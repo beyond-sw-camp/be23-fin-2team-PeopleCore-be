@@ -4,35 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="05645c15-73e4-43a4-b726-586cce3cb3cb" name="변경" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/modules/api-gateway/be23-fin-PeopleCore.api-gateway.main.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules/collaboration-service/be23-fin-PeopleCore.collaboration-service.main.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules/eureka-server/be23-fin-PeopleCore.eureka-server.main.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules/hr-service/be23-fin-PeopleCore.hr-service.main.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules/search-service/be23-fin-PeopleCore.search-service.main.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/.gitignore" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/be23-fin-PeopleCore.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/compiler.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/compiler.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/gradle.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/gradle.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api-gateway/build.gradle" beforeDir="false" afterPath="$PROJECT_DIR$/api-gateway/build.gradle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api-gateway/settings.gradle" beforeDir="false" />
+    <list default="true" id="05645c15-73e4-43a4-b726-586cce3cb3cb" name="변경" comment="코드 중복을 막기 위한 common 서버 생성 및 모든 엔티티에 들어갈 BaseEntity 생성">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/api-gateway/src/main/java/com/peoplecore/api_gateway/ApiGatewayApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/api-gateway/src/main/java/com/peoplecore/api_gateway/ApiGatewayApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/collaboration-service/build.gradle" beforeDir="false" afterPath="$PROJECT_DIR$/collaboration-service/build.gradle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/collaboration-service/settings.gradle" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/collaboration-service/src/main/java/com/peoplecore/collaboration_service/CollaborationServiceApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/collaboration-service/src/main/java/com/peoplecore/collaboration_service/CollaborationServiceApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config-server/build.gradle" beforeDir="false" afterPath="$PROJECT_DIR$/config-server/build.gradle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/config-server/settings.gradle" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/common/src/main/java/com/peoplecore/common/entity/BaseEntity.java" beforeDir="false" afterPath="$PROJECT_DIR$/common/src/main/java/com/peoplecore/common/entity/BaseTimeEntity.java" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/config-server/src/main/java/com/peoplecore/config_server/ConfigServerApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/config-server/src/main/java/com/peoplecore/config_server/ConfigServerApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/eureka-server/build.gradle" beforeDir="false" afterPath="$PROJECT_DIR$/eureka-server/build.gradle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/eureka-server/settings.gradle" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/eureka-server/src/main/java/com/peoplecore/eureka_server/EurekaServerApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/eureka-server/src/main/java/com/peoplecore/eureka_server/EurekaServerApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hr-service/build.gradle" beforeDir="false" afterPath="$PROJECT_DIR$/hr-service/build.gradle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/hr-service/settings.gradle" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/hr-service/src/main/java/com/peoplecore/hr_service/HrServiceApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/hr-service/src/main/java/com/peoplecore/hr_service/HrServiceApplication.java" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/search-service/build.gradle" beforeDir="false" afterPath="$PROJECT_DIR$/search-service/build.gradle" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/search-service/settings.gradle" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/search-service/src/main/java/com/peoplecore/search_service/SearchServiceApplication.java" beforeDir="false" afterPath="$PROJECT_DIR$/search-service/src/main/java/com/peoplecore/search_service/SearchServiceApplication.java" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -172,11 +149,24 @@
       <option name="number" value="Default" />
       <option name="presentableId" value="Default" />
       <updated>1774928306639</updated>
-      <workItem from="1774928308440" duration="1933000" />
+      <workItem from="1774928308440" duration="2250000" />
     </task>
+    <task id="LOCAL-00001" summary="코드 중복을 막기 위한 common 서버 생성 및 모든 엔티티에 들어갈 BaseEntity 생성">
+      <option name="closed" value="true" />
+      <created>1774934009667</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1774934009668</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="코드 중복을 막기 위한 common 서버 생성 및 모든 엔티티에 들어갈 BaseEntity 생성" />
+    <option name="LAST_COMMIT_MESSAGE" value="코드 중복을 막기 위한 common 서버 생성 및 모든 엔티티에 들어갈 BaseEntity 생성" />
   </component>
 </project>
