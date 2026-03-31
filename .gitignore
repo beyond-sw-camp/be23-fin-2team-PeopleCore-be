@@ -100,4 +100,5 @@ bin/
 # 로그
 # ============================
 *.log
-logs/
+logs/**/gradle/wrapper/gradle-wrapper.jar
+**/gradle/wrapper/gradle-wrapper.jar
