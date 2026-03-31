@@ -4,6 +4,7 @@
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/api-gateway/be23-fin-PeopleCore.api-gateway.main.iml" filepath="$PROJECT_DIR$/.idea/modules/api-gateway/be23-fin-PeopleCore.api-gateway.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/collaboration-service/be23-fin-PeopleCore.collaboration-service.main.iml" filepath="$PROJECT_DIR$/.idea/modules/collaboration-service/be23-fin-PeopleCore.collaboration-service.main.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/modules/common/be23-fin-PeopleCore.common.main.iml" filepath="$PROJECT_DIR$/.idea/modules/common/be23-fin-PeopleCore.common.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/eureka-server/be23-fin-PeopleCore.eureka-server.main.iml" filepath="$PROJECT_DIR$/.idea/modules/eureka-server/be23-fin-PeopleCore.eureka-server.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/hr-service/be23-fin-PeopleCore.hr-service.main.iml" filepath="$PROJECT_DIR$/.idea/modules/hr-service/be23-fin-PeopleCore.hr-service.main.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/search-service/be23-fin-PeopleCore.search-service.main.iml" filepath="$PROJECT_DIR$/.idea/modules/search-service/be23-fin-PeopleCore.search-service.main.iml" />
