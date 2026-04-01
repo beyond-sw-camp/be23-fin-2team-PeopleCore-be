@@ -80,7 +80,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 .header("X-User-Name", claims.get("name", String.class))
                 .header("X-User-Role", claims.get("role", String.class))
                 .header("X-User-Department", String.valueOf(claims.get("departmentId")))
-                .header("X-User-Rank", String.valueOf(claims.get("rankId")))
+                .header("X-User-Grade", String.valueOf(claims.get("gradeId")))
+                .header("X-User-Title", String.valueOf(claims.get("titleId")))
                 .build();
 
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
