@@ -30,5 +30,4 @@ public class PayItems {
 //    @JoinColumn(name = "company_id", foreignKey = @ForeignKey(ConstraintMode.CONSTRAINT), nullable = false)
 //    private Company company;
 
-
 }
