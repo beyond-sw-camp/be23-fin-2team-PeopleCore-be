@@ -1,6 +1,10 @@
 package com.peoplecore.employee.domain;
 
+import com.peoplecore.company.entity.Company;
+import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
+import com.peoplecore.grade.domain.Grade;
+import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -21,17 +25,21 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "emp_id")
     private Long empId;
 
-    @Column(name = "company_id", nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
-    @Column(name = "dept_id", nullable = false)
-    private Long deptId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grade_id", nullable = false)
+    private Grade grade;
 
-    @Column(name = "grade_id", nullable = false)
-    private Long gradeId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "title_id", nullable = false)
+    private Title title;
 
-    @Column(name = "title_id", nullable = false)
-    private Long titleId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "dept_id", nullable = false)
+    private Department department;
 
     @Column(name = "job_types_id", nullable = false)
     private Long jobTypesId;
