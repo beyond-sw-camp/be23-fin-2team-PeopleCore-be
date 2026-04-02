@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
@@ -21,6 +22,7 @@ public class RedisConfig {
     // =====================================================================
     //  Redis 1 - DB0: RefreshToken
     // =====================================================================
+    @Primary
     @Bean
     @Qualifier("refreshTokenRedisConnectionFactory")
     public RedisConnectionFactory refreshTokenRedisConnectionFactory() {
@@ -31,10 +33,35 @@ public class RedisConfig {
         return new LettuceConnectionFactory(config);
     }
 
+    @Primary
     @Bean
     @Qualifier("refreshTokenRedisTemplate")
     public StringRedisTemplate refreshTokenRedisTemplate(
             @Qualifier("refreshTokenRedisConnectionFactory") RedisConnectionFactory factory) {
+        StringRedisTemplate template = new StringRedisTemplate();
+        template.setConnectionFactory(factory);
+        template.setKeySerializer(new StringRedisSerializer());
+        template.setValueSerializer(new StringRedisSerializer());
+        return template;
+    }
+
+    // =====================================================================
+    //  Redis 1 - DB1: SMS 인증
+    // =====================================================================
+    @Bean
+    @Qualifier("smsRedisConnectionFactory")
+    public RedisConnectionFactory smsRedisConnectionFactory() {
+        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
+        config.setHostName(redisHost1);
+        config.setPort(redisPort1);
+        config.setDatabase(1);
+        return new LettuceConnectionFactory(config);
+    }
+
+    @Bean
+    @Qualifier("smsRedisTemplate")
+    public StringRedisTemplate smsRedisTemplate(
+            @Qualifier("smsRedisConnectionFactory") RedisConnectionFactory factory) {
         StringRedisTemplate template = new StringRedisTemplate();
         template.setConnectionFactory(factory);
         template.setKeySerializer(new StringRedisSerializer());
