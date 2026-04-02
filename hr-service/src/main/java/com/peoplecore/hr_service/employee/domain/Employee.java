@@ -9,12 +9,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "사원", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"company_id", "emp_email"}),
-        @UniqueConstraint(columnNames = "emp_num")
-})
+@Table(name = "employee")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Employee extends BaseTimeEntity {

@@ -14,7 +14,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,6 +32,7 @@ public class DepartmentService {
     public List<DepartmentResponse> getOrgTree(UUID companyId) {
         List<Department> allDepts = departmentRepository
                 .findByCompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y);
+        Map<Long, Long> memberCountMap = getMemberCountMap(companyId);
 
         // 최상위 부서 (parentDeptId == null)
         List<Department> roots = allDepts.stream()
@@ -37,7 +40,7 @@ public class DepartmentService {
                 .toList();
 
         return roots.stream()
-                .map(root -> buildTree(root, allDepts, companyId))
+                .map(root -> buildTree(root, allDepts, memberCountMap))
                 .toList();
     }
 
@@ -45,10 +48,11 @@ public class DepartmentService {
      * 전체 부서 플랫 리스트 조회
      */
     public List<DepartmentResponse> getAllDepartments(UUID companyId) {
+        Map<Long, Long> memberCountMap = getMemberCountMap(companyId);
         return departmentRepository
                 .findByCompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y)
                 .stream()
-                .map(dept -> DepartmentResponse.from(dept, countMembers(companyId, dept.getId())))
+                .map(dept -> DepartmentResponse.from(dept, memberCountMap.getOrDefault(dept.getId(), 0L)))
                 .toList();
     }
 
@@ -67,11 +71,11 @@ public class DepartmentService {
     @Transactional
     public DepartmentResponse createDepartment(UUID companyId, DepartmentCreateRequest request) {
         // 부서명 중복 검사
-        if (departmentRepository.existsByCompanyIdAndDeptName(companyId, request.getDeptName())) {
+        if (departmentRepository.existsByCompanyIdAndDeptNameAndIsUse(companyId, request.getDeptName(), UseStatus.Y)) {
             throw new CustomException(ErrorCode.DEPARTMENT_NAME_DUPLICATE);
         }
         // 부서코드 중복 검사
-        if (departmentRepository.existsByCompanyIdAndDeptCode(companyId, request.getDeptCode())) {
+        if (departmentRepository.existsByCompanyIdAndDeptCodeAndIsUse(companyId, request.getDeptCode(), UseStatus.Y)) {
             throw new CustomException(ErrorCode.DEPARTMENT_CODE_DUPLICATE);
         }
         // 상위부서 존재 검사
@@ -98,14 +102,14 @@ public class DepartmentService {
         Department dept = findDepartmentOrThrow(companyId, deptId);
 
         if (request.getDeptName() != null && !request.getDeptName().equals(dept.getDeptName())) {
-            if (departmentRepository.existsByCompanyIdAndDeptName(companyId, request.getDeptName())) {
+            if (departmentRepository.existsByCompanyIdAndDeptNameAndIsUse(companyId, request.getDeptName(), UseStatus.Y)) {
                 throw new CustomException(ErrorCode.DEPARTMENT_NAME_DUPLICATE);
             }
             dept.updateName(request.getDeptName());
         }
 
         if (request.getDeptCode() != null && !request.getDeptCode().equals(dept.getDeptCode())) {
-            if (departmentRepository.existsByCompanyIdAndDeptCode(companyId, request.getDeptCode().toUpperCase())) {
+            if (departmentRepository.existsByCompanyIdAndDeptCodeAndIsUse(companyId, request.getDeptCode().toUpperCase(), UseStatus.Y)) {
                 throw new CustomException(ErrorCode.DEPARTMENT_CODE_DUPLICATE);
             }
             dept.updateCode(request.getDeptCode().toUpperCase());
@@ -113,9 +117,10 @@ public class DepartmentService {
 
         if (request.getParentDeptId() != null) {
             if (request.getParentDeptId().equals(deptId)) {
-                throw new CustomException(ErrorCode.BAD_REQUEST);
+                throw new CustomException(ErrorCode.DEPARTMENT_CIRCULAR_REFERENCE);
             }
             findDepartmentOrThrow(companyId, request.getParentDeptId());
+            validateNoCircularReference(companyId, deptId, request.getParentDeptId());
             dept.updateParent(request.getParentDeptId());
         }
 
@@ -150,17 +155,42 @@ public class DepartmentService {
                 .orElseThrow(() -> new CustomException(ErrorCode.DEPARTMENT_NOT_FOUND));
     }
 
+    private void validateNoCircularReference(UUID companyId, Long deptId, Long newParentId) {
+        List<Department> allDepts = departmentRepository
+                .findByCompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y);
+
+        Map<Long, Long> parentMap = allDepts.stream()
+                .collect(Collectors.toMap(Department::getId, d -> d.getParentDeptId() != null ? d.getParentDeptId() : -1L));
+
+        // newParentId에서 루트까지 올라가면서 deptId를 만나면 순환
+        Long current = newParentId;
+        while (current != null && current != -1L) {
+            if (current.equals(deptId)) {
+                throw new CustomException(ErrorCode.DEPARTMENT_CIRCULAR_REFERENCE);
+            }
+            current = parentMap.get(current);
+        }
+    }
+
     private long countMembers(UUID companyId, Long deptId) {
         return employeeRepository.countByCompanyIdAndDeptId(companyId, deptId);
     }
 
-    private DepartmentResponse buildTree(Department dept, List<Department> allDepts, UUID companyId) {
+    private Map<Long, Long> getMemberCountMap(UUID companyId) {
+        return employeeRepository.countByCompanyIdGroupByDeptId(companyId).stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> (Long) row[1]
+                ));
+    }
+
+    private DepartmentResponse buildTree(Department dept, List<Department> allDepts, Map<Long, Long> memberCountMap) {
         List<DepartmentResponse> children = allDepts.stream()
                 .filter(d -> dept.getId().equals(d.getParentDeptId()))
-                .map(child -> buildTree(child, allDepts, companyId))
+                .map(child -> buildTree(child, allDepts, memberCountMap))
                 .toList();
 
-        long memberCount = countMembers(companyId, dept.getId());
+        long memberCount = memberCountMap.getOrDefault(dept.getId(), 0L);
         return DepartmentResponse.withChildren(dept, memberCount, children);
     }
 }

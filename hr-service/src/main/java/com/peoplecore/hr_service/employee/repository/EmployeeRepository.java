@@ -2,7 +2,9 @@ package com.peoplecore.hr_service.employee.repository;
 
 import com.peoplecore.hr_service.employee.domain.Employee;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -21,4 +23,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     Optional<Employee> findByEmpPhone(String empPhone);
 
     long countByCompanyIdAndDeptId(UUID companyId, Long deptId);
+
+    @Query("SELECT e.deptId, COUNT(e) FROM Employee e WHERE e.companyId = :companyId GROUP BY e.deptId")
+    List<Object[]> countByCompanyIdGroupByDeptId(UUID companyId);
 }
