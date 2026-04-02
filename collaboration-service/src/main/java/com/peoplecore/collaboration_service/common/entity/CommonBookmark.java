@@ -15,8 +15,8 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"company_id","bookmark_entity_type","bookmark_entity_id","emp_id"}))
 public class CommonBookmark extends BaseTimeEntity {
-
     /**
      * 즐겨찾기 Id
      */

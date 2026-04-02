@@ -13,6 +13,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"company_id","sig_emp_id"}))
 public class ApprovalSignature extends BaseTimeEntity {
 
     /** 전자 서명 Id */

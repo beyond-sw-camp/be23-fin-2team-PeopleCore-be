@@ -23,6 +23,7 @@ public class BoardPost extends BaseTimeEntity {
 
     /** 게시판  카테고리 ID */
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", nullable = false)
     private BoardCategory boardCategory;
 
     /** 회사 Id */

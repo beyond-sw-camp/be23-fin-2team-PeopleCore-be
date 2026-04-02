@@ -13,9 +13,9 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FormFolder extends BaseTimeEntity {
+public class ApprovalFormFolder extends BaseTimeEntity {
 
-    /** 양식 폴더  id */
+    /** 결재 양식 폴더  id */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long folderId;

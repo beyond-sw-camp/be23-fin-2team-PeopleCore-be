@@ -35,6 +35,7 @@ public class ApprovalLine extends BaseTimeEntity {
      * 결재 문서 Id
      */
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "doc_id", nullable = false)
     private ApprovalDocument docId;
 
     /**
@@ -59,6 +60,7 @@ public class ApprovalLine extends BaseTimeEntity {
      * 결재 역할 - 결제자/참조자/열람자
      */
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private ApprovalRole approvalRole;
 
     /**
@@ -72,6 +74,7 @@ public class ApprovalLine extends BaseTimeEntity {
      */
     @Builder.Default
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private ApprovalLineStatus approvalLineStatus = ApprovalLineStatus.PENDING;
 
     /* 처리 일시 */

@@ -13,6 +13,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"number_rule_company_id"}))
 public class ApprovalNumberRule extends BaseTimeEntity {
 
     public enum NumberRuleSeqResetCycle {

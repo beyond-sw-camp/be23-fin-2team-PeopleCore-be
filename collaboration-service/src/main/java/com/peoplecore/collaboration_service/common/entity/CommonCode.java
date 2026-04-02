@@ -12,6 +12,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"group_id","code_value"}))
 public class CommonCode extends BaseTimeEntity {
 
     /** 공통 코드 ID */
@@ -21,7 +22,8 @@ public class CommonCode extends BaseTimeEntity {
 
     /** 그룹 번호 ID */
     @ManyToOne(fetch = FetchType.LAZY)
-    private CommonCodeGroup commonCodeGroup;
+    @JoinColumn(name = "group_id", nullable = false)
+    private CommonCodeGroup commonCodeGroupId;
 
     /** 코드값 - group_id+ codevalue */
     @Column(nullable = false)

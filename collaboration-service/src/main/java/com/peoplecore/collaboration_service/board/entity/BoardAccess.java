@@ -22,7 +22,8 @@ public class BoardAccess extends BaseTimeEntity {
 
     /** 게시판  카테고리 ID */
     @ManyToOne(fetch = FetchType.LAZY)
-    private BoardCategory boardCategory;
+    @JoinColumn(name = "category_id")
+    private BoardCategory boardCategoryId;
 
     /** 회사 ID */
     @Column(nullable = false)

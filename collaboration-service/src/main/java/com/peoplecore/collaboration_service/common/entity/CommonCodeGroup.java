@@ -13,6 +13,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"company_id","group_code"}))
 public class CommonCodeGroup extends BaseTimeEntity {
 
     /** 그룹 번호 ID */
