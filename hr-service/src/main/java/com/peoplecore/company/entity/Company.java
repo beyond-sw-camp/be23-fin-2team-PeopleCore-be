@@ -18,7 +18,7 @@ import java.util.UUID;
 public class Company {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue
     @Column(name = "company_id")
     private UUID companyId;
 
