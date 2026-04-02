@@ -33,6 +33,9 @@ public class Company {
     @Column(nullable = false)
     private LocalDate contractStartAt;
 
+    @Column(nullable = false)
+    private LocalDate contractEndAt;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private ContractType contractType;
