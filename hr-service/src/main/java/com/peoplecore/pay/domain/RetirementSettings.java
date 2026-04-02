@@ -1,5 +1,6 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.entity.Company;
 import com.peoplecore.pay.enums.PensionType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -21,8 +22,9 @@ public class RetirementSettings {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long retirementSettingsId;
 
-    @Column(nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

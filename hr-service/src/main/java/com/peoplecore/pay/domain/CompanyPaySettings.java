@@ -1,5 +1,6 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.entity.Company;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.pay.enums.PayMonth;
 import jakarta.persistence.*;
@@ -32,8 +33,9 @@ public class CompanyPaySettings extends BaseTimeEntity {
     @Builder.Default
     private PayMonth salaryPayMonth = PayMonth.NEXT;
 
-    @Column(nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Column(length = 10)
     private String mainBankCode;

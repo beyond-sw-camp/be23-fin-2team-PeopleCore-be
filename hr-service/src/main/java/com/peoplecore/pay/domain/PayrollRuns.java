@@ -1,5 +1,6 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.entity.Company;
 import com.peoplecore.pay.enums.PayrollStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -34,8 +35,9 @@ public class PayrollRuns {
     @Column(nullable = false)
     private PayrollStatus payrollStatus;
 
-    @Column(nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     private LocalDate payDate;
 

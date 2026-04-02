@@ -1,5 +1,6 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.entity.Company;
 import com.peoplecore.pay.enums.DepStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -40,8 +41,9 @@ public class RetirementPensionDeposits {
     @Column(nullable = false)
     private DepStatus depStatus;
 
-    @Column(nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Column(nullable = false)
     private Long payrollRunId;

@@ -47,8 +47,9 @@ public class PayItems {
     @Enumerated(EnumType.STRING)
     private PayItemCategory payItemCategory;
 
-    @Column(nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
 //    법정수당여부
     private Boolean isLegal;

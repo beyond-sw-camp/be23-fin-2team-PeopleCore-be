@@ -1,5 +1,6 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.entity.Company;
 import com.peoplecore.pay.enums.SevStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -54,8 +55,10 @@ public class SeverancePays {
     @Column(nullable = false)
     private SevStatus sevStatus;
 
-    @Column(nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
+
 //   확정자
     private Long confirmedBy;
     private LocalDateTime confirmedAt;

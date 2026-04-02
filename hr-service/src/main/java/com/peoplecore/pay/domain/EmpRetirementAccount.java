@@ -1,5 +1,6 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.entity.Company;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.pay.enums.RetirementType;
 import jakarta.persistence.*;
@@ -35,7 +36,8 @@ public class EmpRetirementAccount extends BaseTimeEntity {
     @Column(nullable = false)
     private Long empId;
 
-    @Column(nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
 }
