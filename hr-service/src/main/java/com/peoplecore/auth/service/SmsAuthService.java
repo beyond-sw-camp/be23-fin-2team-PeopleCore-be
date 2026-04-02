@@ -32,7 +32,7 @@ public class SmsAuthService {
 
     public void sendCode(UUID companyId, String empName, String empPhone) {
         // 사원 존재 확인
-        employeeRepository.findByCompanyIdAndEmpNameAndEmpPhone(companyId, empName, empPhone)
+        employeeRepository.findByCompany_CompanyIdAndEmpNameAndEmpPhone(companyId, empName, empPhone)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND));
 
         // 1분 쿨다운 확인

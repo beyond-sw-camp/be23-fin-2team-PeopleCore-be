@@ -39,11 +39,9 @@ public class PayItems {
     @Enumerated(EnumType.STRING)
     private PayItemCategory payItemCategory;
 
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "company_id", foreignKey = @ForeignKey(ConstraintMode.CONSTRAINT), nullable = false)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", foreignKey = @ForeignKey(ConstraintMode.CONSTRAINT), nullable = false)
     private Company company;
-
-    private UUID companyId;
 
     private Boolean isLegal;
 
