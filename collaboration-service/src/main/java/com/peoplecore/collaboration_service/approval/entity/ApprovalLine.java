@@ -58,7 +58,6 @@ public class ApprovalLine extends BaseTimeEntity {
     /**
      * 결재 역할 - 결제자/참조자/열람자
      */
-    @Builder.Default
     @Enumerated(EnumType.STRING)
     private ApprovalRole approvalRole;
 

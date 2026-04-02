@@ -1,6 +1,5 @@
 package com.peoplecore.common.entity;
 
-import com.peoplecore.common.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
 import java.util.UUID;

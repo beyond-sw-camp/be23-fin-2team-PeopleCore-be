@@ -4,7 +4,6 @@ import com.peoplecore.common.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import java.util.UUID;
 import lombok.*;
-import org.hibernate.annotations.Fetch;
 
 /**
  * 결재 양식

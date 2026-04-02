@@ -33,7 +33,6 @@ public class ApprovalLineTemplateList extends BaseTimeEntity {
     private Long lineTemListEmpId;
 
     /** 결재자 역할 - 결재자/열람자/참조자 */
-    @Builder.Default
     @Enumerated(EnumType.STRING)
     private ApprovalRole approvalRole;
 
