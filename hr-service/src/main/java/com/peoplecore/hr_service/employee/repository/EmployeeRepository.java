@@ -15,4 +15,10 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     boolean existsByCompanyIdAndEmpEmail(UUID companyId, String empEmail);
 
     boolean existsByEmpNum(String empNum);
+
+    Optional<Employee> findByCompanyIdAndEmpNameAndEmpPhone(UUID companyId, String empName, String empPhone);
+
+    Optional<Employee> findByEmpPhone(String empPhone);
+
+    long countByCompanyIdAndDeptId(UUID companyId, Long deptId);
 }

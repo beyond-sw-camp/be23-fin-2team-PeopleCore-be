@@ -34,7 +34,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private static final List<String> EXCLUDE_PATHS = List.of(
             "/hr-service/auth/login",
-            "/hr-service/auth/refresh"
+            "/hr-service/auth/refresh",
+            "/hr-service/auth/password"
     );
 
     @PostConstruct
