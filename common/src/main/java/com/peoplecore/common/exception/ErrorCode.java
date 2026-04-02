@@ -12,6 +12,7 @@ public enum ErrorCode {
     INVALID_TOKEN(401, "유효하지 않은 토큰입니다."),
     EXPIRED_TOKEN(401, "만료된 토큰입니다."),
     RESIGNED_EMPLOYEE(403, "퇴직한 사원입니다."),
+    FORBIDDEN(403, "접근 권한이 없습니다."),
 
     // SMS 인증
     SMS_COOLDOWN(429, "1분 후 다시 요청해 주세요."),
@@ -29,6 +30,7 @@ public enum ErrorCode {
     DEPARTMENT_CODE_DUPLICATE(409, "이미 존재하는 부서코드입니다."),
     DEPARTMENT_HAS_MEMBERS(400, "소속 인원이 있어 삭제할 수 없습니다."),
     DEPARTMENT_HAS_CHILDREN(400, "하위 부서가 있어 삭제할 수 없습니다."),
+    DEPARTMENT_CIRCULAR_REFERENCE(400, "하위 부서를 상위 부서로 지정할 수 없습니다."),
 
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),

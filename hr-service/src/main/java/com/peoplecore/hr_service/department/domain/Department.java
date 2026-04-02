@@ -9,13 +9,10 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "부서", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"company_id", "dept_name"}),
-        @UniqueConstraint(columnNames = {"company_id", "dept_code"})
-})
+@Table(name = "department")
 @EntityListeners(AuditingEntityListener.class)
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Department {

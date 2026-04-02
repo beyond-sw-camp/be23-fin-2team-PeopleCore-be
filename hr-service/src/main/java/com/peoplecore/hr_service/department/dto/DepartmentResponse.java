@@ -1,13 +1,14 @@
 package com.peoplecore.hr_service.department.dto;
 
 import com.peoplecore.hr_service.department.domain.Department;
-import lombok.Builder;
-import lombok.Getter;
+import lombok.*;
 
 import java.util.List;
 
-@Getter
+@Data
+@AllArgsConstructor
 @Builder
+@NoArgsConstructor
 public class DepartmentResponse {
 
     private Long id;

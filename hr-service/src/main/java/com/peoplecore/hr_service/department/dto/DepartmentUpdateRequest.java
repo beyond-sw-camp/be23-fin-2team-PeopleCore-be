@@ -1,9 +1,10 @@
 package com.peoplecore.hr_service.department.dto;
 
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
-@Getter
+@Data
+@AllArgsConstructor
+@Builder
 @NoArgsConstructor
 public class DepartmentUpdateRequest {
 

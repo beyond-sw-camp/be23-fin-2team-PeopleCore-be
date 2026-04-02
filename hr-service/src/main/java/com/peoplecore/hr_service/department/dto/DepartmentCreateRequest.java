@@ -1,9 +1,11 @@
 package com.peoplecore.hr_service.department.dto;
 
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import jakarta.annotation.security.DenyAll;
+import lombok.*;
 
-@Getter
+@Data
+@AllArgsConstructor
+@Builder
 @NoArgsConstructor
 public class DepartmentCreateRequest {
 
