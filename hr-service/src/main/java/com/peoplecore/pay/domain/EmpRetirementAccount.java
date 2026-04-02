@@ -1,15 +1,13 @@
 package com.peoplecore.pay.domain;
 
 import com.peoplecore.entity.BaseTimeEntity;
+import com.peoplecore.pay.enums.RetirementType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -17,24 +15,25 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "emp_accounts")   //사원계좌
-public class EmpAccounts extends BaseTimeEntity {
+@Table(name = "emp_retirement_account")   //사원 퇴직연금계좌
+public class EmpRetirementAccount extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long empAccountId;
+    private Long retirementAccountId;
 
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private Long empId;
+    private RetirementType retirementType;
 
-    @Column(length = 50)
-    private String bankName;
+    @Column(nullable = false, length = 100)
+    private String pensionProvider;
 
     @Column(length = 50)
     private String accountNumber;
 
-    @Column(length = 50)
-    private String accountHolder;
+    @Column(nullable = false)
+    private Long empId;
 
     @Column(nullable = false)
     private UUID companyId;

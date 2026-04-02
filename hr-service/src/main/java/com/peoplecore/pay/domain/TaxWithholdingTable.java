@@ -6,35 +6,34 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 @Entity
+@Getter
 @AllArgsConstructor
 @NoArgsConstructor
-@Getter
 @Builder
-@Table(name = "pay_detail")
-public class PayDetails {
+@Table(name = "tax_withholding_table")   //간이세액표
+public class TaxWithholdingTable {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long payDetailsId;
+    private Long taxId;
 
     @Column(nullable = false)
-    private Long payrollRunId;
+    private Integer taxYear;
 
     @Column(nullable = false)
-    private Long empId;
+    private Long salaryFrom;
 
     @Column(nullable = false)
-    private Long payItemId;
+    private Long salaryTo;
 
+//    부양가족수
     @Column(nullable = false)
-    private Long amount;
+    private Integer dependents;
 
-    private String memo;
-
+//    지방소득세 : 소득세*10%
     @Column(nullable = false)
-    private UUID companyId;
+    private Long incomeTax;
+
 
 }

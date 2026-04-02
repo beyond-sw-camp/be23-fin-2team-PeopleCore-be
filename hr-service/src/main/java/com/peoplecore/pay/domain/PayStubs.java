@@ -1,5 +1,6 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.pay.enums.SendStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,7 +15,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "pay_stubs")
+@Table(name = "pay_stubs")  //급여명세
 public class PayStubs {
 
     @Id
@@ -32,9 +33,19 @@ public class PayStubs {
     @Column(nullable = false)
     private SendStatus sendStatus;
 
-    private LocalDateTime issuedAt;
+    private LocalDateTime sentAt;
+    @Column(length = 500)
+    private String pdfUrl;
+    private LocalDateTime issuedAT;
 
     @Column(nullable = false)
     private UUID companyId;
+
+    @Column(nullable = false)
+    private Long payrollRunId;
+
+    @Column(nullable = false)
+    private Long empId;
+
 
 }

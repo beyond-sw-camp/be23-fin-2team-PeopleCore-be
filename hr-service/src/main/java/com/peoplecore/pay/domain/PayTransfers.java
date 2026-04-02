@@ -13,7 +13,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "pay_transfers")
+@Table(name = "pay_transfers")  //급여지급
 public class PayTransfers {
 
     @Id

@@ -1,4 +1,4 @@
-package com.peoplecore.pay.domain;
+package com.peoplecore.pay.enums;
 
 public enum PayItemType {
     PAYMENT,        //지급

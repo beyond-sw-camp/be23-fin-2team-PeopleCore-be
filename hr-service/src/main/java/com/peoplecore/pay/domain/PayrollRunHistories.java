@@ -1,5 +1,6 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.pay.enums.HistoryStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -14,16 +15,17 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "payroll_run_histories")
+@Table(name = "payroll_run_histories")  //급여산정이력
 public class PayrollRunHistories {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long payHistoryId;
+    private Long payrollHistoryId;
 
     @Column(nullable = false)
     private Long payrollRunId;
 
+//    산정자
     @Column(nullable = false)
     private Long processedBy;
 

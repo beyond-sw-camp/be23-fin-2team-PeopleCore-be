@@ -5,9 +5,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
@@ -15,30 +13,27 @@ import java.util.UUID;
 @NoArgsConstructor
 @Getter
 @Builder
-@Table(name = "pay_item_histories")
-public class PayItemHistory {
+@Table(name = "payroll_details") //급여산정상세
+public class PayrollDetails {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long payItemHistoryId;
+    private Long payrollDetailsId;
+
+    @Column(nullable = false)
+    private Long payrollRunId;
+
+    @Column(nullable = false)
+    private Long empId;
 
     @Column(nullable = false)
     private Long payItemId;
 
-    @Column(nullable = false, length = 50)
-    private String changedField;
-
-    private String oldValue;
-    private String newValue;
-
-    @CreationTimestamp
+//    항목별금액
     @Column(nullable = false)
-    private LocalDateTime changeAt;
+    private Long amount;
 
     private String memo;
-
-    @Column(nullable = false)
-    private Long changedById;
 
     @Column(nullable = false)
     private UUID companyId;

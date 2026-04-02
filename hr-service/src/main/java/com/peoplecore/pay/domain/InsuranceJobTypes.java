@@ -13,7 +13,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "insurance_job_types")
+@Table(name = "insurance_job_types")    //업종(산재보험구분용)
 public class InsuranceJobTypes {
 
     @Id
