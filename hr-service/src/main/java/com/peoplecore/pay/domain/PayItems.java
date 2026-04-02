@@ -1,33 +1,53 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.entity.Company;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
+
 @Entity
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
 @Builder
+@Table(name = "pay_items")
 public class PayItems {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long payItemsId;
+    private Long payItemId;
+
     @Column(length = 100, nullable = false)
     private String payItemName;
+
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private PayItemType payItemType;
-    private Boolean isTaxable=true;
-    private Boolean isFixed=true;
-    private int sortOrder;
-    private Boolean isActive=true;
+
+    @Builder.Default
+    private Boolean isTaxable = true;
+    @Builder.Default
+    private Boolean isFixed = true;
+    private Integer sortOrder;
+    @Builder.Default
+    private Boolean isActive = true;
+
     @Enumerated(EnumType.STRING)
     private PayItemCategory payItemCategory;
 
 //    @ManyToOne(fetch = FetchType.LAZY)
 //    @JoinColumn(name = "company_id", foreignKey = @ForeignKey(ConstraintMode.CONSTRAINT), nullable = false)
-//    private Company company;
+    private Company company;
+
+    private UUID companyId;
+
+    private Boolean isLegal;
+
+    @Enumerated(EnumType.STRING)
+    private LegalCalcType legalCalcType;
 
 }
