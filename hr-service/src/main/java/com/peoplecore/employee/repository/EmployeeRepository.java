@@ -1,6 +1,7 @@
 package com.peoplecore.employee.repository;
 
 import com.peoplecore.employee.domain.Employee;
+import com.peoplecore.grade.domain.Grade;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -31,4 +32,6 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
         GROUP BY e.department.id
     """)
     List<Object[]> countByCompanyIdGroupByDeptId(UUID companyId);
+
+    boolean existsByGrade(Grade grade);
 }

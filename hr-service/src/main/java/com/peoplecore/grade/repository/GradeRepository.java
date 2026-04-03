@@ -4,9 +4,10 @@ import com.peoplecore.grade.domain.Grade;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.UUID;
 
 public interface GradeRepository extends JpaRepository<Grade, Long> {
-    boolean existsByGradeName(String gradeName);
-    boolean existsByGradeCode(String gradeCode);
-    List<Grade> findAllByOrderByGradeOrderAsc();
+    List<Grade> findAllByCompanyIdOrderByGradeOrderAsc(UUID companyId);
+    boolean existsByGradeNameAndCompanyId(String gradeName, UUID companyId);
+    long countByCompanyId(UUID companyId);
 }
