@@ -11,6 +11,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/grades")
@@ -22,34 +23,40 @@ public class GradeController {
     }
 
     @GetMapping
-    public ResponseEntity<List<GradeResponse>> getGrades() {
-        return ResponseEntity.ok(gradeService.getGrades());
+    public ResponseEntity<List<GradeResponse>> getGrades(
+            @RequestHeader("X-User-Company") String companyId) {
+        return ResponseEntity.ok(gradeService.getGrades(UUID.fromString(companyId)));
     }
 
     @PostMapping
     public ResponseEntity<GradeResponse> createGrade(
+            @RequestHeader("X-User-Company") String companyId,
             @RequestBody @Valid GradeCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(gradeService.createGrade(request));
+                .body(gradeService.createGrade(UUID.fromString(companyId), request));
     }
 
     @PatchMapping("/{gradeId}")
     public ResponseEntity<GradeResponse> updateGrade(
+            @RequestHeader("X-User-Company") String companyId,
             @PathVariable Long gradeId,
             @RequestBody @Valid GradeUpdateRequest request) {
-        return ResponseEntity.ok(gradeService.updateGrade(gradeId, request));
+        return ResponseEntity.ok(gradeService.updateGrade(UUID.fromString(companyId), gradeId, request));
     }
 
     @DeleteMapping("/{gradeId}")
-    public ResponseEntity<Void> deleteGrade(@PathVariable Long gradeId) {
-        gradeService.deleteGrade(gradeId);
+    public ResponseEntity<Void> deleteGrade(
+            @RequestHeader("X-User-Company") String companyId,
+            @PathVariable Long gradeId) {
+        gradeService.deleteGrade(UUID.fromString(companyId), gradeId);
         return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/order")
     public ResponseEntity<Void> updateOrder(
+            @RequestHeader("X-User-Company") String companyId,
             @RequestBody GradeOrderRequest request) {
-        gradeService.updateOrder(request);
+        gradeService.updateOrder(UUID.fromString(companyId), request);
         return ResponseEntity.ok().build();
     }
 }

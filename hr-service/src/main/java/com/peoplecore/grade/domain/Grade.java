@@ -3,6 +3,8 @@ package com.peoplecore.grade.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.UUID;
+
 @Entity
 @Table(name = "grade")
 @Getter
@@ -15,10 +17,13 @@ public class Grade {
     @Column(name = "grade_id")
     private Long gradeId;
 
-    @Column(name = "grade_name", nullable = false, unique = true)
+    @Column(name = "company_id", nullable = false)
+    private UUID companyId;
+
+    @Column(name = "grade_name", nullable = false)
     private String gradeName;
 
-    @Column(name = "grade_code", nullable = false, unique = true)
+    @Column(name = "grade_code", nullable = false)
     private String gradeCode;
 
     @Column(name = "grade_order", nullable = false)
