@@ -6,7 +6,7 @@ import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
 
 @SpringBootApplication(scanBasePackages = {
 		"com.peoplecore",
-		"com.peoplecore.common"
+		"com.peoplecore.*"
 })
 @EnableJpaAuditing
 public class CollaborationServiceApplication {
