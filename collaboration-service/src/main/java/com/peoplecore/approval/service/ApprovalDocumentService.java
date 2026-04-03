@@ -6,7 +6,7 @@ import com.peoplecore.approval.dto.DocumentUpdateRequest;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.repository.*;
 import com.peoplecore.approval.slot.SlotContextDto;
-import com.peoplecore.common.exception.BusinessException;
+import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.el.lang.ELArithmetic;
 import org.springframework.beans.factory.annotation.Autowired;

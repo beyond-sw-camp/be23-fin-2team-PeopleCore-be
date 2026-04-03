@@ -1,6 +1,6 @@
 package com.peoplecore.approval.entity;
 
-import com.peoplecore.common.exception.BusinessException;
+import com.peoplecore.exception.BusinessException;
 
 public class PendingState implements ApprovalState {
     @Override

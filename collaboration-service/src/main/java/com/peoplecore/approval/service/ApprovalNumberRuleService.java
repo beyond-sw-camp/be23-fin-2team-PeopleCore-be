@@ -4,7 +4,7 @@ import com.peoplecore.approval.dto.NumberRuleResponse;
 import com.peoplecore.approval.dto.NumberRuleUpdateRequest;
 import com.peoplecore.approval.entity.ApprovalNumberRule;
 import com.peoplecore.approval.repository.ApprovalNumberRuleRepository;
-import com.peoplecore.common.exception.BusinessException;
+import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;

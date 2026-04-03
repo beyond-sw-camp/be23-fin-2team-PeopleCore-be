@@ -1,7 +1,7 @@
 package com.peoplecore.approval.slot;
 
 import com.peoplecore.approval.slot.type.*;
-import com.peoplecore.common.exception.BusinessException;
+import com.peoplecore.exception.BusinessException;
 import jakarta.annotation.PostConstruct;
 import org.springframework.stereotype.Component;
 
