@@ -1,5 +1,6 @@
 package com.peoplecore.calendar.entity;
 
+import com.peoplecore.calendar.enums.EventInstancesType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -27,11 +28,11 @@ public class EventInstances {
 //    시작일시 - 수정됐으면 바뀐 값
     private LocalDateTime startAt;
 
-//    종료일시
+//    종료일시 - 수정됐으면 바뀐 값
     private LocalDateTime endAt;
 
-//    개별수정여부
-    private Boolean isException;
+//    개별일정타입 (반복,예외,단일)
+    private EventInstancesType eventInstancesType;
 
 //    개별취소여부
     private Boolean isCancelled;
@@ -45,10 +46,8 @@ public class EventInstances {
     @Column(nullable = false)
     private UUID companyId;
 
+    @ManyToOne
     @Column(nullable = false)
     private Long eventsId;
-
-    @Column(nullable = false)
-    private Long rec_rules_id;
 
 }

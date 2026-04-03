@@ -16,11 +16,11 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 @Table(name = "recurrence_rules")    //반복규칙
-public class RecurrenceRules {
+public class RepeatedRules {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long recRulesId;
+    private Long repeatedRulesId;
 
     @Enumerated(EnumType.STRING)
     private Frequency frequency;
