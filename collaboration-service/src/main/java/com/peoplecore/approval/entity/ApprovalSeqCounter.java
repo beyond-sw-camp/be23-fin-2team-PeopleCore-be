@@ -1,7 +1,7 @@
 package com.peoplecore.approval.entity;
 
 
-import com.peoplecore.common.entity.BaseTimeEntity;
+import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -1,0 +1,32 @@
+package com.peoplecore.pay.domain;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.util.UUID;
+
+@Entity
+@Getter
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
+@Table(name = "pay_transfers")
+public class PayTransfers {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long payTransfersId;
+
+    @Column(nullable = false)
+    private Long payrollRunId;
+
+    @Column(nullable = false)
+    private Long empId;
+
+    @Column(nullable = false)
+    private UUID companyId;
+
+}
