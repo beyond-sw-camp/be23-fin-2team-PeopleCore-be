@@ -1,7 +1,6 @@
 package com.peoplecore.company.controller;
 
 
-import com.netflix.discovery.converters.Auto;
 import com.peoplecore.company.dtos.InternalCompanyResponseDto;
 import com.peoplecore.company.entity.Company;
 import com.peoplecore.company.repository.CompanyRepository;
