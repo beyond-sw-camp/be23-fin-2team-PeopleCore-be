@@ -1,6 +1,6 @@
 package com.peoplecore.exception;
 
-import com.peoplecore.common.exception.BusinessException;
+import com.peoplecore.exception.BusinessException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
