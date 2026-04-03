@@ -1,4 +1,4 @@
-package com.peoplecore.common.exception;
+package com.peoplecore.exception;
 
 import lombok.Getter;
 import org.springframework.http.HttpStatus;
