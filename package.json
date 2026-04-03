@@ -1,0 +1,24 @@
+{
+  "name": "be23-fin-peoplecore",
+  "version": "1.0.0",
+  "description": "wbs및 요구사항 명세서\r https://docs.google.com/spreadsheets/d/1ALYx-2p5l8czzkQxdX7Dp3tdlmTaNh0fP9mfEfIhK14/edit?usp=sharing",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-be.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-be/issues"
+  },
+  "homepage": "https://github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-be#readme",
+  "dependencies": {
+    "@playwright/test": "^1.59.1"
+  }
+}

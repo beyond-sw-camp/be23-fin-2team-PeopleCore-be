@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "apidog": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "apidog-mcp-server@latest",
+        "--project-id=1243110"
+      ],
+      "env": {
+        "APIDOG_ACCESS_TOKEN": "adgp_56083bZG1rdnDEJeWARfZB7kPTngPTxR5FMl"
+      }
+    }
+  }
+}
