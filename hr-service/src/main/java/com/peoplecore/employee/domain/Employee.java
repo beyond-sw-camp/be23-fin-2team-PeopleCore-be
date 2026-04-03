@@ -41,6 +41,7 @@ public class Employee extends BaseTimeEntity {
     @JoinColumn(name = "dept_id", nullable = false)
     private Department department;
 
+    @ManyToOne(fetch = FetchType.LAZY)
     @Column(name = "job_types_id", nullable = false)
     private Long jobTypesId;
 
@@ -86,6 +87,22 @@ public class Employee extends BaseTimeEntity {
 
     @Column(name = "simple_password")
     private String simplePassword;
+
+    @Column(nullable = false)
+    private Long workGroupId;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer dependentsCount = 1;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer taxRateOption = 100;    //80 or 100 or 120
+
+    @Column(nullable = false)
+    @Builder.Default
+    private RetirementType retirementType = RetirementType.DC;
+
 
     public void updateLastLoginAt() {
         this.lastLoginAt = LocalDateTime.now();
