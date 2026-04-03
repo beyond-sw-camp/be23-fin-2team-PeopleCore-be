@@ -116,4 +116,11 @@ public class ApprovalLine extends BaseTimeEntity {
     @Column(nullable = false)
     private String empTitle;
 
+    /** 결재선 상태 초기화 (재기안 시 사용) */
+    public void resetStatus() {
+        this.approvalLineStatus = ApprovalLineStatus.PENDING;
+        this.lineProcessedAt = null;
+        this.lineRejectReason = null;
+    }
+
 }

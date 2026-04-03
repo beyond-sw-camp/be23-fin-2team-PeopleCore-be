@@ -70,8 +70,9 @@ public class ApprovalNumberService {
         String date   = LocalDate.now().format(DateTimeFormatter.ofPattern(rule.getNumberRuleDateFormat()));
         String seqStr = String.format("%0" + rule.getNumberRuleSeqDigits() + "d", seq);
 
+        /* 회사에서 null로 설정할경우 해당 부분 뺴고 출력*/
         List<String> parts = Stream.of(slot1, slot2, slot3, date, seqStr)
-                .filter(Objects::nonNull)
+                .filter(s -> s != null && !s.isBlank())
                 .toList();
 
         return String.join(rule.getNumberRuleSeparator(), parts);  // EX)"HR-LEAVE-260402-001"

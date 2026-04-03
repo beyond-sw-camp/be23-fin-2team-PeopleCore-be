@@ -125,7 +125,6 @@ public class ApprovalDocument extends BaseTimeEntity {
     private String docUrl;
 
 
-
     public void changeStatus(ApprovalStatus approvalStatus) {
         this.approvalStatus = approvalStatus;
     }
@@ -166,6 +165,18 @@ public class ApprovalDocument extends BaseTimeEntity {
     /*채번 부여*/
     public void assignDocNum(String docNum) {
         this.docNum = docNum;
+    }
+
+    /*반려된 문서 재기안시 내용 수정 (REJECT일때만 호출)*/
+    public void updateForReSubmit(String docTitle, String docData, Boolean isEmergency) {
+        this.docTitle = docTitle;
+        this.docData = docData;
+        if (isEmergency != null) {
+            this.isEmergency = isEmergency;
+        }
+        this.docNum = null;
+        this.docCompleteAt = null;
+
     }
 
 }

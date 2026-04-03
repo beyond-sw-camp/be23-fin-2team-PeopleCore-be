@@ -5,21 +5,20 @@ import com.peoplecore.approval.dto.DocumentDetailResponse;
 import com.peoplecore.approval.dto.DocumentUpdateRequest;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.repository.*;
+import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
 import com.peoplecore.approval.slot.SlotContextDto;
+import com.peoplecore.client.component.HrCacheService;
+import com.peoplecore.client.dto.CompanyInfoResponse;
+import com.peoplecore.client.dto.DeptInfoResponse;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.el.lang.ELArithmetic;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Repository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
-import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -31,23 +30,32 @@ public class ApprovalDocumentService {
     private final ApprovalLineRepository lineRepository;
     private final ApprovalFormRepository formRepository;
     private final ApprovalNumberService numberService;
+    private final HrCacheService hrCacheService;
+    private final ApprovalStatusHistoryRepository historyRepository;
+    private final ApprovalAttachmentService attachmentService;
 
     @Autowired
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
         this.numberService = numberService;
+        this.hrCacheService = hrCacheService;
+        this.historyRepository = historyRepository;
+        this.attachmentService = attachmentService;
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번*/
     @Transactional
-    public Long createDocument(UUID companyId, Long empId, String empName, String empDeptName, String empGrade, String empTitle, DocumentCreateRequest request) {
+    public Long createDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request) {
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-
+        CompanyInfoResponse companyInfoResponse = hrCacheService.getCompany(companyId);
+        DeptInfoResponse deptInfoResponse = hrCacheService.getDept(deptId);
         /*slotCOntext 조립*/
         SlotContextDto contextDto = SlotContextDto.builder()
-                .deptName(empDeptName)
+                .companyName(companyInfoResponse.getCompanyName())
+                .deptCode(deptInfoResponse.getDeptCode())
+                .deptName(deptInfoResponse.getDeptName())
                 .formCode(form.getFormCode())
                 .formName(form.getFormName())
                 .build();
@@ -60,7 +68,7 @@ public class ApprovalDocumentService {
                 .formId(form)
                 .empId(empId)
                 .empName(empName)
-                .empDeptName(empDeptName)
+                .empDeptName(deptInfoResponse.getDeptName())
                 .empGrade(empGrade)
                 .empTitle(empTitle)
                 .docType(request.getDocType())
@@ -82,7 +90,11 @@ public class ApprovalDocumentService {
     public DocumentDetailResponse getDocumentDetail(UUID companyId, Long docId) {
         ApprovalDocument document = documentRepository.findWithFormById(companyId, docId).orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
         List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
-        return DocumentDetailResponse.from(document, lines);
+
+        DocumentDetailResponse response = DocumentDetailResponse.from(document, lines);
+        /* 첨부파일 목록 포함 (Pre-signed URL 포함) */
+        response.setAttachments(attachmentService.getAttachments(docId));
+        return response;
     }
 
     /*문서 수정( 임시 저장 문서만 )*/
@@ -102,21 +114,25 @@ public class ApprovalDocumentService {
     @Transactional
     public void deleteDocument(UUID companyId, Long empId, Long docId) {
         ApprovalDocument document = findOwnDraftDocument(companyId, empId, docId);
+        /* 첨부파일 삭제 (MinIO + DB) */
+        attachmentService.deleteAllAttachments(docId);
         lineRepository.deleteByDocId_DocId(docId);
         documentRepository.delete(document);
     }
 
     /*임시 저장 - Draft 상태로 생성 (채번 없음) */
     @Transactional
-    public Long saveTempDocument(UUID companyId, Long empId, String empName, String empDeptName, String empGrade, String empTitle, DocumentCreateRequest request) {
+    public Long saveTempDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request) {
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
+        /*동기 요청*/
+        DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
 
         ApprovalDocument document = ApprovalDocument.builder()
                 .companyId(companyId)
                 .formId(form)
                 .empId(empId)
                 .empName(empName)
-                .empDeptName(empDeptName)
+                .empDeptName(deptInfo.getDeptName())
                 .empGrade(empGrade)
                 .empTitle(empTitle)
                 .docType(request.getDocType())
@@ -143,13 +159,17 @@ public class ApprovalDocumentService {
 
     /*임시 저장 -> 결재 요청 전환(상태 패턴을 사용 + 낙관적 락)*/
     @Transactional
-    public void submitDocument(UUID companyId, Long empId, Long docId) {
+    public void submitDocument(UUID companyId, Long deptId, Long empId, Long docId) {
         ApprovalDocument document = findOwnDraftDocument(companyId, empId, docId);
 
+        DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
+        CompanyInfoResponse companyInfo = hrCacheService.getCompany(companyId);
 
         /* 채번 생성 */
         SlotContextDto contextDto = SlotContextDto.builder()
-                .deptName(document.getEmpDeptName())
+                .companyName(companyInfo.getCompanyName())
+                .deptCode(deptInfo.getDeptCode())
+                .deptName(deptInfo.getDeptName())
                 .formCode(document.getFormId().getFormCode())
                 .formName(document.getFormId().getFormName())
                 .build();
@@ -164,8 +184,103 @@ public class ApprovalDocumentService {
 
     }
 
-    /* TODO: 반려 됐을 때 상황 고려 + 상신 올린 문서 취소할 수 있어야 함/ 시간이 남는다면 결재 문서가 반려됐을 때 결재 문서를 다시 수정할 수 있도록 해여함  */
-    /*--------------------------------------------*/
+    /**
+     * 반려 문서 재기안 — REJECTED → PENDING (문서 수정 + 새 채번 + 결재선 초기화 + 상태 전환)
+     * DRAFT를 거치지 않고 한 번의 API 호출로 재제출 완료
+     */
+    @Transactional
+    public void resubmitDocument(UUID companyId, Long empId, Long deptId,
+                                 Long docId, DocumentUpdateRequest request) {
+        ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId)
+                .orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        /* 본인 문서인지 확인 */
+        if (!document.getEmpId().equals(empId)) {
+            throw new BusinessException("본인의 문서만 재기안할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        /* 반려 상태인지 확인 (상태 패턴에서도 막지만 명시적 검증) */
+        if (document.getApprovalStatus() != ApprovalStatus.REJECTED) {
+            throw new BusinessException("반려된 문서만 재기안할 수 있습니다.");
+        }
+
+        /* 상태 변경 이력 저장 (반려 사유는 결재선에서 가져옴) */
+        String rejectReason = lineRepository.findByDocId_DocIdOrderByLineStep(docId).stream()
+                .filter(line -> line.getLineRejectReason() != null)
+                .map(ApprovalLine::getLineRejectReason)
+                .findFirst().orElse(null);
+
+        historyRepository.save(ApprovalStatusHistory.builder()
+                .docId(docId)
+                .companyId(companyId)
+                .previousStatus(ApprovalStatus.REJECTED)
+                .changedStatus(ApprovalStatus.PENDING)
+                .changedBy(empId)
+                .changeReason("재기안" + (rejectReason != null ? " (이전 반려 사유: " + rejectReason + ")" : ""))
+                .changedAt(LocalDateTime.now())
+                .build());
+
+        /* 문서 내용 수정 + 이전 채번/완료일시 초기화 */
+        document.updateForReSubmit(request.getDocTitle(), request.getDocData(), request.getIsEmergency());
+
+        /* 새 채번 생성 */
+        DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
+        CompanyInfoResponse companyInfo = hrCacheService.getCompany(companyId);
+
+        SlotContextDto contextDto = SlotContextDto.builder()
+                .companyName(companyInfo.getCompanyName())
+                .deptCode(deptInfo.getDeptCode())
+                .deptName(deptInfo.getDeptName())
+                .formCode(document.getFormId().getFormCode())
+                .formName(document.getFormId().getFormName())
+                .build();
+
+        String docNum = numberService.generateDocNum(companyId, contextDto);
+        document.assignDocNum(docNum);
+
+        /* 상태 패턴: REJECTED → PENDING (RejectedState.submit() 호출) */
+        document.submit();
+
+        /* 결재선 초기화 — 모든 결재자 다시 PENDING으로 */
+        List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
+        lines.forEach(ApprovalLine::resetStatus);
+
+        /* 결재선 교체가 필요한 경우 */
+        if (request.getApprovalLines() != null) {
+            lineRepository.deleteByDocId_DocId(docId);
+            saveApprovalLine(companyId, document, request.getApprovalLines());
+        }
+
+        // @Version 낙관적 락: 동시 수정 시 OptimisticLockingFailureException 발생
+    }
+
+    /** 상신 취소(회수) - PENDING → CANCELED 전환 */
+    @Transactional
+    public void recallDocument(UUID companyId, Long empId, Long docId) {
+        ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId)
+                .orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        /* 본인 문서인지 확인 */
+        if (!document.getEmpId().equals(empId)) {
+            throw new BusinessException("본인의 문서만 회수할 수 있습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        /* 상태 변경 이력 저장 */
+        historyRepository.save(ApprovalStatusHistory.builder()
+                .docId(docId)
+                .companyId(companyId)
+                .previousStatus(ApprovalStatus.PENDING)
+                .changedStatus(ApprovalStatus.CANCELED)
+                .changedBy(empId)
+                .changeReason("기안자 상신 취소(회수)")
+                .changedAt(LocalDateTime.now())
+                .build());
+
+        /* 상태 패턴: PENDING → CANCELED (PendingState.recall() 호출) */
+        document.recall();
+
+        // @Version 낙관적 락: 동시에 결재자가 승인하면 OptimisticLockingFailureException 발생
+    }
 
     /*본인의 임시 저장 문서 조회*/
     private ApprovalDocument findOwnDraftDocument(UUID companyId, Long empId, Long docId) {

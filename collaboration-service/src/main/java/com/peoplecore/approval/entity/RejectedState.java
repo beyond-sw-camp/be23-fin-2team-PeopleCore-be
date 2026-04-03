@@ -21,6 +21,7 @@ public class RejectedState implements ApprovalState {
 
     @Override
     public void submit(ApprovalDocument document) {
-        throw new BusinessException("반려된 문서는 재제출할 수 없습니다.");
+        document.changeStatus(ApprovalStatus.PENDING);
+        document.markSubmitted();
     }
 }

@@ -9,11 +9,7 @@
 ## 핵심 설계 원칙
 
 ### 상태 패턴 (State Pattern)
-- 결재 상태(대기, 승인, 반려, 회수)에 따라 실행 가능한 동작이 달라짐
 - if-else로 짜지 말고 **상태 패턴**을 적용해 객체지향적으로 설계
-- `ApprovalState` 인터페이스 → `DraftState`, `PendingState`, `ApprovedState`, `RejectedState`, `CanceledState` 구현체
-- `ApprovalStatus` enum이 각 State 객체를 들고 있어 switch/if 분기 없이 동작 위임
-
 ### 동시성 제어 (Concurrency Control)
 - 결재자가 승인 버튼을 누르는 찰나에 기안자가 문서를 회수하는 경우 → **낙관적 락(Optimistic Lock)** 으로 데이터 충돌 방지
 - `ApprovalDocument`에 `@Version` 적용 → JPA가 UPDATE 시 `WHERE version = N` 자동 부여
@@ -28,6 +24,10 @@
 - 복잡한 검색 조건을 위해 **QueryDSL을 활용한 동적 쿼리 최적화** 적용
 - 모든 연관 엔티티 조회 시 **N+1 문제 반드시 해결** (JOIN FETCH 또는 QueryDSL)
 
+### 코드 최적화 및 효율성 
+- erd 구조를 파악하고 코드를 최고의 효율성으로
+- 한 단계씩 순차적으로 진행 
+- 코드 추가 및 수정 삭제시 코드및 파일 위치 명시 
 ---
 
 ## 비즈니스 로직

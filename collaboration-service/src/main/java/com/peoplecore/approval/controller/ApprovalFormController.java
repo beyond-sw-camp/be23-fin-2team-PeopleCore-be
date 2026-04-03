@@ -63,4 +63,10 @@ public class ApprovalFormController {
         approvalFormService.removeFrequentForm(companyId, empId, formId);
         return ResponseEntity.ok().build();
     }
+
+    @GetMapping("/forms/{formId}/edit")
+    public ResponseEntity<FormDetailResponse> getFormDetailForEditing(@RequestHeader("X-User-Company") UUID companyId, @PathVariable Long formId) {
+        return ResponseEntity.ok(approvalFormService.getFormDetailEditing(companyId, formId));
+
+    }
 }

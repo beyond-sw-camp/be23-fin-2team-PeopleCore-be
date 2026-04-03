@@ -13,4 +13,5 @@ public interface ApprovalState {
     //    현재 상태에서 제출 가능한지
     void submit(ApprovalDocument document);
 
+
 }

@@ -59,9 +59,9 @@ public class ApprovalNumberRuleService {
 
     /*미리보기 생성 */
     private String generatePreview(ApprovalNumberRule rule) {
-        String sep  = rule.getNumberRuleSeparator();
+        String sep = rule.getNumberRuleSeparator();
         String date = LocalDateTime.now().format(DateTimeFormatter.ofPattern(rule.getNumberRuleDateFormat()));
-        String seq  = String.format("%0" + rule.getNumberRuleSeqDigits() + "d", 1);
+        String seq = String.format("%0" + rule.getNumberRuleSeqDigits() + "d", 1);
 
         String slot1 = rule.getNumberRuleSlot1Custom() != null
                 ? rule.getNumberRuleSlot1Custom() : rule.getNumberRuleSlot1Type();
@@ -70,9 +70,9 @@ public class ApprovalNumberRuleService {
         String slot3 = rule.getNumberRuleSlot3Custom() != null
                 ? rule.getNumberRuleSlot3Custom() : rule.getNumberRuleSlot3Type();
 
-        // NONE이면 미리보기에서 제외
+        /* 없을 경우의 수 통일  */
         List<String> parts = Stream.of(slot1, slot2, slot3, date, seq)
-                .filter(s -> s != null && !s.equals("NONE"))
+                .filter(s -> s != null && !s.isBlank())
                 .toList();
 
         return String.join(sep, parts);

@@ -41,6 +41,9 @@ public class DocumentDetailResponse {
     //    결재선
     private List<ApprovalLineResponse> approvalLines;
 
+    //    첨부파일
+    private List<AttachmentResponse> attachments;
+
 
     @Data
     @NoArgsConstructor

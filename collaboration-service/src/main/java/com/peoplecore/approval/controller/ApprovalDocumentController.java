@@ -28,11 +28,11 @@ public class ApprovalDocumentController {
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestHeader("X-User-Name") String empName,
-            @RequestHeader("X-User-Department") String empDeptName,
+            @RequestHeader("X-User-Department") Long deptId,
             @RequestHeader("X-User-Grade") String empGrade,
             @RequestHeader("X-User-Title") String empTitle,
             @RequestBody DocumentCreateRequest request) {
-        Long docId = approvalDocumentService.createDocument(companyId, empId, empName, empDeptName, empGrade, empTitle, request);
+        Long docId = approvalDocumentService.createDocument(companyId, empId, empName, deptId, empGrade, empTitle, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(docId);
     }
 
@@ -64,21 +64,21 @@ public class ApprovalDocumentController {
         return ResponseEntity.ok().build();
     }
 
-  /*임시 저장 */
+    /*임시 저장 */
     @PostMapping("/temp")
     public ResponseEntity<Long> saveTempDocument(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestHeader("X-User-Name") String empName,
-            @RequestHeader("X-User-Department") String empDeptName,
+            @RequestHeader("X-User-Department") Long deptId,
             @RequestHeader("X-User-Grade") String empGrade,
             @RequestHeader("X-User-Title") String empTitle,
             @RequestBody DocumentCreateRequest request) {
-        Long docId = approvalDocumentService.saveTempDocument(companyId, empId, empName, empDeptName, empGrade, empTitle, request);
+        Long docId = approvalDocumentService.saveTempDocument(companyId, empId, empName, deptId, empGrade, empTitle, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(docId);
     }
 
-/* 임시저장 수정 */
+    /* 임시저장 수정 */
     @PutMapping("/temp/{docId}")
     public ResponseEntity<Void> updateTempDocument(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -94,10 +94,32 @@ public class ApprovalDocumentController {
     public ResponseEntity<Void> submitDocument(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
+            @RequestHeader("X-User-Department") Long deptId,
             @PathVariable Long docId) {
-        approvalDocumentService.submitDocument(companyId, empId, docId);
+        approvalDocumentService.submitDocument(companyId, deptId, empId, docId);
         return ResponseEntity.ok().build();
     }
 
+    /** 반려 문서 재기안 - REJECTED → PENDING (수정 + 새 채번 + 결재선 초기화) */
+    @PostMapping("/{docId}/resubmit")
+    public ResponseEntity<Void> resubmitDocument(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestHeader("X-User-Department") Long deptId,
+            @PathVariable Long docId,
+            @RequestBody DocumentUpdateRequest request) {
+        approvalDocumentService.resubmitDocument(companyId, empId, deptId, docId, request);
+        return ResponseEntity.ok().build();
+    }
+
+    /** 상신 취소(회수) - PENDING → CANCELED */
+    @PostMapping("/{docId}/recall")
+    public ResponseEntity<Void> recallDocument(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @PathVariable Long docId) {
+        approvalDocumentService.recallDocument(companyId, empId, docId);
+        return ResponseEntity.ok().build();
+    }
 
 }

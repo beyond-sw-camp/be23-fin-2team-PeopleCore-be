@@ -9,6 +9,7 @@ import com.peoplecore.approval.entity.FrequentForm;
 import com.peoplecore.approval.repository.ApprovalFormFolderRepository;
 import com.peoplecore.approval.repository.ApprovalFormRepository;
 import com.peoplecore.approval.repository.FrequentFormRepository;
+import com.peoplecore.common.service.MinioService;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,12 +27,14 @@ public class ApprovalFormService {
     private final ApprovalFormFolderRepository approvalFormFolderRepository;
     private final ApprovalFormRepository approvalFormRepository;
     private final FrequentFormRepository frequentFormRepository;
+    private final MinioService minioService;
 
     @Autowired
-    public ApprovalFormService(ApprovalFormFolderRepository approvalFormFolderRepository, ApprovalFormRepository approvalFormRepository, FrequentFormRepository frequentFormRepository) {
+    public ApprovalFormService(ApprovalFormFolderRepository approvalFormFolderRepository, ApprovalFormRepository approvalFormRepository, FrequentFormRepository frequentFormRepository, MinioService minioService) {
         this.approvalFormFolderRepository = approvalFormFolderRepository;
         this.approvalFormRepository = approvalFormRepository;
         this.frequentFormRepository = frequentFormRepository;
+        this.minioService = minioService;
     }
 
     //    결재 양식 폴더 조회하는 메서드
@@ -84,8 +87,19 @@ public class ApprovalFormService {
 
     /*
     양식 상세 조회
-    TODO : 현재 코드의 의도에 따라 로직이 변해야 함. 현재 코드는 db에 저장된 html을 불러오는 코드기 때문에 만약 인사과에서 문서 수정을 위한 문서 열람일 경우 minio에서 가져오는 로직으로 변경 . 만일 이미 승인이 다 된 문서를 조회하는 경우에는 이 로직 그대로 사용하는게 맞음
+   인사과에서 양식 수정 시 또는 기안자가 새문서 작성시 사용
      */
+    public FormDetailResponse getFormDetailEditing(UUID companyId, Long formId) {
+        ApprovalForm approvalForm = approvalFormRepository.findDetailById(formId, companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없음", HttpStatus.NOT_FOUND));
+
+        /*minio 오브젝트 이름 : forms/{companyId}/{formCode}_v{version}.html*/
+        String objectName = String.format("forms/%s/%s_v%d.html", companyId, approvalForm.getFormCode(), approvalForm.getFormVersion());
+        String formHtml = minioService.getFormHtml(objectName);
+
+        FormDetailResponse response = FormDetailResponse.from(approvalForm);
+        response.setFormHtml(formHtml); // minio 에서 가져온 html로 교체
+        return response;
+    }
 
     public FormDetailResponse getFormDetail(UUID companyId, Long formId) {
         ApprovalForm form = approvalFormRepository
