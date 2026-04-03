@@ -1,7 +1,8 @@
 package com.peoplecore.auth.service;
 
-import com.peoplecore.common.exception.CustomException;
-import com.peoplecore.common.exception.ErrorCode;
+import com.peoplecore.exception.CustomException;
+import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.sms.SmsSender;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -10,10 +11,6 @@ import org.springframework.stereotype.Service;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-
-import com.peoplecore.common.sms.SmsSender;
-
-
 @Service
 public class SmsAuthService {
 
@@ -21,8 +18,8 @@ public class SmsAuthService {
     private final SmsSender smsSender;
     private final EmployeeRepository employeeRepository;
 
-    private static final long CODE_TTL = 3;
-    private static final int MAX_FAIL = 5;
+    private static final long CODE_TTL = 3;       // 인증코드 유효시간 3분
+    private static final int MAX_FAIL = 5;         // 최대 실패 횟수
 
     public SmsAuthService(
             @Qualifier("smsRedisTemplate") StringRedisTemplate smsRedis,
@@ -34,14 +31,17 @@ public class SmsAuthService {
     }
 
     public void sendCode(UUID companyId, String empName, String empPhone) {
-        employeeRepository.findByCompanyIdAndEmpNameAndEmpPhone(companyId, empName, empPhone)
+        // 사원 존재 확인
+        employeeRepository.findByCompany_CompanyIdAndEmpNameAndEmpPhone(companyId, empName, empPhone)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND));
 
+        // 1분 쿨다운 확인
         String cooldownKey = "SMS_COOLDOWN:" + empPhone;
         if (Boolean.TRUE.equals(smsRedis.hasKey(cooldownKey))) {
             throw new CustomException(ErrorCode.SMS_COOLDOWN);
         }
 
+        // 인증코드 생성 및 저장
         String code = String.valueOf((int) (Math.random() * 900000) + 100000);
 
         smsRedis.opsForValue().set("SMS_CODE:" + empPhone, code, CODE_TTL, TimeUnit.MINUTES);
@@ -54,10 +54,12 @@ public class SmsAuthService {
         String blockKey = "SMS_BLOCK:" + empPhone;
         String failKey = "SMS_FAIL:" + empPhone;
 
+        // 차단 여부 확인
         if (Boolean.TRUE.equals(smsRedis.hasKey(blockKey))) {
             throw new CustomException(ErrorCode.SMS_BLOCKED);
         }
 
+        // 저장된 코드 확인
         String savedCode = smsRedis.opsForValue().get("SMS_CODE:" + empPhone);
 
         if (savedCode == null) {
@@ -70,6 +72,7 @@ public class SmsAuthService {
             throw new CustomException(ErrorCode.SMS_CODE_MISMATCH);
         }
 
+        // 인증 성공 → 실패 카운트 초기화, 인증 완료 표시
         smsRedis.delete(failKey);
         smsRedis.delete("SMS_CODE:" + empPhone);
         smsRedis.opsForValue().set("SMS_VERIFIED:" + empPhone, "true", 10, TimeUnit.MINUTES);

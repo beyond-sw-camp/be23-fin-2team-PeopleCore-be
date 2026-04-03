@@ -1,5 +1,6 @@
 package com.peoplecore.department.domain;
 
+import com.peoplecore.company.entity.Company;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -9,13 +10,10 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "부서", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"company_id", "dept_name"}),
-        @UniqueConstraint(columnNames = {"company_id", "dept_code"})
-})
+@Table(name = "department")
 @EntityListeners(AuditingEntityListener.class)
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Department {
@@ -25,8 +23,9 @@ public class Department {
     @Column(name = "id")
     private Long id;
 
-    @Column(name = "company_id", nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Column(name = "parent_dept_id")
     private Long parentDeptId;

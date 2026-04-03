@@ -1,5 +1,6 @@
 package com.peoplecore.department.controller;
 
+import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.department.dto.DepartmentCreateRequest;
 import com.peoplecore.department.dto.DepartmentResponse;
 import com.peoplecore.department.dto.DepartmentUpdateRequest;
@@ -50,6 +51,7 @@ public class DepartmentController {
     /**
      * 부서 등록
      */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
     @PostMapping
     public ResponseEntity<DepartmentResponse> createDepartment(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -61,6 +63,7 @@ public class DepartmentController {
     /**
      * 부서 수정
      */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
     @PutMapping("/{deptId}")
     public ResponseEntity<DepartmentResponse> updateDepartment(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -72,6 +75,7 @@ public class DepartmentController {
     /**
      * 부서 삭제 (비활성화)
      */
+    @RoleRequired({"HR_SUPER_ADMIN"})
     @DeleteMapping("/{deptId}")
     public ResponseEntity<Void> deleteDepartment(
             @RequestHeader("X-User-Company") UUID companyId,

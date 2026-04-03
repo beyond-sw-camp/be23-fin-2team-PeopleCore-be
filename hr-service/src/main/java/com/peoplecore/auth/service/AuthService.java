@@ -40,7 +40,7 @@ public class AuthService {
     @Transactional
     public LoginResponse login(LoginRequest request) {
         Employee employee = employeeRepository
-                .findByCompanyIdAndEmpEmail(request.getCompanyId(), request.getEmail())
+                .findByCompany_CompanyIdAndEmpEmail(request.getCompanyId(), request.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("이메일 또는 비밀번호가 일치하지 않습니다."));
 
         if (employee.getEmpStatus() == EmpStatus.RESIGNED) {

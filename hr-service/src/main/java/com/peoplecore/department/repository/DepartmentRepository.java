@@ -10,15 +10,16 @@ import java.util.UUID;
 
 public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
-    List<Department> findByCompanyIdAndIsUseOrderByDeptNameAsc(UUID companyId, UseStatus isUse);
+    List<Department> findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(UUID companyId, UseStatus isUse);
 
-    List<Department> findByCompanyIdAndParentDeptIdAndIsUse(UUID companyId, Long parentDeptId, UseStatus isUse);
+    List<Department> findByCompany_CompanyIdAndParentDeptIdAndIsUse(UUID companyId, Long parentDeptId, UseStatus isUse);
 
-    Optional<Department> findByIdAndCompanyId(Long id, UUID companyId);
+    Optional<Department> findByIdAndCompany_CompanyId(Long id, UUID companyId);
 
-    boolean existsByCompanyIdAndDeptName(UUID companyId, String deptName);
+    boolean existsByCompany_CompanyIdAndDeptNameAndIsUse(UUID companyId, String deptName, UseStatus isUse);
 
-    boolean existsByCompanyIdAndDeptCode(UUID companyId, String deptCode);
+    boolean existsByCompany_CompanyIdAndDeptCodeAndIsUse(UUID companyId, String deptCode, UseStatus isUse);
+
 
     boolean existsByParentDeptIdAndIsUse(Long parentDeptId, UseStatus isUse);
 }

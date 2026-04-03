@@ -1,8 +1,8 @@
 package com.peoplecore.employee.domain;
 
-import com.peoplecore.common.entity.BaseTimeEntity;
-import com.peoplecore.company.domain.Company;
+import com.peoplecore.company.entity.Company;
 import com.peoplecore.department.domain.Department;
+import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
@@ -13,12 +13,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "employee", uniqueConstraints = {
-        @UniqueConstraint(columnNames = {"company_id", "emp_email"}),
-        @UniqueConstraint(columnNames = "emp_num")
-})
+@Table(name = "employee")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED)
+@NoArgsConstructor
 @AllArgsConstructor
 @Builder
 public class Employee extends BaseTimeEntity {
@@ -31,7 +28,6 @@ public class Employee extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
-//    삭제 및 변경
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dept_id", nullable = false)
@@ -118,7 +114,7 @@ public class Employee extends BaseTimeEntity {
     private String empMailboxSize;
 
 
-    
+
 
 
 

@@ -1,12 +1,11 @@
 package com.peoplecore.auth.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
-@Getter
-@NoArgsConstructor
+@Data
 @AllArgsConstructor
+@Builder
+@NoArgsConstructor
 public class PasswordResetRequest {
     private String empPhone;
     private String newPassword;
