@@ -56,30 +56,6 @@ public class RedisConfig {
     }
 
     // =====================================================================
-    //  Redis 1 - DB1: SMS 인증
-    // =====================================================================
-    @Bean
-    @Qualifier("smsRedisConnectionFactory")
-    public RedisConnectionFactory smsRedisConnectionFactory() {
-        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration();
-        config.setHostName(redisHost1);
-        config.setPort(redisPort1);
-        config.setDatabase(1);
-        return new LettuceConnectionFactory(config);
-    }
-
-    @Bean
-    @Qualifier("smsRedisTemplate")
-    public StringRedisTemplate smsRedisTemplate(
-            @Qualifier("smsRedisConnectionFactory") RedisConnectionFactory factory) {
-        StringRedisTemplate template = new StringRedisTemplate();
-        template.setConnectionFactory(factory);
-        template.setKeySerializer(new StringRedisSerializer());
-        template.setValueSerializer(new StringRedisSerializer());
-        return template;
-    }
-
-    // =====================================================================
 //  Redis 2 - DB0: HR 캐시 (부서, 회사 정보)
 // =====================================================================
     @Bean

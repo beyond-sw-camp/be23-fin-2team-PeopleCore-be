@@ -32,9 +32,9 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
         // 실제 데이터 조회 (fetch join으로 N+1 방지)
         List<Employee> content = queryFactory
                 .selectFrom(qEmployee)                      // Employee 테이블 조회
-                .join(qEmployee.dept).fetchJoin()           // 부서 한번에 조회
+                .join(qEmployee.dept).fetchJoin()               // 부서 한번에 조회
                 .join(qEmployee.grade).fetchJoin()          // 직급 한번에 조회
-                .join(qEmployee.title).fetchJoin()          // 직책 한번에 조회
+                .leftJoin(qEmployee.title).fetchJoin()      // 직책 한번에 조회 (nullable)
                 .where(
                         keywordContains(keyword),           // 이름 또는 사번 검색 (null이면 조건 무시)
                         deptEq(deptId),                     // 부서 필터 (null이면 조건 무시)

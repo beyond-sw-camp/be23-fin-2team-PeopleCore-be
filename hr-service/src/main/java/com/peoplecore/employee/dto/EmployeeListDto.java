@@ -34,7 +34,7 @@ public class EmployeeListDto {
                 .empName(employee.getEmpName())
                 .deptName(employee.getDept().getDeptName())
                 .gradeName(employee.getGrade().getGradeName())
-                .titleName(employee.getTitle().getTitleName())
+                .titleName(employee.getTitle() != null ? employee.getTitle().getTitleName() : null)
                 .empType(employee.getEmpType())
                 .empHireDate(employee.getEmpHireDate())
                 .empStatus(employee.getEmpStatus())
