@@ -1,6 +1,6 @@
-package com.peoplecore.sms;
+package com.peoplecore.auth.service;
 
-import com.peoplecore.configs.CoolSmsConfig;
+import com.peoplecore.auth.config.CoolSmsConfig;
 import lombok.extern.slf4j.Slf4j;
 import net.nurigo.sdk.NurigoApp;
 import net.nurigo.sdk.message.model.Message;

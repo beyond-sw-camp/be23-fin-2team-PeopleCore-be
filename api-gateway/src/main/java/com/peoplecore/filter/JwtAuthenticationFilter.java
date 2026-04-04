@@ -35,7 +35,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     private static final List<String> EXCLUDE_PATHS = List.of(
             "/hr-service/auth/login",
             "/hr-service/auth/refresh",
-            "/hr-service/auth/password"
+            "/hr-service/auth/password",
+            "/hr-service/auth/email"
     );
 //  hr담담자만 추가 접근 가능 경로
     private static final List<String>HR_ONLY_PATHS =List.of(
@@ -93,15 +94,19 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         }
 
         // 검증 통과 → 사용자 정보를 헤더에 실어서 하위 서비스로 전달
-        ServerHttpRequest mutatedRequest = request.mutate()
+        ServerHttpRequest.Builder requestBuilder = request.mutate()
                 .header("X-User-Id", claims.getSubject())
                 .header("X-User-Company", claims.get("companyId", String.class))
                 .header("X-User-Name", claims.get("name", String.class))
                 .header("X-User-Role", claims.get("role", String.class))
                 .header("X-User-Department", String.valueOf(claims.get("departmentId")))
-                .header("X-User-Grade", String.valueOf(claims.get("gradeId")))
-                .header("X-User-Title", String.valueOf(claims.get("titleId")))
-                .build();
+                .header("X-User-Grade", String.valueOf(claims.get("gradeId")));
+
+        if (claims.get("titleId") != null) {
+            requestBuilder.header("X-User-Title", String.valueOf(claims.get("titleId")));
+        }
+
+        ServerHttpRequest mutatedRequest = requestBuilder.build();
 
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
     }

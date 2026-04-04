@@ -48,7 +48,7 @@ public class JwtProvider {
                 .claim("role", employee.getEmpRole().name())
                 .claim("departmentId", employee.getDept().getDeptId())
                 .claim("gradeId", employee.getGrade().getGradeId())
-                .claim("titleId", employee.getTitle().getTitleId())
+                .claim("titleId", employee.getTitle() != null ? employee.getTitle().getTitleId() : null)
                 .setIssuedAt(now)
                 .setExpiration(expiry)
                 .signWith(accessKey, SignatureAlgorithm.HS256)

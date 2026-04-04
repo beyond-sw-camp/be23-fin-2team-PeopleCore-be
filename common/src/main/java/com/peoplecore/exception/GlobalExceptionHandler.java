@@ -19,6 +19,26 @@ public class GlobalExceptionHandler {
         ErrorResponse response = new ErrorResponse(errorCode.getStatus(), errorCode.getMessage());
         return ResponseEntity.status(errorCode.getStatus()).body(response);
     }
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException e) {
+        return ResponseEntity
+                .status(400)
+                .body(Map.of(
+                        "message", e.getMessage(),
+                        "timestamp", LocalDateTime.now()
+                ));
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<Map<String, Object>> handleIllegalState(IllegalStateException e) {
+        return ResponseEntity
+                .status(409)
+                .body(Map.of(
+                        "message", e.getMessage(),
+                        "timestamp", LocalDateTime.now()
+                ));
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<Map<String, Object>> handleBusiness(BusinessException e) {
         return ResponseEntity

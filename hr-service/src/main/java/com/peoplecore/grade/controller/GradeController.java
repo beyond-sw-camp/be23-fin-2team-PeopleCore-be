@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/grades")
+@RequestMapping("/grades")
 public class GradeController {
     private final GradeService gradeService;
 
