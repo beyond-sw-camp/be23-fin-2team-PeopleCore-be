@@ -1,5 +1,6 @@
 package com.peoplecore.grade.service;
 
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.grade.dto.GradeCreateRequest;
@@ -89,4 +90,18 @@ public class GradeService {
             grade.updateOrder(i + 1);
         }
     }
+
+
+    //superAdmin 계정 생성시 초기값
+    public void initDefault(Company company) {
+        gradeRepository.save(
+            Grade.builder()
+                    .companyId(company.getCompanyId())
+                    .gradeName("미배정")
+                    .gradeCode("DEFAULT")
+                    .gradeOrder(1)
+                    .build()
+        );
+    }
+
 }
