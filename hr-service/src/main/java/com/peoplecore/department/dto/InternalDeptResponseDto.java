@@ -17,7 +17,7 @@ public class InternalDeptResponseDto {
 
     public static InternalDeptResponseDto from(Department dept) {
         return InternalDeptResponseDto.builder()
-                .deptId(dept.getId())
+                .deptId(dept.getDeptId())
                 .deptName(dept.getDeptName())
                 .deptCode(dept.getDeptCode())
                 .build();

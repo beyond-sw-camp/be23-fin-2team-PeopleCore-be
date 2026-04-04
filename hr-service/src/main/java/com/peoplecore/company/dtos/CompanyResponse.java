@@ -1,7 +1,7 @@
 package com.peoplecore.company.dtos;
 
-import com.peoplecore.company.entity.CompanyStatus;
-import com.peoplecore.company.entity.ContractType;
+import com.peoplecore.company.domain.CompanyStatus;
+import com.peoplecore.company.domain.ContractType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;

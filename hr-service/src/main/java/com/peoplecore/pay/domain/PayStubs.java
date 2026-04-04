@@ -1,5 +1,7 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.domain.Company;
+import com.peoplecore.pay.enums.SendStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,14 +9,13 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "pay_stubs")
+@Table(name = "pay_stubs")  //급여명세
 public class PayStubs {
 
     @Id
@@ -32,9 +33,20 @@ public class PayStubs {
     @Column(nullable = false)
     private SendStatus sendStatus;
 
-    private LocalDateTime issuedAt;
+    private LocalDateTime sentAt;
+    @Column(length = 500)
+    private String pdfUrl;
+    private LocalDateTime issuedAT;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Column(nullable = false)
-    private UUID companyId;
+    private Long payrollRunId;
+
+    @Column(nullable = false)
+    private Long empId;
+
 
 }

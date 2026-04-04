@@ -1,19 +1,18 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.domain.Company;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.util.UUID;
-
 @Entity
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "pay_transfers")
+@Table(name = "pay_transfers")  //급여지급
 public class PayTransfers {
 
     @Id
@@ -26,7 +25,8 @@ public class PayTransfers {
     @Column(nullable = false)
     private Long empId;
 
-    @Column(nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
 }

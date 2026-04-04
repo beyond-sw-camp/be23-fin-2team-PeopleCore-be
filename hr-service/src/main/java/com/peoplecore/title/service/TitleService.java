@@ -33,7 +33,7 @@ public class TitleService {
         Map<Long, String> deptMap = departmentRepository
                 .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y)
                 .stream()
-                .collect(Collectors.toMap(Department::getId, Department::getDeptName));
+                .collect(Collectors.toMap(Department::getDeptId, Department::getDeptName));
 
         return titleRepository.findAllByCompanyId(companyId)
                 .stream()
@@ -50,7 +50,7 @@ public class TitleService {
         return departmentRepository
                 .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y)
                 .stream()
-                .map(dept -> new DepartmentSimpleResponse(dept.getId(), dept.getDeptName()))
+                .map(dept -> new DepartmentSimpleResponse(dept.getDeptId(), dept.getDeptName()))
                 .toList();
     }
 

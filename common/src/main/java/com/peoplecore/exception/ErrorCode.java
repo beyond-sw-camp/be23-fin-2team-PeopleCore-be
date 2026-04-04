@@ -32,10 +32,29 @@ public enum ErrorCode {
     DEPARTMENT_HAS_CHILDREN(400, "하위 부서가 있어 삭제할 수 없습니다."),
     DEPARTMENT_CIRCULAR_REFERENCE(400, "하위 부서를 상위 부서로 지정할 수 없습니다."),
 
+    // 급여지급설정
+    PAY_SETTINGS_NOT_FOUND(404, "급여지급설정을 찾을 수 없습니다."),
+    PAY_INVALID_PAYMENT_DAY(400, "지급일은 1~31 사이여야 합니다."),
+    PAY_INVALID_BANK_CODE(400, "유효하지 않은 은행 코드입니다."),
+    PAY_LAST_DAY_CONFLICT(400, "말일 선택 시 지급일 값은 입력하지 마세요."),
+
+    // 지급/공제항목 관리
+//    PAY_SETTINGS_NOT_FOUND(404, "급여지급설정을 찾을 수 없습니다."),
+//    PAY_INVALID_PAYMENT_DAY(400, "지급일은 1~31 사이여야 합니다."),
+//    PAY_INVALID_BANK_CODE(400, "유효하지 않은 은행 코드입니다."),
+//    PAY_LAST_DAY_CONFLICT(400, "말일 선택 시 지급일 값은 입력하지 마세요."),
+
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),
     BAD_REQUEST(400, "잘못된 요청입니다."),
-    INTERNAL_SERVER_ERROR(500, "서버 내부 오류가 발생했습니다.");
+    INTERNAL_SERVER_ERROR(500, "서버 내부 오류가 발생했습니다."),
+
+//    사원관리
+    EMPLOYEE_NOT_FOUND(404, "사원을 찾을 수 없습니다."),
+    GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다."),
+    TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다."),
+    MANUAL_PASSWORD_REQUIRED(400, "비밀번호를 직접 입력해야 합니다.");
+
 
     private final int status;
     private final String message;
