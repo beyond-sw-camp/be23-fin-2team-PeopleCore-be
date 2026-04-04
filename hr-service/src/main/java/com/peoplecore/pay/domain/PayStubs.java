@@ -1,6 +1,6 @@
 package com.peoplecore.pay.domain;
 
-import com.peoplecore.company.entity.Company;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.pay.enums.SendStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -9,7 +9,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Getter

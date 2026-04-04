@@ -2,7 +2,7 @@ package com.peoplecore.company.controller;
 
 
 import com.peoplecore.company.dtos.InternalCompanyResponseDto;
-import com.peoplecore.company.entity.Company;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;

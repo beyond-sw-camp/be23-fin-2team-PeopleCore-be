@@ -1,14 +1,12 @@
 package com.peoplecore.pay.domain;
 
-import com.peoplecore.company.entity.Company;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.pay.enums.PensionType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Entity
 @Getter

@@ -1,6 +1,6 @@
 package com.peoplecore.pay.service;
 
-import com.peoplecore.company.entity.Company;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;

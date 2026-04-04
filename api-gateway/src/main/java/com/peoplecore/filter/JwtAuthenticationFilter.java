@@ -37,6 +37,12 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/refresh",
             "/hr-service/auth/password"
     );
+//  hr담담자만 추가 접근 가능 경로
+    private static final List<String>HR_ONLY_PATHS =List.of(
+            "/hr-service/employee",
+            "/hr-service/resign"
+    );
+
 
     @PostConstruct
     public void init() {
@@ -48,6 +54,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
+
+        System.out.println("=== 요청 경로: " + path);//**
 
         // 인증 제외 경로
         if (isExcludedPath(path)) {
@@ -70,8 +78,18 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
+
         } catch (JwtException e) {
+
             return onError(exchange, "유효하지 않은 토큰입니다.", HttpStatus.UNAUTHORIZED);
+        }
+
+//        hr전용 경로 시 추가 role체크
+        if(isHrOnlyPath(path)){
+            String role = claims.get("role", String.class);
+            if(!role.equals("HR_ADMIN")&&!role.equals("HR_SUPER_ADMIN")){
+                return onError(exchange,"접근권한이 없습니다",HttpStatus.FORBIDDEN);
+            }
         }
 
         // 검증 통과 → 사용자 정보를 헤더에 실어서 하위 서비스로 전달
@@ -90,6 +108,16 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private boolean isExcludedPath(String path) {
         return EXCLUDE_PATHS.stream().anyMatch(path::startsWith);
+    }
+
+//    hr 전용경로 확인
+    private boolean isHrOnlyPath(String path){
+        for(String hrPath : HR_ONLY_PATHS){
+            if(path.startsWith(hrPath)){
+                return true;
+            }
+        }
+        return false;
     }
 
     private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {

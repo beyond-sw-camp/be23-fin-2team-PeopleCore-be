@@ -1,7 +1,6 @@
 package com.peoplecore.pay.domain;
 
-import com.peoplecore.company.entity.Company;
-import com.peoplecore.entity.BaseTimeEntity;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.pay.enums.LegalCalcType;
 import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
@@ -10,8 +9,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-
-import java.util.UUID;
 
 @Entity
 @AllArgsConstructor

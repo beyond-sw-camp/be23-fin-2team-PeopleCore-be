@@ -1,6 +1,6 @@
 package com.peoplecore.department.service;
 
-import com.peoplecore.company.entity.Company;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.department.domain.Department;
@@ -53,7 +53,7 @@ public class DepartmentService {
                 .stream()
                 .map(dept -> DepartmentResponse.from(
                         dept,
-                        memberCountMap.getOrDefault(dept.getId(), 0L)
+                        memberCountMap.getOrDefault(dept.getDeptId(), 0L)
                 ))
                 .toList();
     }
@@ -163,7 +163,7 @@ public class DepartmentService {
 
     private Department findDepartmentOrThrow(UUID companyId, Long deptId) {
         return departmentRepository
-                .findByIdAndCompany_CompanyId(deptId, companyId)
+                .findByDeptIdAndCompany_CompanyId(deptId, companyId)
                 .filter(d -> d.getIsUse() == UseStatus.Y)
                 .orElseThrow(() -> new CustomException(ErrorCode.DEPARTMENT_NOT_FOUND));
     }
@@ -175,7 +175,7 @@ public class DepartmentService {
 
         Map<Long, Long> parentMap = allDepts.stream()
                 .collect(Collectors.toMap(
-                        Department::getId,
+                        Department::getDeptId,
                         d -> d.getParentDeptId() != null ? d.getParentDeptId() : -1L
                 ));
 
@@ -191,7 +191,7 @@ public class DepartmentService {
 
     private long countMembers(UUID companyId, Long deptId) {
         return employeeRepository
-                .countByCompany_CompanyIdAndDepartment_Id(companyId, deptId);
+                .countByCompany_CompanyIdAndDept_DeptId(companyId, deptId);
     }
 
     private Map<Long, Long> getMemberCountMap(UUID companyId) {
@@ -211,11 +211,11 @@ public class DepartmentService {
     ) {
 
         List<DepartmentResponse> children = allDepts.stream()
-                .filter(d -> dept.getId().equals(d.getParentDeptId()))
+                .filter(d -> dept.getDeptId().equals(d.getParentDeptId()))
                 .map(child -> buildTree(child, allDepts, memberCountMap))
                 .toList();
 
-        long memberCount = memberCountMap.getOrDefault(dept.getId(), 0L);
+        long memberCount = memberCountMap.getOrDefault(dept.getDeptId(), 0L);
 
         return DepartmentResponse.withChildren(dept, memberCount, children);
     }
