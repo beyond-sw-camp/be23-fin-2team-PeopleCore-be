@@ -36,7 +36,9 @@
       "Bash(apidog --version)",
       "Bash(npx apidog:*)",
       "Bash(npx @apidog/cli --version)",
-      "Bash(mysql:*)"
+      "Bash(mysql:*)",
+      "mcp__apidog__read_project_oas_6mfpii",
+      "mcp__apidog__read_project_oas_ref_resources_6mfpii"
     ]
   }
 }
