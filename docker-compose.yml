@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   redis1:
     image: redis:7
@@ -67,7 +68,7 @@ services:
     volumes:
       - minio-data:/data
     command: server /data --console-address ":9001"
-  #    권한 설정 (read)
+#    권한 설정 (read)
   minio-init:
     image: minio/mc
     depends_on:

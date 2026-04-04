@@ -3,8 +3,8 @@ package com.peoplecore;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.data.jpa.repository.config.EnableJpaAuditing;
-//확인(entity추가 후 삭제)
-@SpringBootApplication(scanBasePackages = {"com.peoplecore", "com.peoplecore.common", "com.peoplecore.employee", "com.peoplecore.auth", "com.peoplecore.grade", "com.peoplecore.title", "com.peoplecore.company"})
+
+@SpringBootApplication(scanBasePackages = {"com.peoplecore", "com.peoplecore.*"})
 @EnableJpaAuditing
 public class HrServiceApplication {
 

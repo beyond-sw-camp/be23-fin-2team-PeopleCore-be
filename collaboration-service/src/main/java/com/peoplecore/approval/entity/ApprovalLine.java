@@ -35,6 +35,7 @@ public class ApprovalLine extends BaseTimeEntity {
      * 결재 문서 Id
      */
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "doc_id", nullable = false)
     private ApprovalDocument docId;
 
     /**
@@ -59,6 +60,7 @@ public class ApprovalLine extends BaseTimeEntity {
      * 결재 역할 - 결제자/참조자/열람자
      */
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private ApprovalRole approvalRole;
 
     /**
@@ -72,6 +74,7 @@ public class ApprovalLine extends BaseTimeEntity {
      */
     @Builder.Default
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private ApprovalLineStatus approvalLineStatus = ApprovalLineStatus.PENDING;
 
     /* 처리 일시 */
@@ -112,5 +115,35 @@ public class ApprovalLine extends BaseTimeEntity {
      */
     @Column(nullable = false)
     private String empTitle;
+
+    /**
+     * 결재선 상태 초기화 (재기안 시 사용)
+     */
+    public void resetStatus() {
+        this.approvalLineStatus = ApprovalLineStatus.PENDING;
+        this.lineProcessedAt = null;
+        this.lineRejectReason = null;
+    }
+
+    /*결재 승인 처리*/
+    public void approve() {
+        this.approvalLineStatus = ApprovalLineStatus.APPROVED;
+        this.lineProcessedAt = LocalDateTime.now();
+    }
+
+    /*결재 반려 처리 */
+    public void reject(String reason) {
+        this.approvalLineStatus = ApprovalLineStatus.REJECTED;
+        if (reason != null) {
+            this.lineRejectReason = reason;
+        }
+        this.lineProcessedAt = LocalDateTime.now();
+    }
+
+    /*열람/ 참조 확인 처리 */
+    public void markRead() {
+        this.isRead = true;
+        this.lineProcessedAt = LocalDateTime.now();
+    }
 
 }
