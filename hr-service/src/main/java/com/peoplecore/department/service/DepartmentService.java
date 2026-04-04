@@ -1,6 +1,9 @@
 package com.peoplecore.department.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.company.domain.Company;
+import com.peoplecore.event.DeptUpdatedEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.department.domain.Department;
@@ -11,6 +14,9 @@ import com.peoplecore.department.dto.DepartmentUpdateRequest;
 import com.peoplecore.department.repository.DepartmentRepository;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,12 +26,25 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Transactional
+@Slf4j
 public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
     private final EmployeeRepository employeeRepository;
+    /* 부서 변경 이벤트 발생 시 카프카 메세지 발생*/
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
+    private static final String TOPIC_DEPT_UPDATED = "hr-dept-updated";
+
+    @Autowired
+    public DepartmentService(DepartmentRepository departmentRepository, EmployeeRepository employeeRepository, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
+        this.departmentRepository = departmentRepository;
+        this.employeeRepository = employeeRepository;
+        this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
+    }
+
 
     /**
      * 조직도 트리 조회 — 최상위 부서부터 재귀적으로 하위 부서를 포함
@@ -137,6 +156,9 @@ public class DepartmentService {
             dept.updateParent(request.getParentDeptId());
         }
 
+//        부서 정보 변경 시 kafka 이벤트 발행
+        publishDeptUpdatedEvent(deptId);
+
         long memberCount = countMembers(companyId, deptId);
         return DepartmentResponse.from(dept, memberCount);
     }
@@ -157,9 +179,28 @@ public class DepartmentService {
         }
 
         dept.deactivate();
+
+        /* 부서 삭제 또는 비활성화된 부서가 캐시에 남아있을 수 도 있으니 캐시 삭제 메세지 발행 */
+        publishDeptUpdatedEvent(deptId);
     }
 
+    /* 부서 변경 이벤트 kafka로 발행
+     * 실패해도 다른 로직에 영향을 주지 않도록 try-catch에서예외처리 x  */
+    private void publishDeptUpdatedEvent(Long deptId) {
+        try {
+            String message = objectMapper.writeValueAsString(new DeptUpdatedEvent(deptId));
+            kafkaTemplate.send(TOPIC_DEPT_UPDATED, String.valueOf(deptId), message);
+            log.info("부서 변경 이벤트 발행 완료 topic = {}, deptId = {} ", TOPIC_DEPT_UPDATED, deptId);
+        } catch (JsonProcessingException e) {
+            log.error("부서 변경 이벤트 직렬화 실패 deptId = {}, error = {} ", deptId, e.getMessage());
+        } catch (Exception e) {
+            log.error("부서 변경 이벤트 발행 실패 deptId = {} , error = {} ", deptId, e.getMessage());
+        }
+    }
+
+
     // ========================= 내부 메서드 =========================
+
 
     private Department findDepartmentOrThrow(UUID companyId, Long deptId) {
         return departmentRepository
