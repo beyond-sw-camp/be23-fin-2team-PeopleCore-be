@@ -3,15 +3,19 @@ package com.peoplecore.employee.controller;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.EmpType;
 import com.peoplecore.employee.domain.EmployeeSortField;
+import com.peoplecore.employee.dto.EmployeeCreateRequestDto;
 import com.peoplecore.employee.dto.EmployeeKardResponseDto;
 import com.peoplecore.employee.dto.EmployeeListDto;
 import com.peoplecore.employee.service.EmployeeService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -47,7 +51,15 @@ public class EmployeeController {
     }
 //
 ////    3. 신규등록
-//    @PostMapping
+    @PostMapping
+    public ResponseEntity<Long>createEmployee(@RequestHeader("X-User-Company")UUID companyId,
+                                              @Valid @ModelAttribute EmployeeCreateRequestDto responseDto,
+                                              @RequestPart(required = false) List<MultipartFile> files){
+        return ResponseEntity.ok(employeeService.createEmployee(companyId, responseDto,files));
+    }
+
+
+
 //
 ////    4. 상세 조희
 //    @GetMapping("{empId}")
@@ -58,7 +70,6 @@ public class EmployeeController {
 ////    6. 삭제
 //    @DeleteMapping("{empId}")
 //
-
 
 
 
