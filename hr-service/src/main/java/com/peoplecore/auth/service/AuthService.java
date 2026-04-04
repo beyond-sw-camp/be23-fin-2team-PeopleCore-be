@@ -70,7 +70,7 @@ public class AuthService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public LoginResponse refresh(TokenRefreshRequest request) {
         if (!jwtProvider.validateRefreshToken(request.getRefreshToken())) {
             throw new IllegalArgumentException("유효하지 않은 리프레시 토큰입니다.");

@@ -30,7 +30,7 @@ public class ApprovalDocumentController {
             @RequestHeader("X-User-Name") String empName,
             @RequestHeader("X-User-Department") Long deptId,
             @RequestHeader("X-User-Grade") String empGrade,
-            @RequestHeader("X-User-Title") String empTitle,
+            @RequestHeader(value = "X-User-Title", required = false) String empTitle,
             @RequestBody DocumentCreateRequest request) {
         Long docId = approvalDocumentService.createDocument(companyId, empId, empName, deptId, empGrade, empTitle, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(docId);
@@ -72,7 +72,7 @@ public class ApprovalDocumentController {
             @RequestHeader("X-User-Name") String empName,
             @RequestHeader("X-User-Department") Long deptId,
             @RequestHeader("X-User-Grade") String empGrade,
-            @RequestHeader("X-User-Title") String empTitle,
+            @RequestHeader(value = "X-User-Title", required = false) String empTitle,
             @RequestBody DocumentCreateRequest request) {
         Long docId = approvalDocumentService.saveTempDocument(companyId, empId, empName, deptId, empGrade, empTitle, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(docId);

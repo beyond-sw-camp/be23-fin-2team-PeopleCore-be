@@ -2,7 +2,6 @@ package com.peoplecore.auth.service;
 
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
-import com.peoplecore.sms.SmsSender;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
