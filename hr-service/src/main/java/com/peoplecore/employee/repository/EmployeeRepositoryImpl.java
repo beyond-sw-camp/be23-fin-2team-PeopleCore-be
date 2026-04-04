@@ -1,7 +1,10 @@
 package com.peoplecore.employee.repository;
 
+import com.peoplecore.department.domain.QDepartment;
 import com.peoplecore.employee.domain.*;
+import com.peoplecore.employee.dto.EmpDetailResponseDto;
 import com.querydsl.core.types.OrderSpecifier;
+import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
@@ -11,6 +14,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
 //**********************************************************************************
 @Repository
 @RequiredArgsConstructor
@@ -19,6 +25,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
     private final JPAQueryFactory queryFactory;
     // Employee 엔티티를 쿼리에서 사용하기 위한 Q클래스 (변수명 충돌 방지를 위해 q 접두사)
     private final QEmployee qEmployee = QEmployee.employee;
+
 
     @Override
     public Page<Employee> findAllwithFilter(String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField sortField, Pageable pageable) {
@@ -53,6 +60,9 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
 //                        데이터, 페이지정보, 전체개수 합쳐서 반환
         return new PageImpl<>(content,pageable,total != null ? total : 0L);
     }
+
+
+
 //    Enum으로 허용된 값만 정렬에 사용(SQL인젝션 방지)
     private OrderSpecifier<?> getOrderSpecifier(EmployeeSortField sortField) {
         if (sortField == null) return qEmployee.empId.asc(); // 기본 정렬
@@ -80,4 +90,7 @@ private BooleanExpression deptEq(Long deptId) {
     private BooleanExpression empStatusEq(EmpStatus empStatus) {
         return empStatus != null ? qEmployee.empStatus.eq(empStatus) : null;
     }
+
+
+
 }

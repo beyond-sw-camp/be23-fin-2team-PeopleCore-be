@@ -3,6 +3,7 @@ package com.peoplecore.employee.controller;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.EmpType;
 import com.peoplecore.employee.domain.EmployeeSortField;
+import com.peoplecore.employee.dto.EmpDetailResponseDto;
 import com.peoplecore.employee.dto.EmployeeCreateRequestDto;
 import com.peoplecore.employee.dto.EmployeeKardResponseDto;
 import com.peoplecore.employee.dto.EmployeeListDto;
@@ -62,7 +63,10 @@ public class EmployeeController {
 
 //
 ////    4. 상세 조희
-//    @GetMapping("{empId}")
+    @GetMapping("{empId}")
+    public ResponseEntity<EmpDetailResponseDto>getEmpDetail(@RequestHeader("X-User-Company")UUID companyId,@PathVariable Long empId){
+        return ResponseEntity.ok(employeeService.getEmployeeDetail(companyId,empId));
+    }
 //
 ////    5. 정보 수정
 //    @PutMapping("{empId}")
