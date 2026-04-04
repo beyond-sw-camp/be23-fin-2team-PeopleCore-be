@@ -21,9 +21,12 @@ public class PayItemReqDto {
     @NotNull(message = "지급/공제 구분은 필수입니다")
     private PayItemType payItemType;
 
+    @Builder.Default
     private Boolean isFixed = false;    //고정수당여부 (지급항목만)
+    @Builder.Default
     private Boolean isTaxable = true;   //과세여부 (지급항목만)
 
+    @Builder.Default
     @Min(value = 0, message = "비과세한도는 0이상이어야 합니다")
     private Integer taxExemptLimit = 0; //비과세한도 (지급항목만)
 

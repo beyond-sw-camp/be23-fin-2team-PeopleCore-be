@@ -4,6 +4,7 @@ import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.grade.domain.Grade;
+import com.peoplecore.pay.domain.InsuranceJobTypes;
 import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
 import lombok.*;
@@ -28,6 +29,7 @@ public class Employee extends BaseTimeEntity {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
+//    부서
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dept_id", nullable = false)
     private Department dept;
@@ -43,12 +45,8 @@ public class Employee extends BaseTimeEntity {
     private Title title;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "dept_id", nullable = false)
-    private Department department;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @Column(name = "job_types_id", nullable = false)
-    private Long jobTypesId;
+    @JoinColumn(name = "insurance_job_types", nullable = false)
+    private InsuranceJobTypes jobTypes;
 
     @Column(name = "emp_name", nullable = false, length = 50)
     private String empName;

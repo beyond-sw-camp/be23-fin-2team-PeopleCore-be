@@ -63,7 +63,7 @@ public class PayItemsService {
     @Transactional
     public PayItemResDto updatePayItem(UUID companyId, Long payItemId, PayItemReqDto reqDto){
 
-        PayItems items = payItemsRepository.findByPayItemIdInAndCompany_CompanyId(payItemId, companyId).orElseThrow(()-> new CustomException(ErrorCode.NOT_FOUND));
+        PayItems items = payItemsRepository.findByPayItemIdAndCompany_CompanyId(payItemId, companyId).orElseThrow(()-> new CustomException(ErrorCode.NOT_FOUND));
 
         items.update(reqDto.getPayItemName(), reqDto.getIsFixed(), reqDto.getIsTaxable(), reqDto.getTaxExemptLimit(), reqDto.getPayItemCategory());
 
@@ -72,7 +72,7 @@ public class PayItemsService {
 
     @Transactional
     public PayItemResDto toggleStatus(UUID companyId, Long payItemId){
-        PayItems items = payItemsRepository.findByPayItemIdInAndCompany_CompanyId(payItemId, companyId).orElseThrow(()-> new CustomException(ErrorCode.NOT_FOUND));
+        PayItems items = payItemsRepository.findByPayItemIdAndCompany_CompanyId(payItemId, companyId).orElseThrow(()-> new CustomException(ErrorCode.NOT_FOUND));
 
         items.toggleActive();
         return PayItemResDto.fromEntity(items);

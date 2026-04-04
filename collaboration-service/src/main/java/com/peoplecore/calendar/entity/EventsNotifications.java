@@ -25,6 +25,6 @@ public class EventsNotifications {
     private Integer minutesBefore;
 
     @ManyToOne
-    @Column(nullable = false)
+    @JoinColumn(name = "events_id",nullable = false)
     private Long eventsId;
 }

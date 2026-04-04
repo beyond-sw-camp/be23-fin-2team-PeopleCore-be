@@ -42,7 +42,7 @@ public class InterestCalendars {
     private UUID companyId;
 
     @ManyToOne
-    @Column(nullable = false)
+    @JoinColumn(name = "share_req_id",nullable = false)
     private Long shareReqId;
 
 }

@@ -47,8 +47,9 @@ public class InsuranceRates extends BaseTimeEntity {
     @Column(precision = 5, scale = 4)
     private BigDecimal industrialAccident;
 
-    @Column(nullable = false)
-    private Long jobTypesId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "insurance_job_types", nullable = false)
+    private InsuranceJobTypes jobTypes;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)

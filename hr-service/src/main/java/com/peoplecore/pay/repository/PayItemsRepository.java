@@ -10,7 +10,7 @@ import java.util.UUID;
 
 public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
 
-    Optional<PayItems> findByPayItemIdInAndCompany_CompanyId(Long payItemId, UUID companyId);
+    Optional<PayItems> findByPayItemIdAndCompany_CompanyId(Long payItemId, UUID companyId);
 
     // 다중 삭제 전 존재 확인
     List<PayItems> findByPayItemIdInAndCompany_CompanyId(List<Long> payItemIds, UUID companyId);

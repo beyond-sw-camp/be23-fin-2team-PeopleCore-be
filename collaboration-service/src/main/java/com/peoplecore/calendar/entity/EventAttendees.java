@@ -38,6 +38,6 @@ public class EventAttendees {
     private UUID companyId;
 
     @ManyToOne
-    @Column(nullable = false)
+    @JoinColumn(name = "event_instances_id", nullable = false)
     private Long eventInstancesId;
 }

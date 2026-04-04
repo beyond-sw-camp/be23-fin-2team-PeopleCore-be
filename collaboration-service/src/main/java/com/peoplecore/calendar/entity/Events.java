@@ -53,11 +53,11 @@ public class Events extends BaseTimeEntity {
     private UUID companyId;
 
     @ManyToOne
-    @Column(name = "my_calendars_id")
+    @JoinColumn(name = "my_calendars_id")
     private Long myCalendarsId;
 
     @ManyToOne
-    @Column(nullable = false)
+    @JoinColumn(name = "repeated_rules_id",nullable = false)
     private Long repeatedRulesId;
 
 }
