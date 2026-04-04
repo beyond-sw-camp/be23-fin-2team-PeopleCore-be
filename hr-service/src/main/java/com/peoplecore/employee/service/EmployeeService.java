@@ -26,7 +26,7 @@ public class EmployeeService {
     }
 
 //    1.사원조회 및 등록
-    public Page<EmployeeListDto>getEmployee(String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField employeeSortField, Pageable pageable){
+    public Page<EmployeeListDto> getEmployee(String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField employeeSortField, Pageable pageable){
         Page<Employee>employees = employeeRepository.findAllwithFilter(keyword,deptId,empType,empStatus,employeeSortField,pageable);
         return employees.map(EmployeeListDto::fromEntity);
     }

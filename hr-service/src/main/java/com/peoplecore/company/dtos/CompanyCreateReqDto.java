@@ -42,7 +42,5 @@ public class CompanyCreateReqDto {
     private String adminName;
 
     @NotBlank(message = "관리자 이메일은 필수입니다")
-    @Email
     private String adminEmail;
-}
 }
