@@ -1,6 +1,7 @@
 package com.peoplecore.pay.domain;
 
 import com.peoplecore.company.entity.Company;
+import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.pay.enums.LegalCalcType;
 import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
@@ -32,6 +33,7 @@ public class PayItems {
     @Column(nullable = false)
     private PayItemType payItemType;
 
+//    과세여부
     @Builder.Default
     private Boolean isTaxable = true;
 
@@ -44,6 +46,7 @@ public class PayItems {
     @Builder.Default
     private Boolean isActive = true;
 
+//    항목분류
     @Enumerated(EnumType.STRING)
     private PayItemCategory payItemCategory;
 
@@ -57,5 +60,23 @@ public class PayItems {
 //    법정산정방식구분용
     @Enumerated(EnumType.STRING)
     private LegalCalcType legalCalcType;
+
+//    비과세 한도
+    @Builder.Default
+    private Integer taxExemptLimit = 0;
+
+
+    public void update(String payItemName, Boolean isFixed, Boolean isTaxable, Integer taxExemptLimit, PayItemCategory payItemCategory){
+        this.payItemName = payItemName;
+        this.isFixed = isFixed;
+        this.isTaxable = isTaxable;
+        this.taxExemptLimit = taxExemptLimit;
+        this.payItemCategory =payItemCategory;
+    }
+
+//    사용여부 토글
+    public void toggleActive(){
+        this.isActive = !this.isActive;
+    }
 
 }

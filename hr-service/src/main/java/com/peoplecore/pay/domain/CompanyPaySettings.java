@@ -40,4 +40,17 @@ public class CompanyPaySettings extends BaseTimeEntity {
     @Column(length = 10)
     private String mainBankCode;
 
+    @Column(length = 30)
+    private String mainBankName;
+
+
+    public void update(Integer salaryPayDay, Boolean salaryPayLastDay, PayMonth salaryPayMonth, String mainBankCode, String mainBankName){
+        this.salaryPayDay = salaryPayDay;
+        this.salaryPayLastDay = salaryPayLastDay;
+        this.salaryPayMonth = salaryPayMonth;
+        this.mainBankCode = mainBankCode;
+        this.mainBankName = mainBankName;
+
+    }
+
 }
