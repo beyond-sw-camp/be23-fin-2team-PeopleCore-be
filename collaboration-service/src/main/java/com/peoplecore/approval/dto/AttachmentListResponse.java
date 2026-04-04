@@ -10,19 +10,16 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AttachmentResponse {
-
+public class AttachmentListResponse {
     private Long attachId;
     private String fileName;
     private Long fileSize;
-    private String fileUrl;
 
-    public static AttachmentResponse from(ApprovalAttachment attachment, String fileUrl) {
-        return AttachmentResponse.builder()
+    public static AttachmentListResponse from(ApprovalAttachment attachment) {
+        return AttachmentListResponse.builder()
                 .attachId(attachment.getAttachId())
                 .fileName(attachment.getFileName())
                 .fileSize(attachment.getFileSize())
-                .fileUrl(fileUrl)
                 .build();
     }
 }

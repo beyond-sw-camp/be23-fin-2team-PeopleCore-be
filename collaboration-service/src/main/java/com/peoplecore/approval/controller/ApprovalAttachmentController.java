@@ -1,5 +1,6 @@
 package com.peoplecore.approval.controller;
 
+import com.peoplecore.approval.dto.AttachmentListResponse;
 import com.peoplecore.approval.dto.AttachmentResponse;
 import com.peoplecore.approval.service.ApprovalAttachmentService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,8 +37,14 @@ public class ApprovalAttachmentController {
 
     /** 첨부파일 목록 조회 */
     @GetMapping("/{docId}/attachments")
-    public ResponseEntity<List<AttachmentResponse>> getAttachments(@PathVariable Long docId) {
+    public ResponseEntity<List<AttachmentListResponse>> getAttachments(@PathVariable Long docId) {
         return ResponseEntity.ok(attachmentService.getAttachments(docId));
+    }
+
+    /** 첨부파일 다운로드 URL 발급 */
+    @GetMapping("/attachments/{attachId}/download")
+    public ResponseEntity<String> getDownloadUrl(@PathVariable Long attachId) {
+        return ResponseEntity.ok(attachmentService.getDownloadUrl(attachId));
     }
 
     /** 첨부파일 단건 삭제 */

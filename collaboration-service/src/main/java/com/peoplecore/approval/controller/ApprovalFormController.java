@@ -23,12 +23,12 @@ public class ApprovalFormController {
     }
 
     @GetMapping("/form-folder")
-    public ResponseEntity<List<FormFolderResponse>> getFormFolder(@RequestHeader("X-Company") UUID companyId) {
+    public ResponseEntity<List<FormFolderResponse>> getFormFolder(@RequestHeader("X-User-Company") UUID companyId) {
         return ResponseEntity.ok(approvalFormService.getFormFolder(companyId));
     }
 
     @GetMapping("/form")
-    public ResponseEntity<List<FormListResponse>> getForm(@RequestHeader("X-Company") UUID companyId, @RequestParam(required = false) Long folderId) {
+    public ResponseEntity<List<FormListResponse>> getForm(@RequestHeader("X-User-Company") UUID companyId, @RequestParam(required = false) Long folderId) {
         return ResponseEntity.ok(approvalFormService.getForms(companyId, folderId));
     }
 

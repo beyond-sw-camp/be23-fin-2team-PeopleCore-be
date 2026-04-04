@@ -1,5 +1,6 @@
 package com.peoplecore.approval.service;
 
+import com.peoplecore.approval.dto.AttachmentListResponse;
 import com.peoplecore.approval.dto.AttachmentResponse;
 import com.peoplecore.approval.entity.ApprovalAttachment;
 import com.peoplecore.approval.entity.ApprovalDocument;
@@ -81,19 +82,25 @@ public class ApprovalAttachmentService {
         return responses;
     }
 
-    /** 문서의 첨부파일 목록 조회 (Pre-signed URL 포함) */
-    public List<AttachmentResponse> getAttachments(Long docId) {
+    /** 문서의 첨부파일 목록 조회 (URL 없이) */
+    public List<AttachmentListResponse> getAttachments(Long docId) {
         List<ApprovalAttachment> attachments = attachmentRepository.findByDocId_DocId(docId);
         return attachments.stream()
-                .map(att -> AttachmentResponse.from(att, minioService.getPresignedUrl(att.getObjectName())))
+                .map(AttachmentListResponse::from)
                 .toList();
+    }
+
+    /** 첨부파일 다운로드 URL 발급 (단건) */
+    public String getDownloadUrl(Long attachId) {
+        ApprovalAttachment attachment = attachmentRepository.findById(attachId)
+                .orElseThrow(() -> new BusinessException("첨부파일을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        return minioService.getPresignedUrl(attachment.getObjectName());
     }
 
     /** 첨부파일 단건 삭제 (MinIO + DB) */
     @Transactional
     public void deleteAttachment(UUID companyId, Long empId, Long attachId) {
-        ApprovalAttachment attachment = attachmentRepository.findById(attachId)
-                .orElseThrow(() -> new BusinessException("첨부파일을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        ApprovalAttachment attachment = attachmentRepository.findWithDocById(attachId).orElseThrow(() -> new BusinessException("첨부파일을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
         /* 본인 문서인지 확인 */
         if (!attachment.getDocId().getEmpId().equals(empId)) {

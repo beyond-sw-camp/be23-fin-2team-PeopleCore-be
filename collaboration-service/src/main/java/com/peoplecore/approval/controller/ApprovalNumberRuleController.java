@@ -3,7 +3,6 @@ package com.peoplecore.approval.controller;
 import com.peoplecore.approval.dto.NumberRuleResponse;
 import com.peoplecore.approval.dto.NumberRuleUpdateRequest;
 import com.peoplecore.approval.service.ApprovalNumberRuleService;
-import org.apache.coyote.Response;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;

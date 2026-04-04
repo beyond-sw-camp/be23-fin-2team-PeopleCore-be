@@ -42,7 +42,7 @@ public class DocumentDetailResponse {
     private List<ApprovalLineResponse> approvalLines;
 
     //    첨부파일
-    private List<AttachmentResponse> attachments;
+    private List<AttachmentListResponse> attachments;
 
 
     @Data

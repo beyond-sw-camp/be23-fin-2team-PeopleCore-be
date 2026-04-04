@@ -25,7 +25,7 @@ public class DocumentCreateRequest {
     private Boolean isEmergency;
 
     //    결재선 목록
-    private List<ApprovalLineRequest> approvalLine;
+    private List<ApprovalLineRequest> approvalLines;
 
     @Data
     @NoArgsConstructor

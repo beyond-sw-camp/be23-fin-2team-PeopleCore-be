@@ -82,7 +82,7 @@ public class ApprovalDocumentService {
         documentRepository.save(document);
 
         /*결재선 저장 */
-        saveApprovalLine(companyId, document, request.getApprovalLine());
+        saveApprovalLine(companyId, document, request.getApprovalLines());
         return document.getDocId();
     }
 
@@ -144,8 +144,8 @@ public class ApprovalDocumentService {
         documentRepository.save(document);
 
         /*결재선이 있다면 함께 저장 */
-        if (request.getApprovalLine() != null) {
-            saveApprovalLine(companyId, document, request.getApprovalLine());
+        if (request.getApprovalLines() != null) {
+            saveApprovalLine(companyId, document, request.getApprovalLines());
         }
         return document.getDocId();
     }
@@ -161,6 +161,13 @@ public class ApprovalDocumentService {
     @Transactional
     public void submitDocument(UUID companyId, Long deptId, Long empId, Long docId) {
         ApprovalDocument document = findOwnDraftDocument(companyId, empId, docId);
+        /* 결재자 존재 검증 */
+        List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
+        boolean hasApprover = lines.stream()
+                .anyMatch(line -> line.getApprovalRole() == ApprovalRole.APPROVER);
+        if (!hasApprover) {
+            throw new BusinessException("결재자가 지정되지 않은 문서는 상신할 수 없습니다.");
+        }
 
         DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
         CompanyInfoResponse companyInfo = hrCacheService.getCompany(companyId);
@@ -205,10 +212,8 @@ public class ApprovalDocumentService {
         }
 
         /* 상태 변경 이력 저장 (반려 사유는 결재선에서 가져옴) */
-        String rejectReason = lineRepository.findByDocId_DocIdOrderByLineStep(docId).stream()
-                .filter(line -> line.getLineRejectReason() != null)
-                .map(ApprovalLine::getLineRejectReason)
-                .findFirst().orElse(null);
+        List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
+        String rejectReason = lines.stream().filter(line -> line.getLineRejectReason() != null).map(ApprovalLine::getLineRejectReason).findFirst().orElse(null);
 
         historyRepository.save(ApprovalStatusHistory.builder()
                 .docId(docId)
@@ -241,25 +246,28 @@ public class ApprovalDocumentService {
         /* 상태 패턴: REJECTED → PENDING (RejectedState.submit() 호출) */
         document.submit();
 
-        /* 결재선 초기화 — 모든 결재자 다시 PENDING으로 */
-        List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
-        lines.forEach(ApprovalLine::resetStatus);
 
         /* 결재선 교체가 필요한 경우 */
         if (request.getApprovalLines() != null) {
             lineRepository.deleteByDocId_DocId(docId);
             saveApprovalLine(companyId, document, request.getApprovalLines());
+        } else {
+            /* 기존 결재선 유지 시 상태만 초기화 */
+            lines.forEach(ApprovalLine::resetStatus);
         }
-
         // @Version 낙관적 락: 동시 수정 시 OptimisticLockingFailureException 발생
     }
 
-    /** 상신 취소(회수) - PENDING → CANCELED 전환 */
+    /**
+     * 상신 취소(회수) - PENDING → CANCELED 전환
+     */
     @Transactional
     public void recallDocument(UUID companyId, Long empId, Long docId) {
         ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId)
                 .orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-
+        if (document.getApprovalStatus() != ApprovalStatus.PENDING) {
+            throw new BusinessException("결재 진행 중인 문서만 회수할 수 있습니다.");
+        }
         /* 본인 문서인지 확인 */
         if (!document.getEmpId().equals(empId)) {
             throw new BusinessException("본인의 문서만 회수할 수 있습니다.", HttpStatus.FORBIDDEN);

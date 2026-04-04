@@ -34,13 +34,20 @@ public class ApprovalNumberService {
         this.slotTypeRegistry = slotTypeRegistry;
     }
 
+
+    /*문서 번호 자동채번*/
     @Transactional
     public String generateDocNum(UUID companyId, SlotContextDto contextDto) {
-        try {
-            return doGenerate(companyId, contextDto);
-        } catch (DataIntegrityViolationException e) {
-            return doGenerate(companyId, contextDto);
+        /*최소 3회 재시도 */
+        int maxRetry = 3;
+        for (int i = 0; i < maxRetry; i++) {
+            try {
+                return doGenerate(companyId, contextDto);
+            } catch (DataIntegrityViolationException e) {
+                if (i == maxRetry - 1) throw e;
+            }
         }
+        throw new BusinessException("채번 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
     }
 
     private String doGenerate(UUID companyId, SlotContextDto contextDto) {
