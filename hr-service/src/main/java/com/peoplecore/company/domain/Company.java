@@ -1,4 +1,4 @@
-package com.peoplecore.company.entity;
+package com.peoplecore.company.domain;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

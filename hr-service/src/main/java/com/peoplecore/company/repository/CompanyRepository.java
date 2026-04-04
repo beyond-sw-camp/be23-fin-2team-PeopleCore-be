@@ -1,6 +1,6 @@
 package com.peoplecore.company.repository;
 
-import com.peoplecore.company.entity.Company;
+import com.peoplecore.company.domain.Company;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 

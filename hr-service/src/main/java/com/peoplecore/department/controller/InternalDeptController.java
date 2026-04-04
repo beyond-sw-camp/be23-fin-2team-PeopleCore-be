@@ -23,7 +23,7 @@ public class InternalDeptController {
 
     @GetMapping("/{deptId}")
     public ResponseEntity<InternalDeptResponseDto> getDept(@PathVariable Long deptId) {
-        Department department = departmentRepository.findByIdAndIsUse(deptId, UseStatus.Y).orElseThrow(() -> new RuntimeException("부서를 찾을 수 없습니다."));
+        Department department = departmentRepository.findByDeptIdAndIsUse(deptId, UseStatus.Y).orElseThrow(() -> new RuntimeException("부서를 찾을 수 없습니다."));
         return ResponseEntity.ok(InternalDeptResponseDto.from(department));
 
     }

@@ -46,7 +46,7 @@ public class JwtProvider {
                 .claim("companyId", employee.getCompany().getCompanyId())
                 .claim("name", employee.getEmpName())
                 .claim("role", employee.getEmpRole().name())
-                .claim("departmentId", employee.getDepartment().getId())
+                .claim("departmentId", employee.getDept().getDeptId())
                 .claim("gradeId", employee.getGrade().getGradeId())
                 .claim("titleId", employee.getTitle().getTitleId())
                 .setIssuedAt(now)

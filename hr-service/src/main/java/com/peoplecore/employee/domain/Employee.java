@@ -1,6 +1,6 @@
 package com.peoplecore.employee.domain;
 
-import com.peoplecore.company.entity.Company;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.grade.domain.Grade;
@@ -10,7 +10,6 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "employee")
@@ -30,19 +29,23 @@ public class Employee extends BaseTimeEntity {
     private Company company;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "dept_id", nullable = false)
+    private Department dept;
+
+//  직급
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "grade_id", nullable = false)
     private Grade grade;
 
+//    직위
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "title_id", nullable = false)
     private Title title;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "dept_id", nullable = false)
-    private Department department;
-
-    @Column(name = "job_types_id", nullable = false)
-    private Long jobTypesId;
+// 업종(산재보험용)
+//    @ManyToOne(fetch = FetchType.LAZY)
+//    @JoinColumn(name = "jobTypes_id", nullable = false)
+//    private JobTypes jobTypes;
 
     @Column(name = "emp_name", nullable = false, length = 50)
     private String empName;
@@ -86,6 +89,38 @@ public class Employee extends BaseTimeEntity {
 
     @Column(name = "simple_password")
     private String simplePassword;
+
+    @Column(name = "emp_birth_date")
+    private LocalDate empBirthDate;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "emp_gender")
+    private EmpGender empGender;
+
+    @Column(name = "emp_personal_email")
+    private String empPersonalEmail;
+
+    @Column(name = "emp_zip_code")
+    private String empZipCode;
+
+    @Column(name = "emp_address_base")
+    private String empAddressBase;
+
+    @Column(name = "emp_address_detail")
+    private String empAddressDetail;
+
+    @Column(name = "emp_mailbox_size")
+    private String empMailboxSize;
+
+
+
+
+
+
+
+
+
+
 
     public void updateLastLoginAt() {
         this.lastLoginAt = LocalDateTime.now();

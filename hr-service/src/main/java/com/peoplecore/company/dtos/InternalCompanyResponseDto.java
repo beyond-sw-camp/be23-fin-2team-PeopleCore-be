@@ -1,6 +1,6 @@
 package com.peoplecore.company.dtos;
 
-import com.peoplecore.company.entity.Company;
+import com.peoplecore.company.domain.Company;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
