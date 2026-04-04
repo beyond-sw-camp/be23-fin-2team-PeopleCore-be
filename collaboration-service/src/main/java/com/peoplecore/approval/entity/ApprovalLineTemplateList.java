@@ -22,7 +22,8 @@ public class ApprovalLineTemplateList extends BaseTimeEntity {
 
     /** 결재 라인 템플릿 Id */
     @ManyToOne(fetch = FetchType.LAZY)
-    private ApprovalLineTemplate approvalLineTemplate;
+    @JoinColumn(name = "line_tem_id", nullable = false)
+    private ApprovalLineTemplate approvalLineTemplateId;
 
     /** 회사 Id */
     @Column(nullable = false)

@@ -16,6 +16,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"company_id", "doc_num"}))
 public class ApprovalDocument extends BaseTimeEntity {
 
     /**
@@ -41,6 +42,7 @@ public class ApprovalDocument extends BaseTimeEntity {
      * 결재 양식 id
      */
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "form_id", nullable = false)
     private ApprovalForm formId;
 
     /**
@@ -115,5 +117,66 @@ public class ApprovalDocument extends BaseTimeEntity {
      * 상태 완료 일시 - 승인/반려 상태 확정 시
      */
     private LocalDateTime docCompleteAt;
+
+    @Version
+    private Long version;
+
+    /*결재 완성 시 저장되는 url*/
+    private String docUrl;
+
+
+    public void changeStatus(ApprovalStatus approvalStatus) {
+        this.approvalStatus = approvalStatus;
+    }
+
+    public void complete() {
+        this.docCompleteAt = LocalDateTime.now();
+    }
+
+    public void markSubmitted() {
+        this.docSubmittedAt = LocalDateTime.now();
+    }
+
+    public void submit() {
+        this.approvalStatus.getState().submit(this);
+    }
+
+    public void approve() {
+        this.approvalStatus.getState().approve(this);
+    }
+
+    public void reject() {
+        this.approvalStatus.getState().reject(this);
+    }
+
+    public void recall() {
+        this.approvalStatus.getState().recall(this);
+    }
+
+    /*임시 저장 문서 수정 */
+    public void updateDraft(String docTitle, String docData, Boolean isEmergency) {
+        this.docTitle = docTitle;
+        this.docData = docData;
+        if (isEmergency != null) {
+            this.isEmergency = isEmergency;
+        }
+    }
+
+    /*채번 부여*/
+    public void assignDocNum(String docNum) {
+        this.docNum = docNum;
+    }
+
+    /*반려된 문서 재기안시 내용 수정 (REJECT일때만 호출)*/
+    public void updateForReSubmit(String docTitle, String docData, Boolean isEmergency) {
+        this.docTitle = docTitle;
+        this.docData = docData;
+        if (isEmergency != null) {
+            this.isEmergency = isEmergency;
+        }
+        this.docNum = null;
+        this.docCompleteAt = null;
+
+    }
 
 }

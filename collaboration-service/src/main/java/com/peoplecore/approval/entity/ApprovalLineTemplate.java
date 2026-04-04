@@ -33,3 +33,5 @@ public class ApprovalLineTemplate extends BaseTimeEntity {
     private String lineTemName;
 
 }
+
+
