@@ -59,7 +59,14 @@ public enum ErrorCode {
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),
     BAD_REQUEST(400, "잘못된 요청입니다."),
-    INTERNAL_SERVER_ERROR(500, "서버 내부 오류가 발생했습니다.");
+    INTERNAL_SERVER_ERROR(500, "서버 내부 오류가 발생했습니다."),
+
+//    사원관리
+    EMPLOYEE_NOT_FOUND(404, "사원을 찾을 수 없습니다."),
+    GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다."),
+    TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다."),
+    MANUAL_PASSWORD_REQUIRED(400, "비밀번호를 직접 입력해야 합니다.");
+
 
     private final int status;
     private final String message;

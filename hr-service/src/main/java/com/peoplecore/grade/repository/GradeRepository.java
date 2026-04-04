@@ -12,5 +12,7 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
     boolean existsByGradeNameAndCompanyId(String gradeName, UUID companyId);
     long countByCompanyId(UUID companyId);
 
+    Optional<Grade> findByGradeName(String gradeName);
+
     Optional<Grade> findByCompanyIdAndGradeName(UUID companyId, String gradeName);
 }

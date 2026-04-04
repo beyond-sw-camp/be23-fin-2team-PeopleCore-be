@@ -17,4 +17,6 @@ public interface TitleRepository extends JpaRepository<Title, Long> {
 
     Optional<Title> findByCompanyIdAndTitleName(UUID companyId, String titleName);
 
+
+    Optional<Title> findByTitleName(String titleName);
 }

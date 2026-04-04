@@ -234,3 +234,22 @@ INSERT INTO employee (
              NOW(),
              NOW()
          );
+
+
+-- 사원 등록 임시 테스트용
+
+● -- 부서: 중복 제거 (최초 1건만 남김)
+DELETE FROM department
+WHERE dept_name = '개발팀'
+  AND dept_id != (SELECT min_id FROM (SELECT MIN(dept_id) AS min_id FROM department WHERE dept_name = '개발팀') tmp);
+
+-- 직급: 중복 제거
+DELETE FROM grade
+WHERE grade_name = '대리'
+  AND grade_id != (SELECT min_id FROM (SELECT MIN(grade_id) AS min_id FROM grade WHERE grade_name = '대리') tmp);
+
+-- 직책: 중복 제거
+DELETE FROM title
+WHERE title_name = '파트장'
+  AND title_id != (SELECT min_id FROM (SELECT MIN(title_id) AS min_id FROM title WHERE title_name = '파트장') tmp);
+

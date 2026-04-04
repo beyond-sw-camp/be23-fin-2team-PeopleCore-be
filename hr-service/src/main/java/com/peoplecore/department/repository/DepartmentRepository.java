@@ -25,5 +25,7 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     Optional<Department> findByDeptIdAndIsUse(Long deptId, UseStatus isUse);
 
+    Optional<Department>findByDeptName(String deptName);
+
     Optional<Department> findByCompany_CompanyIdAndDeptName(UUID companyId, String deptName);
 }

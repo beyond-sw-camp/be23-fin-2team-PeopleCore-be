@@ -54,6 +54,9 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "emp_email", nullable = false, updatable = false)
     private String empEmail;
 
+    @Column(name = "emp_name_en", length = 100)
+    private String empNameEn;
+
     @Column(name = "emp_phone", nullable = false)
     private String empPhone;
 
@@ -126,8 +129,11 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "emp_address_detail")
     private String empAddressDetail;
 
+
+    //하드코딩 커스텀 고려
     @Column(name = "emp_mailbox_size")
-    private String empMailboxSize;
+    @Builder.Default
+    private String empMailboxSize= "5GB";
 
 //    사원이 비밀번호 변경을 필수로 해야하는지 여부
     @Builder.Default

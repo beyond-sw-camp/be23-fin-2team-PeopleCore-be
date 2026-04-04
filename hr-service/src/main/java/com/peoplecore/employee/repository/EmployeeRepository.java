@@ -25,6 +25,26 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
     Optional<Employee> findByEmpPhone(String empPhone);
 
+
+    @Query("""
+        SELECT e.dept.deptId, COUNT(e)
+        FROM Employee e
+        WHERE e.company.companyId = :companyId
+        GROUP BY e.dept.deptId
+    """)
+    List<Object[]> countByCompanyIdGroupByDeptId(UUID companyId);
+
+    boolean existsByGrade(Grade grade);
+
+
+
+
+
+
+
+
+    /// ////////rim 사원관리
+
     //  카드조회용
     long countByCompany_CompanyIdAndEmpStatusNot(UUID companyId, EmpStatus status);
 
@@ -43,13 +63,18 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
             @Param("year") int year,
             @Param("month") int month
     );
-    @Query("""
-        SELECT e.dept.deptId, COUNT(e)
-        FROM Employee e
-        WHERE e.company.companyId = :companyId
-        GROUP BY e.dept.deptId
-    """)
-    List<Object[]> countByCompanyIdGroupByDeptId(UUID companyId);
 
-    boolean existsByGrade(Grade grade);
+//    사번 채번
+//    동일 사번 여부 체크
+    boolean existsByCompany_CompanyIdAndEmpNum(UUID companyId, String empNum);
+
+//    특정 prefix로 시작하는 사번 개수 조회
+    @Query("""
+SELECT COUNT(e) FROM Employee e
+WHERE e.company.companyId = :companyId
+AND e.empNum LIKE :prefix%
+""")
+    long countByCompanyIdAndEmpNumStartingWith(@Param("companyId")UUID companyId, @Param("prefix")String prefix);
+
+
 }
