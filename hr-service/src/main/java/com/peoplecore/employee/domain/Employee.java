@@ -1,6 +1,6 @@
 package com.peoplecore.employee.domain;
 
-import com.peoplecore.company.entity.Company;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.grade.domain.Grade;
@@ -10,7 +10,6 @@ import lombok.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Table(name = "employee")

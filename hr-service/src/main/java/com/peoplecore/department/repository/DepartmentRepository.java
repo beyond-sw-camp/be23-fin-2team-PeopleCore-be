@@ -14,7 +14,7 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     List<Department> findByCompany_CompanyIdAndParentDeptIdAndIsUse(UUID companyId, Long parentDeptId, UseStatus isUse);
 
-    Optional<Department> findByIdAndCompany_CompanyId(Long id, UUID companyId);
+    Optional<Department> findByDeptIdAndCompany_CompanyId(Long deptId, UUID companyId);
 
     boolean existsByCompany_CompanyIdAndDeptNameAndIsUse(UUID companyId, String deptName, UseStatus isUse);
 

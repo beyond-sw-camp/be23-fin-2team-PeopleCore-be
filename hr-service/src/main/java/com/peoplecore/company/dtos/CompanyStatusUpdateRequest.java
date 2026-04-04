@@ -1,7 +1,6 @@
 package com.peoplecore.company.dtos;
 
-import com.peoplecore.company.entity.CompanyStatus;
-import jakarta.validation.constraints.NotBlank;
+import com.peoplecore.company.domain.CompanyStatus;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

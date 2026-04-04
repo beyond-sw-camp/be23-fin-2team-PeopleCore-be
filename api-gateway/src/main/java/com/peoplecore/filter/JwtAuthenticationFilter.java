@@ -55,6 +55,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest request = exchange.getRequest();
         String path = request.getURI().getPath();
 
+        System.out.println("=== 요청 경로: " + path);//**
+
         // 인증 제외 경로
         if (isExcludedPath(path)) {
             return chain.filter(exchange);
@@ -76,7 +78,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
+
         } catch (JwtException e) {
+
             return onError(exchange, "유효하지 않은 토큰입니다.", HttpStatus.UNAUTHORIZED);
         }
 

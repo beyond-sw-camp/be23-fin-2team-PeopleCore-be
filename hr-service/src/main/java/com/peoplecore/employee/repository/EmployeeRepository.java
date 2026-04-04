@@ -13,46 +13,41 @@ import java.util.UUID;
 
 public interface EmployeeRepository extends JpaRepository<Employee, Long>, EmployeeRepositoryCustom {
 
-    Optional<Employee> findByCompanyIdAndEmpEmail(UUID companyId, String empEmail);
     Optional<Employee> findByCompany_CompanyIdAndEmpEmail(UUID companyId, String empEmail);
 
     Optional<Employee> findByEmpNum(String empNum);
 
-    boolean existsByCompanyIdAndEmpEmail(UUID companyId, String empEmail);
     boolean existsByCompany_CompanyIdAndEmpEmail(UUID companyId, String empEmail);
 
     boolean existsByEmpNum(String empNum);
 
-    Optional<Employee> findByCompanyIdAndEmpNameAndEmpPhone(UUID companyId, String empName, String empPhone);
     Optional<Employee> findByCompany_CompanyIdAndEmpNameAndEmpPhone(UUID companyId, String empName, String empPhone);
 
     Optional<Employee> findByEmpPhone(String empPhone);
 
-    long countByCompanyIdAndDeptId(UUID companyId, Long deptId);
-
     //  카드조회용
-    long countCompany_CompanyIdAndEmpStatusNot(UUID companyId, EmpStatus status);
+    long countByCompany_CompanyIdAndEmpStatusNot(UUID companyId, EmpStatus status);
 
-    long countCompany_CompanyIdAndEmpStatus(UUID companyId, EmpStatus status);
-    long countByCompany_CompanyIdAndDepartment_Id(UUID companyId, Long deptId);
+    long countByCompany_CompanyIdAndEmpStatus(UUID companyId, EmpStatus status);
+    long countByCompany_CompanyIdAndDept_DeptId(UUID companyId, Long deptId);
 
     @Query("""
             SELECT COUNT(e) FROM Employee e
             WHERE e.company.companyId = :companyId
             AND YEAR(e.empHireDate) = :year
             AND MONTH(e.empHireDate) = :month
-            AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.resign
+            AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
             """)
     long countHiredThisMonth(
-            @Param("companId") UUID companyId,
+            @Param("companyId") UUID companyId,
             @Param("year") int year,
             @Param("month") int month
     );
     @Query("""
-        SELECT e.department.id, COUNT(e)
+        SELECT e.dept.deptId, COUNT(e)
         FROM Employee e
         WHERE e.company.companyId = :companyId
-        GROUP BY e.department.id
+        GROUP BY e.dept.deptId
     """)
     List<Object[]> countByCompanyIdGroupByDeptId(UUID companyId);
 

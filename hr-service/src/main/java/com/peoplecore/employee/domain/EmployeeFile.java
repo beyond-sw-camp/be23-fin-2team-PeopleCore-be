@@ -1,6 +1,6 @@
 package com.peoplecore.employee.domain;
 
-import com.peoplecore.common.entity.BaseTimeEntity;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 @Getter
 @Builder
 @Table(name = "employee_file")
-public class EmployeeFile extends BaseTimeEntity {
+public class EmployeeFile {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

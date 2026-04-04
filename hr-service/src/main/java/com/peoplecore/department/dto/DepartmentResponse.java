@@ -20,7 +20,7 @@ public class DepartmentResponse {
 
     public static DepartmentResponse from(Department dept, long memberCount) {
         return DepartmentResponse.builder()
-                .id(dept.getId())
+                .id(dept.getDeptId())
                 .parentDeptId(dept.getParentDeptId())
                 .deptName(dept.getDeptName())
                 .deptCode(dept.getDeptCode())
@@ -31,7 +31,7 @@ public class DepartmentResponse {
 
     public static DepartmentResponse withChildren(Department dept, long memberCount, List<DepartmentResponse> children) {
         return DepartmentResponse.builder()
-                .id(dept.getId())
+                .id(dept.getDeptId())
                 .parentDeptId(dept.getParentDeptId())
                 .deptName(dept.getDeptName())
                 .deptCode(dept.getDeptCode())

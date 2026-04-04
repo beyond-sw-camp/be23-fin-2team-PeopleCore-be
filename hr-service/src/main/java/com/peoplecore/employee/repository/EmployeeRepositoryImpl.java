@@ -55,6 +55,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
     }
 //    Enum으로 허용된 값만 정렬에 사용(SQL인젝션 방지)
     private OrderSpecifier<?> getOrderSpecifier(EmployeeSortField sortField) {
+        if (sortField == null) return qEmployee.empId.asc(); // 기본 정렬
         return switch (sortField) {
             case EMP_NUM -> qEmployee.empNum.asc(); //사번 오름차순
             case EMP_NAME -> qEmployee.empName.asc(); //이름 오름차순
@@ -67,7 +68,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
 
 //    부서 id일치 여부
 private BooleanExpression deptEq(Long deptId) {
-    return deptId != null ? qEmployee.dept.id.eq(deptId) : null;
+    return deptId != null ? qEmployee.dept.deptId.eq(deptId) : null;
 }
 
     //    고용형태 일치 여부
