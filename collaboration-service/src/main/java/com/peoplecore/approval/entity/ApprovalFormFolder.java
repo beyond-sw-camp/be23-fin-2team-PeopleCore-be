@@ -13,9 +13,9 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class FormFolder extends BaseTimeEntity {
+public class ApprovalFormFolder extends BaseTimeEntity {
 
-    /** 양식 폴더  id */
+    /** 결재 양식 폴더  id */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long folderId;
@@ -27,6 +27,11 @@ public class FormFolder extends BaseTimeEntity {
     /** 폴더명 */
     @Column(nullable = false)
     private String folderName;
+
+    /** 부모 폴더 (null이면 최상위 폴더) */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_id")
+    private ApprovalFormFolder parent;
 
     /** niniIO  경로 */
     @Column(nullable = false)
@@ -44,5 +49,4 @@ public class FormFolder extends BaseTimeEntity {
     /** 등록자 id */
     @Column(nullable = false)
     private Long folderEmpId;
-
 }
