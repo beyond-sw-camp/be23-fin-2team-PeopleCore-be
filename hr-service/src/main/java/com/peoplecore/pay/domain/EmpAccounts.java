@@ -1,23 +1,19 @@
 package com.peoplecore.pay.domain;
 
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.CreationTimestamp;
-import org.hibernate.annotations.UpdateTimestamp;
-
-import java.time.LocalDateTime;
-import java.util.UUID;
 
 @Entity
 @Getter
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "emp_accounts")
+@Table(name = "emp_accounts")   //사원계좌
 public class EmpAccounts extends BaseTimeEntity {
 
     @Id
@@ -36,7 +32,8 @@ public class EmpAccounts extends BaseTimeEntity {
     @Column(length = 50)
     private String accountHolder;
 
-    @Column(nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
 }

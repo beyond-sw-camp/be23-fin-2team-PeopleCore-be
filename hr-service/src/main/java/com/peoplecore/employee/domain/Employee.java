@@ -4,6 +4,7 @@ import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.grade.domain.Grade;
+import com.peoplecore.pay.domain.InsuranceJobTypes;
 import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
 import lombok.*;
@@ -28,6 +29,7 @@ public class Employee extends BaseTimeEntity {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
+//    부서
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dept_id", nullable = false)
     private Department dept;
@@ -42,10 +44,9 @@ public class Employee extends BaseTimeEntity {
     @JoinColumn(name = "title_id", nullable = false)
     private Title title;
 
-// 업종(산재보험용)
-//    @ManyToOne(fetch = FetchType.LAZY)
-//    @JoinColumn(name = "jobTypes_id", nullable = false)
-//    private JobTypes jobTypes;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "insurance_job_types", nullable = false)
+    private InsuranceJobTypes jobTypes;
 
     @Column(name = "emp_name", nullable = false, length = 50)
     private String empName;
@@ -92,6 +93,22 @@ public class Employee extends BaseTimeEntity {
 
     @Column(name = "simple_password")
     private String simplePassword;
+
+    @Column(nullable = false)
+    private Long workGroupId;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer dependentsCount = 1;
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer taxRateOption = 100;    //80 or 100 or 120
+
+    @Column(nullable = false)
+    @Builder.Default
+    private RetirementType retirementType = RetirementType.DC;
+
 
     @Column(name = "emp_birth_date")
     private LocalDate empBirthDate;

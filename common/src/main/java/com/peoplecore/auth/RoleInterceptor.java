@@ -20,6 +20,10 @@ public class RoleInterceptor implements HandlerInterceptor {
         }
 
         RoleRequired roleRequired = handlerMethod.getMethodAnnotation(RoleRequired.class);
+//        메서드에 없으면 클래스에서 찾기
+        if(roleRequired == null){
+            roleRequired = handlerMethod.getBeanType().getAnnotation(RoleRequired.class);
+        }
         if (roleRequired == null) {
             return true;
         }
