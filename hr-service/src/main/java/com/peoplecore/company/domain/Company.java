@@ -19,7 +19,6 @@ public class Company {
 
     @Id
     @GeneratedValue
-    @Column(name = "company_id")
     private UUID companyId;
 
     @Column(nullable = false, unique = true)

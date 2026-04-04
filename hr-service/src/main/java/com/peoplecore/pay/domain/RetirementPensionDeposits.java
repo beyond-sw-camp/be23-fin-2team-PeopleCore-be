@@ -1,7 +1,7 @@
 package com.peoplecore.pay.domain;
 
 import com.peoplecore.company.domain.Company;
-import com.peoplecore.pay.enums.SendStatus;
+import com.peoplecore.pay.enums.DepStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -15,28 +15,30 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "pay_stubs")  //급여명세
-public class PayStubs {
+@Table(name = "retirement_pension_deposits")   //퇴직연금적립-DC형
+public class RetirementPensionDeposits {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long payStubsId;
+    private Long depId;
 
     @Column(nullable = false)
-    private String payYearMonth;
+    private Long empId;
 
-    private Long totalPay;
-    private Long totalDeduction;
-    private Long netPay;
+//    적립기준임금
+    @Column(nullable = false)
+    private Long baseAmount;
 
+//    적립금액 : 연간임금/12
+    @Column(nullable = false)
+    private Long depositAmount;
+
+    private LocalDateTime depositDate;
+
+//    퇴직연금 상태 (적립예정,완료)
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private SendStatus sendStatus;
-
-    private LocalDateTime sentAt;
-    @Column(length = 500)
-    private String pdfUrl;
-    private LocalDateTime issuedAT;
+    private DepStatus depStatus;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
@@ -44,9 +46,5 @@ public class PayStubs {
 
     @Column(nullable = false)
     private Long payrollRunId;
-
-    @Column(nullable = false)
-    private Long empId;
-
 
 }

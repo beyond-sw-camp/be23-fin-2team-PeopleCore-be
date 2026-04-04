@@ -1,4 +1,4 @@
-package com.peoplecore.pay.domain;
+package com.peoplecore.pay.enums;
 
 public enum PayItemCategory {
     SALARY,         // 급여
