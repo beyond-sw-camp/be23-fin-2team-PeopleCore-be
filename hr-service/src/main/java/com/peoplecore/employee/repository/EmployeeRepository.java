@@ -39,10 +39,6 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
 
 
-
-
-
-
     /// ////////rim 사원관리
 
     //  카드조회용
@@ -76,5 +72,8 @@ AND e.empNum LIKE :prefix%
 """)
     long countByCompanyIdAndEmpNumStartingWith(@Param("companyId")UUID companyId, @Param("prefix")String prefix);
 
+
+//상세조회
+    Optional<Employee> findByEmpIdAndCompany_CompanyId(Long empId, UUID companyId);
 
 }
