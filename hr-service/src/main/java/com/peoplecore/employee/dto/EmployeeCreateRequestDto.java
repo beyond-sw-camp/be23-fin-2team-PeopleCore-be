@@ -55,10 +55,10 @@ public class EmployeeCreateRequestDto {
     private EmpType empType;
 
     @NotNull
-    private String deptname;
+    private String deptName;
 
     @NotNull
-    private String gradename;
+    private String gradeName;
 
     @NotNull
     private String titleName;

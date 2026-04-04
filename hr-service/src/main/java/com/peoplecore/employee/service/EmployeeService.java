@@ -93,22 +93,22 @@ public class EmployeeService {
     }
 
 //    사원등록
-    public Long createEmployee(UUID companyId, EmployeeCreateRequestDto responseDto, List<MultipartFile> files){
+    public Long createEmployee(UUID companyId, EmployeeCreateRequestDto requestDto, List<MultipartFile> files){
 
 //        연관 entity조회
         Company company = companyRepository.getReferenceById(companyId);
 
-        Department dept = departmentRepository.findByDeptName(responseDto.getDeptname()).orElseThrow(()->new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(),HttpStatus.NOT_FOUND));
+        Department dept = departmentRepository.findByDeptName(requestDto.getDeptName()).orElseThrow(()->new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(),HttpStatus.NOT_FOUND));
 
-        Grade grade = gradeRepository.findByGradeName(responseDto.getGradename()).orElseThrow(()-> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(),HttpStatus.NOT_FOUND));
+        Grade grade = gradeRepository.findByGradeName(requestDto.getGradeName()).orElseThrow(()-> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(),HttpStatus.NOT_FOUND));
 
-        Title title = titleRepository.findByTitleName(responseDto.getTitleName()).orElseThrow(()->new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(),HttpStatus.NOT_FOUND));
+        Title title = titleRepository.findByTitleName(requestDto.getTitleName()).orElseThrow(()->new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(),HttpStatus.NOT_FOUND));
 
-        String empNum = generateEmpNum(companyId, responseDto.getEmpHireDate());
+        String empNum = generateEmpNum(companyId, requestDto.getEmpHireDate());
 
         String fullEmail =empNum + EMAIL_DOMAIN;
 
-        String rawPassword = resolvePassword(responseDto);
+        String rawPassword = resolvePassword(requestDto);
 
 //        사원 저장
         Employee employee = Employee.builder()
@@ -116,22 +116,22 @@ public class EmployeeService {
                 .dept(dept)
                 .grade(grade)
                 .title(title)
-                .empName(responseDto.getEmpName())
-                .empNameEn(responseDto.getEmpNameEn())
-                .empBirthDate(responseDto.getEmpBirthDate())
-                .empGender(responseDto.getEmpGender())
-                .empPhone(responseDto.getEmpPhone())
-                .empPersonalEmail(responseDto.getEmpPersonalEmail())
-                .empZipCode(responseDto.getEmpZipCode())
-                .empAddressBase(responseDto.getEmpAddressBase())
-                .empAddressDetail(responseDto.getEmpAddressDetail())
-                .empHireDate(responseDto.getEmpHireDate())
-                .empType(responseDto.getEmpType())
+                .empName(requestDto.getEmpName())
+                .empNameEn(requestDto.getEmpNameEn())
+                .empBirthDate(requestDto.getEmpBirthDate())
+                .empGender(requestDto.getEmpGender())
+                .empPhone(requestDto.getEmpPhone())
+                .empPersonalEmail(requestDto.getEmpPersonalEmail())
+                .empZipCode(requestDto.getEmpZipCode())
+                .empAddressBase(requestDto.getEmpAddressBase())
+                .empAddressDetail(requestDto.getEmpAddressDetail())
+                .empHireDate(requestDto.getEmpHireDate())
+                .empType(requestDto.getEmpType())
                 .empNum(empNum)
                 .empEmail(fullEmail)
-                .empRole(responseDto.getEmpRole())
+                .empRole(requestDto.getEmpRole())
                 .empPassword(passwordEncoder.encode(rawPassword))
-                .empMailboxSize(responseDto.getEmpMailboxSize()) //사용. 5gb고정 하드 코딩// 커스텀 고려
+                .empMailboxSize(requestDto.getEmpMailboxSize()) //사용. 5gb고정 하드 코딩// 커스��� 고려
                 .empStatus(EmpStatus.ACTIVE)
                 .build();
 
