@@ -24,7 +24,7 @@ public class EventsNotifications {
 
     private Integer minutesBefore;
 
-    @ManyToOne
-    @JoinColumn(name = "events_id",nullable = false)
-    private Long eventsId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "events_id", nullable = false)
+    private Events events;
 }

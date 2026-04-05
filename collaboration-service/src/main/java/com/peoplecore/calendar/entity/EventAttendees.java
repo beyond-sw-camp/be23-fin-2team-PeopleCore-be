@@ -37,7 +37,7 @@ public class EventAttendees {
     @Column(nullable = false)
     private UUID companyId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "event_instances_id", nullable = false)
-    private Long eventInstancesId;
+    private EventInstances eventInstances;
 }

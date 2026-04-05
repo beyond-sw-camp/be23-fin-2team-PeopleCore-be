@@ -41,8 +41,8 @@ public class InterestCalendars {
     @Column(nullable = false)
     private UUID companyId;
 
-    @ManyToOne
-    @JoinColumn(name = "share_req_id",nullable = false)
-    private Long shareReqId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "share_req_id", nullable = false)
+    private CalendarShareRequests calendarShareRequest;
 
 }
