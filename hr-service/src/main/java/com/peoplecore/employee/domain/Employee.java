@@ -41,7 +41,7 @@ public class Employee extends BaseTimeEntity {
 
 //    직위
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "title_id", nullable = false)
+    @JoinColumn(name = "title_id")
     private Title title;
 
     @ManyToOne(fetch = FetchType.LAZY)

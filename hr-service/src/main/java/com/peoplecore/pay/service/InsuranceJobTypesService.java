@@ -3,8 +3,10 @@ package com.peoplecore.pay.service;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.pay.domain.InsuranceJobTypes;
 import com.peoplecore.pay.repository.InsuranceJobTypesRepository;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Service
 @Transactional
 public class InsuranceJobTypesService {
 

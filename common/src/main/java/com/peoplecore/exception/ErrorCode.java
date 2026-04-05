@@ -39,9 +39,7 @@ public enum ErrorCode {
     INVALID_STATUS_TRANSITION(400, "허용되지 않는 상태 변경입니다"),
     INVALID_CONTRACT_DATE(400, "계약 종료일은 시작일 이후여야 합니다"),
 
-    // SuperAdmin 생성    (직급,직책쪽 에러 추가시 중복이면 여기꺼를 삭제하셔도 됩니다)
-    GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다"),
-    TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다"),
+    // SuperAdmin 생성
     INSURANCE_JOB_TYPE_NOT_FOUND(404, "업종을 찾을 수 없습니다"),
 
     // 급여지급설정

@@ -14,7 +14,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/titles")
+@RequestMapping("/titles")
 public class TitleController {
     private final TitleService titleService;
 

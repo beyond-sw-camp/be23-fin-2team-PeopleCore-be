@@ -1,4 +1,4 @@
-package com.peoplecore.configs;
+package com.peoplecore.auth.config;
 
 import lombok.Getter;
 import org.springframework.beans.factory.annotation.Value;

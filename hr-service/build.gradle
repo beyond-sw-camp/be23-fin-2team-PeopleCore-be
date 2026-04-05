@@ -60,6 +60,9 @@ dependencies {
 
 //	minio
 	implementation 'io.minio:minio:8.5.7'
+
+//	CoolSMS
+	implementation 'net.nurigo:sdk:4.3.0'
 }
 
 dependencyManagement {
