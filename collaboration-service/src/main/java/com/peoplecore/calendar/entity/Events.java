@@ -52,12 +52,12 @@ public class Events extends BaseTimeEntity {
     @Column(nullable = false)
     private UUID companyId;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "my_calendars_id")
-    private Long myCalendarsId;
+    private MyCalendars myCalendars;
 
-    @ManyToOne
-    @JoinColumn(name = "repeated_rules_id",nullable = false)
-    private Long repeatedRulesId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "repeated_rules_id", nullable = false)
+    private RepeatedRules repeatedRules;
 
 }
