@@ -9,9 +9,11 @@ import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.department.domain.UseStatus;
 import com.peoplecore.department.dto.DepartmentCreateRequest;
+import com.peoplecore.department.dto.DepartmentDetailResponse;
 import com.peoplecore.department.dto.DepartmentResponse;
 import com.peoplecore.department.dto.DepartmentUpdateRequest;
 import com.peoplecore.department.repository.DepartmentRepository;
+import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +83,25 @@ public class DepartmentService {
         Department dept = findDepartmentOrThrow(companyId, deptId);
         long memberCount = countMembers(companyId, deptId);
         return DepartmentResponse.from(dept, memberCount);
+    }
+
+    /**
+     * 부서 상세 조회 — 직책 보유자, 재직 인원 수, 하위 부서 수 포함
+     */
+    @Transactional(readOnly = true)
+    public DepartmentDetailResponse getDepartmentDetail(UUID companyId, Long deptId) {
+        Department dept = findDepartmentOrThrow(companyId, deptId);
+
+        List<Employee> titleHolders = employeeRepository
+                .findTitleHoldersByDeptId(companyId, deptId);
+
+        long activeCount = countMembers(companyId, deptId);
+
+        int childDeptCount = departmentRepository
+                .findByCompany_CompanyIdAndParentDeptIdAndIsUse(companyId, deptId, UseStatus.Y)
+                .size();
+
+        return DepartmentDetailResponse.of(dept, titleHolders, activeCount, childDeptCount);
     }
 
     // ========================= 생성 =========================
