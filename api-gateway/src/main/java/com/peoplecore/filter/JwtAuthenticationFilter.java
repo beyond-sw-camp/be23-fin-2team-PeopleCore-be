@@ -41,6 +41,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/password",
             "/hr-service/auth/email"
     );
+
 //  hr담담자만 추가 접근 가능 경로
     private static final List<String> HR_ONLY_PATHS = List.of(
             "/hr-service/employee",

@@ -31,8 +31,9 @@ import java.time.LocalDate;
 @Transactional(readOnly = true)
 public class SuperAdminAccountService {
 
-    @Value("${admin.temp-password")
+    @Value("${admin.temp-password}")
     private String tempPassword;
+
 
     private final DepartmentRepository departmentRepository;
     private final GradeRepository gradeRepository;
@@ -51,6 +52,7 @@ public class SuperAdminAccountService {
         this.employeeRepository = employeeRepository;
     }
 
+    @Transactional
     public void createSuperAdmin(Company company, CompanyCreateReqDto reqDto){
 
         Department defaultDepartment = departmentRepository.findByCompany_CompanyIdAndDeptName(company.getCompanyId(), "미배정").orElseThrow(()-> new CustomException(ErrorCode.DEPARTMENT_NOT_FOUND) );
