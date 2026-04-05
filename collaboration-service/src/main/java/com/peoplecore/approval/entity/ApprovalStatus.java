@@ -1,5 +1,8 @@
 package com.peoplecore.approval.entity;
 
+import lombok.Getter;
+
+@Getter
 public enum ApprovalStatus {
     DRAFT(new DraftState()), // 임시 저장
     PENDING(new PendingState()), // 결재 진행 중
@@ -13,7 +16,4 @@ public enum ApprovalStatus {
         this.state = state;
     }
 
-    public ApprovalState getState() {
-        return state;
-    }
 }

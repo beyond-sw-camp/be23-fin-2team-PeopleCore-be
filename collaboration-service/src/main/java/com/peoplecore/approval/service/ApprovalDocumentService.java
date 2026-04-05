@@ -1,5 +1,6 @@
 package com.peoplecore.approval.service;
 
+import com.peoplecore.alram.publiher.AlarmEventPublisher;
 import com.peoplecore.approval.dto.DocumentCreateRequest;
 import com.peoplecore.approval.dto.DocumentDetailResponse;
 import com.peoplecore.approval.dto.DocumentUpdateRequest;
@@ -10,6 +11,7 @@ import com.peoplecore.approval.slot.SlotContextDto;
 import com.peoplecore.client.component.HrCacheService;
 import com.peoplecore.client.dto.CompanyInfoResponse;
 import com.peoplecore.client.dto.DeptInfoResponse;
+import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Service
@@ -33,9 +36,10 @@ public class ApprovalDocumentService {
     private final HrCacheService hrCacheService;
     private final ApprovalStatusHistoryRepository historyRepository;
     private final ApprovalAttachmentService attachmentService;
+    private final AlarmEventPublisher alarmEventPublisher;
 
     @Autowired
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -43,6 +47,7 @@ public class ApprovalDocumentService {
         this.hrCacheService = hrCacheService;
         this.historyRepository = historyRepository;
         this.attachmentService = attachmentService;
+        this.alarmEventPublisher = alarmEventPublisher;
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번*/
@@ -81,8 +86,37 @@ public class ApprovalDocumentService {
         document.markSubmitted();
         documentRepository.save(document);
 
+        historyRepository.save(ApprovalStatusHistory.builder()
+                .docId(document.getDocId())
+                .companyId(companyId)
+                .previousStatus(ApprovalStatus.PENDING)
+                .changedBy(empId)
+                .changeByName(empName)
+                .changeByDeptName(deptInfoResponse.getDeptName())
+                .changeByGrade(empGrade)
+                .changeReason("문서 기안")
+                .changedAt(LocalDateTime.now())
+                .build());
+
         /*결재선 저장 */
         saveApprovalLine(companyId, document, request.getApprovalLines());
+
+        /*결재 라인 전원에게 알림 발행 */
+        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
+                .stream()
+                .map(ApprovalLine::getEmpId)
+                .toList();
+
+        alarmEventPublisher.publisher(AlarmEvent.builder()
+                .companyId(companyId)
+                .empIds(receiverIds)
+                .alarmType("APPROVAL")
+                .alarmTitle(document.getEmpDeptName() + " " + empName + " " + empGrade + "이(가) 결재 문서를 상신하였습니다. ")
+                .alarmContent("[" + document.getDocNum() + "] " + document.getDocTitle())
+                .alarmLink("/approval")
+                .alarmRefType("APPROVAL_DOCUMENT")
+                .alarmRefId(document.getDocId())
+                .build());
         return document.getDocId();
     }
 
@@ -187,6 +221,35 @@ public class ApprovalDocumentService {
         /*상태 패턴 : DRAFT -> PENDING으로 DraftState.submit() 호출 */
         document.submit();
 
+        historyRepository.save(ApprovalStatusHistory.builder()
+                .docId(docId)
+                .companyId(companyId)
+                .previousStatus(ApprovalStatus.DRAFT)
+                .changedStatus(ApprovalStatus.PENDING)
+                .changedBy(empId)
+                .changeByName(document.getEmpName())
+                .changeByDeptName(document.getEmpDeptName())
+                .changeByGrade(document.getEmpGrade())
+                .changeReason("임시저장 문서 상신")
+                .changedAt(LocalDateTime.now())
+                .build());
+
+        /*결재 라인 전원에게 알림 발행 */
+        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
+                .stream()
+                .map(ApprovalLine::getEmpId)
+                .toList();
+
+        alarmEventPublisher.publisher(AlarmEvent.builder()
+                .companyId(companyId)
+                .empIds(receiverIds)
+                .alarmType("APPROVAL")
+                .alarmTitle(document.getEmpDeptName() + " " + document.getEmpName() + " " + document.getEmpGrade() + "이(가) 결재 문서를 상신하였습니다.")
+                .alarmContent("[" + document.getDocNum() + "] " + document.getDocTitle())
+                .alarmLink("/approval")
+                .alarmRefType("APPROVAL_DOCUMENT")
+                .alarmRefId(document.getDocId())
+                .build());
         // @Version 낙관적 락: 동시 수정 시 OptimisticLockingFailureException 발생
 
     }
@@ -213,7 +276,7 @@ public class ApprovalDocumentService {
 
         /* 상태 변경 이력 저장 (반려 사유는 결재선에서 가져옴) */
         List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
-        String rejectReason = lines.stream().filter(line -> line.getLineRejectReason() != null).map(ApprovalLine::getLineRejectReason).findFirst().orElse(null);
+        String rejectReason = lines.stream().map(ApprovalLine::getLineRejectReason).filter(Objects::nonNull).findFirst().orElse(null);
 
         historyRepository.save(ApprovalStatusHistory.builder()
                 .docId(docId)
@@ -221,10 +284,12 @@ public class ApprovalDocumentService {
                 .previousStatus(ApprovalStatus.REJECTED)
                 .changedStatus(ApprovalStatus.PENDING)
                 .changedBy(empId)
+                .changeByName(document.getEmpName())
+                .changeByDeptName(document.getEmpDeptName())
+                .changeByGrade(document.getEmpGrade())
                 .changeReason("재기안" + (rejectReason != null ? " (이전 반려 사유: " + rejectReason + ")" : ""))
                 .changedAt(LocalDateTime.now())
                 .build());
-
         /* 문서 내용 수정 + 이전 채번/완료일시 초기화 */
         document.updateForReSubmit(request.getDocTitle(), request.getDocData(), request.getIsEmergency());
 
@@ -255,6 +320,22 @@ public class ApprovalDocumentService {
             /* 기존 결재선 유지 시 상태만 초기화 */
             lines.forEach(ApprovalLine::resetStatus);
         }
+        /*결재 라인 전원에게 알림 발행 */
+        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
+                .stream()
+                .map(ApprovalLine::getEmpId)
+                .toList();
+
+        alarmEventPublisher.publisher(AlarmEvent.builder()
+                .companyId(companyId)
+                .empIds(receiverIds)
+                .alarmType("APPROVAL")
+                .alarmTitle(document.getEmpDeptName() + " " + document.getEmpName() + " " + document.getEmpGrade() + "이(가) 결재 문서를 재기안하였습니다.")
+                .alarmContent("[" + document.getDocNum() + "] " + document.getDocTitle())
+                .alarmLink("/approval")
+                .alarmRefType("APPROVAL_DOCUMENT")
+                .alarmRefId(document.getDocId())
+                .build());
         // @Version 낙관적 락: 동시 수정 시 OptimisticLockingFailureException 발생
     }
 
@@ -280,6 +361,9 @@ public class ApprovalDocumentService {
                 .previousStatus(ApprovalStatus.PENDING)
                 .changedStatus(ApprovalStatus.CANCELED)
                 .changedBy(empId)
+                .changeByName(document.getEmpName())
+                .changeByDeptName(document.getEmpDeptName())
+                .changeByGrade(document.getEmpGrade())
                 .changeReason("기안자 상신 취소(회수)")
                 .changedAt(LocalDateTime.now())
                 .build());
@@ -287,6 +371,22 @@ public class ApprovalDocumentService {
         /* 상태 패턴: PENDING → CANCELED (PendingState.recall() 호출) */
         document.recall();
 
+        /*결재 라인 전원에게 알림 발행 */
+        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
+                .stream()
+                .map(ApprovalLine::getEmpId)
+                .toList();
+
+        alarmEventPublisher.publisher(AlarmEvent.builder()
+                .companyId(companyId)
+                .empIds(receiverIds)
+                .alarmType("APPROVAL")
+                .alarmTitle(document.getEmpDeptName() + " " + document.getEmpName() + " " + document.getEmpGrade() + "이(가) 결재 문서를 회수하였습니다.")
+                .alarmContent("[" + document.getDocNum() + "] " + document.getDocTitle())
+                .alarmLink("/approval")
+                .alarmRefType("APPROVAL_DOCUMENT")
+                .alarmRefId(document.getDocId())
+                .build());
         // @Version 낙관적 락: 동시에 결재자가 승인하면 OptimisticLockingFailureException 발생
     }
 
