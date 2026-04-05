@@ -76,5 +76,17 @@ AND e.empNum LIKE :prefix%
 """)
     long countByCompanyIdAndEmpNumStartingWith(@Param("companyId")UUID companyId, @Param("prefix")String prefix);
 
+    @Query("""
+        SELECT e FROM Employee e
+        JOIN FETCH e.title t
+        JOIN FETCH e.grade g
+        WHERE e.dept.deptId = :deptId
+        AND e.company.companyId = :companyId
+        AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+    """)
+    List<Employee> findTitleHoldersByDeptId(
+            @Param("companyId") UUID companyId,
+            @Param("deptId") Long deptId
+    );
 
 }
