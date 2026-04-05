@@ -12,7 +12,6 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "events_notifications")
 public class EventsNotifications {
 
     @Id
@@ -25,6 +24,6 @@ public class EventsNotifications {
     private Integer minutesBefore;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "events_id", nullable = false)
+    @JoinColumn( nullable = false)
     private Events events;
 }

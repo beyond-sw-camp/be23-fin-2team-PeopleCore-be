@@ -1,11 +1,9 @@
 package com.peoplecore.approval.service;
 
-import com.netflix.discovery.converters.Auto;
 import com.peoplecore.approval.dto.ApprovalDelegationCreateRequest;
 import com.peoplecore.approval.dto.ApprovalDelegationResponse;
 import com.peoplecore.approval.entity.ApprovalDelegation;
 import com.peoplecore.approval.repository.ApprovalDelegationRepository;
-import com.peoplecore.client.component.HrCacheService;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

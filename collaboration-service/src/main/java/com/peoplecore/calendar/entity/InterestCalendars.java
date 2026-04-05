@@ -14,7 +14,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "interest_calendars")     // 관심캘린더 뷰설정
+    // 관심캘린더 뷰설정
 public class InterestCalendars {
 
     @Id
@@ -42,7 +42,7 @@ public class InterestCalendars {
     private UUID companyId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "share_req_id", nullable = false)
+    @JoinColumn( nullable = false)
     private CalendarShareRequests calendarShareRequest;
 
 }
