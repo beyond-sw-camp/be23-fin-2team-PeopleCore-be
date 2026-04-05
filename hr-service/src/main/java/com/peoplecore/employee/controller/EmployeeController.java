@@ -7,6 +7,7 @@ import com.peoplecore.employee.dto.EmpDetailResponseDto;
 import com.peoplecore.employee.dto.EmployeeCreateRequestDto;
 import com.peoplecore.employee.dto.EmployeeKardResponseDto;
 import com.peoplecore.employee.dto.EmployeeListDto;
+import com.peoplecore.employee.dto.EmployeeUpdateRequestDto;
 import com.peoplecore.employee.service.EmployeeService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -69,11 +70,24 @@ public class EmployeeController {
     }
 //
 ////    5. 정보 수정
-//    @PutMapping("{empId}")
-//
-////    6. 삭제
-//    @DeleteMapping("{empId}")
-//
+    @PutMapping("{empId}")
+    public ResponseEntity<EmpDetailResponseDto> updateEmployee(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long empId,
+            @Valid @RequestBody EmployeeUpdateRequestDto requestDto) {
+        return ResponseEntity.ok(employeeService.updateEmployee(companyId, empId, requestDto));
+    }
+
+//    6. 삭제
+    @DeleteMapping("{empId}")
+    public ResponseEntity<Void>deleteEmployee(
+            @RequestHeader("X-User-Company")UUID companyId,
+            @PathVariable Long empId){
+        employeeService.deleteEmployee(companyId,empId);
+        return ResponseEntity.ok().build();
+    }
+
+
 
 
 
