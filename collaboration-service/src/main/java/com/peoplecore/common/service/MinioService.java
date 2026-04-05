@@ -25,12 +25,26 @@ import java.util.concurrent.TimeUnit;
 public class MinioService {
     private final MinioClient minioClient;
     private final String bucket;
+    private final String endpoint;
 
     @Autowired
-    public MinioService(MinioClient minioClient, @Value("${minio.bucket}") String bucket) {
+    public MinioService(MinioClient minioClient, @Value("${minio.bucket}") String bucket, @Value("${minio.endpoint}") String endpoint) {
         this.minioClient = minioClient;
         this.bucket = bucket;
+        this.endpoint = endpoint;
     }
+
+    @Value("${minio.public-url}")
+    private String publicUrl;
+
+    /**
+     * 공개 버킷 직접 접근 URL 생성
+     */
+    public String getPublicUrl(String objectName) {
+        return publicUrl + "/" + bucket + "/" + objectName;
+    }
+
+
 
     /* minio에서 양식 다운로드 */
     public String getFormHtml(String objectName) {
@@ -64,7 +78,9 @@ public class MinioService {
         }
     }
 
-    /** 첨부파일 업로드 (MultipartFile → MinIO) */
+    /**
+     * 첨부파일 업로드 (MultipartFile → MinIO)
+     */
     public void uploadAttachment(String objectName, MultipartFile file) {
         try (InputStream stream = file.getInputStream()) {
             minioClient.putObject(
@@ -80,7 +96,9 @@ public class MinioService {
         }
     }
 
-    /** 첨부파일 다운로드용 Pre-signed URL 생성 (유효시간 1시간) */
+    /**
+     * 첨부파일 다운로드용 Pre-signed URL 생성 (유효시간 1시간)
+     */
     public String getPresignedUrl(String objectName) {
         try {
             return minioClient.getPresignedObjectUrl(
@@ -96,7 +114,9 @@ public class MinioService {
         }
     }
 
-    /** 첨부파일 삭제 */
+    /**
+     * 첨부파일 삭제
+     */
     public void deleteObject(String objectName) {
         try {
             minioClient.removeObject(
