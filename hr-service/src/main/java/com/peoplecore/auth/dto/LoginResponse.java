@@ -11,4 +11,5 @@ public class LoginResponse {
     private String refreshToken;
     private String empName;
     private String empRole;
+//    private Boolean mustChangePassword;
 }

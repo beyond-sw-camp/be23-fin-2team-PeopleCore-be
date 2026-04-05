@@ -16,5 +16,8 @@ public interface TitleRepository extends JpaRepository<Title, Long> {
             String titleName, UUID companyId, Long deptId, Long titleId);
 
     Optional<Title> findTopByCompanyIdOrderByTitleCodeDesc(UUID companyId);
+    Optional<Title> findByCompanyIdAndTitleName(UUID companyId, String titleName);
+
+
     Optional<Title> findByTitleName(String titleName);
 }

@@ -135,7 +135,10 @@ public class Employee extends BaseTimeEntity {
     @Builder.Default
     private String empMailboxSize= "5GB";
 
-
+//    사원이 비밀번호 변경을 필수로 해야하는지 여부
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean mustChangePassword = false;
 
 
 
@@ -155,5 +158,9 @@ public class Employee extends BaseTimeEntity {
 
     public void updateRole(EmpRole role) {
         this.empRole = role;
+    }
+
+    public void clearMustChangePassword() {
+        this.mustChangePassword = false;
     }
 }

@@ -219,4 +219,16 @@ public class DepartmentService {
 
         return DepartmentResponse.withChildren(dept, memberCount, children);
     }
+
+    //superAdmin 계정 생성시 초기값
+    public void initDefault(Company company) {
+        departmentRepository.save(
+            Department.builder()
+                    .company(company)
+                    .deptName("미배정")
+                    .deptCode("DEFAULT")
+                    .build()
+        );
+    }
+
 }

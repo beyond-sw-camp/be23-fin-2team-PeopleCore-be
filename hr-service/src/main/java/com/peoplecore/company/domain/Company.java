@@ -21,7 +21,7 @@ public class Company {
     @GeneratedValue
     private UUID companyId;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String companyName;
 
     private LocalDate foundedAt;
@@ -47,4 +47,21 @@ public class Company {
     @Builder.Default
     private CompanyStatus companyStatus = CompanyStatus.PENDING;
 
+//    비밀번호 강제변경 여부
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean forcePasswordChange = true;
+
+
+    public void changeStatus(CompanyStatus newstatus){
+        this.companyStatus = newstatus;
+    }
+
+//    계약연장
+    public void extendContract(LocalDate newEndDate, Integer newMaxEmployees, ContractType newContractType){
+        this.contractEndAt = newEndDate;
+        if(newMaxEmployees != null) this.maxEmployees = newMaxEmployees;
+        if(newContractType != null) this.contractType = newContractType;
+        if (this.companyStatus == CompanyStatus.EXPIRED) this.companyStatus = CompanyStatus.ACTIVE;
+    }
 }

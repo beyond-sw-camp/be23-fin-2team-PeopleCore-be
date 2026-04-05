@@ -1,5 +1,6 @@
 package com.peoplecore.title.service;
 
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.department.domain.UseStatus;
 import com.peoplecore.department.repository.DepartmentRepository;
@@ -116,4 +117,17 @@ public class TitleService {
 
         titleRepository.delete(title);
     }
+
+
+    //superAdmin 계정 생성시 초기값
+    public void initDefault(Company company) {
+        titleRepository.save(
+            Title.builder()
+                    .companyId(company.getCompanyId())
+                    .titleName("미배정")
+                    .titleCode("DEFAULT")
+                    .build()
+        );
+    }
+
 }
