@@ -74,13 +74,13 @@ public class EmployeeService {
 //        현재 날짜(비교용)
         LocalDate now = LocalDate.now();
 
-        long total = employeeRepository.countByCompany_CompanyIdAndEmpStatusNot(companyId, EmpStatus.RESIGNED); //재직자 수: 퇴직자 제외
+        int total = employeeRepository.countByCompany_CompanyIdAndEmpStatusNot(companyId, EmpStatus.RESIGNED); //재직자 수: 퇴직자 제외
 
-        long active = employeeRepository.countByCompany_CompanyIdAndEmpStatus(companyId, EmpStatus.ACTIVE);
+        int active = employeeRepository.countByCompany_CompanyIdAndEmpStatus(companyId, EmpStatus.ACTIVE);
 
-        long onLeave = employeeRepository.countByCompany_CompanyIdAndEmpStatus(companyId, EmpStatus.ON_LEAVE);
+        int onLeave = employeeRepository.countByCompany_CompanyIdAndEmpStatus(companyId, EmpStatus.ON_LEAVE);
 
-        long hiredThisMonth = employeeRepository.countHiredThisMonth(companyId, now.getYear(), now.getMonthValue());
+        int hiredThisMonth = employeeRepository.countHiredThisMonth(companyId, now.getYear(), now.getMonthValue());
 
         return EmployeeKardResponseDto.builder()
                 .total(total)

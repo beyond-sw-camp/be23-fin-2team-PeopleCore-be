@@ -253,3 +253,6 @@ DELETE FROM title
 WHERE title_name = '파트장'
   AND title_id != (SELECT min_id FROM (SELECT MIN(title_id) AS min_id FROM title WHERE title_name = '파트장') tmp);
 
+-- 계약 만료일 컬럼 추가 (인력현황 - 계약 만료 예정자 조회용)
+ALTER TABLE employee ADD COLUMN contract_end_date DATE NULL;
+

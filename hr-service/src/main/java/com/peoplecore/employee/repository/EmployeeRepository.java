@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -42,10 +43,10 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     /// ////////rim 사원관리
 
     //  카드조회용
-    long countByCompany_CompanyIdAndEmpStatusNot(UUID companyId, EmpStatus status);
+    int countByCompany_CompanyIdAndEmpStatusNot(UUID companyId, EmpStatus status);
 
-    long countByCompany_CompanyIdAndEmpStatus(UUID companyId, EmpStatus status);
-    long countByCompany_CompanyIdAndDept_DeptId(UUID companyId, Long deptId);
+    int countByCompany_CompanyIdAndEmpStatus(UUID companyId, EmpStatus status);
+    int countByCompany_CompanyIdAndDept_DeptId(UUID companyId, Long deptId);
 
     @Query("""
             SELECT COUNT(e) FROM Employee e
@@ -54,11 +55,34 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
             AND MONTH(e.empHireDate) = :month
             AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
             """)
-    long countHiredThisMonth(
+    int countHiredThisMonth(
             @Param("companyId") UUID companyId,
             @Param("year") int year,
             @Param("month") int month
     );
+
+
+//    카드조회 (인사 현황)
+//    해당달의 퇴직자
+    @Query("""
+SELECT COUNT(e) FROM Employee e
+WHERE e.company.companyId = :companyId
+AND YEAR(e.empResign) = :year
+AND MONTH(e.empResign) = :month""")
+    int countResignedThisMonth(@Param("companyId")UUID companyId, @Param("year")int year,@Param("month")int month);
+
+//    계약만료 30일 이내 예정자
+    @Query("""
+SELECT e FROM Employee e
+JOIN FETCH e.dept
+WHERE e.company.companyId = :companyId
+AND e.contractEndDate IS NOT NULL
+AND e.contractEndDate BETWEEN :now AND :deadline
+AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
+""")
+    List<Employee>findExpiringContracts(@Param("companyId")UUID companyId, @Param("now")LocalDate now, @Param("deadline")LocalDate deadline);
+
+
 
 //    사번 채번
 //    동일 사번 여부 체크
@@ -73,7 +97,31 @@ AND e.empNum LIKE :prefix%
     long countByCompanyIdAndEmpNumStartingWith(@Param("companyId")UUID companyId, @Param("prefix")String prefix);
 
 
-//상세조회
+
+//사원상세조회
     Optional<Employee> findByEmpIdAndCompany_CompanyId(Long empId, UUID companyId);
+
+
+
+//    재직자 조회
+    @Query("""
+SELECT e FROM Employee e
+JOIN FETCH e.dept
+JOIN FETCH e.grade
+WHERE e.company.companyId = :companyId
+AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+""")
+    List<Employee>findActiveEmployeesWithDeptAndGrade(@Param("companyId")UUID companyId);
+
+    @Query("""
+
+            SELECT e FROM Employee e
+JOIN FETCH e.dept
+JOIN FETCH e.grade
+WHERE e.company.companyId = :companyId
+AND e.dept.deptId = :deptId
+AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+""")
+    List<Employee>findActiveByCompanyAndDept(@Param("companyId")UUID companyId,@Param("deptId") Long deptId);
 
 }

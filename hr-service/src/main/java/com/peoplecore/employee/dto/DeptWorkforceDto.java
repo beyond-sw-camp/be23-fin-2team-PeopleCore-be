@@ -5,13 +5,16 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
 @Builder
-public class EmployeeKardResponseDto {
+public class DeptWorkforceDto {
+    private String deptName;
     private int total;
-    private int active;
-    private int onLeave;
-    private int hiredThisMonth;
+    private List<GradeCountDto> gradeCounts;
+    private int avgYears;
+    private int avgMonths;
 }

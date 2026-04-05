@@ -9,9 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Data
 @Builder
-public class EmployeeKardResponseDto {
-    private int total;
-    private int active;
-    private int onLeave;
-    private int hiredThisMonth;
+public class GradeCountDto {
+    private String gradeName;
+    private int count;
 }

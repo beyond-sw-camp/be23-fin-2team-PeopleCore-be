@@ -5,13 +5,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.YearMonth;
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
 @Builder
-public class EmployeeKardResponseDto {
-    private int total;
-    private int active;
-    private int onLeave;
-    private int hiredThisMonth;
+public class MonthlyTrendDto {
+    private YearMonth month;
+    private int hired;
+    private int resigned;
 }

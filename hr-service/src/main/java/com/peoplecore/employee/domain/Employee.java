@@ -145,6 +145,10 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "delete_at")
     private LocalDate deleteAt;
 
+//    계약 만료일
+    @Column(name="contract_end_date")
+    private LocalDate contractEndDate;
+
 
 
 

@@ -9,9 +9,9 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Data
 @Builder
-public class EmployeeKardResponseDto {
+public class WorkforceSummaryDto {
     private int total;
-    private int active;
-    private int onLeave;
-    private int hiredThisMonth;
+    private int  hiredThisMonth;
+    private int resignedThisMonth;
+    private int contractExpiring;
 }
