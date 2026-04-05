@@ -52,6 +52,14 @@ public class ApprovalSignatureService {
     @Transactional
     public ApprovalSignatureResponseDto createOrUpdate(UUID companyId, Long empId,
                                             Long managerId, MultipartFile file) {
+        // 파일 검증
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException("파일을 선택해주세요.", HttpStatus.BAD_REQUEST);
+        }
+        if (!file.getContentType().startsWith("image/")) {
+            throw new BusinessException("이미지 파일만 업로드 가능합니다.", HttpStatus.BAD_REQUEST);
+        }
+
         String objectName = String.format("signatures/%s/%d/%s_%s",
                 companyId, empId, UUID.randomUUID(), file.getOriginalFilename());
         String fileType = resolveFileType(file.getContentType());
@@ -60,11 +68,11 @@ public class ApprovalSignatureService {
         // 기존 서명 있으면 삭제
         attachFileRepository.findByCompanyIdAndEntityTypeAndEntityId(companyId, ENTITY_TYPE, empId)
                 .ifPresent(existing -> {
-                    minioService.deleteObject(existing.getStoredFileName());
-                    attachFileRepository.delete(existing);
+                    String oldObjectName = existing.getStoredFileName();
+                    attachFileRepository.delete(existing);                    // DB 먼저 삭제
                     signatureRepository.deleteByCompanyIdAndSigEmpId(companyId, empId);
+                    minioService.deleteObject(oldObjectName);                 // MinIO 나중에 삭제
                 });
-
         // MinIO 업로드
         minioService.uploadAttachment(objectName, file);
 
@@ -98,9 +106,10 @@ public class ApprovalSignatureService {
                 .findByCompanyIdAndEntityTypeAndEntityId(companyId, ENTITY_TYPE, empId)
                 .orElseThrow(() -> new BusinessException("서명이 등록되어 있지 않습니다.", HttpStatus.NOT_FOUND));
 
-        minioService.deleteObject(attachFile.getStoredFileName());
+        String oldObjectName = attachFile.getStoredFileName();
         attachFileRepository.delete(attachFile);
         signatureRepository.deleteByCompanyIdAndSigEmpId(companyId, empId);
+        minioService.deleteObject(oldObjectName);
     }
 
     /*파일 타입 결정 */
