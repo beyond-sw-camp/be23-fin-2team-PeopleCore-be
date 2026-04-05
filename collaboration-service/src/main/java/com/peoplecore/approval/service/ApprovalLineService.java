@@ -1,9 +1,11 @@
 package com.peoplecore.approval.service;
 
+import com.peoplecore.alram.publiher.AlarmEventPublisher;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.repository.ApprovalDocumentRepository;
 import com.peoplecore.approval.repository.ApprovalLineRepository;
 import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
+import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,12 +24,14 @@ public class ApprovalLineService {
     private final ApprovalDocumentRepository documentRepository;
     private final ApprovalLineRepository lineRepository;
     private final ApprovalStatusHistoryRepository historyRepository;
+    private final AlarmEventPublisher alarmEventPublisher;
 
     @Autowired
-    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository) {
+    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, AlarmEventPublisher alarmEventPublisher) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.historyRepository = historyRepository;
+        this.alarmEventPublisher = alarmEventPublisher;
     }
 
     /* 승인 처리 / 순차 처리(이전 단계가 approved여야만 승인 가능) / 마지막 결재자가 승인 해야만 문서상태 approved*/
@@ -54,6 +58,20 @@ public class ApprovalLineService {
         /*결재선 승인 처리 */
         myLine.approve();
 
+        /*결재자 승인 이력*/
+        historyRepository.save(ApprovalStatusHistory.builder()
+                .docId(docId)
+                .companyId(companyId)
+                .previousStatus(ApprovalStatus.PENDING)
+                .changedStatus(ApprovalStatus.PENDING)
+                .changedBy(empId)
+                .changeByName(myLine.getEmpName())
+                .changeByDeptName(myLine.getEmpDeptName())
+                .changeByGrade(myLine.getEmpGrade())
+                .changeReason(comment != null ? comment : myLine.getLineStep() + "단계 승인")
+                .changedAt(LocalDateTime.now())
+                .build());
+
         /*모든 결재자가 승인했는지 확인 -> 문서 상태 변경*/
         List<ApprovalLine> approvalLines = lineRepository.findByDocId_DocIdOrderByLineStep(docId, ApprovalRole.APPROVER);
         boolean allApproved = approvalLines.stream().allMatch(line -> line.getApprovalLineStatus() == ApprovalLineStatus.APPROVED);
@@ -69,8 +87,40 @@ public class ApprovalLineService {
                     .previousStatus(ApprovalStatus.PENDING)
                     .changedStatus(ApprovalStatus.APPROVED)
                     .changedBy(empId)
+                    .changeByName(myLine.getEmpName())
+                    .changeByDeptName(myLine.getEmpDeptName())
+                    .changeByGrade(myLine.getEmpGrade())
                     .changeReason(comment != null ? comment : "최종 승인")
                     .changedAt(LocalDateTime.now())
+                    .build());
+        }
+
+        /*기안자에게 승인 알림 발행 */
+        alarmEventPublisher.publisher(AlarmEvent.builder()
+                .companyId(companyId)
+                .empIds(List.of(document.getEmpId()))
+                .alarmType("APPROVAL")
+                .alarmTitle(myLine.getEmpDeptName() + " " + myLine.getEmpName() + " " + myLine.getEmpGrade() + "이(가) 결재 문서를 승인하였습니다.")
+                .alarmContent("[" + document.getDocNum() + "] " + document.getDocTitle())
+                .alarmLink("/approval")
+                .alarmRefType("APPROVAL_DOCUMENT")
+                .alarmRefId(document.getDocId())
+                .build());
+
+        /* 다음 결재자에게 알림 (최종 승인이 아닌 경우) */
+        if (!allApproved) {
+            List<Long> nextIds = approvalLines.stream()
+                    .filter(line -> line.getLineStep() == myLine.getLineStep() + 1)
+                    .map(ApprovalLine::getEmpId)
+                    .toList();
+            alarmEventPublisher.publisher(AlarmEvent.builder()
+                    .companyId(companyId)
+                    .empIds(nextIds)
+                    .alarmType("APPROVAL")
+                    .alarmTitle("결재할 문서가 도착하였습니다.")
+                    .alarmLink("/approval")
+                    .alarmRefType("APPROVAL_DOCUMENT")
+                    .alarmRefId(docId)
                     .build());
         }
     }
@@ -106,9 +156,24 @@ public class ApprovalLineService {
                         .previousStatus(ApprovalStatus.PENDING)
                         .changedStatus(ApprovalStatus.REJECTED)
                         .changedBy(empId)
+                        .changeByName(myLine.getEmpName())
+                        .changeByDeptName(myLine.getEmpDeptName())
+                        .changeByGrade(myLine.getEmpGrade())
                         .changeReason(reason)
                         .changedAt(LocalDateTime.now())
                         .build());
+
+        /*기안자한테 반려 알림 발성 */
+        alarmEventPublisher.publisher(AlarmEvent.builder()
+                .companyId(companyId)
+                .empIds(List.of(document.getEmpId()))
+                .alarmType("APPROVAL")
+                .alarmTitle(myLine.getEmpDeptName() + " " + myLine.getEmpName() + " " + myLine.getEmpGrade() + "이(가) 결재 문서를 반려하였습니다.")
+                .alarmContent(reason)
+                .alarmLink("/approval")
+                .alarmRefType("APPROVAL_DOCUMENT")
+                .alarmRefId(docId)
+                .build());
     }
 
     /*결재자가 문서 확인 / 수신 접수*/
@@ -141,6 +206,7 @@ public class ApprovalLineService {
     /*pending 상태 문서 조회 (낙관적 락으로 방어)*/
     private ApprovalDocument findPendingDocument(UUID companyId, Long docId) {
         ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId).orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
+
         if (document.getApprovalStatus() != ApprovalStatus.PENDING) {
             throw new BusinessException("결재 진행 중인 문서만 처리할 수 있스빈다, ");
         }
