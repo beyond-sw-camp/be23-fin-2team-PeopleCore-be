@@ -9,6 +9,7 @@ import com.peoplecore.employee.dto.EmpDetailResponseDto;
 import com.peoplecore.employee.dto.EmployeeCreateRequestDto;
 import com.peoplecore.employee.dto.EmployeeKardResponseDto;
 import com.peoplecore.employee.dto.EmployeeListDto;
+import com.peoplecore.employee.dto.EmployeeUpdateRequestDto;
 import com.peoplecore.employee.repository.EmployeeFileRepository;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.BusinessException;
@@ -215,6 +216,49 @@ public class EmployeeService {
         Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(()-> new EntityNotFoundException("사원을 찾을 수 없습니다"));
         return EmpDetailResponseDto.from(employee);
 
+    }
+
+//    5. 사원 정보 수정
+    public EmpDetailResponseDto updateEmployee(UUID companyId, Long empId, EmployeeUpdateRequestDto requestDto) {
+
+        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId)
+                .orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
+
+        Department dept = departmentRepository.findByDeptName(requestDto.getDeptName())
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+
+        Grade grade = gradeRepository.findByGradeName(requestDto.getGradeName())
+                .orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+
+        Title title = titleRepository.findByTitleName(requestDto.getTitleName())
+                .orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+
+        employee.updateInfo(
+                requestDto.getEmpName(),
+                requestDto.getEmpNameEn(),
+                requestDto.getEmpBirthDate(),
+                requestDto.getEmpGender(),
+                requestDto.getEmpPhone(),
+                requestDto.getEmpPersonalEmail(),
+                requestDto.getEmpZipCode(),
+                requestDto.getEmpAddressBase(),
+                requestDto.getEmpAddressDetail(),
+                requestDto.getEmpHireDate(),
+                requestDto.getEmpType(),
+                dept,
+                grade,
+                title,
+                requestDto.getEmpRole(),
+                requestDto.getEmpMailboxSize()
+        );
+
+        return EmpDetailResponseDto.from(employee);
+    }
+
+//    6.사원 삭제
+    public void deleteEmployee(UUID companyId, Long empId){
+        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId,companyId).orElseThrow(()->new EntityNotFoundException("사원을 찾을 수 없습니다"));
+        employee.softDelete();
     }
 
 }

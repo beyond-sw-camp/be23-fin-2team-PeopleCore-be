@@ -22,7 +22,7 @@ public class HrCacheService {
 
     private static final String DEPT_KEY = "hr:dept:";
     private static final String COMPANY_KEY = "hr:company:";
-    private static final Duration TTL = Duration.ofHours(2);
+    private static final Duration TTL = Duration.ofHours(1);
 
     @Autowired
     public HrCacheService(

@@ -45,7 +45,13 @@
       "WebFetch(domain:help.apidog.com)",
       "WebFetch(domain:apidog.com)",
       "WebFetch(domain:openapi.apidog.io)",
-      "WebFetch(domain:openapi.apidog.com)"
+      "WebFetch(domain:openapi.apidog.com)",
+      "Bash(grep -E \"\\\\.\\(java|kt\\)$\")",
+      "Bash(grep \"\\\\.java$\")",
+      "Bash(xargs ls:*)",
+      "Bash(grep -E \"\\\\.\\(ts|tsx\\)$\")",
+      "mcp__apidog__apidog_get_endpoint",
+      "mcp__apidog__apidog_upsert_endpoint"
     ]
   }
 }
