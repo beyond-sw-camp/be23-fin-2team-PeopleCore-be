@@ -34,9 +34,9 @@ public class PayItemsService {
         this.companyRepository = companyRepository;
     }
 
-//    목록조회 : 지급 or 공제, 항목명검색
-    public List<PayItemResDto> getPayItems(UUID companyId, PayItemType type, String name){
-        return payItemSearchRepository.search(companyId, type, name)
+//    목록조회 : 지급 or 공제, 항목명검색, 법정수당
+    public List<PayItemResDto> getPayItems(UUID companyId, PayItemType type, String name, Boolean isLegal){
+        return payItemSearchRepository.search(companyId, type, name, isLegal)
                 .stream()
                 .map(PayItemResDto::fromEntity)
                 .toList();

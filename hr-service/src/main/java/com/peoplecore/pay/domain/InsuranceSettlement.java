@@ -1,6 +1,7 @@
 package com.peoplecore.pay.domain;
 
 import com.peoplecore.company.domain.Company;
+import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -46,13 +47,13 @@ public class InsuranceSettlement extends BaseTimeEntity {
     private Long ltcEmployer;
 
 //    고용보험
-@Column(nullable = false)
+    @Column(nullable = false)
     private Long employmentEmployee;
     @Column(nullable = false)
     private Long employmentEmployer;
 
 //    산재보험
-@Column(nullable = false)
+    @Column(nullable = false)
     private Long industrialEmployer;
 
     @Column(nullable = false)
@@ -61,6 +62,7 @@ public class InsuranceSettlement extends BaseTimeEntity {
     private Long totalEmployer;
     @Column(nullable = false)
     private Long totalAmount;
+
     @Column(nullable = false)
     private Boolean isApplied;
     private LocalDateTime appliedAt;
@@ -69,13 +71,16 @@ public class InsuranceSettlement extends BaseTimeEntity {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
-    @Column(nullable = false)
-    private Long empId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "emp_id", nullable = false)
+    private Employee employee;
 
-    @Column(nullable = false)
-    private Long payrollRunId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payroll_run_id", nullable = false)
+    private PayrollRuns payrollRuns;
 
-    @Column(nullable = false)
-    private Long insuranceRatesId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "insurance_rates_id", nullable = false)
+    private InsuranceRates insuranceRates;
 
 }

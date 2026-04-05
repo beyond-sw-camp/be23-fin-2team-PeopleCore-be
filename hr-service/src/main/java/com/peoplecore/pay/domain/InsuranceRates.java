@@ -39,9 +39,13 @@ public class InsuranceRates extends BaseTimeEntity {
     @Column(precision = 5, scale = 4)
     private BigDecimal longTermCare;
 
-//    고용보험요율
+//    고용보험요율(근로자)
     @Column(precision = 5, scale = 4)
     private BigDecimal employmentInsurance;
+
+//    고용보험요율(사업주)
+    @Column(precision = 5, scale = 4)
+    private BigDecimal employmentInsuranceEmployer;
 
 //    산재보험요율
     @Column(precision = 5, scale = 4)
@@ -68,4 +72,8 @@ public class InsuranceRates extends BaseTimeEntity {
     @Column(nullable = false)
     private Long pensionLowerLimit;
 
+    // 고용보험 사업주 요율 수정
+    public void updateEmployerRate(BigDecimal employmentInsuranceEmployer){
+        this.employmentInsuranceEmployer = employmentInsuranceEmployer;
+    }
 }

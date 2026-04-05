@@ -48,11 +48,9 @@ public enum ErrorCode {
     PAY_INVALID_BANK_CODE(400, "유효하지 않은 은행 코드입니다."),
     PAY_LAST_DAY_CONFLICT(400, "말일 선택 시 지급일 값은 입력하지 마세요."),
 
-    // 지급/공제항목 관리
-//    PAY_SETTINGS_NOT_FOUND(404, "급여지급설정을 찾을 수 없습니다."),
-//    PAY_INVALID_PAYMENT_DAY(400, "지급일은 1~31 사이여야 합니다."),
-//    PAY_INVALID_BANK_CODE(400, "유효하지 않은 은행 코드입니다."),
-//    PAY_LAST_DAY_CONFLICT(400, "말일 선택 시 지급일 값은 입력하지 마세요."),
+    // 사회보험요율
+    INSURANCE_RATES_NOT_FOUND(404, "해당 연도의 보험요율을 찾을 수 없습니다."),
+    INSURANCE_JOB_TYPE_DUPLICATE(409, "이미 존재하는 업종명입니다."),
 
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),
