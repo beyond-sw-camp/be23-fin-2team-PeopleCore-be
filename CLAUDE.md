@@ -72,8 +72,20 @@ Mend.io 기반 결과
 // 사용 예시
 @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
 @PostMapping
-public ResponseEntity<...> create(...) { ... }
+public ResponseEntity<DepartmentResponse> createDepartment(
+        @RequestHeader("X-User-Company") UUID companyId,
+        @RequestBody DepartmentCreateRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+            .body(departmentService.createDepartment(companyId, request));
+}
 ```
+
+- API별 인가 설정은 `@RoleRequired`로 가능
+- 흐름:
+  1. 요청 → Gateway (JWT 검증, X-User-Role 헤더 추가)
+  2. → 각 서비스 (RoleInterceptor가 X-User-Role과 @RoleRequired 비교)
+  3. → 불일치 시 403 "접근 권한이 없습니다."
+  4. → 일치 시 컨트롤러 메서드 실행
 
 ### 컴포넌트 스캔 설정 (필수)
 - `@RoleRequired`가 동작하려면 common 패키지의 `RoleInterceptor`가 빈으로 등록되어야 함
@@ -82,7 +94,7 @@ public ResponseEntity<...> create(...) { ... }
 ```java
 @SpringBootApplication(scanBasePackages = {
     "com.peoplecore.collaboration_service",
-    "com.peoplecore.common"   // ← 이게 있어야 RoleInterceptor가 빈으로 등록됨
+    "com.peoplecore.common"   // ← 이게 있어야 RoleInterceptor가 빈으로 등록됨(서버 시작 시 다른 서비스 모듈의 빈 객체까지 scan)
 })
 ```
 

@@ -32,6 +32,7 @@ HELP.md
 **/src/main/resources/application-local.yaml
 **/src/main/resources/application-dev.yml
 **/CLAUDE.md
+CLAUDE.md
 
 # ============================
 # Java
