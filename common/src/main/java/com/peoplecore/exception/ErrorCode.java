@@ -2,6 +2,7 @@ package com.peoplecore.exception;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
@@ -31,6 +32,15 @@ public enum ErrorCode {
     DEPARTMENT_HAS_MEMBERS(400, "소속 인원이 있어 삭제할 수 없습니다."),
     DEPARTMENT_HAS_CHILDREN(400, "하위 부서가 있어 삭제할 수 없습니다."),
     DEPARTMENT_CIRCULAR_REFERENCE(400, "하위 부서를 상위 부서로 지정할 수 없습니다."),
+
+//    회사 설정
+    COMPANY_NOT_FOUND(404, "회사를 찾을 수 없습니다"),
+    COMPANY_IP_DUPLICATE(409, "이미 등록된 IP 주소입니다"),
+    INVALID_STATUS_TRANSITION(400, "허용되지 않는 상태 변경입니다"),
+    INVALID_CONTRACT_DATE(400, "계약 종료일은 시작일 이후여야 합니다"),
+
+    // SuperAdmin 생성
+    INSURANCE_JOB_TYPE_NOT_FOUND(404, "업종을 찾을 수 없습니다"),
 
     // 급여지급설정
     PAY_SETTINGS_NOT_FOUND(404, "급여지급설정을 찾을 수 없습니다."),

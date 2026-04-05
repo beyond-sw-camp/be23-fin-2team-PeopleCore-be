@@ -37,5 +37,6 @@ public class PasswordResetService {
 
         // 5. 인증 상태 제거 (재사용 방지)
         smsAuthService.clearVerified(request.getEmpPhone());
+//        employee.clearMustChangePassword();
     }
 }

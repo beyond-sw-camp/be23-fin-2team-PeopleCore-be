@@ -8,6 +8,7 @@ import com.peoplecore.pay.domain.InsuranceJobTypes;
 import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.cglib.core.Local;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -41,11 +42,11 @@ public class Employee extends BaseTimeEntity {
 
 //    직위
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "title_id", nullable = false)
+    @JoinColumn(name = "title_id")
     private Title title;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "insurance_job_types", nullable = false)
+    @JoinColumn(name = "insurance_job_types", nullable = true)
     private InsuranceJobTypes jobTypes;
 
     @Column(name = "emp_name", nullable = false, length = 50)
@@ -135,11 +136,14 @@ public class Employee extends BaseTimeEntity {
     @Builder.Default
     private String empMailboxSize= "5GB";
 
+//    사원이 비밀번호 변경을 필수로 해야하는지 여부
+    @Builder.Default
+    @Column(nullable = false)
+    private Boolean mustChangePassword = false;
 
-
-
-
-
+//    사원 softDelete
+    @Column(name = "delete_at")
+    private LocalDate deleteAt;
 
 
 
@@ -156,4 +160,48 @@ public class Employee extends BaseTimeEntity {
     public void updateRole(EmpRole role) {
         this.empRole = role;
     }
+
+    public void clearMustChangePassword() {
+        this.mustChangePassword = false;
+    }
+
+    public void updateInfo(String empName, String empNameEn, LocalDate empBirthDate,
+                           EmpGender empGender, String empPhone, String empPersonalEmail,
+                           String empZipCode, String empAddressBase, String empAddressDetail,
+                           LocalDate empHireDate, EmpType empType,
+                           Department dept, Grade grade, Title title,
+                           EmpRole empRole, String empMailboxSize) {
+        this.empName = empName;
+        this.empNameEn = empNameEn;
+        this.empBirthDate = empBirthDate;
+        this.empGender = empGender;
+        this.empPhone = empPhone;
+        this.empPersonalEmail = empPersonalEmail;
+        this.empZipCode = empZipCode;
+        this.empAddressBase = empAddressBase;
+        this.empAddressDetail = empAddressDetail;
+        this.empHireDate = empHireDate;
+        this.empType = empType;
+        this.dept = dept;
+        this.grade = grade;
+        this.title = title;
+        this.empRole = empRole;
+        this.empMailboxSize = empMailboxSize;
+    }
+
+
+//    사원 softdelete -> db영구 삭제 기한 고려
+    public void softDelete(){
+        if(this.empStatus != EmpStatus.RESIGNED){
+            throw new IllegalStateException("퇴직 상태인 사원만 삭제가 가능합니다");
+        }
+        this.deleteAt = LocalDate.now(); //날짜로만 표시
+    }
+
+//    사원 삭제 여부 조회 편의용
+    public boolean isDelete(){
+        return this.deleteAt !=null;
+    }
+
+
 }

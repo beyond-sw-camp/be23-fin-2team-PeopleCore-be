@@ -1,5 +1,6 @@
 package com.peoplecore.title.service;
 
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.department.domain.UseStatus;
 import com.peoplecore.department.repository.DepartmentRepository;
@@ -29,7 +30,6 @@ public class TitleService {
     }
 
     public List<TitleResponse> getTitles(UUID companyId) {
-        // 부서 목록 한 번만 조회해서 Map으로 변환 (N+1 방지)
         Map<Long, String> deptMap = departmentRepository
                 .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y)
                 .stream()
@@ -60,7 +60,9 @@ public class TitleService {
             throw new IllegalArgumentException("이미 존재하는 직책명입니다.");
         }
 
-        String titleCode = String.format("%03d", titleRepository.countByCompanyId(companyId) + 1);
+        String titleCode = titleRepository.findTopByCompanyIdOrderByTitleCodeDesc(companyId)
+                .map(t -> String.format("%03d", Integer.parseInt(t.getTitleCode()) + 1))
+                .orElse("001");
 
         Title title = Title.builder()
                 .companyId(companyId)
@@ -88,7 +90,7 @@ public class TitleService {
             throw new IllegalArgumentException("접근 권한이 없습니다.");
         }
 
-        // 자기 자신을 제외하고 같은 직책명 + 같은 부서가 있으면 중복
+
         if (titleRepository.existsByTitleNameAndCompanyIdAndDeptIdAndTitleIdNot(
                 request.getTitleName(), companyId, request.getDeptId(), titleId)) {
             throw new IllegalArgumentException("이미 존재하는 직책명입니다.");
@@ -115,4 +117,17 @@ public class TitleService {
 
         titleRepository.delete(title);
     }
+
+
+    //superAdmin 계정 생성시 초기값
+    public void initDefault(Company company) {
+        titleRepository.save(
+            Title.builder()
+                    .companyId(company.getCompanyId())
+                    .titleName("미배정")
+                    .titleCode("DEFAULT")
+                    .build()
+        );
+    }
+
 }

@@ -30,18 +30,26 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
     @Value("${jwt.secretKey}")
     private String secretKey;
 
+    @Value("${internal.api-key}")
+    private String internalApiKey;
+
     private Key accessKey;
 
     private static final List<String> EXCLUDE_PATHS = List.of(
             "/hr-service/auth/login",
             "/hr-service/auth/refresh",
-            "/hr-service/auth/password"
+            "/hr-service/auth/password",
+            "/hr-service/auth/email"
     );
+
 //  hr담담자만 추가 접근 가능 경로
-    private static final List<String>HR_ONLY_PATHS =List.of(
+    private static final List<String> HR_ONLY_PATHS = List.of(
             "/hr-service/employee",
             "/hr-service/resign"
     );
+
+//  서버운영팀 전용 경로 (API Key 인증)
+    private static final String INTERNAL_PATH_PREFIX = "/hr-service/internal/";
 
 
     @PostConstruct
@@ -60,6 +68,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         // 인증 제외 경로
         if (isExcludedPath(path)) {
             return chain.filter(exchange);
+        }
+
+        // 서버운영팀 → API Key 인증 (JWT 아님)
+        if (path.startsWith(INTERNAL_PATH_PREFIX)) {
+            return handleInternalAuth(exchange, chain, request);
         }
 
         // Authorization 헤더 확인
@@ -93,15 +106,19 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         }
 
         // 검증 통과 → 사용자 정보를 헤더에 실어서 하위 서비스로 전달
-        ServerHttpRequest mutatedRequest = request.mutate()
+        ServerHttpRequest.Builder requestBuilder = request.mutate()
                 .header("X-User-Id", claims.getSubject())
                 .header("X-User-Company", claims.get("companyId", String.class))
                 .header("X-User-Name", claims.get("name", String.class))
                 .header("X-User-Role", claims.get("role", String.class))
                 .header("X-User-Department", String.valueOf(claims.get("departmentId")))
-                .header("X-User-Grade", String.valueOf(claims.get("gradeId")))
-                .header("X-User-Title", String.valueOf(claims.get("titleId")))
-                .build();
+                .header("X-User-Grade", String.valueOf(claims.get("gradeId")));
+
+        if (claims.get("titleId") != null) {
+            requestBuilder.header("X-User-Title", String.valueOf(claims.get("titleId")));
+        }
+
+        ServerHttpRequest mutatedRequest = requestBuilder.build();
 
         return chain.filter(exchange.mutate().request(mutatedRequest).build());
     }
@@ -118,6 +135,18 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             }
         }
         return false;
+    }
+
+    // 서버운영팀 API Key 인증
+    private Mono<Void> handleInternalAuth(ServerWebExchange exchange,
+                                           GatewayFilterChain chain,
+                                           ServerHttpRequest request) {
+        String apiKey = request.getHeaders().getFirst("X-Internal-Api-Key");
+        if (apiKey == null || !apiKey.equals(internalApiKey)) {
+            return onError(exchange, "내부 관리자 인증에 실패했습니다.", HttpStatus.UNAUTHORIZED);
+        }
+        // API Key 인증 통과 → JWT 없이 바로 하위 서비스로 전달
+        return chain.filter(exchange);
     }
 
     private Mono<Void> onError(ServerWebExchange exchange, String message, HttpStatus status) {

@@ -3,9 +3,11 @@ package com.peoplecore.employee.controller;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.EmpType;
 import com.peoplecore.employee.domain.EmployeeSortField;
+import com.peoplecore.employee.dto.EmpDetailResponseDto;
 import com.peoplecore.employee.dto.EmployeeCreateRequestDto;
 import com.peoplecore.employee.dto.EmployeeKardResponseDto;
 import com.peoplecore.employee.dto.EmployeeListDto;
+import com.peoplecore.employee.dto.EmployeeUpdateRequestDto;
 import com.peoplecore.employee.service.EmployeeService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
@@ -62,14 +64,30 @@ public class EmployeeController {
 
 //
 ////    4. 상세 조희
-//    @GetMapping("{empId}")
+    @GetMapping("{empId}")
+    public ResponseEntity<EmpDetailResponseDto>getEmpDetail(@RequestHeader("X-User-Company")UUID companyId,@PathVariable Long empId){
+        return ResponseEntity.ok(employeeService.getEmployeeDetail(companyId,empId));
+    }
 //
 ////    5. 정보 수정
-//    @PutMapping("{empId}")
-//
-////    6. 삭제
-//    @DeleteMapping("{empId}")
-//
+    @PutMapping("{empId}")
+    public ResponseEntity<EmpDetailResponseDto> updateEmployee(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long empId,
+            @Valid @RequestBody EmployeeUpdateRequestDto requestDto) {
+        return ResponseEntity.ok(employeeService.updateEmployee(companyId, empId, requestDto));
+    }
+
+//    6. 삭제
+    @DeleteMapping("{empId}")
+    public ResponseEntity<Void>deleteEmployee(
+            @RequestHeader("X-User-Company")UUID companyId,
+            @PathVariable Long empId){
+        employeeService.deleteEmployee(companyId,empId);
+        return ResponseEntity.ok().build();
+    }
+
+
 
 
 
