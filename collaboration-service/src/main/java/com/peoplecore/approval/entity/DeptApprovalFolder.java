@@ -28,6 +28,15 @@ public class DeptApprovalFolder extends BaseTimeEntity {
     @Column(nullable = false)
     private UUID companyId;
 
+    /** 문서함 이름 */
+    @Column(nullable = false, length = 100)
+    private String folderName;
+
+    /** 정렬 순서 */
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer sortOrder = 0;
+
     /** 전체 사용 여부 */
     @Column(nullable = false)
     @Builder.Default
@@ -45,12 +54,12 @@ public class DeptApprovalFolder extends BaseTimeEntity {
     /** 수신함 사용 */
     @Column(nullable = false)
     @Builder.Default
-    private Boolean ReceivedYn = true;
+    private Boolean receivedYn = true;
 
     /** 발신함 사용 */
     @Column(nullable = false)
     @Builder.Default
-    private Boolean SentYn = true;
+    private Boolean sentYn = true;
 
     /** 참조함 사용 */
     @Column(nullable = false)
@@ -62,4 +71,13 @@ public class DeptApprovalFolder extends BaseTimeEntity {
     @Builder.Default
     private Boolean viewYn = true;
 
+    /** 이름 수정 */
+    public void updateName(String folderName) {
+        this.folderName = folderName;
+    }
+
+    /** 순서 변경 */
+    public void updateSortOrder(Integer sortOrder) {
+        this.sortOrder = sortOrder;
+    }
 }
