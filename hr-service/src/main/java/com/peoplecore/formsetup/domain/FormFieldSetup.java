@@ -54,17 +54,17 @@ public class FormFieldSetup {
     @Column(name = "options", length = 500)
     private String options;
 
-    @Column(name = "linked_source", length = 50)
-    private String linkedSource;
+    @Column(name = "auto_fill_from", length = 50)
+    private String autoFillFrom;
 
     public void update(String label, FieldType fieldType, Boolean visible,
-                       Boolean required, Integer sortOrder, String options, String linkedSource) {
+                       Boolean required, Integer sortOrder, String options, String autoFillFrom) {
         this.label = label;
         this.fieldType = fieldType;
         this.visible = visible;
         this.required = required;
         this.sortOrder = sortOrder;
         this.options = options;
-        this.linkedSource = linkedSource;
+        this.autoFillFrom = autoFillFrom;
     }
 }

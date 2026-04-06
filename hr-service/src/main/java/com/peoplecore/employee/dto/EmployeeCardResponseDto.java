@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Data
 @Builder
-public class EmployeeKardResponseDto {
+public class EmployeeCardResponseDto {
     private int total;
     private int active;
     private int onLeave;

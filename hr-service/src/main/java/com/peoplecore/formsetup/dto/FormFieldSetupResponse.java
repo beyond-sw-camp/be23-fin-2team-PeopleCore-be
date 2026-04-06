@@ -23,10 +23,11 @@ public class FormFieldSetupResponse {
     private Boolean required;
     private Integer sortOrder;
     private List<String> options;
-    private String linkedSource;
+    private String autoFillFrom;
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
+//    db option문자열 ex.'["정규직","계약직"]' -> 프론트 List
     public static FormFieldSetupResponse from(FormFieldSetup entity) {
         List<String> optionList = null;
         if (entity.getOptions() != null && !entity.getOptions().isBlank()) {
@@ -48,7 +49,7 @@ public class FormFieldSetupResponse {
                 .required(entity.getRequired())
                 .sortOrder(entity.getSortOrder())
                 .options(optionList)
-                .linkedSource(entity.getLinkedSource())
+                .autoFillFrom(entity.getAutoFillFrom())
                 .build();
     }
 }

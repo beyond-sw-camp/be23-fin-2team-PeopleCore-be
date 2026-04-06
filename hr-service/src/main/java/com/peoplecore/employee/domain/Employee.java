@@ -46,7 +46,7 @@ public class Employee extends BaseTimeEntity {
     private Title title;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "insurance_job_types", nullable = true)
+    @JoinColumn(name = "insurance_job_types", nullable = false)
     private InsuranceJobTypes jobTypes;
 
     @Column(name = "emp_name", nullable = false, length = 50)

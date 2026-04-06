@@ -5,6 +5,7 @@ import com.peoplecore.employee.dto.ExpiringContractDto;
 import com.peoplecore.employee.dto.MonthlyTrendDto;
 import com.peoplecore.employee.dto.WorkforceSummaryDto;
 import com.peoplecore.employee.service.HrStatusService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,6 +18,7 @@ public class HrStatusController {
 
     private final HrStatusService hrStatusService;
 
+    @Autowired
     public HrStatusController(HrStatusService hrStatusService) {
         this.hrStatusService = hrStatusService;
     }

@@ -7,7 +7,7 @@ import com.peoplecore.department.repository.DepartmentRepository;
 import com.peoplecore.employee.domain.*;
 import com.peoplecore.employee.dto.EmpDetailResponseDto;
 import com.peoplecore.employee.dto.EmployeeCreateRequestDto;
-import com.peoplecore.employee.dto.EmployeeKardResponseDto;
+import com.peoplecore.employee.dto.EmployeeCardResponseDto;
 import com.peoplecore.employee.dto.EmployeeListDto;
 import com.peoplecore.employee.dto.EmployeeUpdateRequestDto;
 import com.peoplecore.employee.repository.EmployeeFileRepository;
@@ -17,10 +17,10 @@ import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.grade.repository.GradeRepository;
 import com.peoplecore.minio.service.MinioService;
-import com.peoplecore.permission.domain.Permission;
 import com.peoplecore.title.domain.Title;
 import com.peoplecore.title.repository.TitleRepository;
 import jakarta.persistence.EntityNotFoundException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -48,6 +48,7 @@ public class EmployeeService {
     private final EmployeeFileRepository employeeFileRepository;
 
 
+    @Autowired
     public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository) {
         this.employeeRepository = employeeRepository;
         this.companyRepository = companyRepository;
@@ -70,7 +71,7 @@ public class EmployeeService {
 
 
     //    2.카드 조회 및 합계
-    public EmployeeKardResponseDto getKard(UUID companyId) {
+    public EmployeeCardResponseDto getCard(UUID companyId) {
 //        현재 날짜(비교용)
         LocalDate now = LocalDate.now();
 
@@ -82,7 +83,7 @@ public class EmployeeService {
 
         int hiredThisMonth = employeeRepository.countHiredThisMonth(companyId, now.getYear(), now.getMonthValue());
 
-        return EmployeeKardResponseDto.builder()
+        return EmployeeCardResponseDto.builder()
                 .total(total)
                 .active(active)
                 .onLeave(onLeave)
@@ -211,6 +212,7 @@ public class EmployeeService {
 
 
 //    4. 사원 상세조회
+    @Transactional(readOnly = true)
     public EmpDetailResponseDto getEmployeeDetail(UUID companyId, Long empId){
 
         Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(()-> new EntityNotFoundException("사원을 찾을 수 없습니다"));
