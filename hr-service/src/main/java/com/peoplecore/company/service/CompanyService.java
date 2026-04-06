@@ -11,7 +11,9 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.grade.service.GradeService;
 import com.peoplecore.pay.service.InsuranceJobTypesService;
+import com.peoplecore.pay.service.InsuranceRatesService;
 import com.peoplecore.pay.service.PayItemsService;
+import com.peoplecore.pay.service.PaySettingsService;
 import com.peoplecore.title.service.TitleService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -35,9 +37,11 @@ public class CompanyService {
     private final InsuranceJobTypesService insuranceJobTypesService;
     private final PayItemsService payItemsService;
     private final SuperAdminAccountService superAdminAccountService;
+    private final InsuranceRatesService insuranceRatesService;
+    private final PaySettingsService paySettingsService;
 
     @Autowired
-    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService) {
+    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService) {
         this.companyRepository = companyRepository;
         this.departmentService = departmentService;
         this.gradeService = gradeService;
@@ -45,6 +49,8 @@ public class CompanyService {
         this.insuranceJobTypesService = insuranceJobTypesService;
         this.payItemsService = payItemsService;
         this.superAdminAccountService = superAdminAccountService;
+        this.insuranceRatesService = insuranceRatesService;
+        this.paySettingsService = paySettingsService;
     }
 
 //    1. 회사 등록 + 기본데이터 세팅 + superAdmin 생성
@@ -79,6 +85,9 @@ public class CompanyService {
         titleService.initDefault(company);
         insuranceJobTypesService.initDefault(company);
         payItemsService.initDefault(company);
+        insuranceRatesService.initDefault(company);
+        paySettingsService.initDefault(company);
+
 
         // superAdmin 계정 생성
         superAdminAccountService.createSuperAdmin(company, reqDto);
