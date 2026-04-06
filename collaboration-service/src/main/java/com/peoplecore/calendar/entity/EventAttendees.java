@@ -15,7 +15,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "event_attendees")     // 일정초대 참석자
+  // 일정초대 참석자
 public class EventAttendees {
 
     @Id
@@ -37,7 +37,7 @@ public class EventAttendees {
     @Column(nullable = false)
     private UUID companyId;
 
-    @ManyToOne
-    @JoinColumn(name = "event_instances_id", nullable = false)
-    private Long eventInstancesId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn( nullable = false)
+    private EventInstances eventInstances;
 }

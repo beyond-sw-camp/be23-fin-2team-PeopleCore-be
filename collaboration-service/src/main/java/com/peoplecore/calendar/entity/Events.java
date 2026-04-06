@@ -15,7 +15,6 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "events")
 public class Events extends BaseTimeEntity {
 
     @Id
@@ -52,12 +51,11 @@ public class Events extends BaseTimeEntity {
     @Column(nullable = false)
     private UUID companyId;
 
-    @ManyToOne
-    @JoinColumn(name = "my_calendars_id")
-    private Long myCalendarsId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    private MyCalendars myCalendars;
 
-    @ManyToOne
-    @JoinColumn(name = "repeated_rules_id",nullable = false)
-    private Long repeatedRulesId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(nullable = false)
+    private RepeatedRules repeatedRules;
 
 }
