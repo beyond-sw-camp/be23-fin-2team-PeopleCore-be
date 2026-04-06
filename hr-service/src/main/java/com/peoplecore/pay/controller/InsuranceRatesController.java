@@ -73,6 +73,31 @@ public class InsuranceRatesController {
         return ResponseEntity.status(HttpStatus.CREATED).body(insuranceJobTypesService.createJobType(companyId, reqDto));
     }
 
+//    산재보험 업종 수정(요율, 업종명, 설명)
+    @PutMapping("/jobtypes/{jobTypesId}")
+    public ResponseEntity<InsuranceJobTypesResDto> updateJobType(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long jobTypesId,
+            @RequestBody @Valid InsuranceJobTypesReqDto reqDto){
+        return ResponseEntity.ok(
+                insuranceJobTypesService.updateJobType(companyId, jobTypesId, reqDto)
+        );
+    }
+
+//    산재보험 업종 사용여부 토글
+    @PatchMapping("/jobtypes/{jobTypesId}")
+    public ResponseEntity<InsuranceJobTypesResDto> toggleJobTypeActive(
+            @RequestHeader("X-User-Company") UUID companyId, @PathVariable Long jobTypesId){
+        return ResponseEntity.ok(insuranceJobTypesService.toggleActive(companyId, jobTypesId));
+    }
+
+//    산재보험 업종 삭제
+    @DeleteMapping("/jobtypes/{jobTypesId}")
+    public ResponseEntity<Void> deleteJobType(@RequestHeader("X-User-Company") UUID companyId, @PathVariable Long jobTypesId){
+        insuranceJobTypesService.deleteJobType(companyId, jobTypesId);
+        return ResponseEntity.noContent().build();
+
+    }
 
 
 

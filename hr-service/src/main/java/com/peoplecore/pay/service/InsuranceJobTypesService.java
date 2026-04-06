@@ -7,11 +7,14 @@ import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.InsuranceJobTypes;
 import com.peoplecore.pay.dtos.InsuranceJobTypesReqDto;
 import com.peoplecore.pay.dtos.InsuranceJobTypesResDto;
+import com.peoplecore.pay.dtos.InsuranceRatesResDto;
 import com.peoplecore.pay.repository.InsuranceJobTypesRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,16 +60,48 @@ public class InsuranceJobTypesService {
         return InsuranceJobTypesResDto.fromEntity(insuranceJobTypesRepository.save(jobTypes));
     }
 
+//     산재보험 업종 수정(요율, 업종명, 설명)
+    @Transactional
+    public InsuranceJobTypesResDto updateJobType(UUID companyId, Long jobTypesId, InsuranceJobTypesReqDto reqDto){
+        InsuranceJobTypes jobTypes = findByIdAndCompany(jobTypesId, companyId);
+        jobTypes.update(reqDto.getName(), reqDto.getDesciption(), reqDto.getIndustrialAccidentRate());
+        return InsuranceJobTypesResDto.fromEntity(jobTypes);
+    }
+
+//    산재보험 업종 사용여부 토글
+    @Transactional
+    public InsuranceJobTypesResDto toggleActive(UUID companyId, Long jobTypesId){
+        InsuranceJobTypes jobTypes = findByIdAndCompany(jobTypesId, companyId);
+
+        jobTypes.toggleActive();
+
+        return InsuranceJobTypesResDto.fromEntity(jobTypes);
+    }
+
+//     산재보험 업종 삭제
+    public void deleteJobType(UUID companyId, Long jobTypesId){
+        InsuranceJobTypes jobTypes = findByIdAndCompany(jobTypesId, companyId);
+
+        insuranceJobTypesRepository.delete(jobTypes);
+    }
 
 
     //superAdmin 계정 생성시 초기값
     public void initDefault(Company company) {
         insuranceJobTypesRepository.save(
-            InsuranceJobTypes.builder()
-                    .company(company)
-                    .name("기본업종")
-                    .isActive(true)
-                    .build()
+                InsuranceJobTypes.builder()
+                        .company(company)
+                        .name("기본업종")
+                        .description("일반 사무직")
+                        .industrialAccidentRate(new BigDecimal("0.0070"))
+                        .isActive(true)
+                        .build()
         );
     }
+
+    private InsuranceJobTypes findByIdAndCompany(Long jobTypesId, UUID companyId){
+        return insuranceJobTypesRepository.findByJobTypesIdAndCompany_CompanyId(jobTypesId, companyId).orElseThrow(()-> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
+    }
+
+
 }
