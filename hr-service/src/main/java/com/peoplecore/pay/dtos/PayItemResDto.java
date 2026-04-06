@@ -1,6 +1,7 @@
 package com.peoplecore.pay.dtos;
 
 import com.peoplecore.pay.domain.PayItems;
+import com.peoplecore.pay.enums.LegalCalcType;
 import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
 import lombok.AllArgsConstructor;
@@ -24,6 +25,7 @@ public class PayItemResDto {
     private Integer sortOrder;
     private Boolean isActive;
     private Boolean isLegal;
+    private LegalCalcType legalCalcType;
 
     public static PayItemResDto fromEntity(PayItems p){
         return PayItemResDto.builder()
@@ -37,6 +39,7 @@ public class PayItemResDto {
                 .sortOrder(p.getSortOrder())
                 .isActive(p.getIsActive())
                 .isLegal(p.getIsLegal())
+                .legalCalcType(p.getLegalCalcType())
                 .build();
     }
 

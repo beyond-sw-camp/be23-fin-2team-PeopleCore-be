@@ -121,6 +121,9 @@ public class ApprovalDocument extends BaseTimeEntity {
     @Version
     private Long version;
 
+    /*개인 문서함 id */
+    private Long personalFolderId;
+
     /*결재 완성 시 저장되는 url*/
     private String docUrl;
 

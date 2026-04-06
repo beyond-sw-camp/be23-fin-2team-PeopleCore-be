@@ -42,7 +42,7 @@ public class FormFieldSetupService {
 //      기존 데이터 조회
         List<FormFieldSetup> existingList = repository.findAllByCompanyIdAndFormTypeOrderBySectionAscSortOrderAsc(companyId, formType);
 
-//        fieldKey기준으로 Map변환 -빠른 조회
+//        fieldKey기준으로 Map변환 -빠른 조회(수정)
         Map<String, FormFieldSetup> existingMap = new HashMap<>();
         for (FormFieldSetup e : existingList) {
             existingMap.put(e.getFieldKey(), e);
@@ -252,6 +252,7 @@ public class FormFieldSetupService {
 
     // DB에 저장할 폼 필드 객체 1
     // 화면의 입력칸 1개 = 이 메서드 1번 호출 = DB 행 1개
+    //     builder 20번 반복 = 200줄 -> 한 줄 × 20 = 약 20줄
     private FormFieldSetup field(
             UUID companyId,
             FormType formType,
@@ -280,7 +281,8 @@ public class FormFieldSetupService {
                 .build();
     }
 
-    // List<String> -> JSON 문자열 변환
+
+    // List<String>(옵션) -> JSON 문자열 변환
     private String toJson(List<String> list) {
         if (list == null || list.isEmpty()) {
             return null;

@@ -31,8 +31,9 @@ public class PayItemController {
     public ResponseEntity<List<PayItemResDto>> getPayItems(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestParam PayItemType type,
-            @RequestParam(required = false) String name){
-        return ResponseEntity.ok(payItemsService.getPayItems(companyId, type, name));
+            @RequestParam(required = false) String name,
+            @RequestParam(required = false) Boolean isLegal){
+        return ResponseEntity.ok(payItemsService.getPayItems(companyId, type, name, isLegal));
     }
 
 //    항목 추가
@@ -53,7 +54,7 @@ public class PayItemController {
     }
 
 //    항목 사용여부 토글 (수정)
-    @PatchMapping("/payItemId")
+    @PatchMapping("/{payItemId}")
     public ResponseEntity<PayItemResDto> toggleStatus(
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long payItemId){
