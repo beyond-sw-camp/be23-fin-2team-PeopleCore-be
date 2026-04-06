@@ -2,6 +2,7 @@ package com.peoplecore.department.controller;
 
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.department.dto.DepartmentCreateRequest;
+import com.peoplecore.department.dto.DepartmentDetailResponse;
 import com.peoplecore.department.dto.DepartmentResponse;
 import com.peoplecore.department.dto.DepartmentUpdateRequest;
 import com.peoplecore.department.service.DepartmentService;
@@ -46,6 +47,16 @@ public class DepartmentController {
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long deptId) {
         return ResponseEntity.ok(departmentService.getDepartment(companyId, deptId));
+    }
+
+    /**
+     * 부서 상세 조회 (직책 보유자, 재직 인원 수, 하위 부서 수)
+     */
+    @GetMapping("/{deptId}/detail")
+    public ResponseEntity<DepartmentDetailResponse> getDepartmentDetail(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long deptId) {
+        return ResponseEntity.ok(departmentService.getDepartmentDetail(companyId, deptId));
     }
 
     /**
