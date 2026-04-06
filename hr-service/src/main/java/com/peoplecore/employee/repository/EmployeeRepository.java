@@ -124,4 +124,22 @@ AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
 """)
     List<Employee>findActiveByCompanyAndDept(@Param("companyId")UUID companyId,@Param("deptId") Long deptId);
 
+
+//    최근 6개월 입사자 조회
+    @Query("""
+SELECT e FROM Employee e
+WHERE e.company.companyId = :companyId
+AND e.empHireDate >= :fromDate
+""")
+    List<Employee>findHiredAfter(@Param("companyId")UUID companyId, @Param("fromDate")LocalDate fromDate);
+
+//    최근 6개월 퇴사자 조회
+    @Query("""
+SELECT e FROM Employee e
+WHERE e.company.companyId = :companyId
+AND e.empResign IS NOT NULL
+AND e.empResign >= :fromDate
+""")
+    List<Employee>findResignedAfter(@Param("companyId")UUID companyId,@Param("fromDate")LocalDate fromDate);
+
 }

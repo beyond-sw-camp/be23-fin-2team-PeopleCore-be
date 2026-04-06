@@ -36,17 +36,17 @@ public class HrStatusController {
         return ResponseEntity.ok(hrStatusService.getByDept(companyId, deptId));
     }
 //
-////    3. 월별 입퇴사 현황
-//    @GetMapping("/trend")
-//    public ResponseEntity<List<MonthlyTrendDto>> getTrend(
-//            @RequestHeader("X-User-Company") UUID companyId) {
-//        return ResponseEntity.ok(hrStatusService.getTrend(companyId));
-//    }
-//
-////    4. 계약 만료 예정자 목록
-//    @GetMapping("/expiring")
-//    public ResponseEntity<List<ExpiringContractDto>> getExpiring(
-//            @RequestHeader("X-User-Company") UUID companyId) {
-//        return ResponseEntity.ok(hrStatusService.getExpiring(companyId));
-//    }
+//    3. 월별 입퇴사 현황
+    @GetMapping("/trend")
+    public ResponseEntity<List<MonthlyTrendDto>> getTrend(
+            @RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(hrStatusService.getTrend(companyId));
+    }
+
+//    4. 계약 만료 예정자 목록
+    @GetMapping("/expiring")
+    public ResponseEntity<List<ExpiringContractDto>> getExpiring(
+            @RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(hrStatusService.getExpiring(companyId));
+    }
 }
