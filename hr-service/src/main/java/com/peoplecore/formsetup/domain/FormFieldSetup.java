@@ -57,9 +57,10 @@ public class FormFieldSetup {
     @Column(name = "auto_fill_from", length = 50)
     private String autoFillFrom;
 
-    public void update(String label, FieldType fieldType, Boolean visible,
+    public void update(String label, String section, FieldType fieldType, Boolean visible,
                        Boolean required, Integer sortOrder, String options, String autoFillFrom) {
         this.label = label;
+        this.section =section;
         this.fieldType = fieldType;
         this.visible = visible;
         this.required = required;

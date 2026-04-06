@@ -18,4 +18,5 @@ public interface FormFieldSetupRepository extends JpaRepository<FormFieldSetup, 
 
     // 회사별 + 폼타입별 설정 존재 여부 (기본값 자동 생성 판단용)
     boolean existsByCompanyIdAndFormType(UUID companyId, FormType formType);
+
 }
