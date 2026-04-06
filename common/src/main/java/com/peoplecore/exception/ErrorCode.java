@@ -52,6 +52,13 @@ public enum ErrorCode {
     INSURANCE_RATES_NOT_FOUND(404, "해당 연도의 보험요율을 찾을 수 없습니다."),
     INSURANCE_JOB_TYPE_DUPLICATE(409, "이미 존재하는 업종명입니다."),
 
+    // 간이세액표
+    TAX_TABLE_NOT_FOUND(404, "해당 연도의 간이세액표를 찾을 수 없습니다."),
+    TAX_TABLE_LOOKUP_FAILED(404, "해당 급여구간의 세액 정보를 찾을 수 없습니다."),
+
+    // 퇴직연금설정
+    RETIREMENT_PROVIDER_REQUIRED(400, "DB형/DB+DC형은 퇴직연금 운용사를 입력해주세요."),
+
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),
     BAD_REQUEST(400, "잘못된 요청입니다."),

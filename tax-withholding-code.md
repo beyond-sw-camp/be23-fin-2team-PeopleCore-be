@@ -59,8 +59,6 @@ public interface TaxWithholdingRepository extends JpaRepository<TaxWithholdingTa
     @Query("SELECT DISTINCT t.taxYear FROM TaxWithholdingTable t ORDER BY t.taxYear DESC")
     List<Integer> findDistinctTaxYears();
 
-    // 특정 연도 데이터 건수
-    long countByTaxYear(Integer taxYear);
 }
 ```
 
@@ -108,31 +106,9 @@ public class TaxWithholdingResDto {
 }
 ```
 
----
-
-### TaxYearSummaryResDto.java (신규)
-**파일 위치**: `pay/dtos/TaxYearSummaryResDto.java`
-
-> 연도 목록 조회 시 "2026년 (1,200건)" 형태로 표시하기 위한 DTO
-
-```java
-package com.peoplecore.pay.dtos;
-
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
-@Data
-@Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class TaxYearSummaryResDto {
-
-    private Integer taxYear;
-    private Long totalRecords;
-}
-```
+> ~~TaxYearSummaryResDto~~ → **불필요** (삭제)
+> 간이세액표 데이터는 연도별 건수가 고정(급여구간 × 부양가족수)이므로
+> 연도 목록은 `List<Integer>`로 충분합니다.
 
 ---
 
@@ -148,7 +124,6 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.TaxWithholdingTable;
 import com.peoplecore.pay.dtos.TaxWithholdingResDto;
-import com.peoplecore.pay.dtos.TaxYearSummaryResDto;
 import com.peoplecore.pay.repository.TaxWithholdingRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -170,16 +145,9 @@ public class TaxWithholdingService {
     }
 
 
-    // ── 등록된 연도 목록 (건수 포함) ──
-    public List<TaxYearSummaryResDto> getYearList() {
-        List<Integer> years = taxWithholdingRepository.findDistinctTaxYears();
-
-        return years.stream()
-                .map(year -> TaxYearSummaryResDto.builder()
-                        .taxYear(year)
-                        .totalRecords(taxWithholdingRepository.countByTaxYear(year))
-                        .build())
-                .toList();
+    // ── 등록된 연도 목록 ──
+    public List<Integer> getYearList() {
+        return taxWithholdingRepository.findDistinctTaxYears();
     }
 
     // ── 특정 연도 세액표 조회 (페이징) ──
@@ -219,7 +187,6 @@ package com.peoplecore.pay.controller;
 
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.pay.dtos.TaxWithholdingResDto;
-import com.peoplecore.pay.dtos.TaxYearSummaryResDto;
 import com.peoplecore.pay.service.TaxWithholdingService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -245,7 +212,7 @@ public class TaxWithholdingController {
 
     //    등록된 연도 목록 조회
     @GetMapping("/years")
-    public ResponseEntity<List<TaxYearSummaryResDto>> getYearList() {
+    public ResponseEntity<List<Integer>> getYearList() {
         return ResponseEntity.ok(taxWithholdingService.getYearList());
     }
 
@@ -257,15 +224,8 @@ public class TaxWithholdingController {
         return ResponseEntity.ok(taxWithholdingService.getTableByYear(year, pageable));
     }
 
-    //    세액 조회 (급여 + 부양가족 수 → 세액)
-    @GetMapping("/lookup")
-    public ResponseEntity<TaxWithholdingResDto> lookupTax(
-            @RequestParam Integer taxYear,
-            @RequestParam Long monthlySalary,
-            @RequestParam Integer dependents) {
-        return ResponseEntity.ok(
-                taxWithholdingService.lookupTax(taxYear, monthlySalary, dependents));
-    }
+    // lookupTax()는 Controller에 노출하지 않음
+    // → 급여계산 Service에서 taxWithholdingService.lookupTax()를 직접 호출하여 사용
 }
 ```
 
@@ -358,9 +318,9 @@ INSERT INTO tax_withholding_table (tax_year, salary_from, salary_to, dependents,
 
 | Method | URL | 설명 |
 |--------|-----|------|
-| GET | `/pay/superadmin/tax-table/years` | 등록된 연도 목록 (건수 포함) |
+| GET | `/pay/superadmin/tax-table/years` | 등록된 연도 목록 |
 | GET | `/pay/superadmin/tax-table/{year}` | 특정 연도 세액표 조회 (페이징) |
-| GET | `/pay/superadmin/tax-table/lookup?taxYear=2026&monthlySalary=3000000&dependents=2` | 세액 조회 |
+| - | `taxWithholdingService.lookupTax()` | 세액 조회 (Service 내부 호출용, Controller 미노출) |
 
 ---
 
@@ -371,10 +331,9 @@ INSERT INTO tax_withholding_table (tax_year, salary_from, salary_to, dependents,
 | 1 | Entity | `TaxWithholdingTable.java` | 변경 없음 |
 | 2 | Repository | `TaxWithholdingRepository.java` | 신규 |
 | 3 | DTO | `TaxWithholdingResDto.java` | 신규 |
-| 4 | DTO | `TaxYearSummaryResDto.java` | 신규 |
-| 5 | Service | `TaxWithholdingService.java` | 신규 |
-| 6 | Controller | `TaxWithholdingController.java` | 신규 |
-| 7 | ErrorCode | `ErrorCode.java` | 2개 추가 |
+| 4 | Service | `TaxWithholdingService.java` | 신규 |
+| 5 | Controller | `TaxWithholdingController.java` | 신규 |
+| 6 | ErrorCode | `ErrorCode.java` | 2개 추가 |
 
 ---
 
