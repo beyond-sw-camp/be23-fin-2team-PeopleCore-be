@@ -253,3 +253,128 @@ DELETE FROM title
 WHERE title_name = '파트장'
   AND title_id != (SELECT min_id FROM (SELECT MIN(title_id) AS min_id FROM title WHERE title_name = '파트장') tmp);
 
+-- 계약 만료일 컬럼 추가 (인력현황 - 계약 만료 예정자 조회용)
+ALTER TABLE employee ADD COLUMN contract_end_date DATE NULL;
+
+
+-- -------------------------------------------
+-- 회사 등록 시 default form양식
+DELIMITER $$
+
+CREATE TRIGGER trg_company_default_form_fields
+    AFTER INSERT ON company
+    FOR EACH ROW
+BEGIN
+
+    -- ══════════════════════════════════
+    -- EMPLOYEE_REGISTER
+    -- ══════════════════════════════════
+
+    INSERT INTO form_field_setup
+    (company_id, form_type, field_key, label, section, field_type, visible, required, sort_order, options, auto_fill_from)
+    VALUES
+        -- 기본 인적사항
+        (NEW.company_id,'EMPLOYEE_REGISTER','empName',      '성명',           '기본 인적사항', 'TEXT',  1,1,1,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','empNameEn',    '영문명',         '기본 인적사항', 'TEXT',  1,0,2,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','birthDate',    '생년월일',       '기본 인적사항', 'DATE',  1,1,3,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','gender',       '성별',           '기본 인적사항', 'RADIO', 1,1,4,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','phone',        '연락처',         '기본 인적사항', 'TEXT',  1,1,5,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','personalEmail','개인 이메일',    '기본 인적사항', 'TEXT',  1,1,6,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','address',      '주소',           '기본 인적사항', 'TEXT',  1,0,7,NULL,NULL),
+        -- 소속 및 고용 정보
+        (NEW.company_id,'EMPLOYEE_REGISTER','hireDate',   '입사일',     '소속 및 고용 정보','DATE',  1,1,1,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','employType', '고용 형태',  '소속 및 고용 정보','SELECT',1,1,2,'["정규직","계약직","시간제"]',NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','contractEnd','계약 만료일','소속 및 고용 정보','DATE',  1,0,3,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','department', '부서',       '소속 및 고용 정보','SELECT',1,1,4,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','rank',       '직급',       '소속 및 고용 정보','SELECT',1,1,5,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','position',   '직책',       '소속 및 고용 정보','SELECT',1,1,6,NULL,NULL),
+        -- 시스템 계정 설정
+        (NEW.company_id,'EMPLOYEE_REGISTER','empId',        '사번',                  '시스템 계정 설정','AUTO',  1,1,1,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','companyEmail', '사내 이메일',            '시스템 계정 설정','TEXT',  1,1,2,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','pwMethod',     '초기 비밀번호 발급 방식','시스템 계정 설정','RADIO', 1,1,3,NULL,NULL),
+        (NEW.company_id,'EMPLOYEE_REGISTER','mailQuota',    '메일함 용량',            '시스템 계정 설정','SELECT',1,0,4,'["5 GB (기본)","10 GB","20 GB","50 GB"]',NULL),
+        -- 메뉴 / 기능 권한 설정
+        (NEW.company_id,'EMPLOYEE_REGISTER','authTemplate','권한 템플릿','메뉴 / 기능 권한 설정','SELECT',1,1,1,'["일반 사원 (기본)","팀장","HR 담당자","재무 담당자","시스템 관리자"]',NULL),
+        -- 인사 서류 등록
+        (NEW.company_id,'EMPLOYEE_REGISTER','documents','서류 첨부','인사 서류 등록','FILE',1,0,1,NULL,NULL);
+
+    -- ══════════════════════════════════
+    -- SALARY_CONTRACT
+    -- ══════════════════════════════════
+
+    INSERT INTO form_field_setup
+    (company_id, form_type, field_key, label, section, field_type, visible, required, sort_order, options, auto_fill_from)
+    VALUES
+        -- 인적사항
+        (NEW.company_id,'SALARY_CONTRACT','empSearch', '사원 검색','인적사항','SEARCH',1,1,1,NULL,NULL),
+        (NEW.company_id,'SALARY_CONTRACT','department','부서',     '인적사항','TEXT',  1,1,2,NULL,'department'),
+        (NEW.company_id,'SALARY_CONTRACT','rank',      '직급',     '인적사항','TEXT',  1,1,3,NULL,'rank'),
+        (NEW.company_id,'SALARY_CONTRACT','position',  '직책',     '인적사항','TEXT',  1,1,4,NULL,'position'),
+        (NEW.company_id,'SALARY_CONTRACT','jobTitle',  '직무',     '인적사항','TEXT',  1,1,5,NULL,'jobTitle'),
+        (NEW.company_id,'SALARY_CONTRACT','employType','근로형태', '인적사항','TEXT',  1,1,6,NULL,'employType'),
+        -- 계약기간
+        (NEW.company_id,'SALARY_CONTRACT','contractYear', '계약 연도',    '계약기간','SELECT',1,1,1,'["2026","2025","2024"]',NULL),
+        (NEW.company_id,'SALARY_CONTRACT','contractStart','계약 시작일',  '계약기간','DATE',  1,1,2,NULL,NULL),
+        (NEW.company_id,'SALARY_CONTRACT','contractEnd',  '계약 종료일',  '계약기간','DATE',  1,0,3,NULL,NULL),
+        (NEW.company_id,'SALARY_CONTRACT','probation',    '수습 기간',    '계약기간','SELECT',1,0,4,'["없음","1개월","2개월","3개월"]',NULL),
+        (NEW.company_id,'SALARY_CONTRACT','weeklyHours',  '주당 근로시간','계약기간','SELECT',1,1,5,'["40시간 (주 5일)","35시간","30시간","20시간 (시간제)","15시간 (단시간)"]',NULL),
+        (NEW.company_id,'SALARY_CONTRACT','contractType', '계약서 유형',  '계약기간','SELECT',1,1,6,'["연봉계약서","근로계약서"]',NULL),
+        -- 급여
+        (NEW.company_id,'SALARY_CONTRACT','annualSalary','계약 연봉',    '급여','NUMBER',1,1,1,NULL,NULL),
+        (NEW.company_id,'SALARY_CONTRACT','baseSalary',  '월 기본급',    '급여','NUMBER',1,1,2,NULL,NULL),
+        (NEW.company_id,'SALARY_CONTRACT','extraSalary', '월 기본급 외', '급여','NUMBER',1,0,3,NULL,NULL),
+        -- 기타사항
+        (NEW.company_id,'SALARY_CONTRACT','memo',      '특약사항 / 메모',     '기타사항','TEXTAREA',1,0,1,NULL,NULL),
+        (NEW.company_id,'SALARY_CONTRACT','attachment','서명 완료 계약서 첨부','기타사항','FILE',    1,0,2,NULL,NULL);
+
+    -- ══════════════════════════════════
+    -- HR_ORDER
+    -- ══════════════════════════════════
+
+    INSERT INTO form_field_setup
+    (company_id, form_type, field_key, label, section, field_type, visible, required, sort_order, options, auto_fill_from)
+    VALUES
+        -- 발령 기본 정보
+        (NEW.company_id,'HR_ORDER','orderDate',  '발령일자', '발령 기본 정보','DATE', 1,1,1,NULL,NULL),
+        (NEW.company_id,'HR_ORDER','orderNumber','발령번호', '발령 기본 정보','AUTO', 1,1,2,NULL,NULL),
+        (NEW.company_id,'HR_ORDER','orderTitle', '발령제목', '발령 기본 정보','TEXT', 1,1,3,NULL,NULL),
+        (NEW.company_id,'HR_ORDER','orderCount', '발령 인원','발령 기본 정보','AUTO', 1,0,4,NULL,NULL),
+        -- 발령 유형
+        (NEW.company_id,'HR_ORDER','orderType','발령유형','발령 유형','SELECT',1,1,1,'["입사","퇴사","직위변경","부서변경","보직변경"]',NULL),
+        -- 대상자 정보
+        (NEW.company_id,'HR_ORDER','empSearch',    '사원명',   '대상자 정보','SEARCH',1,1,1,NULL,NULL),
+        (NEW.company_id,'HR_ORDER','department',   '부서',     '대상자 정보','TEXT',  1,1,2,NULL,'department'),
+        (NEW.company_id,'HR_ORDER','rank',         '직위',     '대상자 정보','TEXT',  1,1,3,NULL,'rank'),
+        (NEW.company_id,'HR_ORDER','newDepartment','변경 부서','대상자 정보','SELECT',1,0,4,NULL,NULL),
+        (NEW.company_id,'HR_ORDER','newRank',      '변경 직위','대상자 정보','SELECT',1,0,5,NULL,NULL),
+        (NEW.company_id,'HR_ORDER','newPosition',  '변경 보직','대상자 정보','SELECT',1,0,6,NULL,NULL),
+        (NEW.company_id,'HR_ORDER','empOrderDate', '발령일',   '대상자 정보','DATE',  1,1,7,NULL,NULL),
+        -- 기타
+        (NEW.company_id,'HR_ORDER','orderReason','발령 사유','기타','TEXTAREA',1,0,1,NULL,NULL);
+
+    -- ══════════════════════════════════
+    -- RESIGN_REGISTER
+    -- ══════════════════════════════════
+
+    INSERT INTO form_field_setup
+    (company_id, form_type, field_key, label, section, field_type, visible, required, sort_order, options, auto_fill_from)
+    VALUES
+        -- 대상자
+        (NEW.company_id,'RESIGN_REGISTER','empSearch', '사원 검색','대상자','SEARCH',1,1,1,NULL,NULL),
+        (NEW.company_id,'RESIGN_REGISTER','department','부서',     '대상자','TEXT',  1,1,2,NULL,'department'),
+        (NEW.company_id,'RESIGN_REGISTER','rank',      '직급',     '대상자','TEXT',  1,1,3,NULL,'rank'),
+        (NEW.company_id,'RESIGN_REGISTER','hireDate',  '입사일',   '대상자','TEXT',  1,1,4,NULL,'hireDate'),
+        -- 퇴직 정보
+        (NEW.company_id,'RESIGN_REGISTER','resignDate',  '퇴직일',  '퇴직 정보','DATE',    1,1,1,NULL,NULL),
+        (NEW.company_id,'RESIGN_REGISTER','resignType',  '퇴직 사유','퇴직 정보','SELECT',  1,1,2,'["자진퇴사","권고사직","정년퇴직","계약만료","기타"]',NULL),
+        (NEW.company_id,'RESIGN_REGISTER','resignDetail','상세 사유','퇴직 정보','TEXTAREA',1,0,3,NULL,NULL),
+        -- 인수인계 현황
+        (NEW.company_id,'RESIGN_REGISTER','handoverWork',   '업무 인수인계 완료','인수인계 현황','RADIO',1,0,1,NULL,NULL),
+        (NEW.company_id,'RESIGN_REGISTER','handoverEquip',  '장비 반납',        '인수인계 현황','RADIO',1,0,2,NULL,NULL),
+        (NEW.company_id,'RESIGN_REGISTER','handoverAccount','계정 비활성화',    '인수인계 현황','RADIO',1,0,3,NULL,NULL),
+        (NEW.company_id,'RESIGN_REGISTER','handoverPay',    '퇴직금 정산',      '인수인계 현황','RADIO',1,0,4,NULL,NULL);
+
+    END$$
+
+    DELIMITER ;
+

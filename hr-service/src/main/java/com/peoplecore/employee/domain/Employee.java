@@ -46,7 +46,7 @@ public class Employee extends BaseTimeEntity {
     private Title title;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "insurance_job_types", nullable = true)
+    @JoinColumn(name = "insurance_job_types", nullable = false)
     private InsuranceJobTypes jobTypes;
 
     @Column(name = "emp_name", nullable = false, length = 50)
@@ -144,6 +144,10 @@ public class Employee extends BaseTimeEntity {
 //    사원 softDelete
     @Column(name = "delete_at")
     private LocalDate deleteAt;
+
+//    계약 만료일
+    @Column(name="contract_end_date")
+    private LocalDate contractEndDate;
 
 
 
