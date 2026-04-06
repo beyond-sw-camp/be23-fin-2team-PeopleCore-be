@@ -12,6 +12,8 @@ import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
 import com.peoplecore.pay.repository.PayItemSearchRepository;
 import com.peoplecore.pay.repository.PayItemsRepository;
+import com.peoplecore.pay.repository.PayrollDetailsRepository;
+import com.peoplecore.salarycontract.repository.SalaryContractDetailRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,12 +28,16 @@ public class PayItemsService {
     private final PayItemsRepository payItemsRepository;
     private final PayItemSearchRepository payItemSearchRepository;
     private final CompanyRepository companyRepository;
+    private final SalaryContractDetailRepository salaryContractDetailRepository;
+    private final PayrollDetailsRepository payrollDetailsRepository;
 
     @Autowired
-    public PayItemsService(PayItemsRepository payItemsRepository, PayItemSearchRepository payItemSearchRepository, CompanyRepository companyRepository) {
+    public PayItemsService(PayItemsRepository payItemsRepository, PayItemSearchRepository payItemSearchRepository, CompanyRepository companyRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayrollDetailsRepository payrollDetailsRepository) {
         this.payItemsRepository = payItemsRepository;
         this.payItemSearchRepository = payItemSearchRepository;
         this.companyRepository = companyRepository;
+        this.salaryContractDetailRepository = salaryContractDetailRepository;
+        this.payrollDetailsRepository = payrollDetailsRepository;
     }
 
 //    목록조회 : 지급 or 공제, 항목명검색, 법정수당
@@ -81,12 +87,21 @@ public class PayItemsService {
 
     }
 
+
+//    다중항목 삭제
     @Transactional
     public void deletePayItems(UUID companyId, List<Long> payItemIds){
         List<PayItems> items = payItemsRepository.findByPayItemIdInAndCompany_CompanyId(payItemIds ,companyId);
 
         if (items.size() != payItemIds.size()) {
             throw new CustomException(ErrorCode.NOT_FOUND);
+        }
+
+//        항목 사용여부 검증 -> 사용시 삭제X
+        for(PayItems item : items){
+            if (salaryContractDetailRepository.existsByPayItemId(item.getPayItemId()) || payrollDetailsRepository.existsByPayItemId(item.getPayItemId())){
+                throw new CustomException(ErrorCode.PAY_ITEM_IN_USE);
+            }
         }
 
         payItemsRepository.deleteAll(items);

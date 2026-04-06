@@ -80,7 +80,7 @@ public class InsuranceSettlement extends BaseTimeEntity {
     private PayrollRuns payrollRuns;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "insurance_rates_id", nullable = false)
+    @JoinColumn(name = "insurance_rates", nullable = false)
     private InsuranceRates insuranceRates;
 
 }

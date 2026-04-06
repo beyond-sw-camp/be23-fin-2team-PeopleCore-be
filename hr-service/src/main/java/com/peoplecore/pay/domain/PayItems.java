@@ -52,7 +52,8 @@ public class PayItems {
     private Company company;
 
 //    법정수당여부
-    private Boolean isLegal;
+    @Builder.Default
+    private Boolean isLegal = false;
 
 //    법정산정방식구분용
     @Enumerated(EnumType.STRING)

@@ -19,4 +19,5 @@ public interface InsuranceJobTypesRepository extends JpaRepository<InsuranceJobT
 
 //    특정 업종 (회사검증포함) /??
     Optional<InsuranceJobTypes> findByJobTypesIdAndCompany_CompanyId(Long jobTypeId, UUID companyId);
+
 }

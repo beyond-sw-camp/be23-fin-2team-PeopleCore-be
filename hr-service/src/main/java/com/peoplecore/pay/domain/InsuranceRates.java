@@ -16,7 +16,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "insurance_rates_id")     //사대보험요율
+@Table(name = "insurance_rates")     //사대보험요율
 public class InsuranceRates extends BaseTimeEntity {
 
     @Id
@@ -52,7 +52,7 @@ public class InsuranceRates extends BaseTimeEntity {
     private BigDecimal industrialAccident;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "insurance_job_types", nullable = false)
+    @JoinColumn(name = "insurance_job_types")
     private InsuranceJobTypes jobTypes;
 
     @ManyToOne(fetch = FetchType.LAZY)

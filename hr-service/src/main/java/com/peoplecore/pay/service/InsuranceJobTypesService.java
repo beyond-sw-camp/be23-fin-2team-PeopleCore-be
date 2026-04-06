@@ -2,6 +2,7 @@ package com.peoplecore.pay.service;
 
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
+import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.InsuranceJobTypes;
@@ -24,11 +25,13 @@ public class InsuranceJobTypesService {
 
     private final InsuranceJobTypesRepository insuranceJobTypesRepository;
     private final CompanyRepository companyRepository;
+    private final EmployeeRepository employeeRepository;
 
     @Autowired
-    public InsuranceJobTypesService(InsuranceJobTypesRepository insuranceJobTypesRepository, CompanyRepository companyRepository) {
+    public InsuranceJobTypesService(InsuranceJobTypesRepository insuranceJobTypesRepository, CompanyRepository companyRepository, EmployeeRepository employeeRepository) {
         this.insuranceJobTypesRepository = insuranceJobTypesRepository;
         this.companyRepository = companyRepository;
+        this.employeeRepository = employeeRepository;
     }
 
 //    산재보험 업종 목록 조회
@@ -79,11 +82,20 @@ public class InsuranceJobTypesService {
     }
 
 //     산재보험 업종 삭제
+    @Transactional
     public void deleteJobType(UUID companyId, Long jobTypesId){
-        InsuranceJobTypes jobTypes = findByIdAndCompany(jobTypesId, companyId);
+        InsuranceJobTypes jobTypes = insuranceJobTypesRepository.findByJobTypesIdAndCompany_CompanyId(jobTypesId, companyId).orElseThrow(()-> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
+
+//        사용중인지 검증
+        if(employeeRepository.existsByJobTypes_JobTypesId(jobTypesId)){
+            System.out.println(jobTypes.getName() +" 항목이 사용중입니다.");
+            throw new CustomException(ErrorCode.PAY_ITEM_IN_USE);
+        }
 
         insuranceJobTypesRepository.delete(jobTypes);
     }
+
+
 
 
     //superAdmin 계정 생성시 초기값

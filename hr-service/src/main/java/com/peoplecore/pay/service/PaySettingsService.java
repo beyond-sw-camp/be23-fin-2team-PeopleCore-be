@@ -1,11 +1,13 @@
 package com.peoplecore.pay.service;
 
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.CompanyPaySettings;
 import com.peoplecore.pay.dtos.BankResDto;
 import com.peoplecore.pay.dtos.PaySettingsReqDto;
 import com.peoplecore.pay.dtos.PaySettingsResDto;
+import com.peoplecore.pay.enums.PayMonth;
 import com.peoplecore.pay.repository.PaySettingsRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -77,6 +79,19 @@ public class PaySettingsService {
     }
 
 
+//    회사 생성시 주거래은행 기본 세팅
+    @Transactional
+    public void initDefault(Company company) {
+        CompanyPaySettings settings = CompanyPaySettings.builder()
+                .company(company)
+                .salaryPayMonth(PayMonth.NEXT)
+                .salaryPayDay(25)
+                .salaryPayLastDay(false)
+                .mainBankCode("004")
+                .mainBankName("국민은행")
+                .build();
+        paySettingsRepository.save(settings);
+    }
 
 
     private CompanyPaySettings findSettings(UUID companyId){
