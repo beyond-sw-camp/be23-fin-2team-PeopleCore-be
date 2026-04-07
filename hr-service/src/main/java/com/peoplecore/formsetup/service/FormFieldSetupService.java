@@ -54,7 +54,7 @@ public class FormFieldSetupService {
                         .section("급여")
                         .fieldType("NUMBER")
                         .visible(true)
-                        .required(items.getIsFixed())
+                        .required(false)
                         .sortOrder(order++)
                         .locked(true)
                         .build());
@@ -97,6 +97,9 @@ public class FormFieldSetupService {
 //      등록/수정
         List<FormFieldSetup> toSave = new ArrayList<>();
         for (FormFieldSetupRequest req : requests) {
+            if(req.getAutoFillFrom() != null && !req.getAutoFillFrom().isBlank()){
+                req.setRequired(true);
+            }
             FormFieldSetup existing = existingMap.get(req.getFieldKey());
             if (existing != null) {
 //                db있는 필드 = 수정
