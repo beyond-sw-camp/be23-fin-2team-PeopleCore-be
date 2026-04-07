@@ -18,13 +18,14 @@ public class PayItemSearchRepository {
     private final JPAQueryFactory queryFactory;
     private final QPayItems payItems = QPayItems.payItems;
 
-    public List<PayItems> search(UUID companyId, PayItemType type, String name){
+    public List<PayItems> search(UUID companyId, PayItemType type, String name, boolean isLegal){
         return queryFactory
                 .selectFrom(payItems)
                 .where(
                         companyIdEq(companyId),     //필수조건
                         typeEq(type),               //필수조건
-                        nameContains(name)          //동적조건 (null일수있음)
+                        nameContains(name),         //동적조건 (null일수있음)
+                        isLegalEq(isLegal)          //동적조건
                 )
                 .orderBy(payItems.sortOrder.asc())
                 .fetch();
@@ -40,5 +41,9 @@ public class PayItemSearchRepository {
 
     private BooleanExpression nameContains(String name){
         return (name != null && !name.isBlank()) ? payItems.payItemName.contains(name) : null;
+    }
+
+    private BooleanExpression isLegalEq(Boolean isLegal){
+        return isLegal != null ? payItems.isLegal.eq(isLegal) : null;
     }
 }

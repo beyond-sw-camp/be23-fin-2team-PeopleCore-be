@@ -13,7 +13,11 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "retirement_settings")   //퇴직연금설정
+@Table(name = "retirement_settings",   //퇴직연금설정
+    indexes = {
+        @Index(name = "idx_retirement_company", columnList = "company_id")
+    })
+
 public class RetirementSettings {
 
     @Id
@@ -35,4 +39,19 @@ public class RetirementSettings {
 //    퇴직연금계좌번호(DB형)
     @Column(length = 100)
     private String pensionAccount;
+
+
+    public void update(PensionType pensionType, String pensionProvider, String pensionAccount){
+        this.pensionType = pensionType;
+
+        if(pensionType == PensionType.DB || pensionType == PensionType.DB_DC){
+            this.pensionProvider = pensionProvider;
+            this.pensionAccount = pensionAccount;
+        } else {
+            this.pensionProvider = null;
+            this.pensionAccount = null;
+        }
+
+    }
+
 }

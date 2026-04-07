@@ -48,11 +48,20 @@ public enum ErrorCode {
     PAY_INVALID_BANK_CODE(400, "유효하지 않은 은행 코드입니다."),
     PAY_LAST_DAY_CONFLICT(400, "말일 선택 시 지급일 값은 입력하지 마세요."),
 
-    // 지급/공제항목 관리
-//    PAY_SETTINGS_NOT_FOUND(404, "급여지급설정을 찾을 수 없습니다."),
-//    PAY_INVALID_PAYMENT_DAY(400, "지급일은 1~31 사이여야 합니다."),
-//    PAY_INVALID_BANK_CODE(400, "유효하지 않은 은행 코드입니다."),
-//    PAY_LAST_DAY_CONFLICT(400, "말일 선택 시 지급일 값은 입력하지 마세요."),
+    // 사회보험요율
+    INSURANCE_RATES_NOT_FOUND(404, "해당 연도의 보험요율을 찾을 수 없습니다."),
+    INSURANCE_JOB_TYPE_DUPLICATE(409, "이미 존재하는 업종명입니다."),
+
+//    급여항목
+    PAY_ITEM_IN_USE(409, "사용 중인 급여항목은 삭제할 수 없습니다."),
+    INSURANCE_JOB_TYPE_IN_USE(409, "사원에 배정된 업종은 삭제할 수 없습니다."),
+
+    // 간이세액표
+    TAX_TABLE_NOT_FOUND(404, "해당 연도의 간이세액표를 찾을 수 없습니다."),
+    TAX_TABLE_LOOKUP_FAILED(404, "해당 급여구간의 세액 정보를 찾을 수 없습니다."),
+
+    // 퇴직연금설정
+    RETIREMENT_PROVIDER_REQUIRED(400, "DB형/DB+DC형은 퇴직연금 운용사를 입력해주세요."),
 
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),
