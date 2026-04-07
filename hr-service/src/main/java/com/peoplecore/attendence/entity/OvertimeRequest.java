@@ -1,5 +1,6 @@
 package com.peoplecore.attendence.entity;
 
+import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;

@@ -21,7 +21,7 @@ public class VacationPolicy extends BaseTimeEntity {
 
     public enum PolicyBaseType {
         HIRE,
-        FISCAL;
+        FISCAL
     }
 
     /**

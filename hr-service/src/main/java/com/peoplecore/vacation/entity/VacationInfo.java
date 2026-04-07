@@ -7,10 +7,7 @@ import lombok.*;
 import java.util.UUID;
 
 
-import jakarta.persistence.*;
 import java.math.BigDecimal;
-import java.util.UUID;
-import lombok.*;
 
 /**
  * 휴가유형

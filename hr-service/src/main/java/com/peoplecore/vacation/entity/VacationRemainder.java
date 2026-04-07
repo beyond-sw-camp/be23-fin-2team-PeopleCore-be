@@ -1,6 +1,6 @@
 package com.peoplecore.vacation.entity;
 
-import com.peoplecore.common.entity.BaseTimeEntity;
+import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.util.UUID;

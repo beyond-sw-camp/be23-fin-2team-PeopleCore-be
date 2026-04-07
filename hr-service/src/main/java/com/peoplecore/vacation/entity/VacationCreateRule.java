@@ -63,6 +63,7 @@ public class VacationCreateRule extends BaseTimeEntity {
                 .createRuleMaxYear(maxYear)
                 .createRuleDay(day)
                 .createRuleEmpId(empId)
+                .createRuleDesc(desc)
                 .build();
     }
 
