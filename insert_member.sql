@@ -319,11 +319,8 @@ BEGIN
         (NEW.company_id,'SALARY_CONTRACT','probation',    '수습 기간',    '계약기간','SELECT',1,0,4,'["없음","1개월","2개월","3개월"]',NULL),
         (NEW.company_id,'SALARY_CONTRACT','weeklyHours',  '주당 근로시간','계약기간','SELECT',1,1,5,'["40시간 (주 5일)","35시간","30시간","20시간 (시간제)","15시간 (단시간)"]',NULL),
         (NEW.company_id,'SALARY_CONTRACT','contractType', '계약서 유형',  '계약기간','SELECT',1,1,6,'["연봉계약서","근로계약서"]',NULL),
-        -- 급여
-        (NEW.company_id,'SALARY_CONTRACT','annualSalary','계약 연봉',    '급여','NUMBER',1,1,1,NULL,NULL),
-        (NEW.company_id,'SALARY_CONTRACT','baseSalary',  '월 기본급',    '급여','NUMBER',1,1,2,NULL,NULL),
-        (NEW.company_id,'SALARY_CONTRACT','extraSalary', '월 기본급 외', '급여','NUMBER',1,0,3,NULL,NULL),
-        -- 기타사항
+
+       -- 기타사항
         (NEW.company_id,'SALARY_CONTRACT','memo',      '특약사항 / 메모',     '기타사항','TEXTAREA',1,0,1,NULL,NULL),
         (NEW.company_id,'SALARY_CONTRACT','attachment','서명 완료 계약서 첨부','기타사항','FILE',    1,0,2,NULL,NULL);
 

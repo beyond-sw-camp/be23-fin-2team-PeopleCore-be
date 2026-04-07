@@ -1,5 +1,6 @@
 package com.peoplecore.salarycontract.domain;
 
+import com.peoplecore.employee.domain.Employee;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedDate;
@@ -10,7 +11,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "연봉계약")
+@Table(name = "salary_contract")
 @EntityListeners(AuditingEntityListener.class)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -23,8 +24,10 @@ public class SalaryContract {
     @Column(name = "contract_id")
     private Long contractId;
 
-    @Column(name = "emp_id", nullable = false)
-    private Long empId;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name="emp_id", nullable = false)
+    private Employee employee;
 
     @Column(name = "create_by", nullable = false)
     private Long createBy;
