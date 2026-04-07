@@ -39,13 +39,18 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/login",
             "/hr-service/auth/refresh",
             "/hr-service/auth/password",
-            "/hr-service/auth/email"
+            "/hr-service/auth/email",
+            "/hr-service/auth/face/login",
+            "/hr-service/auth/face/health"
     );
 
-//  hr담담자만 추가 접근 가능 경로
+//  hr담당자만 추가 접근 가능 경로
     private static final List<String> HR_ONLY_PATHS = List.of(
             "/hr-service/employee",
-            "/hr-service/resign"
+            "/hr-service/resign",
+            "/hr-service/auth/face/register",
+            "/hr-service/auth/face/unregister",
+            "/hr-service/auth/face/employees"
     );
 
 //  서버운영팀 전용 경로 (API Key 인증)
