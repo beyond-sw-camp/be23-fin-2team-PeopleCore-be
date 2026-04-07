@@ -5,14 +5,13 @@ import com.peoplecore.employee.domain.EmpType;
 import com.peoplecore.employee.domain.EmployeeSortField;
 import com.peoplecore.employee.dto.EmpDetailResponseDto;
 import com.peoplecore.employee.dto.EmployeeCreateRequestDto;
-import com.peoplecore.employee.dto.EmployeeKardResponseDto;
+import com.peoplecore.employee.dto.EmployeeCardResponseDto;
 import com.peoplecore.employee.dto.EmployeeListDto;
 import com.peoplecore.employee.dto.EmployeeUpdateRequestDto;
 import com.peoplecore.employee.service.EmployeeService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.http.RequestEntity;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -46,9 +45,9 @@ public class EmployeeController {
 
 
 //    2.상단 카드(전체/재직/휴직/이번달 입사)
-    @GetMapping("/kard")
-    public ResponseEntity<EmployeeKardResponseDto>getKard(@RequestHeader("X-User-Company") UUID companyId){
-        return ResponseEntity.ok(employeeService.getKard(companyId));
+    @GetMapping("/card")
+    public ResponseEntity<EmployeeCardResponseDto>getCard(@RequestHeader("X-User-Company") UUID companyId){
+        return ResponseEntity.ok(employeeService.getCard(companyId));
 
     }
 //
