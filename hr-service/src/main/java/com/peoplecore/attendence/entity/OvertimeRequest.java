@@ -71,7 +71,7 @@ public class OvertimeRequest extends BaseTimeEntity {
      */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String otStatus;
+    private OtStatus otStatus;
 
     /**
      * 처리자 사원 id

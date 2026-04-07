@@ -46,7 +46,7 @@ public class WorkGroup extends BaseTimeEntity {
     /** 근무제유형 */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String groupType;
+    private WorkGroupType groupType;
 
     /** 출근 시간 */
     @Column(nullable = false)

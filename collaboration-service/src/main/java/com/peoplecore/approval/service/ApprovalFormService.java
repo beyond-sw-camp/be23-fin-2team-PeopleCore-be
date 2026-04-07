@@ -1,8 +1,6 @@
 package com.peoplecore.approval.service;
 
-import com.peoplecore.approval.dto.FormDetailResponse;
-import com.peoplecore.approval.dto.FormFolderResponse;
-import com.peoplecore.approval.dto.FormListResponse;
+import com.peoplecore.approval.dto.*;
 import com.peoplecore.approval.entity.ApprovalForm;
 import com.peoplecore.approval.entity.ApprovalFormFolder;
 import com.peoplecore.approval.entity.FrequentForm;
@@ -64,6 +62,103 @@ public class ApprovalFormService {
             }
         }
         return root;
+    }
+
+    /*관리자용 전체 폴더 조회 (숨김 포함) */
+    public List<FormFolderResponse> getAllFormFolders(UUID companyId) {
+        List<ApprovalFormFolder> allFolders = approvalFormFolderRepository.findByFolderCompanyIdOrderByFolderSortOrder(companyId);
+
+        Map<Long, FormFolderResponse> map = new LinkedHashMap<>();
+        for (ApprovalFormFolder folder : allFolders) {
+            map.put(folder.getFolderId(), FormFolderResponse.from(folder));
+        }
+
+        List<FormFolderResponse> root = new ArrayList<>();
+        for (ApprovalFormFolder folder : allFolders) {
+            FormFolderResponse dto = map.get(folder.getFolderId());
+            if (folder.getParent() == null) {
+                root.add(dto);
+            } else {
+                FormFolderResponse parentDto = map.get(folder.getParent().getFolderId());
+                if (parentDto != null) {
+                    parentDto.getChildren().add(dto);
+                }
+            }
+        }
+        return root;
+    }
+
+    /* 폴더 추가 */
+    @Transactional
+    public FormFolderResponse createFormFolder(UUID companyId, Long empId, ApprovalFormFolderCreateRequest request) {
+        if (approvalFormFolderRepository.existsByFolderCompanyIdAndFolderName(companyId, request.getFolderName())) {
+            throw new BusinessException("이미 존재하는 폴더명입니다, ");
+        }
+        ApprovalFormFolder parent = null;
+        if (request.getParentId() != null) {
+            parent = approvalFormFolderRepository.findById(request.getParentId()).orElseThrow(() -> new BusinessException("상위 폴더를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        }
+        Integer maxSort = approvalFormFolderRepository.findMaxSortOrder(companyId, request.getParentId());
+
+        /* minio 경로 생성 */
+        String folderPath = parent != null ? parent.getFolderPath() + "/" + request.getFolderName() : "forms/" + companyId + "/" + request.getFolderName();
+
+        ApprovalFormFolder folder = ApprovalFormFolder.builder()
+                .folderCompanyId(companyId)
+                .folderName(request.getFolderName())
+                .parent(parent)
+                .folderPath(folderPath)
+                .folderSortOrder(maxSort + 1)
+                .folderIsVisible(true)
+                .folderEmpId(empId)
+                .build();
+
+        return FormFolderResponse.from(approvalFormFolderRepository.save(folder));
+    }
+
+    /*폴더 수정 */
+    @Transactional
+    public FormFolderResponse updateFormFolder(UUID companyId, Long folderId, ApprovalFormFolderUpdateRequest request) {
+        ApprovalFormFolder folder = approvalFormFolderRepository.findById(folderId).orElseThrow(() -> new BusinessException("폴더를 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
+
+        if (!folder.getFolderCompanyId().equals(companyId)) {
+            throw new BusinessException("접근 권한이 없습니다, ", HttpStatus.FORBIDDEN);
+        }
+        if (approvalFormFolderRepository.existsByFolderCompanyIdAndFolderName(companyId, request.getFolderName())) {
+            throw new BusinessException("이미 존재하는 폴더명입니다. ");
+        }
+
+        folder.updateFolderName(request.getFolderName());
+        return FormFolderResponse.from(folder);
+    }
+
+    /*폴더 삭제 */
+    @Transactional
+    public void deleteFormFolder(UUID companyId, Long folderId) {
+        ApprovalFormFolder folder = approvalFormFolderRepository.findById(folderId).orElseThrow(() -> new BusinessException("폴더를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        if (!folder.getFolderCompanyId().equals(companyId)) {
+            throw new BusinessException("접근 권한이 없습니다, ", HttpStatus.FORBIDDEN);
+        }
+
+        if (approvalFormFolderRepository.existsFormByFolderId(folderId)) {
+            throw new BusinessException("양식이 존재하는 폴더는 삭제할 수 없습니다.");
+        }
+        approvalFormFolderRepository.delete(folder);
+    }
+
+    /*폴더 노출 여부 변경 */
+    @Transactional
+    public FormFolderResponse updateFolderVisibility(UUID companyId, Long folderId, ApprovalFormFolderVisibilityRequest request) {
+        ApprovalFormFolder folder = approvalFormFolderRepository.findById(folderId).orElseThrow(() -> new BusinessException("폴더를 찾을 수 없습니다,"));
+
+        if (!folder.getFolderCompanyId().equals(companyId)) {
+            throw new BusinessException("접근 권한이 없습니다, ", HttpStatus.FORBIDDEN);
+        }
+
+        folder.updateVisibility(request.getFolderIsVisible());
+        return FormFolderResponse.from(folder);
+
     }
 
     /*
@@ -153,4 +248,101 @@ public class ApprovalFormService {
         frequentFormRepository.delete(frequentForm);
     }
 
+
+    /*양식 관리 ====== 관리자용=============*/
+
+    /* 양식 추가 */
+    @Transactional
+    public FormDetailResponse createForm(UUID companyId, Long empId, ApprovalFormCreateRequest request) {
+        /*양식 코드 중복 체크 */
+        if (approvalFormRepository.existsByCompanyIdAndFormCode(companyId, request.getFormCode())) {
+            throw new BusinessException("이미 존재하는 양식 코드입니다. ");
+        }
+
+        /*양식명 중복 체크 */
+        if (approvalFormRepository.existsByCompanyIdAndFormName(companyId, request.getFormName())) {
+            throw new BusinessException("이미 존재하는 양식명입니다, ");
+        }
+
+        ApprovalFormFolder folder = approvalFormFolderRepository.findById(request.getFolderId()).orElseThrow(() -> new BusinessException("폴더를 찾을 수 없습니다, "));
+
+        Integer maxSort = approvalFormRepository.findMaxSortOrderInFolder(companyId, request.getFolderId());
+
+        ApprovalForm form = ApprovalForm.builder()
+                .companyId(companyId)
+                .formName(request.getFormName())
+                .formCode(request.getFormCode())
+                .formHtml(request.getFormHtml())
+                .isSystem(false)
+                .formVersion(1)
+                .isCurrent(true)
+                .isActive(true)
+                .empId(empId)
+                .formWritePermission(request.getFormWriterPermission())
+                .formIsPublic(request.getFormIsPublic() != null ? request.getFormIsPublic() : true)
+                .formRetentionYear(request.getFormRetentionYear())
+                .formMobileYn(request.getFormMobileYn() != null ? request.getFormMobileYn() : false)
+                .formPreApprovalYn(request.getFormPreApprovalYn() != null ? request.getFormPreApprovalYn() : false)
+                .folderId(folder)
+                .formSortOrder(maxSort + 1)
+                .build();
+
+        ApprovalForm saved = approvalFormRepository.save(form);
+
+        /*minio에 Html 업로드 */
+        String objectName = String.format("forms/%s/%s_v%d.html", companyId, saved.getFormCode(), saved.getFormVersion());
+        minioService.uploadFormHtml(objectName, request.getFormHtml());
+
+        return FormDetailResponse.from(saved);
+    }
+
+    /*양식 수정 */
+    @Transactional
+    public FormDetailResponse updateForm(UUID companyId, Long formId, ApprovalFormUpdateRequest request) {
+        ApprovalForm form = approvalFormRepository.findDetailById(formId, companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다, ", HttpStatus.NOT_FOUND));
+
+        form.updateForm(request.getFormName(), request.getFormHtml(), request.getFormWritePermission(), request.getFormIsPublic(), request.getFormRetentionYear(), request.getFormMobileYn(), request.getFormPreApprovalYn());
+
+        /*minio에 Html 업뎅트 */
+        String objectName = String.format("forms/%s/%s_v%d.html", companyId, form.getFormCode(), form.getFormVersion());
+        minioService.uploadFormHtml(objectName, request.getFormHtml());
+        return FormDetailResponse.from(form);
+    }
+
+    /*양식 삭제 (소프트 딜리트) */
+    @Transactional
+    public void deleteForm(UUID companyId, Long formId) {
+        ApprovalForm form = approvalFormRepository.findDetailById(formId, companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        form.deactivate();
+    }
+
+    /*양식 순서 변경 */
+    @Transactional
+    public List<FormListResponse> reorderForms(UUID companyId, ApprovalFormReorderRequest request) {
+        /*양식별 정렬 순서 업데이트  */
+        for (ApprovalFormReorderRequest.FormOrder order : request.getOrderList()) {
+            approvalFormRepository.updateSortOrder(companyId, order.getFormId(), order.getFormSortOrder());
+        }
+
+        /*변경된 양식 목록 조회 후 반환*/
+        List<Long> formIds = request.getOrderList().stream()
+                .map(ApprovalFormReorderRequest.FormOrder::getFormId).toList();
+        return approvalFormRepository.findAllByCompanyIdAndFormIds(companyId, formIds)
+                .stream().map(FormListResponse::from).toList();
+    }
+
+    /*양식 일괄 설정 */
+    @Transactional
+    public List<FormListResponse> batchUpdateFormSettings(UUID companyId, ApprovalFormBatchSettingRequest request) {
+        List<ApprovalForm> forms = approvalFormRepository.findAllByCompanyIdAndFormIds(companyId, request.getFormIds());
+
+        if (forms.size() != request.getFormIds().size()) {
+            throw new BusinessException("일부 양식을 찾을 수 없습니다, ", HttpStatus.NOT_FOUND);
+        }
+
+        for (ApprovalForm form : forms) {
+            form.updateBatchSettings(request.getFormIsPublic(), request.getFormMobileYn(), request.getFormPreApprovalYn());
+        }
+        return forms.stream().map(FormListResponse::from).toList();
+    }
 }

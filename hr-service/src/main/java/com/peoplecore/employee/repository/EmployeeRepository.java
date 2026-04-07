@@ -114,7 +114,6 @@ AND e.empNum LIKE :prefix%
     Optional<Employee> findByEmpIdAndCompany_CompanyId(Long empId, UUID companyId);
 
 
-<<<<<<< HEAD
 
 //    재직자 조회
     @Query("""
@@ -155,8 +154,6 @@ AND e.empResign >= :fromDate
 """)
     List<Employee>findResignedAfter(@Param("companyId")UUID companyId,@Param("fromDate")LocalDate fromDate);
 
-=======
 // 산재보험 업종 삭제시, 사원에 배정되어있는지 체크
     boolean existsByJobTypes_JobTypesId(Long jobTypesId);
->>>>>>> c93141fefd62200452efc0c967b76836a0afd527
 }

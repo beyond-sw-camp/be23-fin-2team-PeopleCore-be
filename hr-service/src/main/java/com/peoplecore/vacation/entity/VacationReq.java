@@ -60,13 +60,13 @@ public class VacationReq extends BaseTimeEntity {
     /** 승인 상태 */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String vacReqStatus;
+    private VacationStatus vacReqStatus;
 
     /** 처리 사원 ID */
     private Long managerId;
 
     /** 승인/반려 처리 시간 */
-    private LocalDateTime vacReqUpdateat;
+    private LocalDateTime vacReqUpdateAt;
 
     /** 반려 사유 */
     private String vacReqRejectReason;
