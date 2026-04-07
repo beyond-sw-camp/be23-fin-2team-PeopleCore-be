@@ -10,6 +10,7 @@ import com.peoplecore.title.dto.TitleCreateRequest;
 import com.peoplecore.title.dto.TitleResponse;
 import com.peoplecore.title.dto.TitleUpdateRequest;
 import com.peoplecore.title.repository.TitleRepository;
+import com.peoplecore.employee.repository.EmployeeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,10 +24,12 @@ import java.util.stream.Collectors;
 public class TitleService {
     private final TitleRepository titleRepository;
     private final DepartmentRepository departmentRepository;
+    private final EmployeeRepository employeeRepository;
 
-    public TitleService(TitleRepository titleRepository, DepartmentRepository departmentRepository) {
+    public TitleService(TitleRepository titleRepository, DepartmentRepository departmentRepository, EmployeeRepository employeeRepository) {
         this.titleRepository = titleRepository;
         this.departmentRepository = departmentRepository;
+        this.employeeRepository = employeeRepository;
     }
 
     public List<TitleResponse> getTitles(UUID companyId) {
@@ -113,6 +116,10 @@ public class TitleService {
 
         if (!title.getCompanyId().equals(companyId)) {
             throw new IllegalArgumentException("접근 권한이 없습니다.");
+        }
+
+        if (employeeRepository.existsByTitle(title)) {
+            throw new IllegalStateException("해당 직책을 사용 중인 직원이 있어 삭제할 수 없습니다.");
         }
 
         titleRepository.delete(title);

@@ -3,6 +3,7 @@ package com.peoplecore.employee.repository;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.grade.domain.Grade;
+import com.peoplecore.title.domain.Title;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -36,6 +37,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     List<Object[]> countByCompanyIdGroupByDeptId(UUID companyId);
 
     boolean existsByGrade(Grade grade);
+
+    boolean existsByTitle(Title title);
 
 
 
