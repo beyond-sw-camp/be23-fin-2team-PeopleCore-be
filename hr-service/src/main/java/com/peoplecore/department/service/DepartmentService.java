@@ -12,6 +12,9 @@ import com.peoplecore.department.dto.DepartmentCreateRequest;
 import com.peoplecore.department.dto.DepartmentDetailResponse;
 import com.peoplecore.department.dto.DepartmentResponse;
 import com.peoplecore.department.dto.DepartmentUpdateRequest;
+import com.peoplecore.department.dto.OrgChartMemberDto;
+import com.peoplecore.department.dto.OrgChartResponse;
+import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.department.repository.DepartmentRepository;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
@@ -102,6 +105,49 @@ public class DepartmentService {
                 .size();
 
         return DepartmentDetailResponse.of(dept, titleHolders, activeCount, childDeptCount);
+    }
+
+    /**
+     * 조직도 전용 조회 — 부서 트리 + 소속 사원 (전 사원 접근 가능)
+     */
+    @Transactional(readOnly = true)
+    public List<OrgChartResponse> getOrgChartWithMembers(UUID companyId) {
+        List<Department> allDepts = departmentRepository
+                .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y);
+
+        List<Employee> allEmployees = employeeRepository.findAll().stream()
+                .filter(e -> e.getCompany().getCompanyId().equals(companyId))
+                .filter(e -> e.getEmpStatus() != EmpStatus.RESIGNED)
+                .toList();
+
+        Map<Long, List<OrgChartMemberDto>> membersByDept = allEmployees.stream()
+                .collect(Collectors.groupingBy(
+                        e -> e.getDept().getDeptId(),
+                        Collectors.mapping(OrgChartMemberDto::from, Collectors.toList())
+                ));
+
+        List<Department> roots = allDepts.stream()
+                .filter(d -> d.getParentDeptId() == null)
+                .toList();
+
+        return roots.stream()
+                .map(root -> buildOrgChartTree(root, allDepts, membersByDept))
+                .toList();
+    }
+
+    private OrgChartResponse buildOrgChartTree(
+            Department dept,
+            List<Department> allDepts,
+            Map<Long, List<OrgChartMemberDto>> membersByDept
+    ) {
+        List<OrgChartResponse> children = allDepts.stream()
+                .filter(d -> dept.getDeptId().equals(d.getParentDeptId()))
+                .map(child -> buildOrgChartTree(child, allDepts, membersByDept))
+                .toList();
+
+        List<OrgChartMemberDto> members = membersByDept.getOrDefault(dept.getDeptId(), List.of());
+
+        return OrgChartResponse.of(dept, members, children);
     }
 
     // ========================= 생성 =========================

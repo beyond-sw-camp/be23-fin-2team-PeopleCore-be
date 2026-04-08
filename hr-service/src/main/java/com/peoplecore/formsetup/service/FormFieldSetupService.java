@@ -7,6 +7,10 @@ import com.peoplecore.formsetup.domain.FormType;
 import com.peoplecore.formsetup.dto.FormFieldSetupRequest;
 import com.peoplecore.formsetup.dto.FormFieldSetupResponse;
 import com.peoplecore.formsetup.repository.FormFieldSetupRepository;
+import com.peoplecore.pay.domain.PayItems;
+import com.peoplecore.pay.enums.PayItemType;
+import com.peoplecore.pay.repository.PayItemsRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,12 +21,16 @@ import java.util.*;
 @Transactional
 public class FormFieldSetupService {
 
+
     private final FormFieldSetupRepository repository;
     private final ObjectMapper objectMapper;
+    private final PayItemsRepository payItemsRepository;
 
-    public FormFieldSetupService(FormFieldSetupRepository repository, ObjectMapper objectMapper) {
+    @Autowired
+    public FormFieldSetupService(FormFieldSetupRepository repository, ObjectMapper objectMapper, PayItemsRepository payItemsRepository) {
         this.repository = repository;
         this.objectMapper = objectMapper;
+        this.payItemsRepository = payItemsRepository;
     }
 
 
@@ -31,24 +39,59 @@ public class FormFieldSetupService {
         List<FormFieldSetup> entities = repository.findAllByCompanyIdAndFormTypeOrderBySectionAscSortOrderAsc(companyId, formType);
         List<FormFieldSetupResponse> result = new ArrayList<>();
         for (FormFieldSetup entity : entities) {
+//            연봉 form 조회 시 급여부분 skip
+            if (formType == FormType.SALARY_CONTRACT && "급여".equals(entity.getSection())) {
+                continue;
+            }
             result.add(FormFieldSetupResponse.from(entity));
         }
+
+//        급여부분 동적생성
+        if (formType == FormType.SALARY_CONTRACT) {
+            List<PayItems> payItems = payItemsRepository.findByCompany_CompanyIdAndPayItemTypeAndIsActiveTrueOrderBySortOrderAsc(companyId, PayItemType.PAYMENT);
+            int order = 1;
+            for (PayItems items : payItems) {
+                result.add(FormFieldSetupResponse.builder()
+                        .fieldKey("payItem_" + items.getPayItemId())
+                        .label(items.getPayItemName())
+                        .section("급여")
+                        .fieldType("NUMBER")
+                        .visible(true)
+                        .required(false)
+                        .sortOrder(order++)
+                        .locked(true)
+                        .build());
+            }
+
+
+        }
         return result;
+
     }
-
-
     // 2. 폼 설정 일괄 저장 (기존 삭제 -> 새로 insert)
     public List<FormFieldSetupResponse> saveSetup(UUID companyId, FormType formType, List<FormFieldSetupRequest> requests) {
-//      기존 데이터 조회
+        // 급여부분 제외 후 값 덮어쓰기
+        if(formType == FormType.SALARY_CONTRACT){
+            List<FormFieldSetupRequest>filtered = new ArrayList<>();
+            for(FormFieldSetupRequest req : requests){
+                if(!"급여".equals(req.getSection())){
+                    filtered.add(req);
+                }
+            }
+            requests = filtered;
+        }
+
+
+        //      기존 데이터 조회
         List<FormFieldSetup> existingList = repository.findAllByCompanyIdAndFormTypeOrderBySectionAscSortOrderAsc(companyId, formType);
 
-//        fieldKey기준으로 Map변환 -빠른 조회(수정)
+//        fieldKey기준으로 Map변환 -빠른 조회(수정-update할 목록 )
         Map<String, FormFieldSetup> existingMap = new HashMap<>();
         for (FormFieldSetup e : existingList) {
             existingMap.put(e.getFieldKey(), e);
         }
 
-//        fieldKey목록 (빠진데이터 -삭제 목록)
+//        fieldKey목록 (비교해서 빠진데이터 -삭제할 목록)
         Set<String> requestKeys = new HashSet<>();
         for (FormFieldSetupRequest req : requests) {
             requestKeys.add(req.getFieldKey());
@@ -57,6 +100,9 @@ public class FormFieldSetupService {
 //      등록/수정
         List<FormFieldSetup> toSave = new ArrayList<>();
         for (FormFieldSetupRequest req : requests) {
+            if(req.getAutoFillFrom() != null && !req.getAutoFillFrom().isBlank()){
+                req.setRequired(true);
+            }
             FormFieldSetup existing = existingMap.get(req.getFieldKey());
             if (existing != null) {
 //                db있는 필드 = 수정
@@ -185,11 +231,6 @@ public class FormFieldSetupService {
         list.add(field(companyId, FormType.SALARY_CONTRACT, "probation", "수습 기간", "계약기간", FieldType.SELECT, true, false, 4, "[\"없음\",\"1개월\",\"2개월\",\"3개월\"]", null));
         list.add(field(companyId, FormType.SALARY_CONTRACT, "weeklyHours", "주당 근로시간", "계약기간", FieldType.SELECT, true, true, 5, "[\"40시간 (주 5일)\",\"35시간\",\"30시간\",\"20시간 (시간제)\",\"15시간 (단시간)\"]", null));
         list.add(field(companyId, FormType.SALARY_CONTRACT, "contractType", "계약서 유형", "계약기간", FieldType.SELECT, true, true, 6, "[\"연봉계약서\",\"근로계약서\"]", null));
-
-        // 급여
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "annualSalary", "계약 연봉", "급여", FieldType.NUMBER, true, true, 1, null, null));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "baseSalary", "월 기본급", "급여", FieldType.NUMBER, true, true, 2, null, null));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "extraSalary", "월 기본급 외", "급여", FieldType.NUMBER, true, false, 3, null, null));
 
         // 기타사항
         list.add(field(companyId, FormType.SALARY_CONTRACT, "memo", "특약사항 / 메모", "기타사항", FieldType.TEXTAREA, true, false, 1, null, null));

@@ -25,6 +25,7 @@ public class EmployeeListDto {
     private EmpType empType;
     private LocalDate empHireDate;
     private EmpStatus empStatus;
+    private Long empId;
 
     public static EmployeeListDto fromEntity(Employee employee) {
 //grade, title, company entity깔리는거 확인
@@ -38,6 +39,7 @@ public class EmployeeListDto {
                 .empType(employee.getEmpType())
                 .empHireDate(employee.getEmpHireDate())
                 .empStatus(employee.getEmpStatus())
+                .empId(employee.getEmpId())
                 .build();
     }
 }
