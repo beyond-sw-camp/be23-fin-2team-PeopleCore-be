@@ -1,8 +1,8 @@
-package com.peoplecore.alram.controller;
+package com.peoplecore.alarm.controller;
 
-import com.peoplecore.alram.dto.AlarmListResponseDto;
-import com.peoplecore.alram.service.AlarmService;
-import com.peoplecore.alram.sse.AlarmSseEmitterManager;
+import com.peoplecore.alarm.dto.AlarmListResponseDto;
+import com.peoplecore.alarm.service.AlarmService;
+import com.peoplecore.alarm.sse.AlarmSseEmitterManager;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/api/alarm")
+@RequestMapping("/alarm")
 public class AlarmController {
     private final AlarmService alarmService;
     private final AlarmSseEmitterManager sseEmitterManager;

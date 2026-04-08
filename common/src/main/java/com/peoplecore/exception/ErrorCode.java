@@ -67,6 +67,27 @@ public enum ErrorCode {
     EMP_ACCOUNT_NOT_FOUND(404, "사원 계좌 정보를 찾을 수 없습니다."),
     RETIREMENT_ACCOUNT_NOT_FOUND(404, "퇴직연금 계좌 정보를 찾을 수 없습니다."),
 
+    // 캘린더
+    CALENDAR_NOT_FOUND(404, "캘린더를 찾을 수 없습니다."),
+    CALENDAR_NAME_DUPLICATE(409, "이미 같은 이름의 캘린더가 존재합니다."),
+    CALENDAR_OWNER_MISMATCH(403, "본인의 캘린더만 관리할 수 있습니다."),
+
+    // 일정
+    EVENT_NOT_FOUND(404, "일정을 찾을 수 없습니다."),
+    EVENT_DELETED(404, "삭제된 일정입니다."),
+    EVENT_ACCESS_DENIED(403, "접근 권한이 없습니다."),
+    EVENT_OWNER_MISMATCH(403, "본인의 일정만 수정/삭제할 수 있습니다."),
+    EVENT_REGISTER_DENIED(403, "본인의 캘린더에만 일정을 등록할 수 있습니다."),
+
+    // 관심 캘린더 / 공유 요청
+    INTEREST_CALENDAR_NOT_FOUND(404, "관심 캘린더를 찾을 수 없습니다."),
+    INTEREST_CALENDAR_OWNER_MISMATCH(403, "본인의 관심 캘린더만 관리할 수 있습니다."),
+    SHARE_REQUEST_NOT_FOUND(404, "공유 요청을 찾을 수 없습니다."),
+    SHARE_REQUEST_SELF(400, "본인에게는 공유 요청을 보낼 수 없습니다."),
+    SHARE_REQUEST_DUPLICATE(409, "이미 대기 중인 요청이 있습니다."),
+    SHARE_REQUEST_ALREADY_PROCESSED(400, "이미 처리된 요청입니다."),
+    SHARE_REQUEST_ACCESS_DENIED(403, "본인에게 온 요청만 처리할 수 있습니다."),
+
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),
     BAD_REQUEST(400, "잘못된 요청입니다."),

@@ -1,4 +1,4 @@
-package com.peoplecore.alram.repository;
+package com.peoplecore.alarm.repository;
 
 import com.peoplecore.entity.CommonAlarm;
 import org.springframework.data.domain.Page;

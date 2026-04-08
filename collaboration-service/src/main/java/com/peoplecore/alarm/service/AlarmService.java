@@ -1,9 +1,9 @@
-package com.peoplecore.alram.service;
+package com.peoplecore.alarm.service;
 
 
-import com.peoplecore.alram.dto.AlarmListResponseDto;
-import com.peoplecore.alram.repository.CommonAlarmRepository;
-import com.peoplecore.alram.sse.AlarmSseEmitterManager;
+import com.peoplecore.alarm.dto.AlarmListResponseDto;
+import com.peoplecore.alarm.repository.CommonAlarmRepository;
+import com.peoplecore.alarm.sse.AlarmSseEmitterManager;
 import com.peoplecore.entity.CommonAlarm;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.BusinessException;

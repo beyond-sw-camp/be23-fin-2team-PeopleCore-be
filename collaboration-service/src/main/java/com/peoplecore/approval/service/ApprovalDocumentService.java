@@ -1,6 +1,6 @@
 package com.peoplecore.approval.service;
 
-import com.peoplecore.alram.publiher.AlarmEventPublisher;
+import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.approval.dto.DocumentCreateRequest;
 import com.peoplecore.approval.dto.DocumentDetailResponse;
 import com.peoplecore.approval.dto.DocumentUpdateRequest;

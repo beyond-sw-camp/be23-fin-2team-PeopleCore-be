@@ -1,4 +1,4 @@
-package com.peoplecore.alram.publiher;
+package com.peoplecore.alarm.publisher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.event.AlarmEvent;

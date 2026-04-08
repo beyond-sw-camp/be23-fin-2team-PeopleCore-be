@@ -1,4 +1,4 @@
-package com.peoplecore.alram.dto;
+package com.peoplecore.alarm.dto;
 
 import com.peoplecore.entity.CommonAlarm;
 import lombok.AllArgsConstructor;

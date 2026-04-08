@@ -1,7 +1,7 @@
-package com.peoplecore.alram.consumer;
+package com.peoplecore.alarm.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.peoplecore.alram.service.AlarmService;
+import com.peoplecore.alarm.service.AlarmService;
 import com.peoplecore.event.AlarmEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
