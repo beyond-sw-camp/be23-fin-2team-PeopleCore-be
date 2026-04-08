@@ -2,9 +2,6 @@ package com.peoplecore.pay.dtos;
 
 import com.peoplecore.pay.domain.CompanyPaySettings;
 import com.peoplecore.pay.enums.PayMonth;
-import jakarta.persistence.Column;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
