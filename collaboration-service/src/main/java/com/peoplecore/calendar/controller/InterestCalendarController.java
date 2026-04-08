@@ -38,23 +38,14 @@ public class InterestCalendarController {
         }
     }
 
-    //    공유 요청 승인
-    @PatchMapping("/share-request/{shareReqId}/approve")
+    //    공유 요청 응답 (승인/거절)
+    @PatchMapping("/share-request/{shareReqId}")
     public ResponseEntity<Void> approveShareRequest(
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
-            @PathVariable Long shareReqId) {
-        interestCalenderService.approveShareRequest(componyId, empId, shareReqId);
-        return ResponseEntity.ok().build();
-    }
-
-    //    공유 요청 거절
-    @PatchMapping("/share-request/{shareReqId}/reject")
-    public ResponseEntity<Void> rejectShareRequest(
-            @RequestHeader("/X-User-Company") UUID componyId,
-            @RequestHeader("X-User-Id") Long empId,
-            @PathVariable Long shareReqId) {
-        interestCalenderService.rejectShareRequest(componyId, empId, shareReqId);
+            @PathVariable Long shareReqId,
+            @RequestParam boolean accepted) {
+        interestCalenderService.ShareRequestResponse(componyId, empId, shareReqId, accepted);
         return ResponseEntity.ok().build();
     }
 

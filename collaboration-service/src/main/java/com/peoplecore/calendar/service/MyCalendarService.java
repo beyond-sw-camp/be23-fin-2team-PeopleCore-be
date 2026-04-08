@@ -69,7 +69,7 @@ public class MyCalendarService {
             myCalendar.updateColor(reqDto.getDisplayColor());
         }
         if(reqDto.getIsVisible() != null){
-            if (!reqDto.getIsVisible().equals(myCalendar.getIsVisible()){
+            if (!reqDto.getIsVisible().equals(myCalendar.getIsVisible())){
                 myCalendar.toggleVisible();
             }
         }

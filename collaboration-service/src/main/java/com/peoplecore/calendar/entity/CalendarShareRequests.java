@@ -21,7 +21,7 @@ public class CalendarShareRequests {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long calendarShareReqid;
+    private Long calendarShareReqId;
 
 //  요청사원ID
     private Long fromEmpId;

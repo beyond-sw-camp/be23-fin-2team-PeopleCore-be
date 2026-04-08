@@ -14,7 +14,7 @@ public interface CalendarShareRequestsRepository extends JpaRepository<CalendarS
     Page<CalendarShareRequests> findByCompanyIdAndFromEmlIdOrderByRequestedAtDesc(UUID companyId, Long fromEmpId, Pageable pageable);
 
 //    나에게 요청온 관심캘린더 목록
-    Page<CalendarShareRequests> findByCompanyIdAndFromEmpIdOrderByRequestedAtDesc(UUID companyId, Long toEmpId, Pageable pageable);
+    Page<CalendarShareRequests> findByCompanyIdAndToEmpIdOrderByRequestedAtDesc(UUID companyId, Long toEmpId, Pageable pageable);
 
 //    중복 요청 방지
      boolean existsByCompanyIdAndFromEmpIdAndToEmpIdAndShareStatus(UUID companyId, Long fromEmpId, Long toEmpId, ShareStatus status);

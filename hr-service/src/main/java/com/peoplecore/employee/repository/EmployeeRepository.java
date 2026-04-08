@@ -161,4 +161,9 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
     // 산재보험 업종 삭제시, 사원에 배정되어있는지 체크
     boolean existsByJobTypes_JobTypesId(Long jobTypesId);
+
+
+//    캘린더 목록 조회시 여러 사원 한번에 조회(dept,grade,title LAZY조회로 N+1 발행하므로 query문으로 해결
+    @Query("SELECT e FROM Employee s JOIN FETCH e.dept JOIN FETCH e.grade LEFT JOIN FETCH e.title WHERE e.empId IN :empIds AND e.deleteAt IS NULL")
+    List<Employee> findByEmpIdsWithDeptAndGrade(@Param("empIds") List<Long> empIds);
 }

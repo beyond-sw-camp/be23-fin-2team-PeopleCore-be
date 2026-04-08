@@ -85,6 +85,7 @@ public class CalendarEventService {
                 reqDto.getTitle(), reqDto.getDescription(), reqDto.getLocation(), reqDto.getStartAt(), reqDto.getEndAt(), reqDto.getIsAllDay(), reqDto.getIsPublic(), calendars
         );
 
+//        알림 갱신
         eventsNotificationsRepository.deleteByEvents_EventsId(eventsId);
         saveNotifications(event, reqDto.getNotifications());
 

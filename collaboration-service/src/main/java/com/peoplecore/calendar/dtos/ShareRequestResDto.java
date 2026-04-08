@@ -27,7 +27,7 @@ public class ShareRequestResDto {
     public static  ShareRequestResDto fromEntity(CalendarShareRequests req, String fromName, String toName) {
 
         return ShareRequestResDto.builder()
-                .calendarShareReqId(req.getCalendarShareReqid())
+                .calendarShareReqId(req.getCalendarShareReqId())
                 .fromEmpId(req.getFromEmpId())
                 .fromEmpName(fromName)
                 .toEmpId(req.getToEmpId())

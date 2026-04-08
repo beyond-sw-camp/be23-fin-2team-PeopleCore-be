@@ -1448,12 +1448,15 @@ public class MyCalendarService {
 
 **파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/service/InterestCalendarService.java`
 
-> **변경 사항:** `AlarmEventPublisher`(Kafka) 대신 `AlarmService.createAndPush()` 직접 호출
+> **변경 사항:**
+> - `AlarmEventPublisher`(Kafka) 대신 `AlarmService.createAndPush()` 직접 호출
+> - 승인/거절 메서드를 `respondShareRequest()`로 통합
+> - `HrCacheService`로 타인 사원 이름 조회 (null 제거)
 
 ```java
 package com.peoplecore.calendar.service;
 
-import com.peoplecore.alarm.service.AlarmService;
+import com.peoplecore.alram.service.AlarmService;
 import com.peoplecore.calendar.dto.*;
 import com.peoplecore.calendar.entity.CalendarShareRequests;
 import com.peoplecore.calendar.entity.InterestCalendars;
@@ -1461,6 +1464,8 @@ import com.peoplecore.calendar.enums.Permission;
 import com.peoplecore.calendar.enums.ShareStatus;
 import com.peoplecore.calendar.repository.CalendarShareRequestsRepository;
 import com.peoplecore.calendar.repository.InterestCalendarsRepository;
+import com.peoplecore.client.component.HrCacheService;
+import com.peoplecore.client.dto.EmployeeSimpleResponse;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -1472,7 +1477,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 @Service
 @Transactional(readOnly = true)
@@ -1481,14 +1489,17 @@ public class InterestCalendarService {
     private final CalendarShareRequestsRepository shareRequestsRepository;
     private final InterestCalendarsRepository interestCalendarsRepository;
     private final AlarmService alarmService;
+    private final HrCacheService hrCacheService;
 
     @Autowired
     public InterestCalendarService(CalendarShareRequestsRepository shareRequestsRepository,
                                    InterestCalendarsRepository interestCalendarsRepository,
-                                   AlarmService alarmService) {
+                                   AlarmService alarmService,
+                                   HrCacheService hrCacheService) {
         this.shareRequestsRepository = shareRequestsRepository;
         this.interestCalendarsRepository = interestCalendarsRepository;
         this.alarmService = alarmService;
+        this.hrCacheService = hrCacheService;
     }
 
     // ────────────────────────────────────────────
@@ -1533,62 +1544,57 @@ public class InterestCalendarService {
     }
 
     // ────────────────────────────────────────────
-    // 공유 요청 승인 → InterestCalendars 생성 + 즉시 알림
+    // 공유 요청 응답 (승인/거절 통합)
     // ────────────────────────────────────────────
     @Transactional
-    public void approveShareRequest(UUID companyId, Long empId, Long shareReqId) {
+    public ShareRequestResponse respondShareRequest(UUID companyId, Long empId,
+                                                     Long shareReqId, boolean accepted) {
         CalendarShareRequests request = findShareRequestOrThrow(shareReqId);
         validateShareRequestTarget(request, companyId, empId);
 
-        request.approve();
+        if (accepted) {
+            request.approve();
 
-        // 관심 캘린더 레코드 생성 (요청자 → 대상자 일정 구독)
-        InterestCalendars interest = InterestCalendars.builder()
-                .viewerEmpId(request.getFromEmpId())
-                .targetEmpId(request.getToEmpId())
-                .isVisible(true)
-                .insDisplayColor("#4CAF50")
-                .sortOrder(1)
-                .createdAt(LocalDateTime.now())
-                .companyId(companyId)
-                .calendarShareRequest(request)
-                .build();
-        interestCalendarsRepository.save(interest);
+            // 관심 캘린더 레코드 생성 (요청자 → 대상자 일정 구독)
+            InterestCalendars interest = InterestCalendars.builder()
+                    .viewerEmpId(request.getFromEmpId())
+                    .targetEmpId(request.getToEmpId())
+                    .isVisible(true)
+                    .shareDisplayColor("#4CAF50")
+                    .sortOrder(1)
+                    .createdAt(LocalDateTime.now())
+                    .companyId(companyId)
+                    .calendarShareRequest(request)
+                    .build();
+            interestCalendarsRepository.save(interest);
+        } else {
+            request.reject();
+        }
 
-        // 요청자에게 승인 즉시 알림
+        // 요청자에게 즉시 알림
+        String title = accepted ? "캘린더 공유 승인" : "캘린더 공유 거절";
+        String content = accepted
+                ? "캘린더 공유 요청이 승인되었습니다."
+                : "캘린더 공유 요청이 거절되었습니다.";
+
         alarmService.createAndPush(AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("Calendar")
-                .alarmTitle("캘린더 공유 승인")
-                .alarmContent("캘린더 공유 요청이 승인되었습니다.")
-                .alarmLink("/calendar")
+                .alarmTitle(title)
+                .alarmContent(content)
+                .alarmLink("/calendar/interest")
                 .alarmRefType("CALENDAR_SHARE")
                 .alarmRefId(shareReqId)
                 .empIds(List.of(request.getFromEmpId()))
                 .build());
-    }
 
-    // ────────────────────────────────────────────
-    // 공유 요청 거절 + 즉시 알림
-    // ────────────────────────────────────────────
-    @Transactional
-    public void rejectShareRequest(UUID companyId, Long empId, Long shareReqId) {
-        CalendarShareRequests request = findShareRequestOrThrow(shareReqId);
-        validateShareRequestTarget(request, companyId, empId);
+        // 사원 이름 조회
+        Map<Long, EmployeeSimpleResponse> empMap = getEmpMap(
+                List.of(request.getFromEmpId(), request.getToEmpId()));
 
-        request.reject();
-
-        // 요청자에게 거절 즉시 알림
-        alarmService.createAndPush(AlarmEvent.builder()
-                .companyId(companyId)
-                .alarmType("Calendar")
-                .alarmTitle("캘린더 공유 거절")
-                .alarmContent("캘린더 공유 요청이 거절되었습니다.")
-                .alarmLink("/calendar/settings")
-                .alarmRefType("CALENDAR_SHARE")
-                .alarmRefId(shareReqId)
-                .empIds(List.of(request.getFromEmpId()))
-                .build());
+        return ShareRequestResponse.from(request,
+                getEmpName(empMap, request.getFromEmpId()),
+                getEmpName(empMap, request.getToEmpId()));
     }
 
     // ────────────────────────────────────────────
@@ -1596,31 +1602,57 @@ public class InterestCalendarService {
     // ────────────────────────────────────────────
     public Page<ShareRequestResponse> getMyShareRequests(UUID companyId, Long empId,
                                                          Pageable pageable) {
-        return shareRequestsRepository
-                .findByCompanyIdAndFromEmpIdOrderByRequestedAtDesc(companyId, empId, pageable)
-                .map(req -> ShareRequestResponse.from(req, null, null));
-        // NOTE: empName 조회는 HrServiceClient를 통해 보강 가능
+        Page<CalendarShareRequests> page = shareRequestsRepository
+                .findByCompanyIdAndFromEmpIdOrderByRequestedAtDesc(companyId, empId, pageable);
+
+        // 페이지 내 empId 일괄 조회
+        List<Long> empIds = page.getContent().stream()
+                .flatMap(req -> Stream.of(req.getFromEmpId(), req.getToEmpId()))
+                .distinct()
+                .toList();
+        Map<Long, EmployeeSimpleResponse> empMap = getEmpMap(empIds);
+
+        return page.map(req -> ShareRequestResponse.from(req,
+                getEmpName(empMap, req.getFromEmpId()),
+                getEmpName(empMap, req.getToEmpId())));
     }
 
     // ────────────────────────────────────────────
-    // 내 일정을 보고 있는 동료 목록 (나에게 온 요청)
+    // 나에게 온 요청 목록
     // ────────────────────────────────────────────
     public Page<ShareRequestResponse> getReceivedShareRequests(UUID companyId, Long empId,
                                                                Pageable pageable) {
-        return shareRequestsRepository
-                .findByCompanyIdAndToEmpIdOrderByRequestedAtDesc(companyId, empId, pageable)
-                .map(req -> ShareRequestResponse.from(req, null, null));
+        Page<CalendarShareRequests> page = shareRequestsRepository
+                .findByCompanyIdAndToEmpIdOrderByRequestedAtDesc(companyId, empId, pageable);
+
+        List<Long> empIds = page.getContent().stream()
+                .flatMap(req -> Stream.of(req.getFromEmpId(), req.getToEmpId()))
+                .distinct()
+                .toList();
+        Map<Long, EmployeeSimpleResponse> empMap = getEmpMap(empIds);
+
+        return page.map(req -> ShareRequestResponse.from(req,
+                getEmpName(empMap, req.getFromEmpId()),
+                getEmpName(empMap, req.getToEmpId())));
     }
 
     // ────────────────────────────────────────────
     // 관심 캘린더 목록 조회
     // ────────────────────────────────────────────
     public List<InterestCalendarResponse> getInterestCalendars(UUID companyId, Long empId) {
-        return interestCalendarsRepository
-                .findByViewerEmpIdWithRequest(empId, companyId)
-                .stream()
-                .map(ic -> InterestCalendarResponse.from(ic, null))
-                // NOTE: empName 조회는 HrServiceClient를 통해 보강 가능
+        List<InterestCalendars> interests = interestCalendarsRepository
+                .findByViewerEmpIdWithRequest(empId, companyId);
+
+        // targetEmpId 일괄 조회
+        List<Long> empIds = interests.stream()
+                .map(InterestCalendars::getTargetEmpId)
+                .distinct()
+                .toList();
+        Map<Long, EmployeeSimpleResponse> empMap = getEmpMap(empIds);
+
+        return interests.stream()
+                .map(ic -> InterestCalendarResponse.from(ic,
+                        getEmpName(empMap, ic.getTargetEmpId())))
                 .toList();
     }
 
@@ -1648,7 +1680,8 @@ public class InterestCalendarService {
             ic.updateSortOrder(request.getSortOrder());
         }
 
-        return InterestCalendarResponse.from(ic, null);
+        Map<Long, EmployeeSimpleResponse> empMap = getEmpMap(List.of(ic.getTargetEmpId()));
+        return InterestCalendarResponse.from(ic, getEmpName(empMap, ic.getTargetEmpId()));
     }
 
     // ────────────────────────────────────────────
@@ -1685,6 +1718,18 @@ public class InterestCalendarService {
         if (request.getShareStatus() != ShareStatus.PENDING) {
             throw new BusinessException("이미 처리된 요청입니다.");
         }
+    }
+
+    /** empId 리스트 → Map 변환 (HrCacheService 일괄 조회) */
+    private Map<Long, EmployeeSimpleResponse> getEmpMap(List<Long> empIds) {
+        return hrCacheService.getEmployeesBulk(empIds).stream()
+                .collect(Collectors.toMap(EmployeeSimpleResponse::getEmpId, e -> e));
+    }
+
+    /** Map에서 이름 꺼내기 (없으면 null) */
+    private String getEmpName(Map<Long, EmployeeSimpleResponse> empMap, Long empId) {
+        EmployeeSimpleResponse emp = empMap.get(empId);
+        return emp != null ? emp.getEmpName() : null;
     }
 }
 ```
@@ -2041,24 +2086,15 @@ public class InterestCalendarController {
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
 
-    /** 공유 요청 승인 */
-    @PatchMapping("/share-request/{shareReqId}/approve")
-    public ResponseEntity<Void> approveShareRequest(
+    /** 공유 요청 응답 (승인/거절 통합) — ?accepted=true 또는 ?accepted=false */
+    @PatchMapping("/share-request/{shareReqId}")
+    public ResponseEntity<ShareRequestResponse> respondShareRequest(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
-            @PathVariable Long shareReqId) {
-        interestCalendarService.approveShareRequest(companyId, empId, shareReqId);
-        return ResponseEntity.ok().build();
-    }
-
-    /** 공유 요청 거절 */
-    @PatchMapping("/share-request/{shareReqId}/reject")
-    public ResponseEntity<Void> rejectShareRequest(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long empId,
-            @PathVariable Long shareReqId) {
-        interestCalendarService.rejectShareRequest(companyId, empId, shareReqId);
-        return ResponseEntity.ok().build();
+            @PathVariable Long shareReqId,
+            @RequestParam boolean accepted) {
+        return ResponseEntity.ok(
+                interestCalendarService.respondShareRequest(companyId, empId, shareReqId, accepted));
     }
 
     /** 내가 등록한 관심 캘린더 요청 목록 */
@@ -2719,8 +2755,7 @@ hr-service/src/main/java/com/peoplecore/employee/
 | `PATCH` | `/api/calendar/my-calendars/{id}` | 내 캘린더 수정 (이름/색상/보이기) |
 | `DELETE` | `/api/calendar/my-calendars/{id}` | 내 캘린더 삭제 |
 | `POST` | `/api/calendar/interest/share-request` | 관심 캘린더 공유 요청 |
-| `PATCH` | `/api/calendar/interest/share-request/{id}/approve` | 공유 요청 승인 |
-| `PATCH` | `/api/calendar/interest/share-request/{id}/reject` | 공유 요청 거절 |
+| `PATCH` | `/api/calendar/interest/share-request/{id}?accepted=true/false` | 공유 요청 응답 (승인/거절) |
 | `GET` | `/api/calendar/interest/share-request/sent` | 내가 보낸 요청 목록 |
 | `GET` | `/api/calendar/interest/share-request/received` | 나에게 온 요청 목록 |
 | `GET` | `/api/calendar/interest` | 관심 캘린더 목록 |
@@ -2751,12 +2786,8 @@ hr-service/src/main/java/com/peoplecore/employee/
 │    │   InterestCalendarService.requestShare()                       │
 │    │     → AlarmService.createAndPush() → DB + SSE                  │
 │    │                                                                │
-│    ├─ 공유 요청 승인 알림                                             │
-│    │   InterestCalendarService.approveShareRequest()                │
-│    │     → AlarmService.createAndPush() → DB + SSE                  │
-│    │                                                                │
-│    └─ 공유 요청 거절 알림                                             │
-│        InterestCalendarService.rejectShareRequest()                 │
+│    └─ 공유 요청 응답 알림 (승인/거절)                                  │
+│        InterestCalendarService.respondShareRequest()                │
 │          → AlarmService.createAndPush() → DB + SSE                  │
 └─────────────────────────────────────────────────────────────────────┘
 
