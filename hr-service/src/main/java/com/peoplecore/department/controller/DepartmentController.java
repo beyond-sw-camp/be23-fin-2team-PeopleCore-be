@@ -5,6 +5,7 @@ import com.peoplecore.department.dto.DepartmentCreateRequest;
 import com.peoplecore.department.dto.DepartmentDetailResponse;
 import com.peoplecore.department.dto.DepartmentResponse;
 import com.peoplecore.department.dto.DepartmentUpdateRequest;
+import com.peoplecore.department.dto.OrgChartResponse;
 import com.peoplecore.department.service.DepartmentService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,6 +29,15 @@ public class DepartmentController {
     public ResponseEntity<List<DepartmentResponse>> getOrgTree(
             @RequestHeader("X-User-Company") UUID companyId) {
         return ResponseEntity.ok(departmentService.getOrgTree(companyId));
+    }
+
+    /**
+     * 조직도 전용 조회 — 부서 트리 + 소속 사원 (전 사원 접근 가능)
+     */
+    @GetMapping("/tree/with-members")
+    public ResponseEntity<List<OrgChartResponse>> getOrgChartWithMembers(
+            @RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(departmentService.getOrgChartWithMembers(companyId));
     }
 
     /**

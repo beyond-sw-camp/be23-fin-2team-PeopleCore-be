@@ -30,7 +30,8 @@ face_collection = chroma_client.get_or_create_collection(
 )
 
 # 유사도 임계값 (코사인 거리 기준 — 낮을수록 유사)
-SIMILARITY_THRESHOLD = 0.6
+SIMILARITY_THRESHOLD = 0.6    # 로그인: 이 값 이하면 동일인으로 인증
+DUPLICATE_THRESHOLD = 0.4     # 등록: 이 값 이하면 이미 등록된 동일인으로 판단
 
 
 # ── 요청 모델 ──
@@ -113,6 +114,24 @@ def register_face(request: RegisterRequest):
     embedding = extract_face_vector(request.image)
 
     doc_id = str(request.emp_id)
+
+    # 동일인 중복 등록 검사 (본인 재등록은 허용)
+    if face_collection.count() > 0:
+        results = face_collection.query(
+            query_embeddings=[embedding],
+            n_results=1,
+        )
+        if results["ids"] and results["ids"][0]:
+            matched_id = results["ids"][0][0]
+            matched_distance = results["distances"][0][0]
+            matched_name = results["metadatas"][0][0].get("emp_name", "")
+
+            # 유사도가 임계값 이하이고, 다른 사원인 경우 → 중복 차단
+            if matched_distance <= DUPLICATE_THRESHOLD and matched_id != doc_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"이미 다른 사원({matched_name})으로 등록된 얼굴입니다.",
+                )
 
     existing = face_collection.get(ids=[doc_id])
     if existing["ids"]:
