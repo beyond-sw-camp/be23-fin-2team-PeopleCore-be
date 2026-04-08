@@ -157,6 +157,8 @@ AND e.empResign >= :fromDate
 """)
     List<Employee>findResignedAfter(@Param("companyId")UUID companyId,@Param("fromDate")LocalDate fromDate);
 
+
 // 산재보험 업종 삭제시, 사원에 배정되어있는지 체크
     boolean existsByJobTypes_JobTypesId(Long jobTypesId);
+
 }

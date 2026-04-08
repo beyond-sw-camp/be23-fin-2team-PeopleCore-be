@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name = "연봉계약 상세")
+@Table(name = "salary_contract_detail")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -16,15 +16,25 @@ public class SalaryContractDetail {
     @Column(name = "detail_id")
     private Long detailId;
 
-    @Column(name = "contract_id", nullable = false)
-    private Long contractId;
+    //    계약서의 급여 항목
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "contract_id", nullable = false)
+    private SalaryContract contract;
 
+    //    급여 항목 id(pay_items테이블 참조)
     @Column(name = "pay_item_id", nullable = false)
     private Long payItemId;
 
+    //    해당 항목 금액
     @Column(name = "amount", nullable = false)
     private Integer amount;
 
+    //    비고
     @Column(name = "details", length = 255)
     private String details;
+
+
+    public void assignContract(SalaryContract contract) {
+        this.contract = contract;
+    }
 }
