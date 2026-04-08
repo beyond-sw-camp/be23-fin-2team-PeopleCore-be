@@ -27,7 +27,7 @@ public class Permission {
     @Column(name = "requested_role")
     private String requestedRole;
 
-    @Column(name = "current_role")
+    @Column(name = "emp_current_role")
     private String currentRole;
 
     @Column(name = "status")

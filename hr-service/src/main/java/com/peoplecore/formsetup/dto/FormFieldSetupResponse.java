@@ -24,6 +24,7 @@ public class FormFieldSetupResponse {
     private Integer sortOrder;
     private List<String> options;
     private String autoFillFrom;
+    private Boolean locked;
 
     private static final ObjectMapper mapper = new ObjectMapper();
 
