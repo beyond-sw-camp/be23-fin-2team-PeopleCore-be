@@ -23,6 +23,7 @@ public class DocumentCreateRequest {
     private String docType;
     private String docData;
     private Boolean isEmergency;
+    private Long personalFolderId;
 
     //    결재선 목록
     private List<ApprovalLineRequest> approvalLines;

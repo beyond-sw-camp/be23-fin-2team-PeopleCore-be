@@ -43,7 +43,8 @@ public class ApprovalSignatureService {
                 .map(ApprovalSignature::getSigManagerId)
                 .orElse(null);
 
-        return ApprovalSignatureResponseDto.from(attachFile, managerId);
+        String presignedUrl = minioService.getPresignedUrl(attachFile.getStoredFileName());
+        return ApprovalSignatureResponseDto.from(attachFile, managerId, presignedUrl);
     }
 
     /**
@@ -51,7 +52,7 @@ public class ApprovalSignatureService {
      */
     @Transactional
     public ApprovalSignatureResponseDto createOrUpdate(UUID companyId, Long empId,
-                                            Long managerId, MultipartFile file) {
+                                                       Long managerId, MultipartFile file) {
         // 파일 검증
         if (file == null || file.isEmpty()) {
             throw new BusinessException("파일을 선택해주세요.", HttpStatus.BAD_REQUEST);
@@ -63,7 +64,6 @@ public class ApprovalSignatureService {
         String objectName = String.format("signatures/%s/%d/%s_%s",
                 companyId, empId, UUID.randomUUID(), file.getOriginalFilename());
         String fileType = resolveFileType(file.getContentType());
-        String fileUrl = minioService.getPublicUrl(objectName);
 
         // 기존 서명 있으면 삭제
         attachFileRepository.findByCompanyIdAndEntityTypeAndEntityId(companyId, ENTITY_TYPE, empId)
@@ -75,6 +75,7 @@ public class ApprovalSignatureService {
                 });
         // MinIO 업로드
         minioService.uploadAttachment(objectName, file);
+        String presignedUrl = minioService.getPresignedUrl(objectName);
 
         // CommonAttachFile 저장 (storedFileName = objectName, fileUrl = 조립된 공개 URL)
         CommonAttachFile attachFile = attachFileRepository.save(CommonAttachFile.builder()
@@ -83,7 +84,7 @@ public class ApprovalSignatureService {
                 .entityId(empId)
                 .originalFileName(file.getOriginalFilename())
                 .storedFileName(objectName)
-                .fileUrl(fileUrl)
+                .fileUrl(objectName)
                 .fileSize(file.getSize())
                 .fileType(fileType)
                 .build());
@@ -96,10 +97,14 @@ public class ApprovalSignatureService {
                 .sigManagerId(managerId)
                 .build());
 
-        return ApprovalSignatureResponseDto.from(attachFile, managerId);
+
+
+        return ApprovalSignatureResponseDto.from(attachFile, managerId,presignedUrl);
     }
 
-    /** 서명 삭제 */
+    /**
+     * 서명 삭제
+     */
     @Transactional
     public void delete(UUID companyId, Long empId) {
         CommonAttachFile attachFile = attachFileRepository

@@ -91,6 +91,7 @@ public class ApprovalDocumentService {
                 .companyId(companyId)
                 .previousStatus(ApprovalStatus.PENDING)
                 .changedBy(empId)
+                .changedStatus(ApprovalStatus.PENDING)
                 .changeByName(empName)
                 .changeByDeptName(deptInfoResponse.getDeptName())
                 .changeByGrade(empGrade)
@@ -138,8 +139,9 @@ public class ApprovalDocumentService {
         document.updateDraft(request.getDocTitle(), request.getDocData(), request.getIsEmergency());
 
         /*결재선 교체 : 기존 삭제 -> 새로 저장 */
-        if (request.getApprovalLines() != null) {
+        if (request.getApprovalLines() != null && !request.getApprovalLines().isEmpty()) {
             lineRepository.deleteByDocId_DocId(docId);
+            lineRepository.flush();
             saveApprovalLine(companyId, document, request.getApprovalLines());
         }
     }
@@ -173,12 +175,13 @@ public class ApprovalDocumentService {
                 .docData(request.getDocData())
                 .docTitle(request.getDocTitle())
                 .approvalStatus(ApprovalStatus.DRAFT)
+                .personalFolderId(request.getPersonalFolderId())
                 .isEmergency(request.getIsEmergency() != null ? request.getIsEmergency() : false)
                 .build();
         documentRepository.save(document);
 
         /*결재선이 있다면 함께 저장 */
-        if (request.getApprovalLines() != null) {
+        if (request.getApprovalLines() != null && !request.getApprovalLines().isEmpty()) {
             saveApprovalLine(companyId, document, request.getApprovalLines());
         }
         return document.getDocId();
@@ -406,7 +409,7 @@ public class ApprovalDocumentService {
 
     /*결재선 저장 */
     private void saveApprovalLine(UUID companyId, ApprovalDocument document, List<DocumentCreateRequest.ApprovalLineRequest> lineRequests) {
-        if (lineRequests == null) return;
+        if (lineRequests == null || lineRequests.isEmpty()) return;
 
         List<ApprovalLine> lines = lineRequests.stream()
                 .map(req -> ApprovalLine.builder()
