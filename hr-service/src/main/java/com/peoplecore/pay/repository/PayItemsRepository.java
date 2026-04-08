@@ -1,6 +1,7 @@
 package com.peoplecore.pay.repository;
 
 import com.peoplecore.pay.domain.PayItems;
+import com.peoplecore.pay.enums.PayItemType;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -14,5 +15,7 @@ public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
 
     // 다중 삭제 전 존재 확인
     List<PayItems> findByPayItemIdInAndCompany_CompanyId(List<Long> payItemIds, UUID companyId);
+
+    List<PayItems>findByCompany_CompanyIdAndPayItemTypeAndIsActiveTrueOrderBySortOrderAsc(UUID companyId, PayItemType payItemType);
 
 }

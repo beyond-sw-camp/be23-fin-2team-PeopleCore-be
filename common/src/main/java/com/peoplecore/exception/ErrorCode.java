@@ -97,7 +97,9 @@ public enum ErrorCode {
     EMPLOYEE_NOT_FOUND(404, "사원을 찾을 수 없습니다."),
     GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다."),
     TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다."),
-    MANUAL_PASSWORD_REQUIRED(400, "비밀번호를 직접 입력해야 합니다.");
+    MANUAL_PASSWORD_REQUIRED(400, "비밀번호를 직접 입력해야 합니다."),
+    SALARY_CONTRACT_NOT_FOUND(500, "파일 업로드에 실패했습니다"),
+    FILE_UPLOAD_FAILED(404, "파일 업로드에 실패했습니다");
 
 
     private final int status;

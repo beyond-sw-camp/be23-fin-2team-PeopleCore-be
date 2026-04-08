@@ -64,8 +64,8 @@ public class EmployeeService {
     private static final String EMAIL_DOMAIN = "@peoplecore.com";
 
     //    1.사원조회 및 등록
-    public Page<EmployeeListDto> getEmployee(String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField employeeSortField, Pageable pageable) {
-        Page<Employee> employees = employeeRepository.findAllwithFilter(keyword, deptId, empType, empStatus, employeeSortField, pageable);
+    public Page<EmployeeListDto> getEmployee(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField employeeSortField, Pageable pageable) {
+        Page<Employee> employees = employeeRepository.findAllwithFilter(companyId, keyword, deptId, empType, empStatus, employeeSortField, pageable);
         return employees.map(EmployeeListDto::fromEntity);
     }
 

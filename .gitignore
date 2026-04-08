@@ -110,3 +110,10 @@ logs/**/gradle/wrapper/gradle-wrapper.jar
 node_modules/
 package-lock.json
 package.json
+
+# ============================
+# Python (face-module)
+# ============================
+**/venv/
+**/__pycache__/
+**/chroma_data/
