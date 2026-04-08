@@ -34,13 +34,14 @@ public class EmployeeController {
 //    1. 목록 조회, 필터, page
     @GetMapping
     public ResponseEntity<Page<EmployeeListDto>> getEmployee(
+            @RequestHeader("X-User-Company") UUID companyId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) EmpType empType,
             @RequestParam(required = false) EmpStatus empStatus,
             @RequestParam(required = false) EmployeeSortField sortField,
             Pageable pageable){
-        return ResponseEntity.ok(employeeService.getEmployee(keyword,deptId,empType,empStatus, sortField, pageable));
+        return ResponseEntity.ok(employeeService.getEmployee(companyId, keyword,deptId,empType,empStatus, sortField, pageable));
     }
 
 
