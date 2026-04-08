@@ -16,6 +16,7 @@ import java.time.LocalDate;
 @Builder
 public class EmployeeListDto {
 
+    private Long empId;
     private String empNum;
     private String empName;
     private String deptName;
@@ -25,11 +26,10 @@ public class EmployeeListDto {
     private LocalDate empHireDate;
     private EmpStatus empStatus;
 
-    public static EmployeeListDto fromEntity(Employee employee){
-
-
+    public static EmployeeListDto fromEntity(Employee employee) {
 //grade, title, company entity깔리는거 확인
         return EmployeeListDto.builder()
+                .empId(employee.getEmpId())
                 .empNum(employee.getEmpNum())
                 .empName(employee.getEmpName())
                 .deptName(employee.getDept().getDeptName())
@@ -39,6 +39,5 @@ public class EmployeeListDto {
                 .empHireDate(employee.getEmpHireDate())
                 .empStatus(employee.getEmpStatus())
                 .build();
-
     }
 }
