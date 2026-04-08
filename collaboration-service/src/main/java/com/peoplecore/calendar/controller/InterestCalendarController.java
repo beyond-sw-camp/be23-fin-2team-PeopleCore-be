@@ -27,71 +27,72 @@ public class InterestCalendarController {
     }
 
 
-    //    관심 캘린더 공유요청
+    //    1. 관심 캘린더 공유요청
     @PostMapping("/share-request")
     public ResponseEntity<Void> requestShare(
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestBody ShareRequestCreateDto request) {
-        interestCalenderService.requestShare(componyId, empId, request){
-            return ResponseEntity.status(HttpStatus.CREATED).build();
-        }
+
+        interestCalenderService.requestShare(componyId, empId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+
     }
 
-    //    공유 요청 응답 (승인/거절)
+    //    2. 공유 요청 응답 (승인/거절)
     @PatchMapping("/share-request/{shareReqId}")
     public ResponseEntity<Void> approveShareRequest(
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long shareReqId,
             @RequestParam boolean accepted) {
-        interestCalenderService.ShareRequestResponse(componyId, empId, shareReqId, accepted);
+        interestCalenderService.shareRequestResponse(componyId, empId, shareReqId, accepted);
         return ResponseEntity.ok().build();
     }
 
-//    내가 등록한 관심캘린더 요청 목록
+//    3. 내가 등록한 관심캘린더 요청 목록
     @GetMapping("/share-request/sent")
     public ResponseEntity<Page<ShareRequestResDto>> getSentRequests(
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             Pageable pageable){
-        return ResponseEntity.ok(interestCalendarService.getMyShareRequests(componyId, empId, pageable));
+        return ResponseEntity.ok(interestCalenderService.getMyShareRequests(componyId, empId, pageable));
     }
 
-//    내일정을 보고있는 동료
+//    4. 내일정을 보고있는 동료(나한테 온 요청 목록)
     @GetMapping("/share-request/received")
     public ResponseEntity<Page<ShareRequestResDto>> getReceivedRequests(
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             Pageable pageable){
-        return ResponseEntity.ok(interestCalendarService.getReceivedShareRequests(componyId,empId,pageable));
+        return ResponseEntity.ok(interestCalenderService.getReceivedRequests(componyId,empId,pageable));
     }
 
-//    관심캘린더 목록조회
+//    5. 관심캘린더 목록조회
     @GetMapping
     public ResponseEntity<List<InterestCalendarResDto>> getInterestCalenders(
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId){
-        return ResponseEntity.ok(interestCalendarService.getInterestCalendars(componyId, empId));
+        return ResponseEntity.ok(interestCalenderService.getInterestCalendars(componyId, empId));
     }
 
-//    관심캘린더 설정 변경(색상, 보이기, 순서)
+//    6. 관심캘린더 설정 변경(색상, 보이기, 순서)
     @PatchMapping("/{interestCalendarId}")
     public ResponseEntity<InterestCalendarResDto> updateInterestCalendar(
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long interestCalendarId,
             @RequestBody InterestCalendarUpdateReqDto reqDto) {
-        return ResponseEntity.ok(interestCalendarService.updateInterestCalendar(componyId, empId, interestCalendarId, reqDto));
+        return ResponseEntity.ok(interestCalenderService.updateInterestCalendar(componyId, empId, interestCalendarId, reqDto));
     }
 
-//    관심 캘린더 삭제
+//    7. 관심 캘린더 삭제
     @DeleteMapping("/{interestCalendarId}")
     public ResponseEntity<Void> deleteInterestCalendar(
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long interestCalendarId){
-        interestCalendarService.deleteInterestCalendar(componyId, empId, interestCalendarId);
+        interestCalenderService.deleteInterestCalendar(componyId, empId, interestCalendarId);
         return ResponseEntity.noContent().build();
     }
 
