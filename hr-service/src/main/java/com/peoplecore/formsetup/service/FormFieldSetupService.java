@@ -10,6 +10,7 @@ import com.peoplecore.formsetup.repository.FormFieldSetupRepository;
 import com.peoplecore.pay.domain.PayItems;
 import com.peoplecore.pay.enums.PayItemType;
 import com.peoplecore.pay.repository.PayItemsRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,10 +21,12 @@ import java.util.*;
 @Transactional
 public class FormFieldSetupService {
 
+
     private final FormFieldSetupRepository repository;
     private final ObjectMapper objectMapper;
     private final PayItemsRepository payItemsRepository;
 
+    @Autowired
     public FormFieldSetupService(FormFieldSetupRepository repository, ObjectMapper objectMapper, PayItemsRepository payItemsRepository) {
         this.repository = repository;
         this.objectMapper = objectMapper;

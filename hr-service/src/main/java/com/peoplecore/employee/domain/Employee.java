@@ -46,7 +46,7 @@ public class Employee extends BaseTimeEntity {
     private Title title;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "insurance_job_types", nullable = false)
+    @JoinColumn(name = "insurance_job_types", nullable = true)
     private InsuranceJobTypes jobTypes;
 
     @Column(name = "emp_name", nullable = false, length = 50)
@@ -95,7 +95,6 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "simple_password")
     private String simplePassword;
 
-    @Column(nullable = false)
     private Long workGroupId;
 
     @Column(nullable = false)
