@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.UUID;
 
 //**********************************************************************************
 @Repository
@@ -23,7 +24,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
 
 
     @Override
-    public Page<Employee> findAllwithFilter(String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField sortField, Pageable pageable) {
+    public Page<Employee> findAllwithFilter(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField sortField, Pageable pageable) {
         // 실제 데이터 조회 (fetch join으로 N+1 방지)
         List<Employee> content = queryFactory
                 .selectFrom(qEmployee)                      // Employee 테이블 조회
@@ -31,6 +32,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
                 .join(qEmployee.grade).fetchJoin()          // 직급 한번에 조회
                 .leftJoin(qEmployee.title).fetchJoin()      // 직책 한번에 조회 (nullable)
                 .where(
+                        companyEq(companyId),               // 회사 필터 (필수)
                         keywordContains(keyword),           // 이름 또는 사번 검색 (null이면 조건 무시)
                         deptEq(deptId),                     // 부서 필터 (null이면 조건 무시)
                         empTypeEq(empType),                 // 고용형태 필터 (null이면 조건 무시)
@@ -46,6 +48,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
                 .select(qEmployee.count())
                 .from(qEmployee)
                 .where(
+                        companyEq(companyId),
                         keywordContains(keyword),
                         deptEq(deptId),
                         empTypeEq(empType),                 // 고용형태 필터 (null이면 조건 무시)
@@ -66,6 +69,11 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
             case EMP_NAME -> qEmployee.empName.asc(); //이름 오름차순
         };
     }
+    //    회사 id 일치 여부
+    private BooleanExpression companyEq(UUID companyId) {
+        return companyId != null ? qEmployee.company.companyId.eq(companyId) : null;
+    }
+
     //    이름 또는 사번에 keyword포함 여부(null이면 where절 자동 무시)
     private BooleanExpression keywordContains(String keyword) {
         return keyword != null ? qEmployee.empName.contains(keyword).or(qEmployee.empNum.contains(keyword)) : null;
