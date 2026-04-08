@@ -46,11 +46,11 @@ public interface ApprovalFormRepository extends JpaRepository<ApprovalForm, Long
             "WHERE f.companyId = :companyId AND f.folderId.folderId = :folderId")
     Integer findMaxSortOrderInFolder(@Param("companyId") UUID companyId, @Param("folderId") Long folderId);
 
-    // 양식코드 중복 체크
-    boolean existsByCompanyIdAndFormCode(UUID companyId, String formCode);
+    // 양식코드 중복 체크 (활성 양식만)
+    boolean existsByCompanyIdAndFormCodeAndIsActiveTrue(UUID companyId, String formCode);
 
-    // 양식명 중복 체크
-    boolean existsByCompanyIdAndFormName(UUID companyId, String formName);
+    // 양식명 중복 체크 (활성 양식만)
+    boolean existsByCompanyIdAndFormNameAndIsActiveTrue(UUID companyId, String formName);
 
     // 여러 양식 ID로 조회 (일괄설정용)
     @Query("SELECT f FROM ApprovalForm f WHERE f.companyId = :companyId AND f.formId IN :formIds")

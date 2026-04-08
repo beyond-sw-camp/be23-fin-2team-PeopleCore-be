@@ -1,6 +1,7 @@
 package com.peoplecore.approval.dto;
 
 import com.peoplecore.approval.entity.ApprovalForm;
+import com.peoplecore.approval.entity.FormWritePermission;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -22,7 +23,7 @@ public class FormDetailResponse {
     private Boolean isCurrent;
     private Boolean isActive;
     private Long empId;
-    private String formWritePermission;
+    private FormWritePermission formWritePermission;
     private Boolean formIsPublic;
     private Integer formRetentionYear;
     private Boolean formMobileYn;

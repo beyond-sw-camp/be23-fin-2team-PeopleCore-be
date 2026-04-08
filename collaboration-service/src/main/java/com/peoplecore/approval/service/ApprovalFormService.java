@@ -7,6 +7,10 @@ import com.peoplecore.approval.entity.FrequentForm;
 import com.peoplecore.approval.repository.ApprovalFormFolderRepository;
 import com.peoplecore.approval.repository.ApprovalFormRepository;
 import com.peoplecore.approval.repository.FrequentFormRepository;
+import com.peoplecore.common.entity.CommonCode;
+import com.peoplecore.common.entity.CommonCodeGroup;
+import com.peoplecore.common.repository.CommonCodeGroupRepository;
+import com.peoplecore.common.repository.CommonCodeRepository;
 import com.peoplecore.common.service.MinioService;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
@@ -22,16 +26,27 @@ import java.util.*;
 @Transactional(readOnly = true)
 public class ApprovalFormService {
 
+    private static final String FORM_CODE_GROUP = "FORM_CODE";
+
     private final ApprovalFormFolderRepository approvalFormFolderRepository;
     private final ApprovalFormRepository approvalFormRepository;
     private final FrequentFormRepository frequentFormRepository;
+    private final CommonCodeGroupRepository commonCodeGroupRepository;
+    private final CommonCodeRepository commonCodeRepository;
     private final MinioService minioService;
 
     @Autowired
-    public ApprovalFormService(ApprovalFormFolderRepository approvalFormFolderRepository, ApprovalFormRepository approvalFormRepository, FrequentFormRepository frequentFormRepository, MinioService minioService) {
+    public ApprovalFormService(ApprovalFormFolderRepository approvalFormFolderRepository,
+                               ApprovalFormRepository approvalFormRepository,
+                               FrequentFormRepository frequentFormRepository,
+                               CommonCodeGroupRepository commonCodeGroupRepository,
+                               CommonCodeRepository commonCodeRepository,
+                               MinioService minioService) {
         this.approvalFormFolderRepository = approvalFormFolderRepository;
         this.approvalFormRepository = approvalFormRepository;
         this.frequentFormRepository = frequentFormRepository;
+        this.commonCodeGroupRepository = commonCodeGroupRepository;
+        this.commonCodeRepository = commonCodeRepository;
         this.minioService = minioService;
     }
 
@@ -254,13 +269,13 @@ public class ApprovalFormService {
     /* 양식 추가 */
     @Transactional
     public FormDetailResponse createForm(UUID companyId, Long empId, ApprovalFormCreateRequest request) {
-        /*양식 코드 중복 체크 */
-        if (approvalFormRepository.existsByCompanyIdAndFormCode(companyId, request.getFormCode())) {
+        /*양식 코드 중복 체크 (활성 양식만) */
+        if (approvalFormRepository.existsByCompanyIdAndFormCodeAndIsActiveTrue(companyId, request.getFormCode())) {
             throw new BusinessException("이미 존재하는 양식 코드입니다. ");
         }
 
-        /*양식명 중복 체크 */
-        if (approvalFormRepository.existsByCompanyIdAndFormName(companyId, request.getFormName())) {
+        /*양식명 중복 체크 (활성 양식만) */
+        if (approvalFormRepository.existsByCompanyIdAndFormNameAndIsActiveTrue(companyId, request.getFormName())) {
             throw new BusinessException("이미 존재하는 양식명입니다, ");
         }
 
@@ -278,7 +293,7 @@ public class ApprovalFormService {
                 .isCurrent(true)
                 .isActive(true)
                 .empId(empId)
-                .formWritePermission(request.getFormWriterPermission())
+                .formWritePermission(request.getFormWritePermission())
                 .formIsPublic(request.getFormIsPublic() != null ? request.getFormIsPublic() : true)
                 .formRetentionYear(request.getFormRetentionYear())
                 .formMobileYn(request.getFormMobileYn() != null ? request.getFormMobileYn() : false)
@@ -288,6 +303,29 @@ public class ApprovalFormService {
                 .build();
 
         ApprovalForm saved = approvalFormRepository.save(form);
+
+        /* 공통코드 테이블에 양식 코드 등록 */
+        CommonCodeGroup codeGroup = commonCodeGroupRepository
+                .findByCompanyIdAndGroupCodeAndIsActiveTrue(companyId, FORM_CODE_GROUP)
+                .orElseGet(() -> commonCodeGroupRepository.save(
+                        CommonCodeGroup.builder()
+                                .companyId(companyId)
+                                .groupCode(FORM_CODE_GROUP)
+                                .groupName("결재 양식 코드")
+                                .groupDescription("결재 양식 코드를 관리하는 그룹")
+                                .isActive(true)
+                                .build()
+                ));
+
+        Integer maxCodeSort = commonCodeRepository.findMaxSortOrder(codeGroup.getGroupId());
+        CommonCode commonCode = CommonCode.builder()
+                .groupId(codeGroup.getGroupId())
+                .codeValue(saved.getFormCode())
+                .codeName(saved.getFormName())
+                .sortOrder(maxCodeSort + 1)
+                .isActive(true)
+                .build();
+        commonCodeRepository.save(commonCode);
 
         /*minio에 Html 업로드 */
         String objectName = String.format("forms/%s/%s_v%d.html", companyId, saved.getFormCode(), saved.getFormVersion());
@@ -314,6 +352,14 @@ public class ApprovalFormService {
     public void deleteForm(UUID companyId, Long formId) {
         ApprovalForm form = approvalFormRepository.findDetailById(formId, companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
         form.deactivate();
+
+        /* 공통코드 테이블에서도 비활성화 */
+        commonCodeGroupRepository
+                .findByCompanyIdAndGroupCodeAndIsActiveTrue(companyId, FORM_CODE_GROUP)
+                .ifPresent(codeGroup ->
+                        commonCodeRepository.findByGroupIdAndCodeValueAndIsActiveTrue(codeGroup.getGroupId(), form.getFormCode())
+                                .ifPresent(code -> code.updateCode(code.getCodeName(), code.getSortOrder(), false))
+                );
     }
 
     /*양식 순서 변경 */
