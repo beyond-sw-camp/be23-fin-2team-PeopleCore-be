@@ -454,8 +454,9 @@ public class ApprovalFormService {
                     Resource resource = resources[j];
 
                     /*1. 파일명에서 .html제거 -> formName으로 저장하기 위해 */
-                    String formName = resource.getFilename().replace(".html", "");
-
+                    String fileName = resource.getFilename();
+                    if (fileName == null) continue;
+                    String formName = fileName.replace(".html", "");
                     /*2. html 내용 읽기 -> formHtml
                      * getInputStream : resource 객체가 가리키는 파일의 내용을 바이트 스트림으로 열어주는 메서드 반환은 바이트 데이터
                      * StreamUtils.copyToString : 바이트 스트림-> String으로 변환해주는 Spring 유ㅠ틸 / UTF_8 인코딩으로 해석해라 라는 뜻. 한글이 포함된 HTML이기 때문에
