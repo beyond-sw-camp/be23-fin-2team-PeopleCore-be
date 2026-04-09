@@ -169,4 +169,12 @@ public class ApprovalFormController {
             @RequestBody ApprovalFormBatchSettingRequest request) {
         return ResponseEntity.ok(approvalFormService.batchUpdateFormSettings(companyId, request));
     }
+
+
+    /*기본 양식 추가를 위한 기본 폴더 생성 api*/
+    @PostMapping("/init/formfolder")
+    public ResponseEntity<?> initFormFolder(@RequestHeader("X-User-Company") UUID companyId) {
+        approvalFormService.initFormFolder(companyId);
+        return ResponseEntity.status(HttpStatus.CREATED).build();
+    }
 }
