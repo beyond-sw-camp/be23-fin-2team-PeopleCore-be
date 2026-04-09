@@ -2,7 +2,7 @@ package com.peoplecore.approval.service;
 
 import com.peoplecore.approval.dto.ApprovalCommentRequest;
 import com.peoplecore.approval.dto.ApprovalCommentResponse;
-import com.peoplecore.alram.publiher.AlarmEventPublisher;
+import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.approval.entity.ApprovalDocument;
 import com.peoplecore.approval.entity.ApprovalLine;
 import com.peoplecore.approval.repository.ApprovalCommentRepository;

@@ -21,17 +21,17 @@
 
 ## 알림 설계 원칙
 
-캘린더 알림은 두 가지로 나뉘며, 각각 다른 방식으로 처리합니다.
+캘린더 알림은 두 가지로 나뉘며, 전자결재와 동일한 Kafka 비동기 방식을 사용합니다.
 
 | 구분 | 예시 | 처리 방식 | 이유 |
 |------|------|-----------|------|
-| **즉시 알림** | 공유 요청/승인/거절, 일정 초대 | `AlarmService.createAndPush()` 직접 호출 | 같은 JVM 내부 호출이므로 Kafka 불필요. 트랜잭션 내에서 DB 저장 + SSE 푸시 동시 처리 |
+| **즉시 알림** | 공유 요청/승인/거절, 일정 초대, 전사 일정 등록 | `AlarmEventPublisher.publisher()` → Kafka → `AlarmService.createAndPush()` | 비동기 처리로 알림 실패가 비즈니스 로직에 영향 안 줌. 전자결재와 패턴 통일 |
 | **예약 알림** | "10분 전 팝업", "1시간 전 이메일" | `@Scheduled` 스케줄러 | 특정 시각에 맞춰 발송해야 하므로 주기적 폴링 필요 |
 
-> **Kafka는 서비스 간 통신**에 사용합니다 (hr-service → collaboration-service 등).
-> 같은 collaboration-service 내부에서는 직접 호출이 더 안전하고 빠릅니다.
-> 서비스가 살아있으면 AlarmService도 살아있으므로 유실 경로 자체가 없고,
-> `@Transactional` 내에서 DB 저장이 보장되므로 데이터 안정성도 확보됩니다.
+> **Kafka 비동기 알림의 장점:**
+> 1. 일정 생성 트랜잭션과 알림 발송이 분리 → 알림 실패해도 일정은 정상 저장
+> 2. 전자결재(`ApprovalDocumentService` 등)와 동일한 `AlarmEventPublisher.publisher()` 패턴 사용
+> 3. 흐름: 서비스 → `AlarmEventPublisher.publisher(AlarmEvent)` → Kafka 토픽 `"alarm-event"` → `AlarmEventConsumer` → `AlarmService.createAndPush()` → DB 저장 + SSE 푸시
 
 ---
 
@@ -1167,12 +1167,13 @@ public class AnnualLeaveSettingResponse {
 
 **파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/service/CalendarEventService.java`
 
-> **변경 사항:** `AlarmEventPublisher`(Kafka) 대신 `AlarmService.createAndPush()` 직접 호출
+> **알림 방식:** 전자결재와 동일하게 `AlarmEventPublisher.publisher()` → Kafka 비동기 처리
+> 일정 생성 트랜잭션과 알림이 분리되므로 알림 실패가 일정 저장에 영향 안 줌
 
 ```java
 package com.peoplecore.calendar.service;
 
-import com.peoplecore.alarm.service.AlarmService;
+import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.calendar.dto.*;
 import com.peoplecore.calendar.entity.*;
 import com.peoplecore.calendar.repository.*;
@@ -1198,7 +1199,7 @@ public class CalendarEventService {
     private final RepeatedRulesRepository repeatedRulesRepository;
     private final EventsNotificationsRepository notificationsRepository;
     private final InterestCalendarsRepository interestCalendarsRepository;
-    private final AlarmService alarmService;
+    private final AlarmEventPublisher alarmEventPublisher;
 
     @Autowired
     public CalendarEventService(EventsRepository eventsRepository,
@@ -1206,13 +1207,13 @@ public class CalendarEventService {
                                 RepeatedRulesRepository repeatedRulesRepository,
                                 EventsNotificationsRepository notificationsRepository,
                                 InterestCalendarsRepository interestCalendarsRepository,
-                                AlarmService alarmService) {
+                                AlarmEventPublisher alarmEventPublisher) {
         this.eventsRepository = eventsRepository;
         this.myCalendarsRepository = myCalendarsRepository;
         this.repeatedRulesRepository = repeatedRulesRepository;
         this.notificationsRepository = notificationsRepository;
         this.interestCalendarsRepository = interestCalendarsRepository;
-        this.alarmService = alarmService;
+        this.alarmEventPublisher = alarmEventPublisher;
     }
 
     // ────────────────────────────────────────────
@@ -1399,14 +1400,14 @@ public class CalendarEventService {
     }
 
     /**
-     * 참석자에게 즉시 알림 발송
-     * 같은 collaboration-service 내부이므로 AlarmService 직접 호출
-     * → DB 저장 + SSE 실시간 푸시가 같은 트랜잭션 내에서 처리됨
+     * 참석자에게 알림 발송 (Kafka 비동기)
+     * 전자결재와 동일한 AlarmEventPublisher 패턴
+     * → 일정 저장 트랜잭션과 분리되어 알림 실패가 일정에 영향 안 줌
      */
     private void sendAttendeeAlarm(UUID companyId, Events event, List<Long> attendeeEmpIds) {
         if (attendeeEmpIds == null || attendeeEmpIds.isEmpty()) return;
 
-        AlarmEvent alarm = AlarmEvent.builder()
+        alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("Calendar")
                 .alarmTitle("일정 초대")
@@ -1415,8 +1416,7 @@ public class CalendarEventService {
                 .alarmRefType("EVENT")
                 .alarmRefId(event.getEventsId())
                 .empIds(attendeeEmpIds)
-                .build();
-        alarmService.createAndPush(alarm);
+                .build());
     }
 }
 ```
@@ -1577,14 +1577,14 @@ public class MyCalendarService {
 **파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/service/InterestCalendarService.java`
 
 > **변경 사항:**
-> - `AlarmEventPublisher`(Kafka) 대신 `AlarmService.createAndPush()` 직접 호출
+> - 전자결재와 동일하게 `AlarmEventPublisher.publisher()` → Kafka 비동기 알림
 > - 승인/거절 메서드를 `respondShareRequest()`로 통합
 > - `HrCacheService`로 타인 사원 이름 조회 (null 제거)
 
 ```java
 package com.peoplecore.calendar.service;
 
-import com.peoplecore.alram.service.AlarmService;
+import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.calendar.dto.*;
 import com.peoplecore.calendar.entity.CalendarShareRequests;
 import com.peoplecore.calendar.entity.InterestCalendars;
@@ -1616,17 +1616,17 @@ public class InterestCalendarService {
 
     private final CalendarShareRequestsRepository shareRequestsRepository;
     private final InterestCalendarsRepository interestCalendarsRepository;
-    private final AlarmService alarmService;
+    private final AlarmEventPublisher alarmEventPublisher;
     private final HrCacheService hrCacheService;
 
     @Autowired
     public InterestCalendarService(CalendarShareRequestsRepository shareRequestsRepository,
                                    InterestCalendarsRepository interestCalendarsRepository,
-                                   AlarmService alarmService,
+                                   AlarmEventPublisher alarmEventPublisher,
                                    HrCacheService hrCacheService) {
         this.shareRequestsRepository = shareRequestsRepository;
         this.interestCalendarsRepository = interestCalendarsRepository;
-        this.alarmService = alarmService;
+        this.alarmEventPublisher = alarmEventPublisher;
         this.hrCacheService = hrCacheService;
     }
 
@@ -1658,8 +1658,8 @@ public class InterestCalendarService {
 
         shareRequestsRepository.save(shareRequest);
 
-        // 상대방에게 즉시 알림 (같은 서비스 → 직접 호출)
-        alarmService.createAndPush(AlarmEvent.builder()
+        // 상대방에게 알림 (Kafka 비동기)
+        alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("Calendar")
                 .alarmTitle("캘린더 공유 요청")
@@ -1699,13 +1699,13 @@ public class InterestCalendarService {
             request.reject();
         }
 
-        // 요청자에게 즉시 알림
+        // 요청자에게 알림 (Kafka 비동기)
         String title = accepted ? "캘린더 공유 승인" : "캘린더 공유 거절";
         String content = accepted
                 ? "캘린더 공유 요청이 승인되었습니다."
                 : "캘린더 공유 요청이 거절되었습니다.";
 
-        alarmService.createAndPush(AlarmEvent.builder()
+        alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("Calendar")
                 .alarmTitle(title)
@@ -2348,7 +2348,7 @@ public class CollaborationServiceApplication {
 ```java
 package com.peoplecore.calendar.scheduler;
 
-import com.peoplecore.alarm.service.AlarmService;
+import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.calendar.entity.Events;
 import com.peoplecore.calendar.entity.EventsNotifications;
 import com.peoplecore.calendar.repository.EventsRepository;
@@ -2372,7 +2372,7 @@ import java.util.List;
  *   - 매분 정각에 실행 (fixedRate = 60000)
  *   - 현재 시각 기준으로 "1분 뒤 ~ 최대 예약 시간 뒤"에 시작하는 일정을 조회
  *   - 각 일정의 알림 설정을 확인하여, "일정시작 - minutesBefore"가 현재 분과 일치하면 발송
- *   - AlarmService.createAndPush()로 DB 저장 + SSE 실시간 푸시
+ *   - AlarmEventPublisher.publisher()로 Kafka 비동기 알림 발송
  *
  * 예시:
  *   - 일정 시작: 10:30, 알림 설정: 10분 전
@@ -2384,13 +2384,13 @@ import java.util.List;
 public class EventNotificationScheduler {
 
     private final EventsRepository eventsRepository;
-    private final AlarmService alarmService;
+    private final AlarmEventPublisher alarmEventPublisher;
 
     @Autowired
     public EventNotificationScheduler(EventsRepository eventsRepository,
-                                      AlarmService alarmService) {
+                                      AlarmEventPublisher alarmEventPublisher) {
         this.eventsRepository = eventsRepository;
-        this.alarmService = alarmService;
+        this.alarmEventPublisher = alarmEventPublisher;
     }
 
     /**
@@ -2451,7 +2451,7 @@ public class EventNotificationScheduler {
                     .empIds(List.of(event.getEmpId()))
                     .build();
 
-            alarmService.createAndPush(alarm);
+            alarmEventPublisher.publisher(alarm);
 
             log.info("예약 알림 발송 완료 - 일정: {}, 방식: {}, {}분 전",
                     event.getTitle(), methodLabel, noti.getMinutesBefore());
@@ -2860,12 +2860,14 @@ public class CompanyEventResponse {
 ```java
 package com.peoplecore.calendar.service;
 
+import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.calendar.dto.CompanyEventRequest;
 import com.peoplecore.calendar.dto.CompanyEventResponse;
 import com.peoplecore.calendar.entity.Events;
 import com.peoplecore.calendar.repository.EventsRepository;
 import com.peoplecore.client.component.HrCacheService;
 import com.peoplecore.client.dto.EmployeeSimpleResponse;
+import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.common.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -2886,12 +2888,15 @@ public class CompanyEventService {
 
     private final EventsRepository eventsRepository;
     private final HrCacheService hrCacheService;
+    private final AlarmEventPublisher alarmEventPublisher;
 
     @Autowired
     public CompanyEventService(EventsRepository eventsRepository,
-                               HrCacheService hrCacheService) {
+                               HrCacheService hrCacheService,
+                               AlarmEventPublisher alarmEventPublisher) {
         this.eventsRepository = eventsRepository;
         this.hrCacheService = hrCacheService;
+        this.alarmEventPublisher = alarmEventPublisher;
     }
 
     // ────────────────────────────────────────────
@@ -2915,6 +2920,20 @@ public class CompanyEventService {
                 .build();
 
         eventsRepository.save(event);
+
+        // 전 직원에게 알림 (Kafka 비동기)
+        // empIds를 빈 리스트로 보내면 AlarmService에서 전사 발송 처리
+        // 또는 별도 전사 알림용 alarmRefType 사용
+        alarmEventPublisher.publisher(AlarmEvent.builder()
+                .companyId(companyId)
+                .alarmType("Calendar")
+                .alarmTitle("전사 일정 등록")
+                .alarmContent(request.getTitle() + " 전사 일정이 등록되었습니다.")
+                .alarmLink("/calendar?eventId=" + event.getEventsId())
+                .alarmRefType("COMPANY_EVENT")
+                .alarmRefId(event.getEventsId())
+                .empIds(List.of())  // 전사 발송 — AlarmService에서 회사 전 직원 대상 처리
+                .build());
 
         return CompanyEventResponse.from(event, getCreatorName(empId));
     }
@@ -3254,31 +3273,39 @@ hr-service/src/main/java/com/peoplecore/employee/
 
 ## 알림 흐름
 
+> 전자결재와 동일하게 `AlarmEventPublisher.publisher()` → Kafka 비동기 방식 통일
+
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        즉시 알림 (Direct Call)                       │
+│                  즉시 알림 (Kafka 비동기)                              │
 │                                                                     │
-│  같은 collaboration-service 내부 → Kafka 불필요                       │
-│  @Transactional 내에서 DB 저장 + SSE 푸시 동시 처리                    │
+│  전자결재(ApprovalDocumentService 등)와 동일한 패턴                     │
+│  알림 실패가 비즈니스 트랜잭션에 영향 안 줌                               │
 │                                                                     │
 │  [Service 레이어]                                                    │
 │    │                                                                │
 │    ├─ 일정 등록 시 참석자 알림                                        │
 │    │   CalendarEventService.sendAttendeeAlarm()                     │
-│    │     → AlarmService.createAndPush(AlarmEvent)                   │
-│    │       → DB 저장 + SSE 실시간 푸시                               │
+│    │     → AlarmEventPublisher.publisher(AlarmEvent)                 │
+│    │       → Kafka "alarm-event" 토픽                                │
+│    │         → AlarmEventConsumer → AlarmService.createAndPush()     │
+│    │           → DB 저장 + SSE 실시간 푸시                            │
 │    │                                                                │
 │    ├─ 관심 캘린더 공유 요청 알림                                      │
 │    │   InterestCalendarService.requestShare()                       │
-│    │     → AlarmService.createAndPush() → DB + SSE                  │
+│    │     → AlarmEventPublisher.publisher() → Kafka → DB + SSE       │
 │    │                                                                │
-│    └─ 공유 요청 응답 알림 (승인/거절)                                  │
-│        InterestCalendarService.respondShareRequest()                │
-│          → AlarmService.createAndPush() → DB + SSE                  │
+│    ├─ 공유 요청 응답 알림 (승인/거절)                                  │
+│    │   InterestCalendarService.respondShareRequest()                │
+│    │     → AlarmEventPublisher.publisher() → Kafka → DB + SSE       │
+│    │                                                                │
+│    └─ 전사 일정 등록 알림 (Admin)                                     │
+│        CompanyEventService.createCompanyEvent()                     │
+│          → AlarmEventPublisher.publisher() → Kafka → DB + SSE       │
 └─────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     예약 알림 (Scheduled)                             │
+│                     예약 알림 (Scheduled + Kafka)                     │
 │                                                                     │
 │  "10분 전 팝업", "1시간 전 이메일" 등                                  │
 │  @Scheduled(fixedRate=60000)으로 1분 주기 폴링                        │
@@ -3288,12 +3315,7 @@ hr-service/src/main/java/com/peoplecore/employee/
 │    ├─ 매분 정각 실행                                                 │
 │    ├─ 향후 24시간 내 시작하는 일정 + 알림 설정 조회                     │
 │    ├─ 일정시작 - minutesBefore == 현재 시각이면 발송                    │
-│    └─ AlarmService.createAndPush() → DB + SSE                       │
+│    └─ AlarmEventPublisher.publisher() → Kafka → DB + SSE             │
 └─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Kafka는 서비스 간 통신에만 사용                     │
-│                                                                     │
-│  hr-service ──(Kafka "alarm-event")──→ collaboration-service        │
-│  hr-service ──(Kafka "hr-dept-updated")──→ HrEventConsumer          │
-└─────────────────────────────────────────────────
+```
+│    �

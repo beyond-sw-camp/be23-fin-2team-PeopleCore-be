@@ -20,6 +20,10 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class MyCalendarService {
 
+    private static final String DEFAULT_CALENDAR_NAME = "내 일정(기본)";
+    private static final String DEFAULT_CALENDAR_COLOR = "#1A73E8";
+
+
     private final MyCalendarsRepository myCalendarsRepository;
 
     @Autowired
@@ -28,10 +32,29 @@ public class MyCalendarService {
     }
 
 
-    //    내 캘린더 목록조회
+    //    내 캘린더 목록조회 + 기본캘린더 없으면 자동 생성
+    @Transactional
     public List<MyCalendarResDto> getMyCalendars(UUID companyId, Long empId) {
-        return myCalendarsRepository.findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId).stream().map(MyCalendarResDto::fromEntity).toList()   ;
+        List<MyCalendars> calendars = myCalendarsRepository.findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId);
+
+        if (calendars.isEmpty()) {
+            MyCalendars defaultMyCal = MyCalendars.builder()
+                    .empId(empId)
+                    .calendarName(DEFAULT_CALENDAR_NAME)
+                    .myDisplayColor(DEFAULT_CALENDAR_COLOR)
+                    .isVisible(true)
+                    .sortOrder(0)
+                    .companyId(companyId)
+                    .build();
+            myCalendarsRepository.save(defaultMyCal);
+            calendars = List.of(defaultMyCal);
+        }
+
+        return calendars.stream()
+                .map(MyCalendarResDto::fromEntity)
+                .toList();
     }
+
 
 //    내 캘린더 추가
     @Transactional
@@ -48,6 +71,7 @@ public class MyCalendarService {
                 .calendarName(reqDto.getCalendarName())
                 .myDisplayColor(reqDto.getDisplayColor())
                 .isVisible(true)
+                .isDefault(false)
                 .sortOrder(existing.size()+1)
                 .companyId(companyId)
                 .build();
@@ -60,7 +84,14 @@ public class MyCalendarService {
     @Transactional
     public MyCalendarResDto updateMyCalendar(UUID companyId, Long empId, Long calendarId, MyCalendarUpdateReqDto reqDto){
 
-        MyCalendars myCalendar = findAndValidate(calendarId, companyId, empId   );
+        MyCalendars myCalendar = findAndValidate(calendarId, companyId, empId);
+
+//        기본캘린더는 이름변경 불가
+        if(reqDto.getCalendarName() != null){
+            if (myCalendar.isDefaultCalendar()){
+                throw new CustomException(ErrorCode.DEFAULT_CALENDAR_CANNOT_RENAME);
+            }
+        }
 
         if(reqDto.getCalendarName() != null){
             myCalendar.updateName(reqDto.getCalendarName());
@@ -83,7 +114,13 @@ public class MyCalendarService {
 //    내캘린더 삭제
     @Transactional
     public void deleteMyCalendar(UUID companyId, Long empId, Long calendarId){
+
         MyCalendars myCalendar = findAndValidate(calendarId, companyId, empId);
+
+        if(myCalendar.getIsDefault()){
+            throw new CustomException(ErrorCode.DEFAULT_CALENDAR_CANNOT_DELETE);
+        }
+
         myCalendarsRepository.delete(myCalendar);
     }
 

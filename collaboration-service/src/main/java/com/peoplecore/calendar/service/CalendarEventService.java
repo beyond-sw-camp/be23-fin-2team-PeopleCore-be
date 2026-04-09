@@ -1,5 +1,6 @@
 package com.peoplecore.calendar.service;
 
+import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.alarm.service.AlarmService;
 import com.peoplecore.calendar.dtos.*;
 import com.peoplecore.calendar.entity.*;
@@ -22,17 +23,17 @@ public class CalendarEventService {
     private final EventsRepository eventsRepository;
     private final RepeatedRulesRepository repeatedRulesRepository;
     private final EventsNotificationsRepository eventsNotificationsRepository;
-    private final AlarmService alarmService;
-    private final InterestCalendarsRepository interestCalendarsRepository;
+     private final InterestCalendarsRepository interestCalendarsRepository;
+     private final AlarmEventPublisher alarmEventPublisher;
 
     @Autowired
-    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, AlarmService alarmService, InterestCalendarsRepository interestCalendarsRepository) {
+    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, InterestCalendarsRepository interestCalendarsRepository, AlarmEventPublisher alarmEventPublisher) {
         this.myCalendarsRepository = myCalendarsRepository;
         this.eventsRepository = eventsRepository;
         this.repeatedRulesRepository = repeatedRulesRepository;
         this.eventsNotificationsRepository = eventsNotificationsRepository;
-        this.alarmService = alarmService;
         this.interestCalendarsRepository = interestCalendarsRepository;
+        this.alarmEventPublisher = alarmEventPublisher;
     }
 
 //    일정 등록
@@ -69,7 +70,6 @@ public class CalendarEventService {
         sendAttendeeAlarm(companyId, event, reqDto.getAttendeeEmpIds());
 
         return EventResDto.fromEntity(event);
-
     }
 
 
@@ -90,8 +90,8 @@ public class CalendarEventService {
         saveNotifications(event, reqDto.getNotifications());
 
         return EventResDto.fromEntity(event);
-
     }
+
 
 //     일정 삭제
     @Transactional
@@ -115,10 +115,10 @@ public class CalendarEventService {
         List<MyCalendars> myCalendars = myCalendarsRepository.findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId);
         List<Long> visibleCalIds = myCalendars.stream().filter(c -> Boolean.TRUE.equals(c.getIsVisible())).map(MyCalendars::getMyCalendarsId).toList();
 
-//        2. 내일정        //List.of() : 빈리스트 반화
+//        2. 내일정        //List.of() : 빈리스트 반환
         List<Events> myEvents = visibleCalIds.isEmpty() ? List.of() : eventsRepository.findByCalendarIdsAndPeriod(visibleCalIds, companyId, start, end);
 
-//        3. 관심캘린더 일정
+//        3. 관심캘린더 일정 (공개일정만)
         List<InterestCalendars> interestCalendars = interestCalendarsRepository.findByViewerEmpIdWithRequest(empId, companyId);
         List<Events> interestEvents = interestCalendars.stream().filter(ic -> Boolean.TRUE.equals(ic.getIsVisible()))
                 .flatMap(ic -> eventsRepository.findPublicEventsByEmpId(ic.getTargetEmpId(), companyId, start, end).stream()).toList();
@@ -217,11 +217,11 @@ public class CalendarEventService {
 
     }
 
-//    즉시알림발송(일정참석자에게)
+//    일정참석자에게 알림발송 / kafka 비동기
     private void sendAttendeeAlarm(UUID companyId, Events event, List<Long> attendeeEmpIds){
         if(attendeeEmpIds == null  || attendeeEmpIds.isEmpty()) return;
 
-        AlarmEvent alarm = AlarmEvent.builder()
+        alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("Calendar")
                 .alarmContent(event.getTitle() + " 일정에 초대되었습니다")
@@ -229,13 +229,8 @@ public class CalendarEventService {
                 .alarmRefType("EVENT")
                 .alarmRefId(event.getEventsId())
                 .empIds(attendeeEmpIds)
-                .build();
-        alarmService.createAndPush(alarm);
+                .build());
     }
-
-
-
-
 }
 
 
