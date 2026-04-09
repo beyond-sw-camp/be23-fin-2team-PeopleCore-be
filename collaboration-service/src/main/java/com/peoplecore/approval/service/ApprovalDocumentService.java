@@ -7,6 +7,9 @@ import com.peoplecore.approval.dto.DocumentUpdateRequest;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.repository.*;
 import com.peoplecore.approval.entity.SourceBoxType;
+import com.peoplecore.common.service.MinioService;
+import java.util.Map;
+import java.util.stream.Collectors;
 import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
 import com.peoplecore.approval.slot.SlotContextDto;
 import com.peoplecore.client.component.HrCacheService;
@@ -39,9 +42,11 @@ public class ApprovalDocumentService {
     private final ApprovalAttachmentService attachmentService;
     private final AlarmEventPublisher alarmEventPublisher;
     private final AutoClassifyExecutor autoClassifyExecutor;
+    private final ApprovalSignatureRepository signatureRepository;
+    private final MinioService minioService;
 
     @Autowired
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -51,6 +56,8 @@ public class ApprovalDocumentService {
         this.attachmentService = attachmentService;
         this.alarmEventPublisher = alarmEventPublisher;
         this.autoClassifyExecutor = autoClassifyExecutor;
+        this.signatureRepository = signatureRepository;
+        this.minioService = minioService;
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번*/
@@ -141,7 +148,19 @@ public class ApprovalDocumentService {
                 .findFirst()
                 .ifPresent(ApprovalLine::markRead);
 
-        DocumentDetailResponse response = DocumentDetailResponse.from(document, lines);
+        /* 기안자 + 결재선 서명 일괄 조회 (empId → presigned URL) */
+        List<Long> empIds = new java.util.ArrayList<>(lines.stream().map(ApprovalLine::getEmpId).distinct().toList());
+        if (!empIds.contains(document.getEmpId())) {
+            empIds.add(document.getEmpId());
+        }
+        Map<Long, String> signatureMap = signatureRepository.findByCompanyIdAndSigEmpIdIn(companyId, empIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        ApprovalSignature::getSigEmpId,
+                        sig -> minioService.getPresignedUrl(sig.getSigUrl())
+                ));
+
+        DocumentDetailResponse response = DocumentDetailResponse.from(document, lines, signatureMap);
         /* 첨부파일 목록 포함 (Pre-signed URL 포함) */
         response.setAttachments(attachmentService.getAttachments(docId));
         return response;
