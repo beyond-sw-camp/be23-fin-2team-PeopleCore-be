@@ -117,12 +117,15 @@ public class ApprovalDocumentService {
         /*기안자 자동분류 (SENT) */
         autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, document);
 
-        /*결재 라인 전원에게 알림 발행 */
+        /*결재선 전원 자동분류 (INBOX) */
         List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
                 .stream()
                 .map(ApprovalLine::getEmpId)
                 .toList();
+        receiverIds.forEach(receiverId ->
+                autoClassifyExecutor.classify(companyId, receiverId, SourceBoxType.INBOX, document));
 
+        /*결재 라인 전원에게 알림 발행 */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(receiverIds)
@@ -264,6 +267,10 @@ public class ApprovalDocumentService {
         /*기안자 자동분류 (SENT) */
         autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, document);
 
+        /*결재선 전원 자동분류 (INBOX) */
+        lineRepository.findByDocId_DocIdOrderByLineStep(docId)
+                .forEach(line -> autoClassifyExecutor.classify(companyId, line.getEmpId(), SourceBoxType.INBOX, document));
+
         historyRepository.save(ApprovalStatusHistory.builder()
                 .docId(docId)
                 .companyId(companyId)
@@ -358,6 +365,7 @@ public class ApprovalDocumentService {
         autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, document);
 
         /* 결재선 교체가 필요한 경우 */
+        /* (INBOX 자동분류는 결재선 교체 후 아래에서 실행) */
         if (request.getApprovalLines() != null) {
             lineRepository.deleteByDocId_DocId(docId);
             saveApprovalLine(companyId, document, request.getApprovalLines());
@@ -365,12 +373,15 @@ public class ApprovalDocumentService {
             /* 기존 결재선 유지 시 상태만 초기화 */
             lines.forEach(ApprovalLine::resetStatus);
         }
-        /*결재 라인 전원에게 알림 발행 */
+        /*결재선 전원 자동분류 (INBOX) */
         List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
                 .stream()
                 .map(ApprovalLine::getEmpId)
                 .toList();
+        receiverIds.forEach(receiverId ->
+                autoClassifyExecutor.classify(companyId, receiverId, SourceBoxType.INBOX, document));
 
+        /*결재 라인 전원에게 알림 발행 */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(receiverIds)

@@ -6,8 +6,10 @@ import com.peoplecore.approval.dto.PersonalFolderReorderRequest;
 import com.peoplecore.approval.dto.PersonalFolderRequest;
 import com.peoplecore.approval.dto.PersonalFolderResponse;
 import com.peoplecore.approval.entity.PersonalApprovalFolder;
-import com.peoplecore.approval.repository.ApprovalDocumentRepository;
+import com.peoplecore.approval.entity.PersonalFolderDocument;
+import com.peoplecore.approval.repository.AutoClassifyRuleRepository;
 import com.peoplecore.approval.repository.PersonalApprovalFolderRepository;
+import com.peoplecore.approval.repository.PersonalFolderDocumentRepository;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
@@ -24,20 +26,22 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class PersonalApprovalFolderService {
     private final PersonalApprovalFolderRepository folderRepository;
-    private final ApprovalDocumentRepository documentRepository;
+    private final PersonalFolderDocumentRepository folderDocumentRepository;
+    private final AutoClassifyRuleRepository ruleRepository;
     private final AlarmEventPublisher alarmEventPublisher;
 
     @Autowired
-    public PersonalApprovalFolderService(PersonalApprovalFolderRepository folderRepository, ApprovalDocumentRepository documentRepository, AlarmEventPublisher alarmEventPublisher) {
+    public PersonalApprovalFolderService(PersonalApprovalFolderRepository folderRepository, PersonalFolderDocumentRepository folderDocumentRepository, AutoClassifyRuleRepository ruleRepository, AlarmEventPublisher alarmEventPublisher) {
         this.folderRepository = folderRepository;
-        this.documentRepository = documentRepository;
+        this.folderDocumentRepository = folderDocumentRepository;
+        this.ruleRepository = ruleRepository;
         this.alarmEventPublisher = alarmEventPublisher;
     }
 
     /* 개인 문서함 목록 조회 정렬 순서대로 조회 -> 각 문서함에 속한 문서 수도 같이 반환*/
     public List<PersonalFolderResponse> getList(UUID companyId, Long empId) {
         return folderRepository.findByCompanyIdAndEmpIdOrderBySortOrder(companyId, empId).stream().map(folder -> {
-            int docCount = documentRepository.countByPersonalFolderIdAndCompanyId(folder.getPersonalFolderId(), companyId);
+            int docCount = folderDocumentRepository.countByCompanyIdAndEmpIdAndPersonalFolderId(companyId, empId, folder.getPersonalFolderId());
             return PersonalFolderResponse.from(folder, docCount);
         }).toList();
     }
@@ -85,7 +89,7 @@ public class PersonalApprovalFolderService {
 
         folder.updateName(request.getName());
 
-        int docCount = documentRepository.countByPersonalFolderIdAndCompanyId(folderId, companyId);
+        int docCount = folderDocumentRepository.countByCompanyIdAndEmpIdAndPersonalFolderId(companyId, empId, folderId);
         return PersonalFolderResponse.from(folder, docCount);
     }
 
@@ -94,7 +98,7 @@ public class PersonalApprovalFolderService {
     public void delete(UUID companyId, Long empId, Long folderId) {
         PersonalApprovalFolder folder = findFolderWithOwnerCheck(companyId, empId, folderId);
         /* 문서 있으면 삭제 실패 */
-        int docCount = documentRepository.countByPersonalFolderIdAndCompanyId(folderId, companyId);
+        int docCount = folderDocumentRepository.countByCompanyIdAndEmpIdAndPersonalFolderId(companyId, empId, folderId);
 
         if (docCount > 0) {
             throw new BusinessException("문서가 존재하는 문서함은 삭제할 수 없습니다. ", HttpStatus.BAD_REQUEST);
@@ -121,7 +125,7 @@ public class PersonalApprovalFolderService {
         if (request.getTargetFolderId() != null) {
             findFolderWithOwnerCheck(companyId, empId, request.getTargetFolderId());
         }
-        documentRepository.updatePersonalFolderIdByDocIds(request.getTargetFolderId(), request.getDocIds(), companyId);
+        folderDocumentRepository.moveDocuments(request.getTargetFolderId(), companyId, empId, request.getDocIds());
     }
 
     /*문서 전체 이동 -> 폴더에서 폴더로 */
@@ -132,21 +136,25 @@ public class PersonalApprovalFolderService {
             findFolderWithOwnerCheck(companyId, empId, targetFolderId);
         }
 
-        documentRepository.updatePersonalFolderIdByFolderId(targetFolderId, folderId, companyId);
+        folderDocumentRepository.moveAllDocuments(targetFolderId, companyId, empId, folderId);
     }
 
-    /* 문서함 이관 -> 개인 문서함을 다른 사원에게 통째로 넘김  -> 대상 사원한테 알림 발송 */
+    /* 문서함 이관 -> 개인 문서함을 다른 사원에게 통째로 넘김 (폴더 + 규칙 + 문서 매핑) -> 알림 발송 */
     @Transactional
     public void transfer(UUID companyId, Long empId, Long folderId, Long targetEmpId) {
         PersonalApprovalFolder folder = findFolderWithOwnerCheck(companyId, empId, folderId);
         folder.transferTo(targetEmpId);
+
+        /* 해당 폴더에 연결된 자동분류 규칙도 이관 */
+        ruleRepository.findByCompanyIdAndEmpIdAndTargetFolderId(companyId, empId, folderId)
+                .forEach(rule -> rule.transferTo(targetEmpId));
 
         /* 이관 대상 사원한테 알림 발송 */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("Approval")
                 .alarmTitle("개인 문서함 이관")
-                .alarmContent(folder.getFolderName() + "문서함이 이관되었습니다,")
+                .alarmContent(folder.getFolderName() + " 문서함이 이관되었습니다.")
                 .alarmRefType("PersonalFolder")
                 .alarmRefId(folderId)
                 .empIds(List.of(targetEmpId))
