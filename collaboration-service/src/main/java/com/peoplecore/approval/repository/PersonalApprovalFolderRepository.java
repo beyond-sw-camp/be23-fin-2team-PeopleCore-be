@@ -18,6 +18,9 @@ public interface PersonalApprovalFolderRepository extends JpaRepository<Personal
     /*단건 조회 */
     Optional<PersonalApprovalFolder> findByPersonalFolderIdAndCompanyId(Long personalFolderId, UUID companyId);
 
+    /* 단건 조회 (사원 격리) */
+    Optional<PersonalApprovalFolder> findByPersonalFolderIdAndCompanyIdAndEmpId(Long personalFolderId, UUID companyId, Long empId);
+
     /*사원내 최대 sortOrder 조회 */
     @Query("SELECT COALESCE(MAX(f.sortOrder), 0) FROM PersonalApprovalFolder f WHERE f.companyId = :companyId AND f.empId = :empId")
     Integer findMaxSortOrder(@Param("companyId") UUID companyId, @Param("empId") Long empId);

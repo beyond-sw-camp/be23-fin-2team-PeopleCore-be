@@ -44,7 +44,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/face/health"
     );
 
-//  hr담당자만 추가 접근 가능 경로
+    //  hr담당자만 추가 접근 가능 경로
     private static final List<String> HR_ONLY_PATHS = List.of(
             "/hr-service/employee",
             "/hr-service/resign",
@@ -53,7 +53,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/face/employees"
     );
 
-//  서버운영팀 전용 경로 (API Key 인증)
+    //  서버운영팀 전용 경로 (API Key 인증)
     private static final String INTERNAL_PATH_PREFIX = "/hr-service/internal/";
 
 
@@ -103,10 +103,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         }
 
 //        hr전용 경로 시 추가 role체크
-        if(isHrOnlyPath(path)){
+        if (isHrOnlyPath(path)) {
             String role = claims.get("role", String.class);
-            if(!role.equals("HR_ADMIN")&&!role.equals("HR_SUPER_ADMIN")){
-                return onError(exchange,"접근권한이 없습니다",HttpStatus.FORBIDDEN);
+            if (!role.equals("HR_ADMIN") && !role.equals("HR_SUPER_ADMIN")) {
+                return onError(exchange, "접근권한이 없습니다", HttpStatus.FORBIDDEN);
             }
         }
 
@@ -114,7 +114,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         ServerHttpRequest.Builder requestBuilder = request.mutate()
                 .header("X-User-Id", claims.getSubject())
                 .header("X-User-Company", claims.get("companyId", String.class))
-                .header("X-User-Name", claims.get("name", String.class))
+                .header("X-User-Name", java.net.URLEncoder.encode(claims.get("name", String.class), java.nio.charset.StandardCharsets.UTF_8))
+//                .header("X-User-Name", claims.get("name", String.class))
                 .header("X-User-Role", claims.get("role", String.class))
                 .header("X-User-Department", String.valueOf(claims.get("departmentId")))
                 .header("X-User-Grade", String.valueOf(claims.get("gradeId")));
@@ -132,10 +133,10 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
         return EXCLUDE_PATHS.stream().anyMatch(path::startsWith);
     }
 
-//    hr 전용경로 확인
-    private boolean isHrOnlyPath(String path){
-        for(String hrPath : HR_ONLY_PATHS){
-            if(path.startsWith(hrPath)){
+    //    hr 전용경로 확인
+    private boolean isHrOnlyPath(String path) {
+        for (String hrPath : HR_ONLY_PATHS) {
+            if (path.startsWith(hrPath)) {
                 return true;
             }
         }
@@ -144,8 +145,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     // 서버운영팀 API Key 인증
     private Mono<Void> handleInternalAuth(ServerWebExchange exchange,
-                                           GatewayFilterChain chain,
-                                           ServerHttpRequest request) {
+                                          GatewayFilterChain chain,
+                                          ServerHttpRequest request) {
         String apiKey = request.getHeaders().getFirst("X-Internal-Api-Key");
         if (apiKey == null || !apiKey.equals(internalApiKey)) {
             return onError(exchange, "내부 관리자 인증에 실패했습니다.", HttpStatus.UNAUTHORIZED);

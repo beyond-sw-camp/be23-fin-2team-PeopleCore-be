@@ -13,4 +13,7 @@ public class DeptFolderCreateRequest {
 
     /** 문서함 이름 */
     private String name;
+
+    private Long deptId;
+
 }
