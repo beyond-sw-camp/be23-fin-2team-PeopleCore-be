@@ -66,17 +66,17 @@ public class AutoClassifyExecutor {
             }
         }
         if (rule.getFormName() != null && !rule.getFormName().isBlank()) {
-            if (document.getFormId() == null || !rule.getFormName().equals(document.getFormId().getFormName())) {
+            if (document.getFormId() == null || !document.getFormId().getFormName().contains(rule.getFormName())) {
                 return false;
             }
         }
         if (rule.getDrafterDept() != null && !rule.getDrafterDept().isBlank()) {
-            if (document.getEmpDeptName() == null || !document.getEmpDeptName().equals(rule.getDrafterDept())) {
+            if (document.getEmpDeptName() == null || !document.getEmpDeptName().contains(rule.getDrafterDept())) {
                 return false;
             }
         }
         if (rule.getDrafterName() != null && !rule.getDrafterName().isBlank()) {
-            if (document.getEmpName() == null || !document.getEmpName().equals(rule.getDrafterName())) {
+            if (document.getEmpName() == null || !document.getEmpName().contains(rule.getDrafterName())) {
                 return false;
             }
         }
