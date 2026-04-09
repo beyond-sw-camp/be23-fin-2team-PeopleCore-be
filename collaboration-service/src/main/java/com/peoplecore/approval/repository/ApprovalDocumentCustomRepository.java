@@ -39,8 +39,8 @@ public interface ApprovalDocumentCustomRepository {
     /*개인 폴더 문서함 (매핑 테이블 기준) */
     Page<DocumentListResponseDto> findPersonalFolderDocument(UUID companyId, Long empId, Long folderId, DocumentListSearchDto searchDto, Pageable pageable);
 
-    /*전체 문서함 건수 조회 (단일 쿼리)*/
-    DocumentCountResponse countAllBoxes(UUID companyId, Long empId);
+    /*전체 문서함 건수 조회*/
+    DocumentCountResponse countAllBoxes(UUID companyId, Long empId, Long deptId);
 
     /*부서 문서함 deptId 기준 */
 

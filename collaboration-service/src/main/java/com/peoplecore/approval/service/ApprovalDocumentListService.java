@@ -60,8 +60,8 @@ public class ApprovalDocumentListService {
 
     /* === 전체 문서함 건수 조회 === */
 
-    public DocumentCountResponse getDocumentCounts(UUID companyId, Long empId) {
-        return documentRepository.countAllBoxes(companyId, empId);
+    public DocumentCountResponse getDocumentCounts(UUID companyId, Long empId, Long deptId) {
+        return documentRepository.countAllBoxes(companyId, empId, deptId);
     }
 
     /* === 개인 폴더 문서함 === */

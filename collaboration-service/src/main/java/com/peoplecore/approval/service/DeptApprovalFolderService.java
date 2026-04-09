@@ -6,6 +6,7 @@ import com.peoplecore.approval.dto.DeptFolderResponse;
 import com.peoplecore.approval.dto.DeptFolderUpdateRequest;
 import com.peoplecore.approval.entity.DeptApprovalFolder;
 import com.peoplecore.approval.entity.DeptFolderManager;
+import com.peoplecore.approval.repository.ApprovalDocumentRepository;
 import com.peoplecore.approval.repository.DeptApprovalFolderRepository;
 import com.peoplecore.approval.repository.DeptFolderManagerRepository;
 import com.peoplecore.exception.BusinessException;
@@ -25,12 +26,15 @@ public class DeptApprovalFolderService {
 
     private final DeptApprovalFolderRepository folderRepository;
     private final DeptFolderManagerRepository managerRepository;
+    private final ApprovalDocumentRepository documentRepository;
 
     @Autowired
     public DeptApprovalFolderService(DeptApprovalFolderRepository folderRepository,
-                                     DeptFolderManagerRepository managerRepository) {
+                                     DeptFolderManagerRepository managerRepository,
+                                     ApprovalDocumentRepository documentRepository) {
         this.folderRepository = folderRepository;
         this.managerRepository = managerRepository;
+        this.documentRepository = documentRepository;
     }
 
     /**  부서 문서함 목록 조회 */
@@ -41,8 +45,7 @@ public class DeptApprovalFolderService {
                 .map(folder -> {
                     List<DeptFolderManager> managers = managerRepository.findByDeptAppFolderIdAndCompanyId(
                             folder.getDeptAppFolderId(), companyId);
-                    // TODO: ApprovalDocument에 deptFolderId 연결 후 실제 문서 수 카운트로 변경
-                    int docCount = 0;
+                    int docCount = documentRepository.countByDeptFolderIdAndCompanyId(folder.getDeptAppFolderId(), companyId);
                     return DeptFolderResponse.from(folder, docCount, managers);
                 })
                 .toList();
@@ -89,7 +92,8 @@ public class DeptApprovalFolderService {
         folder.updateName(request.getName());
 
         List<DeptFolderManager> managers = managerRepository.findByDeptAppFolderIdAndCompanyId(folderId, companyId);
-        return DeptFolderResponse.from(folder, 0, managers);
+        int docCount = documentRepository.countByDeptFolderIdAndCompanyId(folderId, companyId);
+        return DeptFolderResponse.from(folder, docCount, managers);
     }
 
     /** 부서 문서함 삭제 */
@@ -97,8 +101,10 @@ public class DeptApprovalFolderService {
     public void delete(UUID companyId, Long folderId) {
         DeptApprovalFolder folder = findFolder(companyId, folderId);
 
-        // TODO: ApprovalDocument에 deptFolderId 연결 후 문서 존재 여부 체크 추가
-        // if (docCount > 0) throw new BusinessException("문서가 존재하는 문서함은 삭제할 수 없습니다.", HttpStatus.BAD_REQUEST);
+        int docCount = documentRepository.countByDeptFolderIdAndCompanyId(folderId, companyId);
+        if (docCount > 0) {
+            throw new BusinessException("문서가 존재하는 문서함은 삭제할 수 없습니다.", HttpStatus.BAD_REQUEST);
+        }
 
         managerRepository.deleteByDeptAppFolderId(folderId);
         folderRepository.delete(folder);
