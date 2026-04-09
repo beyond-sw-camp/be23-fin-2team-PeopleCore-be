@@ -213,7 +213,9 @@ public class InterestCalenderService {
         if (!interestCalendar.getViewerEmpId().equals(empId) || !interestCalendar.getCompanyId().equals(companyId)){
         }
 
+//        공유요청상태를 -> APPROVE 에서 CANCELLED로
         interestCalendar.getCalendarShareRequest().cancel();
+//        관심캘린더에서 삭제
         interestCalendarsRepository.delete(interestCalendar);
     }
 

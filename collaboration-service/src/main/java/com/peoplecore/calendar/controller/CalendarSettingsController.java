@@ -2,7 +2,7 @@ package com.peoplecore.calendar.controller;
 
 import com.peoplecore.calendar.dtos.AnnualLeaveSettingReqDto;
 import com.peoplecore.calendar.dtos.AnnualLeaveSettingResDto;
-import com.peoplecore.calendar.service.SettingsService;
+import com.peoplecore.calendar.service.CalendarSettingsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -13,11 +13,10 @@ import java.util.UUID;
 @RequestMapping("/calendar/settings")
 public class CalendarSettingsController {
 
-    private final SettingsService settingsService;
+    private final CalendarSettingsService calendarSettingsService;
 
-    @Autowired
-    public CalendarSettingsController(SettingsService settingsService) {
-        this.settingsService = settingsService;1
+    public CalendarSettingsController(CalendarSettingsService calendarSettingsService) {
+        this.calendarSettingsService = calendarSettingsService;
     }
 
 
@@ -26,7 +25,7 @@ public class CalendarSettingsController {
     public ResponseEntity<AnnualLeaveSettingResDto> getAnnualLeaveSettings(
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId){
-        return ResponseEntity.ok(settingsService.getSettings(componyId,empId));
+        return ResponseEntity.ok(calendarSettingsService.getSettings(componyId,empId));
     }
 
 //    연차 연동 설정 저장
@@ -35,7 +34,7 @@ public class CalendarSettingsController {
             @RequestHeader("/X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestBody AnnualLeaveSettingReqDto reqDto){
-        return ResponseEntity.ok(settingsService.saveSettings(componyId,empId, reqDto));
+        return ResponseEntity.ok(calendarSettingsService.saveSettings(componyId,empId, reqDto));
     }
 
 }
