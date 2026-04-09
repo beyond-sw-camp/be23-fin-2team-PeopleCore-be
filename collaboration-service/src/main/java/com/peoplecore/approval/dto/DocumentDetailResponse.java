@@ -33,6 +33,7 @@ public class DocumentDetailResponse {
     private String empDeptName;
     private String empGrade;
     private String empTitle;
+    private String docOpinion;
 
     //    양식 html
     private String formHtml;
@@ -89,6 +90,7 @@ public class DocumentDetailResponse {
                 .docTitle(doc.getDocTitle())
                 .docData(doc.getDocData())
                 .docType(doc.getDocType())
+                .docOpinion(doc.getDocOpinion())
                 .approvalStatus(doc.getApprovalStatus().name())
                 .isEmergency(doc.getIsEmergency())
                 .docSubmittedAt(doc.getDocSubmittedAt())
