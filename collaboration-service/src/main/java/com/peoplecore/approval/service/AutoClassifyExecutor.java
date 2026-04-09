@@ -2,8 +2,10 @@ package com.peoplecore.approval.service;
 
 import com.peoplecore.approval.entity.ApprovalDocument;
 import com.peoplecore.approval.entity.AutoClassifyRule;
+import com.peoplecore.approval.entity.PersonalFolderDocument;
 import com.peoplecore.approval.entity.SourceBoxType;
 import com.peoplecore.approval.repository.AutoClassifyRuleRepository;
+import com.peoplecore.approval.repository.PersonalFolderDocumentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -16,6 +18,7 @@ import java.util.UUID;
  * - 문서 상신 시 기안자(SENT) 규칙 매칭
  * - 결재 수신 시 결재자(INBOX) 규칙 매칭
  * - 우선순위(sortOrder) 순으로 첫 매칭 규칙 적용
+ * - PersonalFolderDocument 매핑 테이블에 INSERT
  */
 @Component
 @RequiredArgsConstructor
@@ -23,12 +26,10 @@ import java.util.UUID;
 public class AutoClassifyExecutor {
 
     private final AutoClassifyRuleRepository ruleRepository;
+    private final PersonalFolderDocumentRepository folderDocumentRepository;
 
     /**
      * 문서에 자동분류 규칙을 적용하여 개인 폴더에 배정
-     * @param sourceBox SENT(기안자) 또는 INBOX(결재자)
-     * @param empId 규칙 소유자 (기안자 또는 결재자)
-     * @param document 대상 문서
      */
     public void classify(UUID companyId, Long empId, SourceBoxType sourceBox, ApprovalDocument document) {
         List<AutoClassifyRule> rules = ruleRepository
@@ -37,9 +38,19 @@ public class AutoClassifyExecutor {
         for (AutoClassifyRule rule : rules) {
             if (rule.getSourceBox() != sourceBox) continue;
             if (matches(rule, document)) {
-                document.assignPersonalFolder(rule.getTargetFolderId());
-                log.info("자동분류 적용: docId={}, rule={}, folderId={}",
-                        document.getDocId(), rule.getRuleName(), rule.getTargetFolderId());
+                /* 이미 매핑이 있으면 폴더 변경, 없으면 새로 생성 */
+                folderDocumentRepository.findByCompanyIdAndEmpIdAndDocId(companyId, empId, document.getDocId())
+                        .ifPresentOrElse(
+                                existing -> existing.moveToFolder(rule.getTargetFolderId()),
+                                () -> folderDocumentRepository.save(PersonalFolderDocument.builder()
+                                        .companyId(companyId)
+                                        .empId(empId)
+                                        .docId(document.getDocId())
+                                        .personalFolderId(rule.getTargetFolderId())
+                                        .build())
+                        );
+                log.info("자동분류 적용: empId={}, docId={}, rule={}, folderId={}",
+                        empId, document.getDocId(), rule.getRuleName(), rule.getTargetFolderId());
                 return;
             }
         }
@@ -55,17 +66,17 @@ public class AutoClassifyExecutor {
             }
         }
         if (rule.getFormName() != null && !rule.getFormName().isBlank()) {
-            if (document.getFormId() == null || !rule.getFormName().equals(document.getFormId().getFormName())) {
+            if (document.getFormId() == null || !document.getFormId().getFormName().contains(rule.getFormName())) {
                 return false;
             }
         }
         if (rule.getDrafterDept() != null && !rule.getDrafterDept().isBlank()) {
-            if (document.getEmpDeptName() == null || !document.getEmpDeptName().equals(rule.getDrafterDept())) {
+            if (document.getEmpDeptName() == null || !document.getEmpDeptName().contains(rule.getDrafterDept())) {
                 return false;
             }
         }
         if (rule.getDrafterName() != null && !rule.getDrafterName().isBlank()) {
-            if (document.getEmpName() == null || !document.getEmpName().equals(rule.getDrafterName())) {
+            if (document.getEmpName() == null || !document.getEmpName().contains(rule.getDrafterName())) {
                 return false;
             }
         }

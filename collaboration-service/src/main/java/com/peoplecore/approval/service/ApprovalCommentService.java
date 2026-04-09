@@ -1,8 +1,9 @@
 package com.peoplecore.approval.service;
 
+import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.approval.dto.ApprovalCommentRequest;
 import com.peoplecore.approval.dto.ApprovalCommentResponse;
-import com.peoplecore.alarm.publisher.AlarmEventPublisher;
+
 import com.peoplecore.approval.entity.ApprovalDocument;
 import com.peoplecore.approval.entity.ApprovalLine;
 import com.peoplecore.approval.repository.ApprovalCommentRepository;
@@ -12,7 +13,7 @@ import com.peoplecore.client.component.HrCacheService;
 import com.peoplecore.common.entity.CommonComment;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.BusinessException;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,7 +23,6 @@ import java.util.List;
 import java.util.UUID;
 
 @Service
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ApprovalCommentService {
 
@@ -33,6 +33,15 @@ public class ApprovalCommentService {
     private final ApprovalLineRepository lineRepository;
     private final HrCacheService hrCacheService;
     private final AlarmEventPublisher alarmEventPublisher;
+
+    @Autowired
+    public ApprovalCommentService(ApprovalCommentRepository commentRepository, ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, HrCacheService hrCacheService, AlarmEventPublisher alarmEventPublisher) {
+        this.commentRepository = commentRepository;
+        this.documentRepository = documentRepository;
+        this.lineRepository = lineRepository;
+        this.hrCacheService = hrCacheService;
+        this.alarmEventPublisher = alarmEventPublisher;
+    }
 
     /** 댓글 목록 조회 */
     public List<ApprovalCommentResponse> getComments(UUID companyId, Long docId) {

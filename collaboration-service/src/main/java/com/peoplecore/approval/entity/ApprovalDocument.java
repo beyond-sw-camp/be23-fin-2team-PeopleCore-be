@@ -185,6 +185,11 @@ public class ApprovalDocument extends BaseTimeEntity {
         this.personalFolderId = personalFolderId;
     }
 
+    /*완성 문서 URL 저장*/
+    public void assignDocUrl(String docUrl) {
+        this.docUrl = docUrl;
+    }
+
     /*반려된 문서 재기안시 내용 수정 (REJECT일때만 호출)*/
     public void updateForReSubmit(String docTitle, String docData, Boolean isEmergency,String docOpinion) {
         this.docTitle = docTitle;

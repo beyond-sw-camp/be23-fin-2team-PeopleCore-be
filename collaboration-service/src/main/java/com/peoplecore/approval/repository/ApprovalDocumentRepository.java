@@ -24,6 +24,8 @@ public interface ApprovalDocumentRepository extends JpaRepository<ApprovalDocume
     Optional<ApprovalDocument> findWithFormById(
             @Param("companyId") UUID companyId, @Param("docId") Long docId);
 
+
+
     /*문서함 내 문서 카운트 */
     int countByPersonalFolderIdAndCompanyId(Long personalFolderId, UUID companyId);
 

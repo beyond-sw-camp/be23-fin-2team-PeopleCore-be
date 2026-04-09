@@ -37,4 +37,7 @@ public class AlarmSettings {
     private Boolean pushEnabled = true;
     @Builder.Default
     private Boolean popupEnabled = true;
+
+
+
 }
