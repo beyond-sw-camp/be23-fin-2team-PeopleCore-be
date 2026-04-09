@@ -116,4 +116,11 @@ public class AutoClassifyRule extends BaseTimeEntity {
     public void updateSortOrder(Integer sortOrder) {
         this.sortOrder = sortOrder;
     }
+
+    /**
+     * 소유자 이관
+     */
+    public void transferTo(Long targetEmpId) {
+        this.empId = targetEmpId;
+    }
 }

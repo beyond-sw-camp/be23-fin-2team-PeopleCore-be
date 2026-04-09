@@ -32,6 +32,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
     private final QApprovalLine line = QApprovalLine.approvalLine;
     private final QApprovalForm form = QApprovalForm.approvalForm;
     private final QApprovalAttachment attachment = QApprovalAttachment.approvalAttachment;
+    private final QPersonalFolderDocument folderDoc = QPersonalFolderDocument.personalFolderDocument;
 
     @Autowired
     public ApprovalDocumentCustomRepositoryImpl(JPAQueryFactory jpaQueryFactory) {
@@ -412,12 +413,10 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         return executedWithPagination(contentQuery, countQuery, pageable);
     }
 
-    /* 개인 폴더 문서함 — personalFolderId로 분류된 문서 조회 */
+    /* 개인 폴더 문서함 — PersonalFolderDocument 매핑 테이블 JOIN */
     @Override
     public Page<DocumentListResponseDto> findPersonalFolderDocument(UUID companyId, Long empId, Long folderId, DocumentListSearchDto searchDto, Pageable pageable) {
         BooleanBuilder builder = applyCommonFilters(companyId, searchDto);
-        builder.and(doc.personalFolderId.eq(folderId));
-        builder.and(doc.approvalStatus.ne(ApprovalStatus.DRAFT));
 
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
@@ -427,11 +426,25 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
+                .join(folderDoc).on(
+                        folderDoc.docId.eq(doc.docId),
+                        folderDoc.companyId.eq(companyId),
+                        folderDoc.empId.eq(empId),
+                        folderDoc.personalFolderId.eq(folderId)
+                )
                 .where(builder)
                 .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
 
         JPAQuery<Long> countQuery = jpaQueryFactory
-                .select(doc.count()).from(doc).where(builder);
+                .select(doc.count())
+                .from(doc)
+                .join(folderDoc).on(
+                        folderDoc.docId.eq(doc.docId),
+                        folderDoc.companyId.eq(companyId),
+                        folderDoc.empId.eq(empId),
+                        folderDoc.personalFolderId.eq(folderId)
+                )
+                .where(builder);
 
         return executedWithPagination(contentQuery, countQuery, pageable);
     }
