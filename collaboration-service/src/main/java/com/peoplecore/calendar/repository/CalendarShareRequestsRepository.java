@@ -11,7 +11,7 @@ import java.util.UUID;
 public interface CalendarShareRequestsRepository extends JpaRepository<CalendarShareRequests, Long> {
 
 //    내가 요청보낸 관심캘린더 목록
-    Page<CalendarShareRequests> findByCompanyIdAndFromEmlIdOrderByRequestedAtDesc(UUID companyId, Long fromEmpId, Pageable pageable);
+    Page<CalendarShareRequests> findByCompanyIdAndFromEmpIdOrderByRequestedAtDesc(UUID companyId, Long fromEmpId, Pageable pageable);
 
 //    나에게 요청온 관심캘린더 목록
     Page<CalendarShareRequests> findByCompanyIdAndToEmpIdOrderByRequestedAtDesc(UUID companyId, Long toEmpId, Pageable pageable);

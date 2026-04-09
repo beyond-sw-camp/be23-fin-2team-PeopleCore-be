@@ -119,7 +119,7 @@ public class CalendarEventService {
         List<Events> myEvents = visibleCalIds.isEmpty() ? List.of() : eventsRepository.findByCalendarIdsAndPeriod(visibleCalIds, companyId, start, end);
 
 //        3. 관심캘린더 일정
-        List<InterestCalendars> interestCalendars = interestCalendarsRepository.findByViewerEmpIndWithRequest(empId, companyId);
+        List<InterestCalendars> interestCalendars = interestCalendarsRepository.findByViewerEmpIdWithRequest(empId, companyId);
         List<Events> interestEvents = interestCalendars.stream().filter(ic -> Boolean.TRUE.equals(ic.getIsVisible()))
                 .flatMap(ic -> eventsRepository.findPublicEventsByEmpId(ic.getTargetEmpId(), companyId, start, end).stream()).toList();
 

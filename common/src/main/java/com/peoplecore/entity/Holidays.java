@@ -23,6 +23,7 @@ public class Holidays extends BaseTimeEntity{
     @Column(nullable = false)
     private LocalDate date;
 
+    //    구분 - 법정공휴일, 사내일정
     private String holidayName;
 
     @Enumerated(EnumType.STRING)

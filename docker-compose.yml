@@ -68,7 +68,17 @@ services:
     volumes:
       - minio-data:/data
     command: server /data --console-address ":9001"
-#    권한 설정 (read)
+  #    권한 설정 (read)
+  face-api:
+    build:
+      context: ./hr-service/face-module
+      dockerfile: Dockerfile
+    container_name: face-api
+    ports:
+      - "8001:8001"
+    volumes:
+      - face-chroma-data:/app/chroma_data
+
   minio-init:
     image: minio/mc
     depends_on:
@@ -83,3 +93,4 @@ services:
 volumes:
   es-data:
   minio-data:
+  face-chroma-data:

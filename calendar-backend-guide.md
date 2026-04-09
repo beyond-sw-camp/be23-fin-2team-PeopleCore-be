@@ -14,7 +14,8 @@
 5. [Controller](#5-controller)
 6. [예약 알림 스케줄러](#6-예약-알림-스케줄러)
 7. [사원 정보 조회 (서비스 간 통신)](#7-사원-정보-조회-서비스-간-통신)
-8. [파일 위치 요약](#8-파일-위치-요약)
+8. [전사 일정 관리 (Admin 전용)](#8-전사-일정-관리-admin-전용)
+9. [파일 위치 요약](#9-파일-위치-요약)
 
 ---
 
@@ -37,6 +38,31 @@
 ## 1. 엔티티 수정 사항
 
 기존 엔티티에 비즈니스 메서드 및 누락 필드를 추가합니다.
+
+### 1-0. `MyCalendars.java` 수정 — 기본 캘린더 필드 추가
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/entity/MyCalendars.java`
+
+> `isDefault` 필드를 추가하여 기본 캘린더 여부를 식별합니다.
+> 기본 캘린더는 삭제/이름변경이 불가합니다.
+
+```java
+// ─── 기존 필드 아래에 추가 ───
+
+@Column(nullable = false)
+@Builder.Default
+private Boolean isDefault = false;
+```
+
+> 기존 비즈니스 메서드에 기본 캘린더 체크 메서드도 추가:
+
+```java
+public boolean isDefaultCalendar() {
+    return Boolean.TRUE.equals(this.isDefault);
+}
+```
+
+---
 
 ### 1-1. `Events.java` 수정
 
@@ -1337,9 +1363,14 @@ public class CalendarEventService {
 }
 ```
 
-### 4-2. `MyCalendarService.java` — 내 캘린더 CRUD
+### 4-2. `MyCalendarService.java` — 내 캘린더 CRUD + 기본 캘린더
 
 **파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/service/MyCalendarService.java`
+
+> **변경 사항:**
+> - 신규 사원 첫 접근 시 '내 일정(기본)' 캘린더 자동 생성
+> - 기본 캘린더는 삭제/이름변경 불가
+> - 색상, 보이기, 순서는 기본 캘린더도 변경 가능
 
 ```java
 package com.peoplecore.calendar.service;
@@ -1360,6 +1391,9 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class MyCalendarService {
 
+    private static final String DEFAULT_CALENDAR_NAME = "내 일정(기본)";
+    private static final String DEFAULT_CALENDAR_COLOR = "#1A73E8";
+
     private final MyCalendarsRepository myCalendarsRepository;
 
     @Autowired
@@ -1367,11 +1401,19 @@ public class MyCalendarService {
         this.myCalendarsRepository = myCalendarsRepository;
     }
 
-    /** 내 캘린더 목록 조회 */
+    /** 내 캘린더 목록 조회 — 기본 캘린더 없으면 자동 생성 */
+    @Transactional
     public List<MyCalendarResponse> getMyCalendars(UUID companyId, Long empId) {
-        return myCalendarsRepository
-                .findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId)
-                .stream()
+        List<MyCalendars> calendars = myCalendarsRepository
+                .findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId);
+
+        // 첫 접근 시 기본 캘린더 자동 생성
+        if (calendars.isEmpty()) {
+            MyCalendars defaultCal = createDefaultCalendar(companyId, empId);
+            calendars = List.of(defaultCal);
+        }
+
+        return calendars.stream()
                 .map(MyCalendarResponse::from)
                 .toList();
     }
@@ -1394,6 +1436,7 @@ public class MyCalendarService {
                 .calendarName(request.getCalendarName())
                 .myDisplayColor(request.getDisplayColor())
                 .isVisible(true)
+                .isDefault(false)
                 .sortOrder(existing.size() + 1)
                 .companyId(companyId)
                 .build();
@@ -1408,7 +1451,11 @@ public class MyCalendarService {
                                                 MyCalendarUpdateRequest request) {
         MyCalendars calendar = findAndValidate(calendarId, companyId, empId);
 
+        // 기본 캘린더는 이름 변경 불가
         if (request.getCalendarName() != null) {
+            if (calendar.isDefaultCalendar()) {
+                throw new BusinessException("기본 캘린더의 이름은 변경할 수 없습니다.");
+            }
             calendar.updateName(request.getCalendarName());
         }
         if (request.getDisplayColor() != null) {
@@ -1426,11 +1473,34 @@ public class MyCalendarService {
         return MyCalendarResponse.from(calendar);
     }
 
-    /** 내 캘린더 삭제 */
+    /** 내 캘린더 삭제 — 기본 캘린더 삭제 불가 */
     @Transactional
     public void deleteMyCalendar(UUID companyId, Long empId, Long calendarId) {
         MyCalendars calendar = findAndValidate(calendarId, companyId, empId);
+
+        if (calendar.isDefaultCalendar()) {
+            throw new BusinessException("기본 캘린더는 삭제할 수 없습니다.");
+        }
+
         myCalendarsRepository.delete(calendar);
+    }
+
+    // ────────────────────────────────────────────
+    // Private 헬퍼
+    // ────────────────────────────────────────────
+
+    /** 기본 캘린더 생성 (첫 접근 시 1회) */
+    private MyCalendars createDefaultCalendar(UUID companyId, Long empId) {
+        MyCalendars defaultCal = MyCalendars.builder()
+                .empId(empId)
+                .calendarName(DEFAULT_CALENDAR_NAME)
+                .myDisplayColor(DEFAULT_CALENDAR_COLOR)
+                .isVisible(true)
+                .isDefault(true)
+                .sortOrder(0)
+                .companyId(companyId)
+                .build();
+        return myCalendarsRepository.save(defaultCal);
     }
 
     private MyCalendars findAndValidate(Long calendarId, UUID companyId, Long empId) {
@@ -2649,18 +2719,377 @@ public List<EventResponse> getEvents(...) {
 
 ---
 
-## 8. 파일 위치 요약
+## 8. 전사 일정 관리 (Admin 전용)
+
+> 전사 일정(`isAllEmployees=true`)은 **HR_SUPER_ADMIN / HR_ADMIN**만 등록·수정·삭제할 수 있습니다.
+> 일반 사원의 `createEvent`는 항상 `isAllEmployees=false`로 고정되며,
+> 일정 등록 시 캘린더 목록 API(`getMyCalendars`)는 본인 캘린더만 반환하므로 전사캘린더는 선택지에 노출되지 않습니다.
+>
+> 전사 일정은 `myCalendars`(개인 캘린더)에 종속되지 않고, `myCalendars = null`로 저장합니다.
+> 조회 시에는 기존 `getEventsForView()`의 4번 단계에서 `findCompanyEvents()`로 자동 통합됩니다.
+
+### 8-1. `CompanyEventRequest.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/dto/CompanyEventRequest.java`
+
+```java
+package com.peoplecore.calendar.dto;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class CompanyEventRequest {
+    private String title;
+    private String description;
+    private String location;
+    private LocalDateTime startAt;
+    private LocalDateTime endAt;
+    private Boolean isAllDay;
+}
+```
+
+### 8-2. `CompanyEventResponse.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/dto/CompanyEventResponse.java`
+
+```java
+package com.peoplecore.calendar.dto;
+
+import com.peoplecore.calendar.entity.Events;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class CompanyEventResponse {
+    private Long eventsId;
+    private String title;
+    private String description;
+    private String location;
+    private LocalDateTime startAt;
+    private LocalDateTime endAt;
+    private Boolean isAllDay;
+    private UUID companyId;
+    private String creatorName;
+    private LocalDateTime createdAt;
+
+    public static CompanyEventResponse from(Events event, String creatorName) {
+        return CompanyEventResponse.builder()
+                .eventsId(event.getEventsId())
+                .title(event.getTitle())
+                .description(event.getDescription())
+                .location(event.getLocation())
+                .startAt(event.getStartAt())
+                .endAt(event.getEndAt())
+                .isAllDay(event.getIsAllDay())
+                .companyId(event.getCompanyId())
+                .creatorName(creatorName)
+                .createdAt(event.getCreatedAt())
+                .build();
+    }
+}
+```
+
+### 8-3. `CompanyEventService.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/service/CompanyEventService.java`
+
+```java
+package com.peoplecore.calendar.service;
+
+import com.peoplecore.calendar.dto.CompanyEventRequest;
+import com.peoplecore.calendar.dto.CompanyEventResponse;
+import com.peoplecore.calendar.entity.Events;
+import com.peoplecore.calendar.repository.EventsRepository;
+import com.peoplecore.client.component.HrCacheService;
+import com.peoplecore.client.dto.EmployeeSimpleResponse;
+import com.peoplecore.common.exception.BusinessException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Service
+@Transactional(readOnly = true)
+public class CompanyEventService {
+
+    private final EventsRepository eventsRepository;
+    private final HrCacheService hrCacheService;
+
+    @Autowired
+    public CompanyEventService(EventsRepository eventsRepository,
+                               HrCacheService hrCacheService) {
+        this.eventsRepository = eventsRepository;
+        this.hrCacheService = hrCacheService;
+    }
+
+    // ────────────────────────────────────────────
+    // 전사 일정 등록
+    // ────────────────────────────────────────────
+    @Transactional
+    public CompanyEventResponse createCompanyEvent(UUID companyId, Long empId,
+                                                    CompanyEventRequest request) {
+        Events event = Events.builder()
+                .empId(empId)
+                .title(request.getTitle())
+                .description(request.getDescription())
+                .location(request.getLocation())
+                .startAt(request.getStartAt())
+                .endAt(request.getEndAt())
+                .isAllDay(request.getIsAllDay())
+                .isPublic(true)
+                .isAllEmployees(true)       // ← 전사 일정 핵심
+                .companyId(companyId)
+                .myCalendars(null)          // ← 개인 캘린더에 종속 안 됨
+                .build();
+
+        eventsRepository.save(event);
+
+        return CompanyEventResponse.from(event, getCreatorName(empId));
+    }
+
+    // ────────────────────────────────────────────
+    // 전사 일정 수정
+    // ────────────────────────────────────────────
+    @Transactional
+    public CompanyEventResponse updateCompanyEvent(UUID companyId, Long empId,
+                                                    Long eventsId,
+                                                    CompanyEventRequest request) {
+        Events event = findCompanyEventOrThrow(eventsId, companyId);
+
+        event.update(
+                request.getTitle(),
+                request.getDescription(),
+                request.getLocation(),
+                request.getStartAt(),
+                request.getEndAt(),
+                request.getIsAllDay(),
+                true,               // isPublic 항상 true
+                null                // myCalendars 없음
+        );
+
+        return CompanyEventResponse.from(event, getCreatorName(event.getEmpId()));
+    }
+
+    // ────────────────────────────────────────────
+    // 전사 일정 삭제 (소프트 삭제)
+    // ────────────────────────────────────────────
+    @Transactional
+    public void deleteCompanyEvent(UUID companyId, Long eventsId) {
+        Events event = findCompanyEventOrThrow(eventsId, companyId);
+        event.softDelete();
+    }
+
+    // ────────────────────────────────────────────
+    // 전사 일정 목록 조회 (페이징)
+    // ────────────────────────────────────────────
+    public Page<CompanyEventResponse> getCompanyEvents(UUID companyId, Pageable pageable) {
+        Page<Events> page = eventsRepository
+                .findByCompanyIdAndIsAllEmployeesTrueAndDeletedAtIsNullOrderByStartAtDesc(
+                        companyId, pageable);
+
+        // 작성자 이름 일괄 조회
+        List<Long> empIds = page.getContent().stream()
+                .map(Events::getEmpId)
+                .distinct()
+                .toList();
+        Map<Long, String> nameMap = getCreatorNameMap(empIds);
+
+        return page.map(event ->
+                CompanyEventResponse.from(event, nameMap.get(event.getEmpId())));
+    }
+
+    // ────────────────────────────────────────────
+    // 전사 일정 상세 조회
+    // ────────────────────────────────────────────
+    public CompanyEventResponse getCompanyEvent(UUID companyId, Long eventsId) {
+        Events event = findCompanyEventOrThrow(eventsId, companyId);
+        return CompanyEventResponse.from(event, getCreatorName(event.getEmpId()));
+    }
+
+    // ────────────────────────────────────────────
+    // Private 헬퍼
+    // ────────────────────────────────────────────
+
+    private Events findCompanyEventOrThrow(Long eventsId, UUID companyId) {
+        Events event = eventsRepository.findById(eventsId)
+                .orElseThrow(() -> new BusinessException(
+                        "전사 일정을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        if (!event.getCompanyId().equals(companyId)) {
+            throw new BusinessException("접근 권한이 없습니다.", HttpStatus.FORBIDDEN);
+        }
+        if (!Boolean.TRUE.equals(event.getIsAllEmployees())) {
+            throw new BusinessException("전사 일정이 아닙니다.", HttpStatus.BAD_REQUEST);
+        }
+        if (event.isDeleted()) {
+            throw new BusinessException("삭제된 일정입니다.", HttpStatus.NOT_FOUND);
+        }
+        return event;
+    }
+
+    private String getCreatorName(Long empId) {
+        List<EmployeeSimpleResponse> emps = hrCacheService.getEmployeesBulk(List.of(empId));
+        return emps.isEmpty() ? null : emps.get(0).getEmpName();
+    }
+
+    private Map<Long, String> getCreatorNameMap(List<Long> empIds) {
+        return hrCacheService.getEmployeesBulk(empIds).stream()
+                .collect(Collectors.toMap(
+                        EmployeeSimpleResponse::getEmpId,
+                        EmployeeSimpleResponse::getEmpName,
+                        (a, b) -> a));
+    }
+}
+```
+
+### 8-4. `CompanyEventController.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/controller/CompanyEventController.java`
+
+> `@RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})` 클래스 레벨 적용 → 모든 엔드포인트 Admin 전용
+
+```java
+package com.peoplecore.calendar.controller;
+
+import com.peoplecore.auth.RoleRequired;
+import com.peoplecore.calendar.dto.CompanyEventRequest;
+import com.peoplecore.calendar.dto.CompanyEventResponse;
+import com.peoplecore.calendar.service.CompanyEventService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/calendar/company-events")
+@RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+public class CompanyEventController {
+
+    private final CompanyEventService companyEventService;
+
+    @Autowired
+    public CompanyEventController(CompanyEventService companyEventService) {
+        this.companyEventService = companyEventService;
+    }
+
+    /** 전사 일정 등록 */
+    @PostMapping
+    public ResponseEntity<CompanyEventResponse> createCompanyEvent(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestBody CompanyEventRequest request) {
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .body(companyEventService.createCompanyEvent(companyId, empId, request));
+    }
+
+    /** 전사 일정 수정 */
+    @PutMapping("/{eventsId}")
+    public ResponseEntity<CompanyEventResponse> updateCompanyEvent(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @PathVariable Long eventsId,
+            @RequestBody CompanyEventRequest request) {
+        return ResponseEntity.ok(
+                companyEventService.updateCompanyEvent(companyId, empId, eventsId, request));
+    }
+
+    /** 전사 일정 삭제 */
+    @DeleteMapping("/{eventsId}")
+    public ResponseEntity<Void> deleteCompanyEvent(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long eventsId) {
+        companyEventService.deleteCompanyEvent(companyId, eventsId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /** 전사 일정 목록 조회 (Admin 관리 화면용, 페이징) */
+    @GetMapping
+    public ResponseEntity<Page<CompanyEventResponse>> getCompanyEvents(
+            @RequestHeader("X-User-Company") UUID companyId,
+            Pageable pageable) {
+        return ResponseEntity.ok(companyEventService.getCompanyEvents(companyId, pageable));
+    }
+
+    /** 전사 일정 상세 조회 */
+    @GetMapping("/{eventsId}")
+    public ResponseEntity<CompanyEventResponse> getCompanyEvent(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long eventsId) {
+        return ResponseEntity.ok(companyEventService.getCompanyEvent(companyId, eventsId));
+    }
+}
+```
+
+### 8-5. `EventsRepository.java` — 전사 일정 페이징 쿼리 추가
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/repository/EventsRepository.java`
+
+```java
+// 기존 메서드들 아래에 추가
+
+/** 전사 일정 목록 (Admin 관리 화면 + 페이징) */
+Page<Events> findByCompanyIdAndIsAllEmployeesTrueAndDeletedAtIsNullOrderByStartAtDesc(
+        UUID companyId, Pageable pageable);
+```
+
+### 8-6. 기존 `CalendarEventService.createEvent()` 전사캘린더 차단 확인
+
+기존 일반 사원용 `createEvent`는 이미 `isAllEmployees(false)`로 고정되어 있습니다:
+
+```java
+// CalendarEventService.createEvent() 내부 — 이미 반영됨
+Events event = Events.builder()
+        ...
+        .isAllEmployees(false)    // ← 일반 사원은 전사 일정 생성 불가
+        .myCalendars(calendar)    // ← 반드시 개인 캘린더에 종속
+        .build();
+```
+
+> **프론트엔드 참고:** 일정 등록 화면의 캘린더 선택 드롭다운은
+> `GET /api/calendar/my-calendars` 호출 결과를 사용하면 됩니다.
+> 이 API는 본인의 `MyCalendars`만 반환하므로 전사캘린더는 선택지에 **자동으로 노출되지 않습니다.**
+
+---
+
+## 9. 파일 위치 요약
 
 ```
 collaboration-service/src/main/java/com/peoplecore/calendar/
 ├── controller/
-│   ├── CalendarEventController.java        ← 일정 CRUD
+│   ├── CalendarEventController.java        ← 일정 CRUD (일반 사원)
+│   ├── CompanyEventController.java         ← 전사 일정 CRUD (Admin 전용, 신규)
 │   ├── MyCalendarController.java           ← 내 캘린더 관리
 │   ├── InterestCalendarController.java     ← 관심 캘린더 + 공유 요청
 │   └── CalendarSettingsController.java     ← 연차 연동 설정
 │
 ├── service/
-│   ├── CalendarEventService.java           ← 일정 비즈니스 로직 + 즉시 알림
+│   ├── CalendarEventService.java           ← 일정 비즈니스 로직 + 즉시 알림 (일반 사원)
+│   ├── CompanyEventService.java            ← 전사 일정 비즈니스 로직 (Admin 전용, 신규)
 │   ├── MyCalendarService.java              ← 내 캘린더 비즈니스 로직
 │   ├── InterestCalendarService.java        ← 관심 캘린더 + 공유 요청 + 즉시 알림
 │   └── CalendarSettingsService.java        ← 연차 연동 설정
@@ -2695,6 +3124,8 @@ collaboration-service/src/main/java/com/peoplecore/calendar/
 │   ├── ShareRequestResponse.java
 │   ├── InterestCalendarResponse.java
 │   ├── InterestCalendarUpdateRequest.java
+│   ├── CompanyEventRequest.java              ← 전사 일정 요청 (신규)
+│   ├── CompanyEventResponse.java             ← 전사 일정 응답 (신규)
 │   ├── AnnualLeaveSettingRequest.java
 │   └── AnnualLeaveSettingResponse.java
 │
@@ -2761,6 +3192,11 @@ hr-service/src/main/java/com/peoplecore/employee/
 | `GET` | `/api/calendar/interest` | 관심 캘린더 목록 |
 | `PATCH` | `/api/calendar/interest/{id}` | 관심 캘린더 설정 변경 |
 | `DELETE` | `/api/calendar/interest/{id}` | 관심 캘린더 삭제 |
+| `POST` | `/api/calendar/company-events` | 전사 일정 등록 (Admin) |
+| `PUT` | `/api/calendar/company-events/{eventsId}` | 전사 일정 수정 (Admin) |
+| `DELETE` | `/api/calendar/company-events/{eventsId}` | 전사 일정 삭제 (Admin) |
+| `GET` | `/api/calendar/company-events` | 전사 일정 목록 (Admin, 페이징) |
+| `GET` | `/api/calendar/company-events/{eventsId}` | 전사 일정 상세 (Admin) |
 | `GET` | `/api/calendar/settings/annual-leave` | 연차 연동 설정 조회 |
 | `POST` | `/api/calendar/settings/annual-leave` | 연차 연동 설정 저장 |
 

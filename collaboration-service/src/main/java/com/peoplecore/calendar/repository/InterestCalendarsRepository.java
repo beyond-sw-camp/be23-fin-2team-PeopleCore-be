@@ -10,8 +10,8 @@ import java.util.UUID;
 
 public interface InterestCalendarsRepository extends JpaRepository<InterestCalendars, Long> {
 
-    @Query("SELECT ic FROM InterestCalendars ic JOIN FETCH ic.calendarShareRequests csr WHERE ic.viwerEmpId = :empId AND ic.companyId = :companyId ORDER BY ic.sortOrder ASC")
-    List<InterestCalendars> findByViewerEmpIndWithRequest(@Param("empId") Long empId, @Param("companyId") UUID companyID);
+    @Query("SELECT ic FROM InterestCalendars ic JOIN FETCH ic.calendarShareRequest csr WHERE ic.viewerEmpId = :empId AND ic.companyId = :companyId ORDER BY ic.sortOrder ASC")
+    List<InterestCalendars> findByViewerEmpIdWithRequest(@Param("empId") Long empId, @Param("companyId") UUID companyID);
 
     Boolean existsByCompanyIdAndViewerEmpIdAndTargetEmpId(UUID companyId, Long viewEmpId, Long targetEmpId);
 }

@@ -27,7 +27,7 @@ public class MyCalendarController {
     //   내 캘린더 목록조회
     @GetMapping
     public ResponseEntity<List<MyCalendarResDto>> getMycCalendars(
-            @RequestHeader("/X-User-Company") UUID componyId,
+            @RequestHeader("X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId){
         return ResponseEntity.ok(myCalendarService.getMyCalendars(componyId, empId));
     }
@@ -35,7 +35,7 @@ public class MyCalendarController {
 //    내캘린더 추가
     @PostMapping
     public ResponseEntity<MyCalendarResDto> createMyCalendar(
-            @RequestHeader("/X-User-Company") UUID componyId,
+            @RequestHeader("X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestBody MyCalendarCreateReqDto reqDto){
         return ResponseEntity.status(HttpStatus.CREATED).body(myCalendarService.createMyCalendar(componyId,empId,reqDto));
@@ -44,7 +44,7 @@ public class MyCalendarController {
 //    내캘린더 수정
     @PatchMapping("/{calendarId}")
     public ResponseEntity<MyCalendarResDto> updateMyCalendar(
-            @RequestHeader("/X-User-Company") UUID componyId,
+            @RequestHeader("X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long calendarId,
             @RequestBody MyCalendarUpdateReqDto reqDto){
@@ -54,7 +54,7 @@ public class MyCalendarController {
 //    내캘린더 삭제
     @DeleteMapping("/{calendarId}")
     public ResponseEntity<Void> deleteMyCalendar(
-            @RequestHeader("/X-User-Company") UUID componyId,
+            @RequestHeader("X-User-Company") UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long calendarId){
         myCalendarService.deleteMyCalendar(componyId, empId, calendarId);

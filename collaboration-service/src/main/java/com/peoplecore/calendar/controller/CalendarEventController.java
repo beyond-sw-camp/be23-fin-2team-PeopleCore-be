@@ -28,7 +28,7 @@ public class CalendarEventController {
 //    일정등록
     @PostMapping
     public ResponseEntity<EventResDto> createEvent(
-            @RequestHeader("/X-User-Company")UUID componyId,
+            @RequestHeader("X-User-Company")UUID componyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestBody EventCreateReqDto reqDto){
         return ResponseEntity.status(HttpStatus.CREATED).body(calendarEventService.createEvent(componyId,empId, reqDto));

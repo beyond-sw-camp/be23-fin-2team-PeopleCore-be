@@ -138,7 +138,7 @@ public class InterestCalenderService {
 //    3. 내가 등록한 관심캘린더 요청 목록
     public Page<ShareRequestResDto> getMyShareRequests(UUID companyId, Long empId, Pageable pageable){
 
-        Page<CalendarShareRequests> page = calendarShareRequestsRepository.findByCompanyIdAndFromEmlIdOrderByRequestedAtDesc(companyId, empId, pageable);
+        Page<CalendarShareRequests> page = calendarShareRequestsRepository.findByCompanyIdAndFromEmpIdOrderByRequestedAtDesc(companyId, empId, pageable);
 
 //        페이지 내 empId 일괄 조회
         List<Long> empIds = page.getContent().stream()
@@ -166,8 +166,8 @@ public class InterestCalenderService {
     }
 
 //    5. 관심캘린더 목록조회
-    public List<InterestCalendarResDto> getInterestCalendars(UUID  companyId, Long empId){
-        List<InterestCalendars> interestCalendars = interestCalendarsRepository.findByViewerEmpIndWithRequest(empId, companyId);
+    public List<InterestCalendarResDto> getInterestCalendars(UUID companyId, Long empId){
+        List<InterestCalendars> interestCalendars = interestCalendarsRepository.findByViewerEmpIdWithRequest(empId, companyId);
 
 //        targetEmpId 일괄 조회
         List<Long> empIds = interestCalendars.stream()

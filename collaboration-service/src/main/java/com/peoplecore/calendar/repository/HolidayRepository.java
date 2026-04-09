@@ -12,7 +12,7 @@ import java.util.UUID;
 
 public interface HolidayRepository extends JpaRepository<Holidays, Long> {
 
-    @Query("SELECT h FROM Holiday h WHERE h.companyId = :companyId AND ((h.isRepeating = true) OR (h.date BETWEEN :start AND :end))")
+    @Query("SELECT h FROM Holidays h WHERE h.companyId = :companyId AND ((h.isRepeating = true) OR (h.date BETWEEN :start AND :end))")
     List<Holidays> findByCompanyIdAndPeriod(@Param("companyId")UUID companyId, @Param("start")LocalDate start, @Param("end") LocalDate end);
 
 }

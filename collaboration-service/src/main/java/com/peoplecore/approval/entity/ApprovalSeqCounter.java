@@ -15,7 +15,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"seq_company_id", "seq_rule_id", "seq_reset_key"}))
+@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"company_id", "seq_rule_id", "seq_reset_key"}))
 public class ApprovalSeqCounter extends BaseTimeEntity {
 
     @Id
