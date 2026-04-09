@@ -43,7 +43,7 @@ public class HrServiceClient {
     @CircuitBreaker(name = "hrService", fallbackMethod = "getCompanyFallback")
     public CompanyInfoResponse getCompany(UUID companyId) {
         return restClient.get()
-                .uri("/internal/company/{companyId}", companyId)
+                .uri("/internal/companies/{companyId}", companyId)
                 .retrieve()
                 .body(CompanyInfoResponse.class);
     }

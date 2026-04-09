@@ -15,7 +15,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(uniqueConstraints = {@UniqueConstraint(columnNames = {"company_id", "form_code"}), @UniqueConstraint(columnNames = {"company_id", "form_name"})})
+@Table(uniqueConstraints = {@UniqueConstraint(columnNames = {"company_id", "form_code", "is_active"}), @UniqueConstraint(columnNames = {"company_id", "form_name", "is_active"})})
 public class ApprovalForm extends BaseTimeEntity {
 
     /**
@@ -46,7 +46,7 @@ public class ApprovalForm extends BaseTimeEntity {
     /**
      * 양식 html - html 템프릿
      */
-    @Column(nullable = false, columnDefinition = "TEXT")
+    @Column(nullable = false, columnDefinition = "MEDIUMTEXT")
     private String formHtml;
 
     /**
@@ -85,8 +85,9 @@ public class ApprovalForm extends BaseTimeEntity {
     /**
      * 작성 권한 - 전체/부서/개인
      */
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
-    private String formWritePermission;
+    private FormWritePermission formWritePermission;
 
     /**
      * 공개 여부 - default == true
@@ -128,4 +129,30 @@ public class ApprovalForm extends BaseTimeEntity {
     @Column(nullable = false)
     private Integer formSortOrder;
 
+    public void updateForm(String formName, String formHtml, FormWritePermission  formWritePermission,
+                           Boolean formIsPublic, Integer formRetentionYear,
+                           Boolean formMobileYn, Boolean formPreApprovalYn) {
+        this.formName = formName;
+        this.formHtml = formHtml;
+        this.formWritePermission = formWritePermission;
+        this.formIsPublic = formIsPublic;
+        this.formRetentionYear = formRetentionYear;
+        this.formMobileYn = formMobileYn;
+        this.formPreApprovalYn = formPreApprovalYn;
+        this.formVersion += 1;
+    }
+
+    public void updateSortOrder(Integer formSortOrder) {
+        this.formSortOrder = formSortOrder;
+    }
+
+    public void deactivate() {
+        this.isActive = false;
+    }
+
+    public void updateBatchSettings(Boolean formIsPublic, Boolean formMobileYn, Boolean formPreApprovalYn) {
+        if (formIsPublic != null) this.formIsPublic = formIsPublic;
+        if (formMobileYn != null) this.formMobileYn = formMobileYn;
+        if (formPreApprovalYn != null) this.formPreApprovalYn = formPreApprovalYn;
+    }
 }

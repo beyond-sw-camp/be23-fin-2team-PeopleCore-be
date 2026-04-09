@@ -36,10 +36,13 @@ public class ApprovalDocumentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(docId);
     }
 
-    //    문서 상세 조회
+    //    문서 상세 조회 (열람 시 자동 읽음 처리)
     @GetMapping("/{docId}")
-    public ResponseEntity<DocumentDetailResponse> getDocumentDetail(@RequestHeader("X-User-Company") UUID companyId, @PathVariable Long docId) {
-        return ResponseEntity.ok(approvalDocumentService.getDocumentDetail(companyId, docId));
+    public ResponseEntity<DocumentDetailResponse> getDocumentDetail(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @PathVariable Long docId) {
+        return ResponseEntity.ok(approvalDocumentService.getDocumentDetail(companyId, empId, docId));
     }
 
     /*문서 수정*/

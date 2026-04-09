@@ -24,63 +24,61 @@ public class AutoClassifyRuleController {
         this.ruleService = ruleService;
     }
 
-    /** 11. 규칙 목록 조회 */
-    // TODO: @RoleRequired({"HR_SUPER_ADMIN"})
+    // 목록 조회 — deptId → empId
     @GetMapping
     public ResponseEntity<List<AutoClassifyRuleResponse>> getList(
             @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Department") Long deptId) {
-        return ResponseEntity.ok(ruleService.getList(companyId, deptId));
+            @RequestHeader("X-User-Id") Long empId) {
+        return ResponseEntity.ok(ruleService.getList(companyId, empId));
     }
 
-    /** 12. 규칙 생성 */
-    // TODO: @RoleRequired({"HR_SUPER_ADMIN"})
+    // 생성 — deptId → empId
     @PostMapping
     public ResponseEntity<AutoClassifyRuleResponse> create(
             @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Department") Long deptId,
+            @RequestHeader("X-User-Id") Long empId,
             @RequestBody AutoClassifyRuleCreateRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ruleService.create(companyId, deptId, request));
+                .body(ruleService.create(companyId, empId, request));
     }
 
-    /** 13. 규칙 수정 */
-    // TODO: @RoleRequired({"HR_SUPER_ADMIN"})
+    // 수정/삭제/토글/순서변경 — companyId + empId 기준으로 변경
     @PutMapping("/{id}")
     public ResponseEntity<AutoClassifyRuleResponse> update(
             @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long id,
             @RequestBody AutoClassifyRuleUpdateRequest request) {
-        return ResponseEntity.ok(ruleService.update(companyId, id, request));
+        return ResponseEntity.ok(ruleService.update(companyId, empId, id, request));
     }
 
-    /** 14. 규칙 삭제 */
-    // TODO: @RoleRequired({"HR_SUPER_ADMIN"})
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long id) {
-        ruleService.delete(companyId, id);
+        ruleService.delete(companyId, empId, id);
         return ResponseEntity.noContent().build();
     }
 
-    /** 15. 활성/비활성 토글 */
-    // TODO: @RoleRequired({"HR_SUPER_ADMIN"})
+
+    /** 활성/비활성 토글 */
     @PatchMapping("/{id}/toggle")
     public ResponseEntity<Void> toggle(
             @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long id) {
-        ruleService.toggle(companyId, id);
+        ruleService.toggle(companyId, empId, id);
         return ResponseEntity.ok().build();
     }
 
-    /** 16. 규칙 순서 변경 */
-    // TODO: @RoleRequired({"HR_SUPER_ADMIN"})
+    /** 규칙 순서 변경 */
     @PutMapping("/reorder")
     public ResponseEntity<Void> reorder(
             @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
             @RequestBody AutoClassifyRuleReorderRequest request) {
-        ruleService.reorder(companyId, request);
+        ruleService.reorder(companyId, empId, request);
         return ResponseEntity.ok().build();
     }
 }

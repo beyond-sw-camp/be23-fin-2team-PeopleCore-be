@@ -2,102 +2,44 @@
   "openapi": "3.0.3",
   "info": {
     "title": "PeopleCore 전자결재 API",
+    "description": "전자결재 시스템 (Approval) API 명세서 - 53개 엔드포인트",
     "version": "1.0.0"
   },
   "servers": [
-    { "url": "http://localhost:8080/collaboration-service" }
+    {
+      "url": "http://localhost:8080",
+      "description": "Local Development"
+    }
   ],
-  "security": [
-    { "bearerAuth": [] }
+  "tags": [
+    { "name": "결재문서", "description": "결재 문서 CRUD 및 상태 전환" },
+    { "name": "결재처리", "description": "승인, 반려, 수신, 열람, 참조 확인" },
+    { "name": "문서목록-개인", "description": "개인 문서함 목록 조회" },
+    { "name": "문서목록-부서", "description": "부서 문서함 목록 조회" },
+    { "name": "양식", "description": "결재 양식 및 양식 폴더" },
+    { "name": "첨부파일", "description": "첨부파일 업로드/다운로드/삭제" },
+    { "name": "채번규칙", "description": "문서번호 자동채번 규칙" },
+    { "name": "결재선템플릿", "description": "결재선 템플릿 CRUD" },
+    { "name": "위임", "description": "결재 위임 관리" },
+    { "name": "서명", "description": "서명 이미지 관리" },
+    { "name": "부서문서함관리", "description": "부서 문서함 CRUD 및 담당자 관리" },
+    { "name": "자동분류규칙", "description": "부서 문서함 자동 분류 규칙" },
+    { "name": "개인문서함관리", "description": "개인 문서함 CRUD 및 문서 이동" }
   ],
   "paths": {
-    "/approval/form-folder": {
-      "get": {
-        "tags": ["1. 양식 관리"],
-        "summary": "양식 폴더 트리 조회",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
-      }
-    },
-    "/approval/form": {
-      "get": {
-        "tags": ["1. 양식 관리"],
-        "summary": "양식 목록 조회 (폴더별 필터)",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "folderId", "in": "query", "required": false, "schema": { "type": "integer" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
-      }
-    },
-    "/approval/forms/{formId}": {
-      "get": {
-        "tags": ["1. 양식 관리"],
-        "summary": "양식 상세 조회 (DB - 승인 완료 문서용)",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "formId", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
-      }
-    },
-    "/approval/forms/{formId}/edit": {
-      "get": {
-        "tags": ["1. 양식 관리"],
-        "summary": "양식 편집용 조회 (MinIO - 최신 HTML)",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "formId", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
-      }
-    },
-    "/approval/forms/frequent": {
-      "get": {
-        "tags": ["1. 양식 관리"],
-        "summary": "자주 쓰는 양식 조회",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
-      }
-    },
-    "/approval/forms/frequent/{formId}": {
-      "post": {
-        "tags": ["1. 양식 관리"],
-        "summary": "자주 쓰는 양식 추가",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "formId", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
-      },
-      "delete": {
-        "tags": ["1. 양식 관리"],
-        "summary": "자주 쓰는 양식 삭제",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "formId", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
-      }
-    },
     "/approval/document": {
       "post": {
-        "tags": ["2. 문서 CRUD"],
-        "summary": "문서 기안 (결재요청 - 바로 PENDING)",
+        "tags": ["결재문서"],
+        "summary": "문서 기안 (결재 요청)",
+        "description": "문서 생성 + 결재선 + 채번을 한번에 처리",
+        "operationId": "createDocument",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "X-User-Name", "in": "header", "required": true, "schema": { "type": "string" } },
-          { "name": "X-User-Department", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "X-User-Grade", "in": "header", "required": true, "schema": { "type": "string" } },
-          { "name": "X-User-Title", "in": "header", "required": true, "schema": { "type": "string" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/X-User-Name" },
+          { "$ref": "#/components/parameters/X-User-Department" },
+          { "$ref": "#/components/parameters/X-User-Grade" },
+          { "$ref": "#/components/parameters/X-User-Title" }
         ],
         "requestBody": {
           "required": true,
@@ -106,159 +48,1015 @@
               "schema": { "$ref": "#/components/schemas/DocumentCreateRequest" },
               "example": {
                 "formId": 1,
-                "docTitle": "2026년 상반기 채용요청",
-                "docType": "채용요청",
-                "docData": "{\"field1\":\"value1\"}",
+                "docTitle": "2026년 상반기 개발팀 채용요청",
+                "docType": "기안",
+                "docData": "{\"field1\":\"value1\",\"field2\":\"value2\"}",
                 "isEmergency": false,
                 "approvalLines": [
-                  { "empId": 2, "empName": "김결재", "empDeptName": "경영지원", "empGrade": "부장", "empTitle": "부장", "approvalRole": "APPROVER", "lineStep": 1 },
-                  { "empId": 3, "empName": "박참조", "empDeptName": "인사", "empGrade": "대리", "empTitle": "대리", "approvalRole": "REFERENCE", "lineStep": 1 }
+                  {
+                    "empId": 2,
+                    "empName": "강희계",
+                    "empDeptName": "인사팀",
+                    "empGrade": "부장",
+                    "empTitle": "팀장",
+                    "approvalRole": "결재자",
+                    "lineStep": 1
+                  },
+                  {
+                    "empId": 3,
+                    "empName": "박경영",
+                    "empDeptName": "경영지원팀",
+                    "empGrade": "이사",
+                    "empTitle": "본부장",
+                    "approvalRole": "결재자",
+                    "lineStep": 2
+                  },
+                  {
+                    "empId": 4,
+                    "empName": "김참조",
+                    "empDeptName": "경영지원팀",
+                    "empGrade": "과장",
+                    "empTitle": null,
+                    "approvalRole": "참조",
+                    "lineStep": 0
+                  }
                 ]
               }
             }
           }
         },
-        "responses": { "201": { "description": "Created - docId 반환" } }
+        "responses": {
+          "201": {
+            "description": "문서 생성 성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "integer", "format": "int64" },
+                "example": 1
+              }
+            }
+          }
+        }
       }
     },
     "/approval/document/{docId}": {
       "get": {
-        "tags": ["2. 문서 CRUD"],
+        "tags": ["결재문서"],
         "summary": "문서 상세 조회",
+        "operationId": "getDocumentDetail",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathDocId" }
         ],
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentDetailResponse" },
+                "example": {
+                  "docId": 1,
+                  "docNum": "인사-채용-260402-001",
+                  "docTitle": "2026년 상반기 개발팀 채용요청",
+                  "docType": "기안",
+                  "docData": "{\"field1\":\"value1\"}",
+                  "approvalStatus": "진행중",
+                  "isEmergency": false,
+                  "docSubmittedAt": "2026-04-02T10:00:00",
+                  "docCompleteAt": null,
+                  "empId": 1,
+                  "empName": "김인재",
+                  "empDeptName": "경영",
+                  "empGrade": "차장",
+                  "empTitle": "차장",
+                  "formHtml": "<div class='form-container'>...</div>",
+                  "formName": "채용요청",
+                  "approvalLines": [
+                    {
+                      "lineId": 1,
+                      "empId": 2,
+                      "empName": "강희계",
+                      "empDeptName": "인사팀",
+                      "empGrade": "부장",
+                      "empTitle": "팀장",
+                      "approvalRole": "결재자",
+                      "lineStep": 1,
+                      "approvalLineStatus": "승인",
+                      "lineProcessedAt": "2026-04-02T11:00:00",
+                      "lineRejectReason": null,
+                      "isDelegated": false,
+                      "isRead": true
+                    },
+                    {
+                      "lineId": 2,
+                      "empId": 3,
+                      "empName": "박경영",
+                      "empDeptName": "경영지원팀",
+                      "empGrade": "이사",
+                      "empTitle": "본부장",
+                      "approvalRole": "결재자",
+                      "lineStep": 2,
+                      "approvalLineStatus": "대기",
+                      "lineProcessedAt": null,
+                      "lineRejectReason": null,
+                      "isDelegated": false,
+                      "isRead": false
+                    }
+                  ],
+                  "attachments": [
+                    { "attachId": 1, "fileName": "채용계획서.pdf", "fileSize": 1024000 },
+                    { "attachId": 2, "fileName": "인원현황.xlsx", "fileSize": 512000 }
+                  ]
+                }
+              }
+            }
+          }
+        }
       },
       "put": {
-        "tags": ["2. 문서 CRUD"],
-        "summary": "임시저장 문서 수정",
+        "tags": ["결재문서"],
+        "summary": "문서 수정",
+        "operationId": "updateDocument",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": { "$ref": "#/components/schemas/DocumentUpdateRequest" },
-              "example": { "docTitle": "수정된 제목", "docData": "{\"field1\":\"updated\"}", "isEmergency": true, "approvalLines": null }
+              "example": {
+                "docTitle": "2026년 상반기 개발팀 채용요청 (수정)",
+                "docData": "{\"field1\":\"updated_value\"}",
+                "isEmergency": true,
+                "approvalLines": [
+                  {
+                    "empId": 2,
+                    "empName": "강희계",
+                    "empDeptName": "인사팀",
+                    "empGrade": "부장",
+                    "empTitle": "팀장",
+                    "approvalRole": "결재자",
+                    "lineStep": 1
+                  }
+                ]
+              }
             }
           }
         },
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": { "description": "수정 성공" }
+        }
       },
       "delete": {
-        "tags": ["2. 문서 CRUD"],
+        "tags": ["결재문서"],
         "summary": "임시저장 문서 삭제",
+        "operationId": "deleteDocument",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
         ],
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": { "description": "삭제 성공" }
+        }
       }
     },
     "/approval/document/temp": {
       "post": {
-        "tags": ["2. 문서 CRUD"],
-        "summary": "임시저장 (DRAFT)",
+        "tags": ["결재문서"],
+        "summary": "임시 저장",
+        "operationId": "saveTempDocument",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "X-User-Name", "in": "header", "required": true, "schema": { "type": "string" } },
-          { "name": "X-User-Department", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "X-User-Grade", "in": "header", "required": true, "schema": { "type": "string" } },
-          { "name": "X-User-Title", "in": "header", "required": true, "schema": { "type": "string" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/X-User-Name" },
+          { "$ref": "#/components/parameters/X-User-Department" },
+          { "$ref": "#/components/parameters/X-User-Grade" },
+          { "$ref": "#/components/parameters/X-User-Title" }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
-              "schema": { "$ref": "#/components/schemas/DocumentCreateRequest" }
+              "schema": { "$ref": "#/components/schemas/DocumentCreateRequest" },
+              "example": {
+                "formId": 1,
+                "docTitle": "임시저장 문서",
+                "docType": "기안",
+                "docData": "{\"field1\":\"draft_value\"}",
+                "isEmergency": false,
+                "approvalLines": [
+                  {
+                    "empId": 2,
+                    "empName": "강희계",
+                    "empDeptName": "인사팀",
+                    "empGrade": "부장",
+                    "empTitle": "팀장",
+                    "approvalRole": "결재자",
+                    "lineStep": 1
+                  }
+                ]
+              }
             }
           }
         },
-        "responses": { "201": { "description": "Created - docId 반환" } }
+        "responses": {
+          "201": {
+            "description": "임시저장 성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "integer", "format": "int64" },
+                "example": 5
+              }
+            }
+          }
+        }
       }
     },
     "/approval/document/temp/{docId}": {
       "put": {
-        "tags": ["2. 문서 CRUD"],
+        "tags": ["결재문서"],
         "summary": "임시저장 수정",
+        "operationId": "updateTempDocument",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": { "$ref": "#/components/schemas/DocumentUpdateRequest" }
-            }
-          }
-        },
-        "responses": { "200": { "description": "OK" } }
-      }
-    },
-    "/approval/document/{docId}/submit": {
-      "post": {
-        "tags": ["3. 상태변경"],
-        "summary": "임시저장 → 결재요청 (DRAFT → PENDING)",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "X-User-Department", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
-      }
-    },
-    "/approval/document/{docId}/resubmit": {
-      "post": {
-        "tags": ["3. 상태변경"],
-        "summary": "반려 문서 재기안 (REJECTED → PENDING)",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "X-User-Department", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": { "$ref": "#/components/schemas/DocumentUpdateRequest" },
-              "example": { "docTitle": "재기안 제목", "docData": "{\"field1\":\"revised\"}", "isEmergency": false, "approvalLines": null }
+              "example": {
+                "docTitle": "임시저장 수정된 제목",
+                "docData": "{\"field1\":\"updated_draft\"}",
+                "isEmergency": false,
+                "approvalLines": [
+                  {
+                    "empId": 2,
+                    "empName": "강희계",
+                    "empDeptName": "인사팀",
+                    "empGrade": "부장",
+                    "empTitle": "팀장",
+                    "approvalRole": "결재자",
+                    "lineStep": 1
+                  }
+                ]
+              }
             }
           }
         },
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": { "description": "수정 성공" }
+        }
+      }
+    },
+    "/approval/document/{docId}/submit": {
+      "post": {
+        "tags": ["결재문서"],
+        "summary": "임시저장 -> 결재 요청 전환",
+        "operationId": "submitDocument",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/X-User-Department" },
+          { "$ref": "#/components/parameters/PathDocId" }
+        ],
+        "responses": {
+          "200": { "description": "전환 성공" }
+        }
+      }
+    },
+    "/approval/document/{docId}/resubmit": {
+      "post": {
+        "tags": ["결재문서"],
+        "summary": "반려 문서 재기안",
+        "description": "REJECTED -> PENDING (수정 + 새 채번 + 결재선 초기화)",
+        "operationId": "resubmitDocument",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/X-User-Department" },
+          { "$ref": "#/components/parameters/PathDocId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DocumentUpdateRequest" },
+              "example": {
+                "docTitle": "2026년 상반기 개발팀 채용요청 (재기안)",
+                "docData": "{\"field1\":\"revised_value\"}",
+                "isEmergency": false,
+                "approvalLines": [
+                  {
+                    "empId": 2,
+                    "empName": "강희계",
+                    "empDeptName": "인사팀",
+                    "empGrade": "부장",
+                    "empTitle": "팀장",
+                    "approvalRole": "결재자",
+                    "lineStep": 1
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "재기안 성공" }
+        }
       }
     },
     "/approval/document/{docId}/recall": {
       "post": {
-        "tags": ["3. 상태변경"],
-        "summary": "상신 취소/회수 (PENDING → CANCELED)",
+        "tags": ["결재문서"],
+        "summary": "상신 취소 (회수)",
+        "description": "PENDING -> CANCELED",
+        "operationId": "recallDocument",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
         ],
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": { "description": "회수 성공" }
+        }
+      }
+    },
+    "/approval/document/{docId}/approve": {
+      "post": {
+        "tags": ["결재처리"],
+        "summary": "승인",
+        "operationId": "approveDocument",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "comment": { "type": "string", "description": "승인 의견" }
+                }
+              },
+              "example": {
+                "comment": "검토 완료, 승인합니다."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "승인 성공" }
+        }
+      }
+    },
+    "/approval/document/{docId}/reject": {
+      "post": {
+        "tags": ["결재처리"],
+        "summary": "반려",
+        "operationId": "rejectDocument",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["reason"],
+                "properties": {
+                  "reason": { "type": "string", "description": "반려 사유 (필수)" }
+                }
+              },
+              "example": {
+                "reason": "예산 항목이 누락되어 반려합니다. 수정 후 재기안 부탁드립니다."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "반려 성공" }
+        }
+      }
+    },
+    "/approval/document/{docId}/receive": {
+      "post": {
+        "tags": ["결재처리"],
+        "summary": "수신 접수",
+        "operationId": "receiveDocument",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
+        ],
+        "responses": {
+          "200": { "description": "수신 접수 성공" }
+        }
+      }
+    },
+    "/approval/document/{docId}/read": {
+      "post": {
+        "tags": ["결재처리"],
+        "summary": "열람 확인",
+        "operationId": "readDocument",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
+        ],
+        "responses": {
+          "200": { "description": "열람 확인 성공" }
+        }
+      }
+    },
+    "/approval/document/{docId}/cc-confirm": {
+      "post": {
+        "tags": ["결재처리"],
+        "summary": "참조 확인",
+        "operationId": "ccConfirmDocument",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
+        ],
+        "responses": {
+          "200": { "description": "참조 확인 성공" }
+        }
+      }
+    },
+    "/approval/documents/waiting": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "결재 대기 문서",
+        "operationId": "getWaitingDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" },
+                "example": {
+                  "content": [
+                    {
+                      "docId": 1,
+                      "docTitle": "2026년 상반기 개발팀 채용요청",
+                      "docNum": "인사-채용-260402-001",
+                      "docStatus": "진행중",
+                      "isEmergency": true,
+                      "formName": "채용요청",
+                      "drafterName": "김인재",
+                      "drafterDept": "경영",
+                      "createdAt": "2026-04-02T10:00:00",
+                      "hasAttachment": true
+                    },
+                    {
+                      "docId": 2,
+                      "docTitle": "출장비 정산 요청",
+                      "docNum": "경영-출장-260403-001",
+                      "docStatus": "진행중",
+                      "isEmergency": false,
+                      "formName": "출장정산",
+                      "drafterName": "이개발",
+                      "drafterDept": "개발팀",
+                      "createdAt": "2026-04-03T09:30:00",
+                      "hasAttachment": false
+                    }
+                  ],
+                  "pageable": {
+                    "pageNumber": 0,
+                    "pageSize": 10,
+                    "sort": { "sorted": true, "unsorted": false }
+                  },
+                  "totalElements": 25,
+                  "totalPages": 3,
+                  "size": 10,
+                  "number": 0,
+                  "first": true,
+                  "last": false,
+                  "empty": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approval/documents/received": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "수신 문서",
+        "operationId": "getReceivedDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/cc-view": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "참조/열람 문서",
+        "operationId": "getCcViewDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/upcoming": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "예정 문서",
+        "operationId": "getUpcomingDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/draft": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "기안 문서",
+        "operationId": "getDraftDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/temp": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "임시저장 문서",
+        "operationId": "getTempDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/approved": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "승인 완료 문서",
+        "operationId": "getApprovedDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/cc-view-box": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "참조/열람함",
+        "operationId": "getCcViewBoxDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/sent": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "발신 문서",
+        "operationId": "getSentDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/inbox": {
+      "get": {
+        "tags": ["문서목록-개인"],
+        "summary": "수신함",
+        "operationId": "getInboxDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/dept/completed": {
+      "get": {
+        "tags": ["문서목록-부서"],
+        "summary": "부서 완료 문서",
+        "operationId": "getDeptCompletedDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Department" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/dept/received": {
+      "get": {
+        "tags": ["문서목록-부서"],
+        "summary": "부서 수신 문서",
+        "operationId": "getDeptReceivedDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Department" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/documents/dept/sent": {
+      "get": {
+        "tags": ["문서목록-부서"],
+        "summary": "부서 발신 문서",
+        "operationId": "getDeptSentDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Department" },
+          { "$ref": "#/components/parameters/SearchQuery" },
+          { "$ref": "#/components/parameters/SearchStartDate" },
+          { "$ref": "#/components/parameters/SearchEndDate" },
+          { "$ref": "#/components/parameters/SearchFormId" },
+          { "$ref": "#/components/parameters/SearchStatus" },
+          { "$ref": "#/components/parameters/PageNumber" },
+          { "$ref": "#/components/parameters/PageSize" },
+          { "$ref": "#/components/parameters/PageSort" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PageDocumentListResponseDto" } } }
+          }
+        }
+      }
+    },
+    "/approval/form-folder": {
+      "get": {
+        "tags": ["양식"],
+        "summary": "양식 폴더 목록 조회",
+        "operationId": "getFormFolder",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/FormFolderResponse" } },
+                "example": [
+                  {
+                    "folderId": 1,
+                    "folderName": "인사",
+                    "folderPath": "/인사",
+                    "folderSortOrder": 1,
+                    "folderIsVisible": true,
+                    "children": [
+                      {
+                        "folderId": 3,
+                        "folderName": "채용",
+                        "folderPath": "/인사/채용",
+                        "folderSortOrder": 1,
+                        "folderIsVisible": true,
+                        "children": []
+                      }
+                    ]
+                  },
+                  {
+                    "folderId": 2,
+                    "folderName": "경영",
+                    "folderPath": "/경영",
+                    "folderSortOrder": 2,
+                    "folderIsVisible": true,
+                    "children": []
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approval/form": {
+      "get": {
+        "tags": ["양식"],
+        "summary": "양식 목록 조회",
+        "operationId": "getForms",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "name": "folderId", "in": "query", "required": false, "schema": { "type": "integer", "format": "int64" }, "description": "폴더 ID (선택)" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/FormListResponse" } },
+                "example": [
+                  {
+                    "formId": 1,
+                    "formName": "채용요청",
+                    "formCode": "HR-RECRUIT",
+                    "folderId": 1,
+                    "folderName": "인사",
+                    "isSystem": false,
+                    "formVersion": 1,
+                    "isActive": true,
+                    "formWritePermission": "ALL",
+                    "formIsPublic": true,
+                    "formRetentionYear": 5,
+                    "formMobileYn": true,
+                    "formPreApprovalYn": false,
+                    "formSortOrder": 1
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approval/forms/{formId}": {
+      "get": {
+        "tags": ["양식"],
+        "summary": "양식 상세 조회",
+        "operationId": "getFormDetail",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathFormId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/FormDetailResponse" },
+                "example": {
+                  "formId": 1,
+                  "formName": "채용요청",
+                  "formCode": "HR-RECRUIT",
+                  "formHtml": "<div class='form-container'><h2>채용요청서</h2>...</div>",
+                  "folderId": 1,
+                  "folderName": "인사",
+                  "isSystem": false,
+                  "formVersion": 1,
+                  "isCurrent": true,
+                  "isActive": true,
+                  "empId": 1,
+                  "formWritePermission": "ALL",
+                  "formIsPublic": true,
+                  "formRetentionYear": 5,
+                  "formMobileYn": true,
+                  "formPreApprovalYn": false,
+                  "formSortOrder": 1
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approval/forms/{formId}/edit": {
+      "get": {
+        "tags": ["양식"],
+        "summary": "양식 편집용 상세 조회",
+        "operationId": "getFormDetailForEditing",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathFormId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/FormDetailResponse" } } }
+          }
+        }
+      }
+    },
+    "/approval/forms/frequent": {
+      "get": {
+        "tags": ["양식"],
+        "summary": "자주 쓰는 양식 목록",
+        "operationId": "getFrequentForms",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/FormListResponse" } } } }
+          }
+        }
+      }
+    },
+    "/approval/forms/frequent/{formId}": {
+      "post": {
+        "tags": ["양식"],
+        "summary": "자주 쓰는 양식 등록",
+        "operationId": "addFrequentForm",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathFormId" }
+        ],
+        "responses": { "200": { "description": "등록 성공" } }
+      },
+      "delete": {
+        "tags": ["양식"],
+        "summary": "자주 쓰는 양식 삭제",
+        "operationId": "removeFrequentForm",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathFormId" }
+        ],
+        "responses": { "200": { "description": "삭제 성공" } }
       }
     },
     "/approval/document/{docId}/attachments": {
       "post": {
-        "tags": ["4. 첨부파일"],
-        "summary": "첨부파일 업로드 (multipart)",
+        "tags": ["첨부파일"],
+        "summary": "첨부파일 업로드",
+        "operationId": "uploadAttachments",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathDocId" }
         ],
         "requestBody": {
           "required": true,
@@ -266,132 +1064,1547 @@
             "multipart/form-data": {
               "schema": {
                 "type": "object",
+                "required": ["files"],
                 "properties": {
-                  "files": { "type": "array", "items": { "type": "string", "format": "binary" } }
+                  "files": { "type": "array", "items": { "type": "string", "format": "binary" }, "description": "업로드할 파일 목록" }
                 }
               }
             }
           }
         },
-        "responses": { "201": { "description": "Created" } }
+        "responses": {
+          "201": {
+            "description": "업로드 성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/AttachmentResponse" } },
+                "example": [
+                  { "attachId": 1, "fileName": "채용계획서.pdf", "fileSize": 1024000, "fileUrl": "https://minio.example.com/bucket/채용계획서.pdf?presigned..." },
+                  { "attachId": 2, "fileName": "인원현황.xlsx", "fileSize": 512000, "fileUrl": "https://minio.example.com/bucket/인원현황.xlsx?presigned..." }
+                ]
+              }
+            }
+          }
+        }
       },
       "get": {
-        "tags": ["4. 첨부파일"],
+        "tags": ["첨부파일"],
         "summary": "첨부파일 목록 조회",
-        "parameters": [
-          { "name": "docId", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
+        "operationId": "getAttachments",
+        "parameters": [ { "$ref": "#/components/parameters/PathDocId" } ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/AttachmentListResponse" } },
+                "example": [
+                  { "attachId": 1, "fileName": "채용계획서.pdf", "fileSize": 1024000 },
+                  { "attachId": 2, "fileName": "인원현황.xlsx", "fileSize": 512000 }
+                ]
+              }
+            }
+          }
+        }
       }
     },
     "/approval/document/attachments/{attachId}/download": {
       "get": {
-        "tags": ["4. 첨부파일"],
+        "tags": ["첨부파일"],
         "summary": "첨부파일 다운로드 URL 발급",
-        "parameters": [
-          { "name": "attachId", "in": "path", "required": true, "schema": { "type": "integer" } }
-        ],
-        "responses": { "200": { "description": "Pre-signed URL 반환" } }
+        "operationId": "getDownloadUrl",
+        "parameters": [ { "$ref": "#/components/parameters/PathAttachId" } ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "string" },
+                "example": "https://minio.example.com/bucket/채용계획서.pdf?X-Amz-Signature=abc123..."
+              }
+            }
+          }
+        }
       }
     },
     "/approval/document/attachments/{attachId}": {
       "delete": {
-        "tags": ["4. 첨부파일"],
+        "tags": ["첨부파일"],
         "summary": "첨부파일 삭제",
+        "operationId": "deleteAttachment",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } },
-          { "name": "attachId", "in": "path", "required": true, "schema": { "type": "integer" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathAttachId" }
         ],
-        "responses": { "200": { "description": "OK" } }
+        "responses": { "200": { "description": "삭제 성공" } }
       }
     },
     "/approval/number-rule": {
       "get": {
-        "tags": ["5. 채번 규칙"],
+        "tags": ["채번규칙"],
         "summary": "채번 규칙 조회",
-        "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } }
-        ],
-        "responses": { "200": { "description": "OK" } }
+        "operationId": "getNumberRule",
+        "parameters": [ { "$ref": "#/components/parameters/X-User-Company" } ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/NumberRuleResponse" },
+                "example": {
+                  "numberRuleId": 1,
+                  "numberRuleSlot1Type": "DEPT_CODE",
+                  "numberRuleSlot1Custom": null,
+                  "numberRuleSlot2Type": "FORM_CODE",
+                  "numberRuleSlot2Custom": null,
+                  "numberRuleSlot3Type": "NONE",
+                  "numberRuleSlot3Custom": null,
+                  "numberRuleDateFormat": "YYMMDD",
+                  "numberRuleSeqDigits": 3,
+                  "numberRuleSeparator": "-",
+                  "numberRuleSeqResetCycle": "DAILY",
+                  "preview": "인사-채용-260402-001"
+                }
+              }
+            }
+          }
+        }
       },
       "put": {
-        "tags": ["5. 채번 규칙"],
+        "tags": ["채번규칙"],
         "summary": "채번 규칙 수정",
+        "operationId": "updateNumberRule",
         "parameters": [
-          { "name": "X-User-Company", "in": "header", "required": true, "schema": { "type": "string", "format": "uuid" } },
-          { "name": "X-User-Id", "in": "header", "required": true, "schema": { "type": "integer" } }
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
         ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
+              "schema": { "$ref": "#/components/schemas/NumberRuleUpdateRequest" },
               "example": {
-                "numberRuleSlot1Type": "DEPT_NAME",
+                "numberRuleSlot1Type": "DEPT_CODE",
                 "numberRuleSlot1Custom": null,
-                "numberRuleSlot2Type": "FORM_NAME",
+                "numberRuleSlot2Type": "FORM_CODE",
                 "numberRuleSlot2Custom": null,
                 "numberRuleSlot3Type": "NONE",
                 "numberRuleSlot3Custom": null,
-                "numberRuleDateFormat": "yyMMdd",
+                "numberRuleDateFormat": "YYMMDD",
                 "numberRuleSeqDigits": 3,
                 "numberRuleSeparator": "-",
-                "numberRuleSeqResetCycle": "MONTH"
+                "numberRuleSeqResetCycle": "DAILY"
               }
             }
           }
         },
-        "responses": { "200": { "description": "OK" } }
+        "responses": { "200": { "description": "수정 성공" } }
+      }
+    },
+    "/approval/line-templates": {
+      "get": {
+        "tags": ["결재선템플릿"],
+        "summary": "내 템플릿 목록 조회",
+        "operationId": "getLineTemplates",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ApprovalLineTemplateResponse" } },
+                "example": [
+                  {
+                    "lineTemId": 1,
+                    "lineTemName": "기본 결재선",
+                    "isDefault": true,
+                    "itemDto": [
+                      { "empId": 2, "approvalRole": "APPROVER", "step": 1 },
+                      { "empId": 3, "approvalRole": "APPROVER", "step": 2 }
+                    ]
+                  },
+                  {
+                    "lineTemId": 2,
+                    "lineTemName": "긴급 결재선",
+                    "isDefault": false,
+                    "itemDto": [
+                      { "empId": 5, "approvalRole": "APPROVER", "step": 1 }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["결재선템플릿"],
+        "summary": "템플릿 생성",
+        "operationId": "createLineTemplate",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApprovalLineTemplateCreateRequest" },
+              "example": {
+                "lineTemName": "내 결재선",
+                "isDefault": false,
+                "itemDto": [
+                  { "empId": 2, "approvalRole": "APPROVER", "step": 1 },
+                  { "empId": 3, "approvalRole": "APPROVER", "step": 2 },
+                  { "empId": 4, "approvalRole": "CC", "step": 0 }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "생성 성공",
+            "content": { "application/json": { "schema": { "type": "integer", "format": "int64" }, "example": 3 } }
+          }
+        }
+      }
+    },
+    "/approval/line-templates/{id}": {
+      "put": {
+        "tags": ["결재선템플릿"],
+        "summary": "템플릿 수정",
+        "operationId": "updateLineTemplate",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApprovalLineTemplateCreateRequest" },
+              "example": {
+                "lineTemName": "수정된 결재선",
+                "isDefault": true,
+                "itemDto": [
+                  { "empId": 2, "approvalRole": "APPROVER", "step": 1 }
+                ]
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "수정 성공" } }
+      },
+      "delete": {
+        "tags": ["결재선템플릿"],
+        "summary": "템플릿 삭제",
+        "operationId": "deleteLineTemplate",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "responses": { "200": { "description": "삭제 성공" } }
+      }
+    },
+    "/approval/line-templates/default": {
+      "get": {
+        "tags": ["결재선템플릿"],
+        "summary": "기본 템플릿 조회",
+        "operationId": "getDefaultLineTemplate",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApprovalLineTemplateResponse" } } }
+          }
+        }
+      }
+    },
+    "/approval/delegations": {
+      "get": {
+        "tags": ["위임"],
+        "summary": "내 위임 목록 조회",
+        "operationId": "getMyDelegations",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ApprovalDelegationResponse" } },
+                "example": [
+                  {
+                    "appDeleId": 1,
+                    "empId": 1,
+                    "empName": "김인재",
+                    "empDeptName": "경영",
+                    "empGrade": "차장",
+                    "empTitle": "팀장",
+                    "deleEmpId": 2,
+                    "deleName": "박대리",
+                    "deleDeptName": "경영",
+                    "deleGrade": "대리",
+                    "deleTitle": null,
+                    "startAt": "2026-04-01",
+                    "endAt": "2026-04-10",
+                    "reason": "해외출장",
+                    "isActive": true,
+                    "createdAt": "2026-04-01T09:00:00"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["위임"],
+        "summary": "위임 등록",
+        "operationId": "createDelegation",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/X-User-Name" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ApprovalDelegationCreateRequest" },
+              "example": {
+                "empDeptName": "경영",
+                "empGrade": "차장",
+                "empTitle": "팀장",
+                "appDeleEmpId": 2,
+                "deleName": "박대리",
+                "deleDeptName": "경영",
+                "deleGrade": "대리",
+                "deleTitle": null,
+                "appDeleStartAt": "2026-04-01",
+                "appDeleEndAt": "2026-04-10",
+                "appDeleReason": "해외출장으로 인한 결재 위임"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "등록 성공",
+            "content": { "application/json": { "schema": { "type": "integer", "format": "int64" }, "example": 1 } }
+          }
+        }
+      }
+    },
+    "/approval/delegations/{id}": {
+      "delete": {
+        "tags": ["위임"],
+        "summary": "위임 삭제",
+        "operationId": "deleteDelegation",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "responses": { "200": { "description": "삭제 성공" } }
+      }
+    },
+    "/approval/delegations/{id}/toggle": {
+      "patch": {
+        "tags": ["위임"],
+        "summary": "위임 활성/비활성 토글",
+        "operationId": "toggleDelegation",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "responses": { "200": { "description": "토글 성공" } }
+      }
+    },
+    "/approval/signatures/me": {
+      "get": {
+        "tags": ["서명"],
+        "summary": "내 서명 조회",
+        "operationId": "getMySignature",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ApprovalSignatureResponseDto" },
+                "example": {
+                  "attachId": 1,
+                  "sigEmpId": 1,
+                  "originalFileName": "서명_김인재.png",
+                  "fileUrl": "https://minio.example.com/signatures/서명_김인재.png?presigned...",
+                  "fileSize": 50000,
+                  "sigManagerId": null
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approval/signatures": {
+      "post": {
+        "tags": ["서명"],
+        "summary": "내 서명 등록/수정",
+        "operationId": "createMySignature",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary", "description": "서명 이미지 파일 (PNG/JPG)" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "등록 성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApprovalSignatureResponseDto" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["서명"],
+        "summary": "내 서명 삭제",
+        "operationId": "deleteMySignature",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "responses": { "200": { "description": "삭제 성공" } }
+      }
+    },
+    "/approval/signatures/{empId}": {
+      "get": {
+        "tags": ["서명"],
+        "summary": "[관리자] 특정 사원 서명 조회",
+        "description": "권한: HR_SUPER_ADMIN",
+        "operationId": "getSignatureByAdmin",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathEmpId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApprovalSignatureResponseDto" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["서명"],
+        "summary": "[관리자] 특정 사원 서명 대리 등록/수정",
+        "description": "권한: HR_SUPER_ADMIN",
+        "operationId": "createSignatureByAdmin",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathEmpId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": ["file"],
+                "properties": {
+                  "file": { "type": "string", "format": "binary", "description": "서명 이미지 파일" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "등록 성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApprovalSignatureResponseDto" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["서명"],
+        "summary": "[관리자] 특정 사원 서명 삭제",
+        "description": "권한: HR_SUPER_ADMIN",
+        "operationId": "deleteSignatureByAdmin",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathEmpId" }
+        ],
+        "responses": { "200": { "description": "삭제 성공" } }
+      }
+    },
+    "/approval/dept-folders": {
+      "get": {
+        "tags": ["부서문서함관리"],
+        "summary": "부서 문서함 목록 조회",
+        "operationId": "getDeptFolders",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Department" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/DeptFolderResponse" } },
+                "example": [
+                  {
+                    "id": 1,
+                    "name": "인사 문서함",
+                    "createdAt": "2026-04-01",
+                    "docCount": 15,
+                    "sortOrder": 1,
+                    "managers": [
+                      { "empId": 1, "empName": "김인재", "deptName": "경영" }
+                    ]
+                  },
+                  {
+                    "id": 2,
+                    "name": "채용 문서함",
+                    "createdAt": "2026-04-01",
+                    "docCount": 8,
+                    "sortOrder": 2,
+                    "managers": []
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["부서문서함관리"],
+        "summary": "부서 문서함 생성",
+        "operationId": "createDeptFolder",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Department" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeptFolderCreateRequest" },
+              "example": { "name": "신규 문서함" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "생성 성공",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeptFolderResponse" },
+                "example": { "id": 3, "name": "신규 문서함", "createdAt": "2026-04-07", "docCount": 0, "sortOrder": 3, "managers": [] }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approval/dept-folders/{id}": {
+      "put": {
+        "tags": ["부서문서함관리"],
+        "summary": "부서 문서함 이름 수정",
+        "operationId": "updateDeptFolder",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeptFolderUpdateRequest" },
+              "example": { "name": "수정된 문서함 이름" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "수정 성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DeptFolderResponse" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["부서문서함관리"],
+        "summary": "부서 문서함 삭제",
+        "operationId": "deleteDeptFolder",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "responses": { "204": { "description": "삭제 성공" } }
+      }
+    },
+    "/approval/dept-folders/reorder": {
+      "put": {
+        "tags": ["부서문서함관리"],
+        "summary": "부서 문서함 순서 일괄 변경",
+        "operationId": "reorderDeptFolders",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Department" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReorderRequest" },
+              "example": { "orderList": [ { "id": 2, "sortOrder": 1 }, { "id": 1, "sortOrder": 2 } ] }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "변경 성공",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/DeptFolderResponse" } } } }
+          }
+        }
+      }
+    },
+    "/approval/dept-folders/{id}/managers": {
+      "post": {
+        "tags": ["부서문서함관리"],
+        "summary": "부서 문서함 담당자 추가",
+        "operationId": "addDeptFolderManager",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ManagerAddRequest" },
+              "example": { "empId": 5, "empName": "이담당", "deptName": "인사팀" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "추가 성공",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ManagerInfo" },
+                "example": { "empId": 5, "empName": "이담당", "deptName": "인사팀" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approval/dept-folders/{id}/managers/{empId}": {
+      "delete": {
+        "tags": ["부서문서함관리"],
+        "summary": "부서 문서함 담당자 삭제",
+        "operationId": "removeDeptFolderManager",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathId" },
+          { "$ref": "#/components/parameters/PathEmpId" }
+        ],
+        "responses": { "204": { "description": "삭제 성공" } }
+      }
+    },
+    "/approval/auto-classify-rules": {
+      "get": {
+        "tags": ["자동분류규칙"],
+        "summary": "자동 분류 규칙 목록 조회",
+        "operationId": "getAutoClassifyRules",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Department" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/AutoClassifyRuleResponse" } },
+                "example": [
+                  {
+                    "id": 1,
+                    "ruleName": "채용 관련 자동 분류",
+                    "conditions": { "titleContains": "채용", "formName": "채용요청", "drafterDept": null, "drafterName": null },
+                    "targetFolderId": 3,
+                    "targetFolderName": "채용문서함",
+                    "isActive": true,
+                    "sortOrder": 1
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["자동분류규칙"],
+        "summary": "자동 분류 규칙 생성",
+        "operationId": "createAutoClassifyRule",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Department" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AutoClassifyRuleCreateRequest" },
+              "example": {
+                "ruleName": "채용 관련 자동 분류",
+                "conditions": { "titleContains": "채용", "formName": "채용요청", "drafterDept": null, "drafterName": null },
+                "targetFolderId": 3,
+                "isActive": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "생성 성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AutoClassifyRuleResponse" } } }
+          }
+        }
+      }
+    },
+    "/approval/auto-classify-rules/{id}": {
+      "put": {
+        "tags": ["자동분류규칙"],
+        "summary": "자동 분류 규칙 수정",
+        "operationId": "updateAutoClassifyRule",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AutoClassifyRuleUpdateRequest" },
+              "example": {
+                "ruleName": "채용 관련 수정됨",
+                "conditions": { "titleContains": "채용", "formName": null, "drafterDept": "인사팀", "drafterName": null },
+                "targetFolderId": 3,
+                "isActive": true
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "수정 성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AutoClassifyRuleResponse" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["자동분류규칙"],
+        "summary": "자동 분류 규칙 삭제",
+        "operationId": "deleteAutoClassifyRule",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "responses": { "204": { "description": "삭제 성공" } }
+      }
+    },
+    "/approval/auto-classify-rules/{id}/toggle": {
+      "patch": {
+        "tags": ["자동분류규칙"],
+        "summary": "자동 분류 규칙 활성/비활성 토글",
+        "operationId": "toggleAutoClassifyRule",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "responses": { "200": { "description": "토글 성공" } }
+      }
+    },
+    "/approval/auto-classify-rules/reorder": {
+      "put": {
+        "tags": ["자동분류규칙"],
+        "summary": "자동 분류 규칙 순서 변경",
+        "operationId": "reorderAutoClassifyRules",
+        "parameters": [ { "$ref": "#/components/parameters/X-User-Company" } ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReorderRequest" },
+              "example": { "orderList": [ { "id": 2, "sortOrder": 1 }, { "id": 1, "sortOrder": 2 } ] }
+            }
+          }
+        },
+        "responses": { "200": { "description": "변경 성공" } }
+      }
+    },
+    "/approval/personal-folder": {
+      "get": {
+        "tags": ["개인문서함관리"],
+        "summary": "개인 문서함 목록 조회",
+        "operationId": "getPersonalFolders",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "responses": {
+          "200": {
+            "description": "성공",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/PersonalFolderResponse" } },
+                "example": [
+                  { "id": 1, "name": "내 문서함", "createdAt": "2026-04-01", "sortOrder": 1, "docCount": 5 },
+                  { "id": 2, "name": "프로젝트 문서", "createdAt": "2026-04-03", "sortOrder": 2, "docCount": 12 }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["개인문서함관리"],
+        "summary": "개인 문서함 생성",
+        "operationId": "createPersonalFolder",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PersonalFolderRequest" },
+              "example": { "name": "새 폴더" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "생성 성공",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PersonalFolderResponse" },
+                "example": { "id": 3, "name": "새 폴더", "createdAt": "2026-04-07", "sortOrder": 3, "docCount": 0 }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/approval/personal-folder/{id}": {
+      "put": {
+        "tags": ["개인문서함관리"],
+        "summary": "개인 문서함 이름 수정",
+        "operationId": "updatePersonalFolder",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PersonalFolderRequest" },
+              "example": { "name": "수정된 폴더명" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "수정 성공",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PersonalFolderResponse" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["개인문서함관리"],
+        "summary": "개인 문서함 삭제",
+        "operationId": "deletePersonalFolder",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "responses": { "204": { "description": "삭제 성공" } }
+      }
+    },
+    "/approval/personal-folder/reorder": {
+      "put": {
+        "tags": ["개인문서함관리"],
+        "summary": "개인 문서함 순서 변경",
+        "operationId": "reorderPersonalFolders",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ReorderRequest" },
+              "example": { "orderList": [ { "id": 2, "sortOrder": 1 }, { "id": 1, "sortOrder": 2 } ] }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "변경 성공",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/PersonalFolderResponse" } } } }
+          }
+        }
+      }
+    },
+    "/approval/personal-folder/{id}/transfer": {
+      "post": {
+        "tags": ["개인문서함관리"],
+        "summary": "개인 문서함 이관 (다른 사원에게)",
+        "operationId": "transferPersonalFolder",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PersonalFolderTransferRequest" },
+              "example": { "targetEmpId": 5 }
+            }
+          }
+        },
+        "responses": { "200": { "description": "이관 성공" } }
+      }
+    },
+    "/approval/personal-folder/{id}/move-documents": {
+      "put": {
+        "tags": ["개인문서함관리"],
+        "summary": "문서 개별 이동",
+        "operationId": "moveDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PersonalFolderMoveRequest" },
+              "example": { "docIds": [1, 2, 3], "targetFolderId": 2 }
+            }
+          }
+        },
+        "responses": { "200": { "description": "이동 성공" } }
+      }
+    },
+    "/approval/personal-folder/{id}/move-all": {
+      "put": {
+        "tags": ["개인문서함관리"],
+        "summary": "문서 전체 이동",
+        "operationId": "moveAllDocuments",
+        "parameters": [
+          { "$ref": "#/components/parameters/X-User-Company" },
+          { "$ref": "#/components/parameters/X-User-Id" },
+          { "$ref": "#/components/parameters/PathId" },
+          { "name": "targetFolderId", "in": "query", "required": false, "schema": { "type": "integer", "format": "int64" }, "description": "이동할 대상 폴더 ID (미지정 시 미분류)" }
+        ],
+        "responses": { "200": { "description": "이동 성공" } }
       }
     }
   },
   "components": {
-    "securitySchemes": {
-      "bearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
+    "parameters": {
+      "X-User-Company": {
+        "name": "X-User-Company",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" },
+        "description": "회사 ID (UUID)",
+        "example": "550e8400-e29b-41d4-a716-446655440000"
+      },
+      "X-User-Id": {
+        "name": "X-User-Id",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "integer", "format": "int64" },
+        "description": "사원 ID",
+        "example": 1
+      },
+      "X-User-Name": {
+        "name": "X-User-Name",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "사원 이름",
+        "example": "김인재"
+      },
+      "X-User-Department": {
+        "name": "X-User-Department",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "integer", "format": "int64" },
+        "description": "부서 ID",
+        "example": 10
+      },
+      "X-User-Grade": {
+        "name": "X-User-Grade",
+        "in": "header",
+        "required": true,
+        "schema": { "type": "string" },
+        "description": "직급 ID",
+        "example": "차장"
+      },
+      "X-User-Title": {
+        "name": "X-User-Title",
+        "in": "header",
+        "required": false,
+        "schema": { "type": "string" },
+        "description": "직책 ID (nullable)",
+        "example": "팀장"
+      },
+      "PathDocId": {
+        "name": "docId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "format": "int64" },
+        "description": "문서 ID",
+        "example": 1
+      },
+      "PathFormId": {
+        "name": "formId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "format": "int64" },
+        "description": "양식 ID",
+        "example": 1
+      },
+      "PathId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "format": "int64" },
+        "description": "리소스 ID",
+        "example": 1
+      },
+      "PathAttachId": {
+        "name": "attachId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "format": "int64" },
+        "description": "첨부파일 ID",
+        "example": 1
+      },
+      "PathEmpId": {
+        "name": "empId",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer", "format": "int64" },
+        "description": "사원 ID",
+        "example": 2
+      },
+      "SearchQuery": {
+        "name": "search",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string" },
+        "description": "키워드 검색",
+        "example": "채용"
+      },
+      "SearchStartDate": {
+        "name": "startDate",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string", "format": "date" },
+        "description": "검색 시작일 (yyyy-MM-dd)",
+        "example": "2026-01-01"
+      },
+      "SearchEndDate": {
+        "name": "endDate",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string", "format": "date" },
+        "description": "검색 종료일 (yyyy-MM-dd)",
+        "example": "2026-12-31"
+      },
+      "SearchFormId": {
+        "name": "formId",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer", "format": "int64" },
+        "description": "양식 필터",
+        "example": 1
+      },
+      "SearchStatus": {
+        "name": "status",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string" },
+        "description": "상태 필터",
+        "example": "진행중"
+      },
+      "PageNumber": {
+        "name": "page",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer", "default": 0 },
+        "description": "페이지 번호 (0부터 시작)",
+        "example": 0
+      },
+      "PageSize": {
+        "name": "size",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "integer", "default": 10 },
+        "description": "페이지 크기",
+        "example": 10
+      },
+      "PageSort": {
+        "name": "sort",
+        "in": "query",
+        "required": false,
+        "schema": { "type": "string" },
+        "description": "정렬 (예: createdAt,desc)",
+        "example": "createdAt,desc"
       }
     },
     "schemas": {
-      "DocumentCreateRequest": {
-        "type": "object",
-        "properties": {
-          "formId": { "type": "integer", "example": 1 },
-          "docTitle": { "type": "string", "example": "2026년 상반기 채용요청" },
-          "docType": { "type": "string", "example": "채용요청" },
-          "docData": { "type": "string", "example": "{\"field1\":\"value1\"}" },
-          "isEmergency": { "type": "boolean", "example": false },
-          "approvalLines": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/ApprovalLineRequest" }
-          }
-        }
-      },
       "ApprovalLineRequest": {
         "type": "object",
         "properties": {
-          "empId": { "type": "integer", "example": 2 },
-          "empName": { "type": "string", "example": "김결재" },
-          "empDeptName": { "type": "string", "example": "경영지원" },
-          "empGrade": { "type": "string", "example": "부장" },
-          "empTitle": { "type": "string", "example": "부장" },
-          "approvalRole": { "type": "string", "enum": ["APPROVER", "REFERENCE", "VIEWER"], "example": "APPROVER" },
-          "lineStep": { "type": "integer", "example": 1 }
+          "empId": { "type": "integer", "format": "int64", "description": "결재자 사원 ID" },
+          "empName": { "type": "string", "description": "결재자 이름" },
+          "empDeptName": { "type": "string", "description": "결재자 부서명" },
+          "empGrade": { "type": "string", "description": "결재자 직급" },
+          "empTitle": { "type": "string", "description": "결재자 직책" },
+          "approvalRole": { "type": "string", "description": "결재 역할 (결재자/합의자/참조/열람)" },
+          "lineStep": { "type": "integer", "description": "결재 순서" }
+        }
+      },
+      "DocumentCreateRequest": {
+        "type": "object",
+        "required": ["formId", "docTitle"],
+        "properties": {
+          "formId": { "type": "integer", "format": "int64", "description": "양식 ID" },
+          "docTitle": { "type": "string", "description": "문서 제목" },
+          "docType": { "type": "string", "description": "문서 유형" },
+          "docData": { "type": "string", "description": "양식 데이터 (HTML/JSON string)" },
+          "isEmergency": { "type": "boolean", "description": "긴급 여부", "default": false },
+          "approvalLines": { "type": "array", "items": { "$ref": "#/components/schemas/ApprovalLineRequest" }, "description": "결재선 목록" }
         }
       },
       "DocumentUpdateRequest": {
         "type": "object",
         "properties": {
-          "docTitle": { "type": "string", "example": "수정된 제목" },
-          "docData": { "type": "string", "example": "{\"field1\":\"updated\"}" },
-          "isEmergency": { "type": "boolean", "example": false },
-          "approvalLines": {
-            "type": "array",
-            "nullable": true,
-            "items": { "$ref": "#/components/schemas/ApprovalLineRequest" },
-            "description": "null이면 기존 결재선 유지, 값 넣으면 교체"
-          }
+          "docTitle": { "type": "string", "description": "문서 제목" },
+          "docData": { "type": "string", "description": "양식 데이터" },
+          "isEmergency": { "type": "boolean", "description": "긴급 여부" },
+          "approvalLines": { "type": "array", "items": { "$ref": "#/components/schemas/ApprovalLineRequest" }, "description": "결재선 목록" }
+        }
+      },
+      "ApprovalLineResponse": {
+        "type": "object",
+        "properties": {
+          "lineId": { "type": "integer", "format": "int64" },
+          "empId": { "type": "integer", "format": "int64" },
+          "empName": { "type": "string" },
+          "empDeptName": { "type": "string" },
+          "empGrade": { "type": "string" },
+          "empTitle": { "type": "string" },
+          "approvalRole": { "type": "string" },
+          "lineStep": { "type": "integer" },
+          "approvalLineStatus": { "type": "string", "description": "대기/승인/반려 등" },
+          "lineProcessedAt": { "type": "string", "format": "date-time" },
+          "lineRejectReason": { "type": "string" },
+          "isDelegated": { "type": "boolean" },
+          "isRead": { "type": "boolean" }
+        }
+      },
+      "DocumentDetailResponse": {
+        "type": "object",
+        "properties": {
+          "docId": { "type": "integer", "format": "int64" },
+          "docNum": { "type": "string", "description": "문서번호 (예: 인사-채용-260402-001)" },
+          "docTitle": { "type": "string" },
+          "docType": { "type": "string" },
+          "docData": { "type": "string" },
+          "approvalStatus": { "type": "string", "description": "임시저장/진행중/완료/반려/회수" },
+          "isEmergency": { "type": "boolean" },
+          "docSubmittedAt": { "type": "string", "format": "date-time" },
+          "docCompleteAt": { "type": "string", "format": "date-time" },
+          "empId": { "type": "integer", "format": "int64", "description": "기안자 사원 ID" },
+          "empName": { "type": "string", "description": "기안자 이름" },
+          "empDeptName": { "type": "string", "description": "기안자 부서명" },
+          "empGrade": { "type": "string", "description": "기안자 직급" },
+          "empTitle": { "type": "string", "description": "기안자 직책" },
+          "formHtml": { "type": "string", "description": "양식 HTML" },
+          "formName": { "type": "string", "description": "양식명" },
+          "approvalLines": { "type": "array", "items": { "$ref": "#/components/schemas/ApprovalLineResponse" } },
+          "attachments": { "type": "array", "items": { "$ref": "#/components/schemas/AttachmentListResponse" } }
+        }
+      },
+      "DocumentListResponseDto": {
+        "type": "object",
+        "properties": {
+          "docId": { "type": "integer", "format": "int64" },
+          "docTitle": { "type": "string" },
+          "docNum": { "type": "string" },
+          "docStatus": { "type": "string" },
+          "isEmergency": { "type": "boolean" },
+          "formName": { "type": "string" },
+          "drafterName": { "type": "string" },
+          "drafterDept": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "hasAttachment": { "type": "boolean" }
+        }
+      },
+      "PageDocumentListResponseDto": {
+        "type": "object",
+        "properties": {
+          "content": { "type": "array", "items": { "$ref": "#/components/schemas/DocumentListResponseDto" } },
+          "pageable": { "type": "object" },
+          "totalElements": { "type": "integer", "format": "int64" },
+          "totalPages": { "type": "integer" },
+          "size": { "type": "integer" },
+          "number": { "type": "integer" },
+          "first": { "type": "boolean" },
+          "last": { "type": "boolean" },
+          "empty": { "type": "boolean" }
+        }
+      },
+      "FormFolderResponse": {
+        "type": "object",
+        "properties": {
+          "folderId": { "type": "integer", "format": "int64" },
+          "folderName": { "type": "string" },
+          "folderPath": { "type": "string" },
+          "folderSortOrder": { "type": "integer" },
+          "folderIsVisible": { "type": "boolean" },
+          "children": { "type": "array", "items": { "$ref": "#/components/schemas/FormFolderResponse" }, "description": "하위 폴더 (재귀 트리)" }
+        }
+      },
+      "FormListResponse": {
+        "type": "object",
+        "properties": {
+          "formId": { "type": "integer", "format": "int64" },
+          "formName": { "type": "string" },
+          "formCode": { "type": "string" },
+          "folderId": { "type": "integer", "format": "int64" },
+          "folderName": { "type": "string" },
+          "isSystem": { "type": "boolean" },
+          "formVersion": { "type": "integer" },
+          "isActive": { "type": "boolean" },
+          "formWritePermission": { "type": "string" },
+          "formIsPublic": { "type": "boolean" },
+          "formRetentionYear": { "type": "integer" },
+          "formMobileYn": { "type": "boolean" },
+          "formPreApprovalYn": { "type": "boolean" },
+          "formSortOrder": { "type": "integer" }
+        }
+      },
+      "FormDetailResponse": {
+        "type": "object",
+        "properties": {
+          "formId": { "type": "integer", "format": "int64" },
+          "formName": { "type": "string" },
+          "formCode": { "type": "string" },
+          "formHtml": { "type": "string", "description": "양식 HTML 템플릿" },
+          "folderId": { "type": "integer", "format": "int64" },
+          "folderName": { "type": "string" },
+          "isSystem": { "type": "boolean" },
+          "formVersion": { "type": "integer" },
+          "isCurrent": { "type": "boolean" },
+          "isActive": { "type": "boolean" },
+          "empId": { "type": "integer", "format": "int64" },
+          "formWritePermission": { "type": "string" },
+          "formIsPublic": { "type": "boolean" },
+          "formRetentionYear": { "type": "integer" },
+          "formMobileYn": { "type": "boolean" },
+          "formPreApprovalYn": { "type": "boolean" },
+          "formSortOrder": { "type": "integer" }
+        }
+      },
+      "AttachmentResponse": {
+        "type": "object",
+        "properties": {
+          "attachId": { "type": "integer", "format": "int64" },
+          "fileName": { "type": "string" },
+          "fileSize": { "type": "integer", "format": "int64" },
+          "fileUrl": { "type": "string" }
+        }
+      },
+      "AttachmentListResponse": {
+        "type": "object",
+        "properties": {
+          "attachId": { "type": "integer", "format": "int64" },
+          "fileName": { "type": "string" },
+          "fileSize": { "type": "integer", "format": "int64" }
+        }
+      },
+      "NumberRuleResponse": {
+        "type": "object",
+        "properties": {
+          "numberRuleId": { "type": "integer", "format": "int64" },
+          "numberRuleSlot1Type": { "type": "string" },
+          "numberRuleSlot1Custom": { "type": "string" },
+          "numberRuleSlot2Type": { "type": "string" },
+          "numberRuleSlot2Custom": { "type": "string" },
+          "numberRuleSlot3Type": { "type": "string" },
+          "numberRuleSlot3Custom": { "type": "string" },
+          "numberRuleDateFormat": { "type": "string" },
+          "numberRuleSeqDigits": { "type": "integer" },
+          "numberRuleSeparator": { "type": "string" },
+          "numberRuleSeqResetCycle": { "type": "string" },
+          "preview": { "type": "string", "description": "미리보기 (예: 인사-채용-260402-001)" }
+        }
+      },
+      "NumberRuleUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "numberRuleSlot1Type": { "type": "string" },
+          "numberRuleSlot1Custom": { "type": "string" },
+          "numberRuleSlot2Type": { "type": "string" },
+          "numberRuleSlot2Custom": { "type": "string" },
+          "numberRuleSlot3Type": { "type": "string" },
+          "numberRuleSlot3Custom": { "type": "string" },
+          "numberRuleDateFormat": { "type": "string" },
+          "numberRuleSeqDigits": { "type": "integer" },
+          "numberRuleSeparator": { "type": "string" },
+          "numberRuleSeqResetCycle": { "type": "string" }
+        }
+      },
+      "ApprovalLineTemplateListItemDto": {
+        "type": "object",
+        "properties": {
+          "empId": { "type": "integer", "format": "int64", "description": "사원 ID" },
+          "approvalRole": { "type": "string", "description": "결재 역할 (APPROVER, CC 등)" },
+          "step": { "type": "integer", "description": "결재 순서" }
+        }
+      },
+      "ApprovalLineTemplateCreateRequest": {
+        "type": "object",
+        "properties": {
+          "lineTemName": { "type": "string", "description": "템플릿 이름" },
+          "isDefault": { "type": "boolean", "description": "기본 템플릿 여부" },
+          "itemDto": { "type": "array", "items": { "$ref": "#/components/schemas/ApprovalLineTemplateListItemDto" } }
+        }
+      },
+      "ApprovalLineTemplateResponse": {
+        "type": "object",
+        "properties": {
+          "lineTemId": { "type": "integer", "format": "int64" },
+          "lineTemName": { "type": "string" },
+          "isDefault": { "type": "boolean" },
+          "itemDto": { "type": "array", "items": { "$ref": "#/components/schemas/ApprovalLineTemplateListItemDto" } }
+        }
+      },
+      "ApprovalDelegationCreateRequest": {
+        "type": "object",
+        "properties": {
+          "empDeptName": { "type": "string", "description": "위임자 부서명" },
+          "empGrade": { "type": "string", "description": "위임자 직급" },
+          "empTitle": { "type": "string", "description": "위임자 직책" },
+          "appDeleEmpId": { "type": "integer", "format": "int64", "description": "대결자 사원 ID" },
+          "deleName": { "type": "string", "description": "대결자 이름" },
+          "deleDeptName": { "type": "string", "description": "대결자 부서명" },
+          "deleGrade": { "type": "string", "description": "대결자 직급" },
+          "deleTitle": { "type": "string", "description": "대결자 직책" },
+          "appDeleStartAt": { "type": "string", "format": "date", "description": "위임 시작일 (yyyy-MM-dd)" },
+          "appDeleEndAt": { "type": "string", "format": "date", "description": "위임 종료일 (yyyy-MM-dd)" },
+          "appDeleReason": { "type": "string", "description": "위임 사유" }
+        }
+      },
+      "ApprovalDelegationResponse": {
+        "type": "object",
+        "properties": {
+          "appDeleId": { "type": "integer", "format": "int64" },
+          "empId": { "type": "integer", "format": "int64" },
+          "empName": { "type": "string" },
+          "empDeptName": { "type": "string" },
+          "empGrade": { "type": "string" },
+          "empTitle": { "type": "string" },
+          "deleEmpId": { "type": "integer", "format": "int64" },
+          "deleName": { "type": "string" },
+          "deleDeptName": { "type": "string" },
+          "deleGrade": { "type": "string" },
+          "deleTitle": { "type": "string" },
+          "startAt": { "type": "string", "format": "date" },
+          "endAt": { "type": "string", "format": "date" },
+          "reason": { "type": "string" },
+          "isActive": { "type": "boolean" },
+          "createdAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ApprovalSignatureResponseDto": {
+        "type": "object",
+        "properties": {
+          "attachId": { "type": "integer", "format": "int64" },
+          "sigEmpId": { "type": "integer", "format": "int64" },
+          "originalFileName": { "type": "string" },
+          "fileUrl": { "type": "string" },
+          "fileSize": { "type": "integer", "format": "int64" },
+          "sigManagerId": { "type": "integer", "format": "int64", "description": "대리 등록한 관리자 ID (본인 등록 시 null)" }
+        }
+      },
+      "DeptFolderCreateRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "문서함 이름" }
+        }
+      },
+      "DeptFolderUpdateRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "문서함 이름" }
+        }
+      },
+      "ReorderItem": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64", "description": "리소스 ID" },
+          "sortOrder": { "type": "integer", "description": "변경할 순서" }
+        }
+      },
+      "ReorderRequest": {
+        "type": "object",
+        "properties": {
+          "orderList": { "type": "array", "items": { "$ref": "#/components/schemas/ReorderItem" } }
+        }
+      },
+      "ManagerInfo": {
+        "type": "object",
+        "properties": {
+          "empId": { "type": "integer", "format": "int64" },
+          "empName": { "type": "string" },
+          "deptName": { "type": "string" }
+        }
+      },
+      "ManagerAddRequest": {
+        "type": "object",
+        "properties": {
+          "empId": { "type": "integer", "format": "int64", "description": "담당자 사원 ID" },
+          "empName": { "type": "string", "description": "담당자 이름" },
+          "deptName": { "type": "string", "description": "담당자 부서명" }
+        }
+      },
+      "DeptFolderResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date" },
+          "docCount": { "type": "integer" },
+          "sortOrder": { "type": "integer" },
+          "managers": { "type": "array", "items": { "$ref": "#/components/schemas/ManagerInfo" } }
+        }
+      },
+      "AutoClassifyConditions": {
+        "type": "object",
+        "properties": {
+          "titleContains": { "type": "string", "description": "제목 포함 키워드" },
+          "formName": { "type": "string", "description": "양식명" },
+          "drafterDept": { "type": "string", "description": "기안자 부서" },
+          "drafterName": { "type": "string", "description": "기안자 이름" }
+        }
+      },
+      "AutoClassifyRuleCreateRequest": {
+        "type": "object",
+        "properties": {
+          "ruleName": { "type": "string", "description": "규칙명" },
+          "conditions": { "$ref": "#/components/schemas/AutoClassifyConditions" },
+          "targetFolderId": { "type": "integer", "format": "int64", "description": "대상 문서함 ID" },
+          "isActive": { "type": "boolean" }
+        }
+      },
+      "AutoClassifyRuleUpdateRequest": {
+        "type": "object",
+        "properties": {
+          "ruleName": { "type": "string" },
+          "conditions": { "$ref": "#/components/schemas/AutoClassifyConditions" },
+          "targetFolderId": { "type": "integer", "format": "int64" },
+          "isActive": { "type": "boolean" }
+        }
+      },
+      "AutoClassifyRuleResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "ruleName": { "type": "string" },
+          "conditions": { "$ref": "#/components/schemas/AutoClassifyConditions" },
+          "targetFolderId": { "type": "integer", "format": "int64" },
+          "targetFolderName": { "type": "string" },
+          "isActive": { "type": "boolean" },
+          "sortOrder": { "type": "integer" }
+        }
+      },
+      "PersonalFolderRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "폴더 이름" }
+        }
+      },
+      "PersonalFolderTransferRequest": {
+        "type": "object",
+        "required": ["targetEmpId"],
+        "properties": {
+          "targetEmpId": { "type": "integer", "format": "int64", "description": "이관 대상 사원 ID" }
+        }
+      },
+      "PersonalFolderMoveRequest": {
+        "type": "object",
+        "properties": {
+          "docIds": { "type": "array", "items": { "type": "integer", "format": "int64" }, "description": "이동할 문서 ID 목록" },
+          "targetFolderId": { "type": "integer", "format": "int64", "description": "대상 폴더 ID" }
+        }
+      },
+      "PersonalFolderResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "format": "int64" },
+          "name": { "type": "string" },
+          "createdAt": { "type": "string", "format": "date" },
+          "sortOrder": { "type": "integer" },
+          "docCount": { "type": "integer" }
         }
       }
     }

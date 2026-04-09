@@ -55,8 +55,9 @@ public class ApprovalLineService {
         /*순차 합의 */
         validatePreviousStepApproved(docId, myLine.getLineStep());
 
-        /*결재선 승인 처리 */
+        /*결재선 승인 처리 + 읽음 처리 */
         myLine.approve();
+        myLine.markRead();
 
         /*결재자 승인 이력*/
         historyRepository.save(ApprovalStatusHistory.builder()
@@ -145,7 +146,9 @@ public class ApprovalLineService {
         /*순차 합의 */
         validatePreviousStepApproved(docId, myLine.getLineStep());
 
-        /*결재선 반려 처리 */
+        /*결재선 반려 처리 + 읽음 처리 */
+        myLine.reject(reason);
+        myLine.markRead();
         document.reject();
 
         /*상태 패턴 변경 이력 저장 */
@@ -177,6 +180,7 @@ public class ApprovalLineService {
     }
 
     /*결재자가 문서 확인 / 수신 접수*/
+    @Transactional
     public void receiveDocument(UUID companyId, Long empId, Long docId) {
         ApprovalLine myLine = findMyLine(docId, empId);
         myLine.markRead();

@@ -6,7 +6,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.joda.time.DateTime;
+
+import java.time.LocalDate;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -20,7 +21,7 @@ public class SalaryContractListResDto {
     private String rank; //직급
     private String position;    //직책
     private EmpType employmentType; //근로형태
-    private DateTime contractStart; //계약일자
+    private LocalDate contractStart; //계약일자
 
 
 }

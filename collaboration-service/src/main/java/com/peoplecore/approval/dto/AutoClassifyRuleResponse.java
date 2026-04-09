@@ -18,6 +18,8 @@ public class AutoClassifyRuleResponse {
     private Long targetFolderId;
     private String targetFolderName;
     private Boolean isActive;
+    private String sourceBox;       // "SENT" 또는 "INBOX"
+
     private Integer sortOrder;
 
     @Data
@@ -41,6 +43,7 @@ public class AutoClassifyRuleResponse {
                         .drafterDept(rule.getDrafterDept())
                         .drafterName(rule.getDrafterName())
                         .build())
+                .sourceBox(rule.getSourceBox().name())
                 .targetFolderId(rule.getTargetFolderId())
                 .targetFolderName(targetFolderName)
                 .isActive(rule.getIsActive())

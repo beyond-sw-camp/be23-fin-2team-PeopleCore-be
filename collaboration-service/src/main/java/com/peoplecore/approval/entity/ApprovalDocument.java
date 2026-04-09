@@ -58,6 +58,11 @@ public class ApprovalDocument extends BaseTimeEntity {
     private String empName;
 
     /**
+     * 기안자 부서 ID
+     */
+    private Long empDeptId;
+
+    /**
      * 기안자 부서
      */
     @Column(nullable = false)
@@ -80,6 +85,10 @@ public class ApprovalDocument extends BaseTimeEntity {
      */
     @Column(nullable = false)
     private String docType;
+
+
+    /*기안 의견 */
+    private String docOpinion;
 
     /**
      * 양식 데이터 - 양식 입력값이 JSON
@@ -160,6 +169,7 @@ public class ApprovalDocument extends BaseTimeEntity {
     public void updateDraft(String docTitle, String docData, Boolean isEmergency) {
         this.docTitle = docTitle;
         this.docData = docData;
+
         if (isEmergency != null) {
             this.isEmergency = isEmergency;
         }
@@ -170,12 +180,20 @@ public class ApprovalDocument extends BaseTimeEntity {
         this.docNum = docNum;
     }
 
+    /*개인 문서함 배정*/
+    public void assignPersonalFolder(Long personalFolderId) {
+        this.personalFolderId = personalFolderId;
+    }
+
     /*반려된 문서 재기안시 내용 수정 (REJECT일때만 호출)*/
-    public void updateForReSubmit(String docTitle, String docData, Boolean isEmergency) {
+    public void updateForReSubmit(String docTitle, String docData, Boolean isEmergency,String docOpinion) {
         this.docTitle = docTitle;
         this.docData = docData;
         if (isEmergency != null) {
             this.isEmergency = isEmergency;
+        }
+        if( docOpinion != null) {
+            this.docOpinion  = docOpinion;
         }
         this.docNum = null;
         this.docCompleteAt = null;

@@ -98,8 +98,13 @@ public enum ErrorCode {
     GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다."),
     TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다."),
     MANUAL_PASSWORD_REQUIRED(400, "비밀번호를 직접 입력해야 합니다."),
-    SALARY_CONTRACT_NOT_FOUND(500, "파일 업로드에 실패했습니다"),
-    FILE_UPLOAD_FAILED(404, "파일 업로드에 실패했습니다");
+
+
+//    연봉
+    SALARY_CONTRACT_NOT_FOUND(404, "계약서를 찾을 수 없습니다."),
+    SALARY_CONTRACT_ALREADY_DELETED(400, "이미 삭제된 계약서입니다."),
+    EMPLOYEE_NOT_RESIGNED(400, "퇴직 상태인 사원의 계약서만 삭제할 수 있습니다."),
+    FILE_UPLOAD_FAILED(500, "파일 업로드에 실패했습니다.");
 
 
     private final int status;

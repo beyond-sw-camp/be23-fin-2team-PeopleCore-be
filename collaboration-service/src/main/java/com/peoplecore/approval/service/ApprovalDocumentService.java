@@ -6,6 +6,10 @@ import com.peoplecore.approval.dto.DocumentDetailResponse;
 import com.peoplecore.approval.dto.DocumentUpdateRequest;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.repository.*;
+import com.peoplecore.approval.entity.SourceBoxType;
+import com.peoplecore.common.service.MinioService;
+import java.util.Map;
+import java.util.stream.Collectors;
 import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
 import com.peoplecore.approval.slot.SlotContextDto;
 import com.peoplecore.client.component.HrCacheService;
@@ -37,9 +41,12 @@ public class ApprovalDocumentService {
     private final ApprovalStatusHistoryRepository historyRepository;
     private final ApprovalAttachmentService attachmentService;
     private final AlarmEventPublisher alarmEventPublisher;
+    private final AutoClassifyExecutor autoClassifyExecutor;
+    private final ApprovalSignatureRepository signatureRepository;
+    private final MinioService minioService;
 
     @Autowired
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -48,6 +55,9 @@ public class ApprovalDocumentService {
         this.historyRepository = historyRepository;
         this.attachmentService = attachmentService;
         this.alarmEventPublisher = alarmEventPublisher;
+        this.autoClassifyExecutor = autoClassifyExecutor;
+        this.signatureRepository = signatureRepository;
+        this.minioService = minioService;
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번*/
@@ -73,12 +83,14 @@ public class ApprovalDocumentService {
                 .formId(form)
                 .empId(empId)
                 .empName(empName)
+                .empDeptId(deptId)
                 .empDeptName(deptInfoResponse.getDeptName())
                 .empGrade(empGrade)
                 .empTitle(empTitle)
                 .docType(request.getDocType())
                 .docData(request.getDocData())
                 .docTitle(request.getDocTitle())
+                .docOpinion(request.getDocOpinion())
                 .approvalStatus(ApprovalStatus.PENDING)
                 .isEmergency(request.getIsEmergency() != null ? request.getIsEmergency() : false)
                 .build();
@@ -91,6 +103,7 @@ public class ApprovalDocumentService {
                 .companyId(companyId)
                 .previousStatus(ApprovalStatus.PENDING)
                 .changedBy(empId)
+                .changedStatus(ApprovalStatus.PENDING)
                 .changeByName(empName)
                 .changeByDeptName(deptInfoResponse.getDeptName())
                 .changeByGrade(empGrade)
@@ -100,6 +113,9 @@ public class ApprovalDocumentService {
 
         /*결재선 저장 */
         saveApprovalLine(companyId, document, request.getApprovalLines());
+
+        /*기안자 자동분류 (SENT) */
+        autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, document);
 
         /*결재 라인 전원에게 알림 발행 */
         List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
@@ -120,12 +136,31 @@ public class ApprovalDocumentService {
         return document.getDocId();
     }
 
-    /*문서 상세 조회 */
-    public DocumentDetailResponse getDocumentDetail(UUID companyId, Long docId) {
+    /*문서 상세 조회 (열람 시 자동 읽음 처리) */
+    @Transactional
+    public DocumentDetailResponse getDocumentDetail(UUID companyId, Long empId, Long docId) {
         ApprovalDocument document = documentRepository.findWithFormById(companyId, docId).orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
         List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
 
-        DocumentDetailResponse response = DocumentDetailResponse.from(document, lines);
+        /* 본인 결재선이 있으면 읽음 처리 */
+        lines.stream()
+                .filter(line -> line.getEmpId().equals(empId) && !line.getIsRead())
+                .findFirst()
+                .ifPresent(ApprovalLine::markRead);
+
+        /* 기안자 + 결재선 서명 일괄 조회 (empId → presigned URL) */
+        List<Long> empIds = new java.util.ArrayList<>(lines.stream().map(ApprovalLine::getEmpId).distinct().toList());
+        if (!empIds.contains(document.getEmpId())) {
+            empIds.add(document.getEmpId());
+        }
+        Map<Long, String> signatureMap = signatureRepository.findByCompanyIdAndSigEmpIdIn(companyId, empIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        ApprovalSignature::getSigEmpId,
+                        sig -> minioService.getPresignedUrl(sig.getSigUrl())
+                ));
+
+        DocumentDetailResponse response = DocumentDetailResponse.from(document, lines, signatureMap);
         /* 첨부파일 목록 포함 (Pre-signed URL 포함) */
         response.setAttachments(attachmentService.getAttachments(docId));
         return response;
@@ -138,8 +173,9 @@ public class ApprovalDocumentService {
         document.updateDraft(request.getDocTitle(), request.getDocData(), request.getIsEmergency());
 
         /*결재선 교체 : 기존 삭제 -> 새로 저장 */
-        if (request.getApprovalLines() != null) {
+        if (request.getApprovalLines() != null && !request.getApprovalLines().isEmpty()) {
             lineRepository.deleteByDocId_DocId(docId);
+            lineRepository.flush();
             saveApprovalLine(companyId, document, request.getApprovalLines());
         }
     }
@@ -154,6 +190,7 @@ public class ApprovalDocumentService {
         documentRepository.delete(document);
     }
 
+
     /*임시 저장 - Draft 상태로 생성 (채번 없음) */
     @Transactional
     public Long saveTempDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request) {
@@ -166,19 +203,22 @@ public class ApprovalDocumentService {
                 .formId(form)
                 .empId(empId)
                 .empName(empName)
+                .empDeptId(deptId)
                 .empDeptName(deptInfo.getDeptName())
                 .empGrade(empGrade)
                 .empTitle(empTitle)
                 .docType(request.getDocType())
                 .docData(request.getDocData())
                 .docTitle(request.getDocTitle())
+                .docOpinion(request.getDocOpinion())
                 .approvalStatus(ApprovalStatus.DRAFT)
+                .personalFolderId(request.getPersonalFolderId())
                 .isEmergency(request.getIsEmergency() != null ? request.getIsEmergency() : false)
                 .build();
         documentRepository.save(document);
 
         /*결재선이 있다면 함께 저장 */
-        if (request.getApprovalLines() != null) {
+        if (request.getApprovalLines() != null && !request.getApprovalLines().isEmpty()) {
             saveApprovalLine(companyId, document, request.getApprovalLines());
         }
         return document.getDocId();
@@ -220,6 +260,9 @@ public class ApprovalDocumentService {
 
         /*상태 패턴 : DRAFT -> PENDING으로 DraftState.submit() 호출 */
         document.submit();
+
+        /*기안자 자동분류 (SENT) */
+        autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, document);
 
         historyRepository.save(ApprovalStatusHistory.builder()
                 .docId(docId)
@@ -291,7 +334,7 @@ public class ApprovalDocumentService {
                 .changedAt(LocalDateTime.now())
                 .build());
         /* 문서 내용 수정 + 이전 채번/완료일시 초기화 */
-        document.updateForReSubmit(request.getDocTitle(), request.getDocData(), request.getIsEmergency());
+        document.updateForReSubmit(request.getDocTitle(), request.getDocData(), request.getIsEmergency(), request.getDocOpinion());
 
         /* 새 채번 생성 */
         DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
@@ -311,6 +354,8 @@ public class ApprovalDocumentService {
         /* 상태 패턴: REJECTED → PENDING (RejectedState.submit() 호출) */
         document.submit();
 
+        /*기안자 자동분류 (SENT) */
+        autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, document);
 
         /* 결재선 교체가 필요한 경우 */
         if (request.getApprovalLines() != null) {
@@ -406,7 +451,7 @@ public class ApprovalDocumentService {
 
     /*결재선 저장 */
     private void saveApprovalLine(UUID companyId, ApprovalDocument document, List<DocumentCreateRequest.ApprovalLineRequest> lineRequests) {
-        if (lineRequests == null) return;
+        if (lineRequests == null || lineRequests.isEmpty()) return;
 
         List<ApprovalLine> lines = lineRequests.stream()
                 .map(req -> ApprovalLine.builder()
@@ -415,6 +460,7 @@ public class ApprovalDocumentService {
                         .empId(req.getEmpId())
                         .empName(req.getEmpName())
                         .empGrade(req.getEmpGrade())
+                        .empDeptId(req.getEmpDeptId())
                         .empDeptName(req.getEmpDeptName())
                         .empTitle(req.getEmpTitle())
                         .approvalRole(ApprovalRole.valueOf(req.getApprovalRole()))

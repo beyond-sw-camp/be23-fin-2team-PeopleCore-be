@@ -16,7 +16,10 @@ public class DocumentUpdateRequest {
     private String docTitle;
     private String docData;
     private Boolean isEmergency;
+    private String docOpinion;
 
-    /** 결재선 수정 */
+    /**
+     * 결재선 수정
+     */
     private List<DocumentCreateRequest.ApprovalLineRequest> approvalLines;
 }

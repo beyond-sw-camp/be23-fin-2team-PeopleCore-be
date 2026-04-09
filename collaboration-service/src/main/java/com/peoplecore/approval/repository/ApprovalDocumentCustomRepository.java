@@ -1,5 +1,6 @@
 package com.peoplecore.approval.repository;
 
+import com.peoplecore.approval.dto.DocumentCountResponse;
 import com.peoplecore.approval.dto.DocumentListResponseDto;
 import com.peoplecore.approval.dto.DocumentListSearchDto;
 import org.springframework.data.domain.Page;
@@ -13,9 +14,6 @@ public interface ApprovalDocumentCustomRepository {
 
     /*결재 대기 문서*/
     Page<DocumentListResponseDto> findWaitingDocument(UUID companyId, Long empId, DocumentListSearchDto searchDto, Pageable pageable);
-
-    /*결재 수신 문서*/
-    Page<DocumentListResponseDto> findReceiveDocument(UUID companyId, Long empId, DocumentListSearchDto searchDto, Pageable pageable);
 
     /*참조/열람 대기 문서*/
     Page<DocumentListResponseDto> findCcViewDocument(UUID companyId, Long empId, DocumentListSearchDto searchDto, Pageable pageable);
@@ -35,22 +33,25 @@ public interface ApprovalDocumentCustomRepository {
     /*참조 열람 문서함*/
     Page<DocumentListResponseDto> findCcViewBoxDocument(UUID companyId, Long empId, DocumentListSearchDto searchDto, Pageable pageable);
 
-    /*발송 문서함*/
-    Page<DocumentListResponseDto> findSentDocument(UUID companyId, Long empId, DocumentListSearchDto searchDto, Pageable pageable);
-
     /*수신 문서함*/
     Page<DocumentListResponseDto> findInboxDocument(UUID companyId, Long empId, DocumentListSearchDto searchDto, Pageable pageable);
 
-    /*부서 문서함 deptName 기준 */
+    /*개인 폴더 문서함*/
+    Page<DocumentListResponseDto> findPersonalFolderDocument(UUID companyId, Long empId, Long folderId, DocumentListSearchDto searchDto, Pageable pageable);
 
-    /*부서 결재 대기함*/
-    Page<DocumentListResponseDto> findDeptCompletedDocument(UUID companyId, String deptName, DocumentListSearchDto searchDto, Pageable pageable);
+    /*전체 문서함 건수 조회 (단일 쿼리)*/
+    DocumentCountResponse countAllBoxes(UUID companyId, Long empId);
+
+    /*부서 문서함 deptId 기준 */
+
+    /*부서 완료 문서함*/
+    Page<DocumentListResponseDto> findDeptCompletedDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable);
 
     /*부서 수신 문서함 */
-    Page<DocumentListResponseDto> findDeptReceiveDocument(UUID companyId, String deptName, DocumentListSearchDto searchDto, Pageable pageable);
+    Page<DocumentListResponseDto> findDeptReceiveDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable);
 
     /* 부서 발신 문서함 */
-    Page<DocumentListResponseDto> findDeptSentDocument(UUID companyId, String deptName, DocumentListSearchDto searchDto, Pageable pageable);
+    Page<DocumentListResponseDto> findDeptSentDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable);
 
 
 }

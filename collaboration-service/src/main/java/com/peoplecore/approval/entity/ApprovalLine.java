@@ -51,6 +51,11 @@ public class ApprovalLine extends BaseTimeEntity {
     private String empName;
 
     /**
+     * 사원 부서 ID
+     */
+    private Long empDeptId;
+
+    /**
      * 사원 부서 이름
      */
     @Column(nullable = false)

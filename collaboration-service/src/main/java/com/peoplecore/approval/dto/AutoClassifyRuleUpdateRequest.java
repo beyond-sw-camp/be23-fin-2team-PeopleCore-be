@@ -15,4 +15,5 @@ public class AutoClassifyRuleUpdateRequest {
     private AutoClassifyRuleCreateRequest.Conditions conditions;
     private Long targetFolderId;
     private Boolean isActive;
+    private String sourceBox;       // "SENT" 또는 "INBOX"
 }

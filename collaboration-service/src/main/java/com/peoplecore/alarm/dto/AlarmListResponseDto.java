@@ -16,6 +16,7 @@ public class AlarmListResponseDto {
     private Long alarmId;
     private String alarmType;
     private String alarmTitle;
+    private String alarmContent;
     private String alarmLink;
     private String alarmRefType;
     private Long alarmRefId;
@@ -27,6 +28,7 @@ public class AlarmListResponseDto {
                 .alarmId(alarm.getAlarmId())
                 .alarmType(alarm.getAlarmType())
                 .alarmTitle(alarm.getAlarmTitle())
+                .alarmContent(alarm.getAlarmContent())
                 .alarmLink(alarm.getAlarmLink())
                 .alarmRefType(alarm.getAlarmRefType())
                 .alarmRefId(alarm.getAlarmRefId())
