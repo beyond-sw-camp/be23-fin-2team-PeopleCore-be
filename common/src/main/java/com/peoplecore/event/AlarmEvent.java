@@ -14,7 +14,7 @@ import java.util.UUID;
 @Data
 public class AlarmEvent {
     private UUID companyId;
-    /*Approval, attendance, board, Hr, System*/
+    /*Approval, attendance, board, Hr, System, Calendar*/
     private String alarmType;
 
     private String alarmTitle;

@@ -21,7 +21,7 @@ public class CalendarShareRequests {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long calendarShareReqid;
+    private Long calendarShareReqId;
 
 //  요청사원ID
     private Long fromEmpId;
@@ -44,4 +44,17 @@ public class CalendarShareRequests {
     @Column(nullable = false)
     private UUID companyId;
 
+
+    public void approve(){
+        this.shareStatus = ShareStatus.APPROVED;
+        this.respondedAt = LocalDateTime.now();
+    }
+    public void reject(){
+        this.shareStatus = ShareStatus.REJECTED;
+        this.respondedAt = LocalDateTime.now();
+    }
+    public void cancel(){
+        this.shareStatus = ShareStatus.CANCELLED;
+        this.respondedAt = LocalDateTime.now();
+    }
 }

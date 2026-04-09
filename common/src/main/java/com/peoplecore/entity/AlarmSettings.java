@@ -29,7 +29,7 @@ public class AlarmSettings {
     @Column(length = 50)
     private String service;
     @Column(length = 50)
-    private String eventTyps;
+    private String eventTypes;
 
     @Builder.Default
     private Boolean emailEnabled = true;

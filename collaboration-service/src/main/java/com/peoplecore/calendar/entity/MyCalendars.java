@@ -34,4 +34,25 @@ public class MyCalendars extends BaseTimeEntity {
     @Column(nullable = false)
     private UUID companyId;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isDefault = false;
+
+
+    public void updateName(String calendarName){
+        this.calendarName = calendarName;
+    }
+    public void updateColor(String color){
+        this.myDisplayColor = color;
+    }
+    public void toggleVisible(){
+        this.isVisible = !Boolean.TRUE.equals(this.isVisible);
+    }
+    public void updateSortOrder(Integer sortOrder){
+        this.sortOrder = sortOrder;
+    }
+
+    public boolean isDefaultCalendar(){
+        return Boolean.TRUE.equals(this.isDefault);
+    }
 }
