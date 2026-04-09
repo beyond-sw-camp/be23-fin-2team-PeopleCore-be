@@ -65,7 +65,6 @@ public class ApprovalFormFolder extends BaseTimeEntity {
     /**
      * 등록자 id
      */
-    @Column(nullable = false)
     private Long folderEmpId;
 
     public void updateFolderName(String folderName) {
