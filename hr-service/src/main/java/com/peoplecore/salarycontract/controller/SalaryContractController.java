@@ -3,6 +3,7 @@ package com.peoplecore.salarycontract.controller;
 import com.peoplecore.salarycontract.domain.SalaryContractSortField;
 import com.peoplecore.salarycontract.dto.SalaryContractCreateReqDto;
 import com.peoplecore.salarycontract.dto.SalaryContractDetailResDto;
+import com.peoplecore.salarycontract.dto.SalaryContractHisToryResDto;
 import com.peoplecore.salarycontract.dto.SalaryContractListResDto;
 import com.peoplecore.salarycontract.service.SalaryContractService;
 import jakarta.validation.Valid;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 
+import java.util.List;
 import java.util.UUID;
 
 import static org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE;
@@ -46,27 +48,27 @@ public class SalaryContractController {
                                                              @RequestHeader("X-User-Id")Long userId,
                                                              @RequestPart("data") @Valid SalaryContractCreateReqDto req,
                                                              @RequestPart(value = "attachment", required = false) MultipartFile file) {
-        return ResponseEntity.ok(salaryContractService.create(UUID.fromString(companyId), req, file));
+        return ResponseEntity.ok(salaryContractService.create(UUID.fromString(companyId), userId, req, file));
     }
 
-//    //  3. 상세조회
-//    @GetMapping("/{id}")
-//    public ResponseEntity<SalaryContractDetailRes> detail(@RequestHeader("X-User-Company") String companyId,
-//                                                          @PathVariable Long id) {
-//        return ResponseEntity.ok(salaryContractService.detail(UUID.fromString(companyId), id));
-//    }
-////    4.사원별 계약 이력
-//    @GetMapping("/history/{empId}")
-//    public ResponseEntity<List<SalaryContractHistoryRes>>history(@RequestHeader("X-User-Company") String companyId,
-//                                                                 @PathVariable Long id){
-//        return ResponseEntity.ok(salaryContractService.history(UUID.fromString(companyId),empId));
-//    }
+    //  3. 상세조회
+    @GetMapping("/{id}")
+    public ResponseEntity<SalaryContractDetailResDto> detail(@RequestHeader("X-User-Company") String companyId,
+                                                          @PathVariable Long id) {
+        return ResponseEntity.ok(salaryContractService.detail(UUID.fromString(companyId), id));
+    }
+//    4.사원별 계약 이력
+    @GetMapping("/history/{empId}")
+    public ResponseEntity<List<SalaryContractHisToryResDto>>historysnap(@RequestHeader("X-User-Company") String companyId,
+                                                                    @PathVariable Long empId){
+        return ResponseEntity.ok(salaryContractService.historysnap(UUID.fromString(companyId),empId));
+    }
 //
-////    5.삭제
-//    @DeleteMapping("/{id}")
-//    public ResponseEntity<Void>delete(@RequestHeader("X-User-Company") String companyId,
-//                                      @PathVariable Long id) {
-//        return ResponseEntity.noContent.build()
-//    }
+//    5.삭제(softDelete
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void>delete(@RequestHeader("X-User-Company") String companyId,
+                                      @PathVariable Long id) {
+        return ResponseEntity.noContent().build();
+    }
 }
 

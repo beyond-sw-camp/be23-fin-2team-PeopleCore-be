@@ -1,11 +1,11 @@
 package com.peoplecore.salarycontract.service;
 
 
-
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
@@ -20,6 +20,7 @@ import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.domain.SalaryContractSortField;
 import com.peoplecore.salarycontract.dto.SalaryContractCreateReqDto;
 import com.peoplecore.salarycontract.dto.SalaryContractDetailResDto;
+import com.peoplecore.salarycontract.dto.SalaryContractHisToryResDto;
 import com.peoplecore.salarycontract.dto.SalaryContractListResDto;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
 import org.springframework.data.domain.Page;
@@ -29,9 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.*;
 
-
+import static io.lettuce.core.KillArgs.Builder.id;
 
 
 @Service
@@ -70,6 +73,18 @@ public class SalaryContractService {
         for (SalaryContractCreateReqDto.FieldValue fv : req.getFields()) {
             fieldMap.put(fv.getFieldKey(), fv.getValue());
         }
+
+//        contractYear, applyFrom, applyTo 추출
+        String contractYearStr = fieldMap.get("contractYear");
+        Integer contractYear = (contractYearStr != null && !contractYearStr.isBlank()) ? Integer.parseInt(contractYearStr):null;
+
+        String applyFromStr = fieldMap.get("contractStart");
+        LocalDate applyFrom = (applyFromStr != null && !applyFromStr.isBlank()) ? LocalDate.parse(applyFromStr):null;
+
+        String applyToStr = fieldMap.get("contractEnd");
+        LocalDate applyTo = (applyToStr != null &&!applyToStr.isBlank()) ? LocalDate.parse(applyToStr) : null;
+
+
 
 //       급여항목 분리 + totalAmount계산
         List<SalaryContractDetail> details = new ArrayList<>();
@@ -110,17 +125,20 @@ public class SalaryContractService {
                 .formValues(toJson(fieldMap))
                 .formSnapshot(formSnapshot)
                 .formVersion(formVersion)
+                .contractYear(contractYear)
+                .applyFrom(applyFrom)
+                .applyTo(applyTo)
                 .build();
 
 //        첨부파일 처리
         String fileName = null;
         if (file != null && !file.isEmpty()) { //TODO: MinIO업로드
             try {
-                fileName = minioService.uploadFile(file,"salary-contract");
+                fileName = minioService.uploadFile(file, "salary-contract");
             } catch (Exception e) {
-                    throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
-                }
+                throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
             }
+        }
 
 //        급여 상세 연결
         for (SalaryContractDetail d : details) {
@@ -130,16 +148,30 @@ public class SalaryContractService {
         return toDetailRes(contract);
     }
 
+    //    3. 상세조회
+    @Transactional(readOnly = true)
+    public SalaryContractDetailResDto detail(UUID companyId, Long contractId) {
+
+//        계약서 조회
+        SalaryContract contract = salaryContractRepository.findById(contractId).orElseThrow(() -> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
+
+//        타회사 계약서 접근 방시
+        if (!contract.getCompanyId().equals(companyId)) {
+            throw new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND);
+        }
+        return toDetailRes(contract);
+    }
+
     //    entity -> dto
     private SalaryContractDetailResDto toDetailRes(SalaryContract contract) {
         Employee emp = contract.getEmployee();
 
-//        formSnapshot에서 등록 당시 폼 구성 복원
+//        formSnapshot에서 등록 당시 폼 구성 복원 (일반필드먼저)
         List<FormFieldSetupResponse> snapshot = fromJson(contract.getFormSnapshot(), new TypeReference<List<FormFieldSetupResponse>>() {
         });
-
 //        formValues에서 저장된 값 복원
-        Map<String, String> values = fromJson(contract.getFormValues(), new TypeReference<Map<String,String>>() {});
+        Map<String, String> values = fromJson(contract.getFormValues(), new TypeReference<Map<String, String>>() {
+        });
         if (values == null) values = new HashMap<>();
 
 //        급여상세 필드로 합치기
@@ -149,7 +181,7 @@ public class SalaryContractService {
             }
         }
 
-//        snapshot기반으로 필드 목록 생성
+//        snapshot기반으로 필드 목록 생성(조립)
         List<SalaryContractDetailResDto.FieldDetail> fields = new ArrayList<>();
         if (snapshot != null) {
             for (FormFieldSetupResponse f : snapshot) {
@@ -175,7 +207,56 @@ public class SalaryContractService {
 
     }
 
-//    자바객체 json문자열 변환(수동변환 컨버터x)
+    //  4. 사원별 계약 이력
+    @Transactional
+    public List<SalaryContractHisToryResDto> historysnap(UUID companyId, Long empId) {
+
+//        사원조회
+        Employee emp = employeeRepository.findById(empId).orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+//        해당 사원 목록 조회(최신계약먼저: 내림차순)
+        List<SalaryContract> contracts = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(companyId, empId);
+
+//        계약서-> dto변환
+        List<SalaryContractHisToryResDto> result = new ArrayList<>();
+
+        for (SalaryContract c : contracts) {
+            result.add(SalaryContractHisToryResDto.builder()
+                    .id(c.getContractId())
+                    .empNum(emp.getEmpNum())
+                    .empName(emp.getEmpName())
+                    .department(emp.getDept().getDeptName())
+                    .rank(emp.getGrade().getGradeName())
+                    .year(c.getContractYear())
+                    .annualSalary(c.getTotalAmount())
+                    .contractStart(c.getApplyFrom())
+                    .contractEnd(c.getApplyTo())
+                    .build());
+        }
+
+//        전년대비 연봉변동 계산
+        for(int i = 0; i<result.size() -1; i++){
+            BigDecimal current = result.get(i).getAnnualSalary();
+            BigDecimal prev = result.get(i+1).getAnnualSalary();
+
+            if(current != null && prev != null && prev.compareTo(BigDecimal.ZERO) != 0){ // /0방지
+//                차이 = 올해-전년(양수-인상, 음수-삭감)
+                BigDecimal diff = current.subtract(prev);
+//                변동률 = 차이/전년 *100, 소수점 1자리 반올림
+                BigDecimal rate = diff.multiply(BigDecimal.valueOf(100)).divide(prev,1, RoundingMode.HALF_UP);
+
+                result.get(i).setSalaryDiff(diff);
+                result.get(i).setSalaryDiffRate(rate);
+
+            }
+        }
+        return result;
+    }
+
+//    entity
+
+
+    //    자바객체 json문자열 변환(수동변환 컨버터x)
     private String toJson(Object obj) {
         try {
             return objectMapper.writeValueAsString(obj);
@@ -183,16 +264,50 @@ public class SalaryContractService {
             return null;
         }
     }
-//json문자열을 자바 객체로 복원(수동변환 컨버터x)
-    private <T> T fromJson(String json, TypeReference<T> typeRef){
-        if(json == null || json.isBlank())return null;
-        try{
-            return objectMapper.readValue(json,typeRef);
-        }catch (JsonProcessingException e){
+
+    //json문자열을 자바 객체로 복원(수동변환 컨버터x)
+    private <T> T fromJson(String json, TypeReference<T> typeRef) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, typeRef);
+        } catch (JsonProcessingException e) {
             return null;
         }
     }
 //    List<FieldValue> → Map으로 변환 → JSON 문자열로 변환 → entity 저장, 조회는 entity의 JSON 문자열 → Map으로 복원 → FieldDetail 리스트로 변환 → 응답 DTO
 
+
+//    5. 계약서 삭제(soft delete)
+
+//    재직상태=퇴직 인 사원의 계약서만 삭제가능
+    public void delete(UUID companyId, Long contractId){
+
+//        계약서 조회
+        SalaryContract contract = salaryContractRepository.findById(contractId).orElseThrow(()->new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
+
+//        본인 회사만
+        if(!contract.getCompanyId().equals(companyId)){
+            throw new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND);
+        }
+
+//        삭제된 계약서인지 확인
+        if(contract.isDeleted()){
+            throw new CustomException(ErrorCode.SALARY_CONTRACT_ALREADY_DELETED);
+        }
+
+//        퇴직 상태의 사원 계약서만 삭제가능
+        if(contract.getEmployee().getEmpStatus() != EmpStatus.RESIGNED){
+            throw new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND);
+        }
+
+//        soft delete처리(deleteAt에 현재 날짜 세팅)
+        contract.softDelete();
+    }
 }
+
+
+
+
+
+
 

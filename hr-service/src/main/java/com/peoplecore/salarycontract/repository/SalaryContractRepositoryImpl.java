@@ -42,7 +42,8 @@ public class SalaryContractRepositoryImpl implements SalaryContractRepositoryCus
                 .where(
                         companyEq(companyId),        //회사필터
                         searchContains(search),     //이름/사번 검색
-                        yearEq(year)                //연도필터
+                        yearEq(year),  //연도필터
+                        qSalaryContract.deletedAt.isNull()
                 )
                 .orderBy(getOrderSpecifier(sortField))  //정렬
                 .offset(pageable.getOffset())       //시작위치
@@ -57,7 +58,8 @@ public class SalaryContractRepositoryImpl implements SalaryContractRepositoryCus
                 .where(
                         companyEq(companyId), //회사Id일치
                         searchContains(search), //검색어 필터
-                        yearEq(year) //연도필터
+                        yearEq(year), //연도필터
+                        qSalaryContract.deletedAt.isNull()
                 )
                 .fetchOne(); //count값으로 단일값
 
@@ -130,5 +132,10 @@ public class SalaryContractRepositoryImpl implements SalaryContractRepositoryCus
         }
         return qSalaryContract.contractYear.eq(Integer.parseInt(year));
     }
+
+////    soft delete필터(삭제되지 않은 건만 조회)
+//    private BooleanExpression notDeleted(){
+//        return qSalaryContract.deletedAt.isNull();
+//    }
 
 }

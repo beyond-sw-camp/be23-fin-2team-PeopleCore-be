@@ -64,13 +64,13 @@ public class EmployeeController {
 
 //
 ////    4. 상세 조희
-    @GetMapping("{empId}")
+    @GetMapping("/{empId}")
     public ResponseEntity<EmpDetailResponseDto>getEmpDetail(@RequestHeader("X-User-Company")UUID companyId,@PathVariable Long empId){
         return ResponseEntity.ok(employeeService.getEmployeeDetail(companyId,empId));
     }
 //
 ////    5. 정보 수정
-    @PutMapping("{empId}")
+    @PutMapping("/{empId}")
     public ResponseEntity<EmpDetailResponseDto> updateEmployee(
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long empId,
@@ -79,7 +79,7 @@ public class EmployeeController {
     }
 
 //    6. 삭제
-    @DeleteMapping("{empId}")
+    @DeleteMapping("/{empId}")
     public ResponseEntity<Void>deleteEmployee(
             @RequestHeader("X-User-Company")UUID companyId,
             @PathVariable Long empId){
