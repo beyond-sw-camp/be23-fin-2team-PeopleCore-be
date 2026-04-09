@@ -25,6 +25,7 @@ public class DocumentCreateRequest {
     private String docOpinion;
     private Boolean isEmergency;
     private Long personalFolderId;
+    private Long deptFolderId;
 
     //    결재선 목록
     private List<ApprovalLineRequest> approvalLines;

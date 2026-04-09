@@ -96,6 +96,9 @@ public class ApprovalDocumentService {
                 .build();
 
         document.markSubmitted();
+        if (request.getDeptFolderId() != null) {
+            document.assignDeptFolder(request.getDeptFolderId());
+        }
         documentRepository.save(document);
 
         historyRepository.save(ApprovalStatusHistory.builder()
@@ -216,6 +219,7 @@ public class ApprovalDocumentService {
                 .docOpinion(request.getDocOpinion())
                 .approvalStatus(ApprovalStatus.DRAFT)
                 .personalFolderId(request.getPersonalFolderId())
+                .deptFolderId(request.getDeptFolderId())
                 .isEmergency(request.getIsEmergency() != null ? request.getIsEmergency() : false)
                 .build();
         documentRepository.save(document);
