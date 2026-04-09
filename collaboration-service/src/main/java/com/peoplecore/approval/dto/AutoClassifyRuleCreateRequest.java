@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class AutoClassifyRuleCreateRequest {
 
     private String ruleName;
+    private String sourceBox;       // "SENT" 또는 "INBOX"
     private Conditions conditions;
     private Long targetFolderId;
     private Boolean isActive;

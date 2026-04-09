@@ -6,7 +6,7 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
-**/be23-fin-PeopleCore/최프_hjh
+**/최프_hjh
 # ============================
 # IntelliJ IDEA
 # ============================

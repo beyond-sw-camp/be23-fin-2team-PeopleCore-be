@@ -6,6 +6,7 @@ import com.peoplecore.auth.dto.FaceHealthResponse;
 import com.peoplecore.auth.dto.FaceRecognizeResponse;
 import com.peoplecore.auth.dto.FaceRegisterResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -33,7 +34,7 @@ public class FaceRecognitionClient {
                 .bodyValue(request)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response ->
-                        response.bodyToMono(Map.class).flatMap(body -> {
+                        response.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}).flatMap(body -> {
                             String detail = body.getOrDefault("detail", "얼굴 인식에 실패했습니다.").toString();
                             return Mono.error(new IllegalArgumentException(detail));
                         })
@@ -52,7 +53,7 @@ public class FaceRecognitionClient {
                 ))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response ->
-                        response.bodyToMono(Map.class).flatMap(body -> {
+                        response.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}).flatMap(body -> {
                             String detail = body.getOrDefault("detail", "얼굴 등록에 실패했습니다.").toString();
                             return Mono.error(new IllegalArgumentException(detail));
                         })
@@ -66,12 +67,12 @@ public class FaceRecognitionClient {
                 .uri("/unregister/{empId}", empId)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response ->
-                        response.bodyToMono(Map.class).flatMap(body -> {
+                        response.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}).flatMap(body -> {
                             String detail = body.getOrDefault("detail", "얼굴 삭제에 실패했습니다.").toString();
                             return Mono.error(new IllegalArgumentException(detail));
                         })
                 )
-                .bodyToMono(Map.class)
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
                 .block();
     }
 
@@ -81,7 +82,7 @@ public class FaceRecognitionClient {
                 .bodyValue(Map.of("image", base64Image))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response ->
-                        response.bodyToMono(Map.class).flatMap(body -> {
+                        response.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}).flatMap(body -> {
                             String detail = body.getOrDefault("detail", "얼굴 인식에 실패했습니다.").toString();
                             return Mono.error(new IllegalArgumentException(detail));
                         })

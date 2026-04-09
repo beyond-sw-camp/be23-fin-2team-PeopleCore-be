@@ -19,4 +19,10 @@ public interface ApprovalDelegationRepository extends JpaRepository<ApprovalDele
 
     /*중복 위임체크 - 기간 겹침 방지 */
     boolean existsByCompanyIdAndEmpIdAndIsActiveTrueAndStartAtLessThanEqualAndEndAtGreaterThanEqual(UUID companyId, Long empId, LocalDate endAt, LocalDate startAt);
+
+    /*관리자용 - 회사 전체 위임 목록 조회 */
+    List<ApprovalDelegation> findByCompanyIdOrderByCreatedAtDesc(UUID companyId);
+
+    /*관리자용 - 위임 단건 조회 (empId 검증 없이) */
+    Optional<ApprovalDelegation> findByAppDeleIdAndCompanyId(Long appDeleId, UUID companyId);
 }

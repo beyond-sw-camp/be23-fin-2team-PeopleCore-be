@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @NoArgsConstructor
@@ -33,10 +34,13 @@ public class DocumentDetailResponse {
     private String empDeptName;
     private String empGrade;
     private String empTitle;
+    private String docOpinion;
+    private String drafterSigUrl;
 
     //    양식 html
     private String formHtml;
     private String formName;
+    private Long formId;
 
     //    결재선
     private List<ApprovalLineResponse> approvalLines;
@@ -63,9 +67,14 @@ public class DocumentDetailResponse {
         private String lineRejectReason;
         private Boolean isDelegated;
         private Boolean isRead;
+        private String sigUrl;
     }
 
     public static DocumentDetailResponse from(ApprovalDocument doc, List<ApprovalLine> lines) {
+        return from(doc, lines, Map.of());
+    }
+
+    public static DocumentDetailResponse from(ApprovalDocument doc, List<ApprovalLine> lines, Map<Long, String> signatureMap) {
         List<ApprovalLineResponse> lineResponses = lines.stream().map(line -> ApprovalLineResponse.builder()
                 .lineId(line.getLineId())
                 .empId(line.getEmpId())
@@ -80,6 +89,7 @@ public class DocumentDetailResponse {
                 .lineRejectReason(line.getLineRejectReason())
                 .isDelegated(line.getIsDelegated())
                 .isRead(line.getIsRead())
+                .sigUrl(signatureMap.get(line.getEmpId()))
                 .build()).toList();
 
         return DocumentDetailResponse.builder()
@@ -88,6 +98,7 @@ public class DocumentDetailResponse {
                 .docTitle(doc.getDocTitle())
                 .docData(doc.getDocData())
                 .docType(doc.getDocType())
+                .docOpinion(doc.getDocOpinion())
                 .approvalStatus(doc.getApprovalStatus().name())
                 .isEmergency(doc.getIsEmergency())
                 .docSubmittedAt(doc.getDocSubmittedAt())
@@ -97,8 +108,10 @@ public class DocumentDetailResponse {
                 .empDeptName(doc.getEmpDeptName())
                 .empGrade(doc.getEmpGrade())
                 .empTitle(doc.getEmpTitle())
+                .drafterSigUrl(signatureMap.get(doc.getEmpId()))
                 .formHtml(doc.getFormId().getFormHtml())
                 .formName(doc.getFormId().getFormName())
+                .formId(doc.getFormId().getFormId())
                 .approvalLines(lineResponses).build();
     }
 }

@@ -11,9 +11,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.swing.text.html.Option;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -40,20 +42,43 @@ public class ApprovalNumberRuleService {
     /*채번 규칙 수정 */
     @Transactional
     public void updateNumberRule(UUID companyId, Long empId, NumberRuleUpdateRequest request) {
-        ApprovalNumberRule rule = numberRuleRepository.findByNumberRuleCompanyId(companyId).orElseThrow(() -> new BusinessException("채번 규칙이 설정되지 않았습니다. ", HttpStatus.NOT_FOUND));
+        Optional<ApprovalNumberRule> rule = numberRuleRepository.findByNumberRuleCompanyId(companyId);
 
-        rule.updateRule(
-                request.getNumberRuleSlot1Type(),
-                request.getNumberRuleSlot1Custom(),
-                request.getNumberRuleSlot2Type(),
-                request.getNumberRuleSlot2Custom(),
-                request.getNumberRuleSlot3Type(),
-                request.getNumberRuleSlot3Custom(),
-                request.getNumberRuleDateFormat(),
-                request.getNumberRuleSeqDigits(),
-                request.getNumberRuleSeparator(),
-                ApprovalNumberRule.NumberRuleSeqResetCycle.valueOf(request.getNumberRuleSeqResetCycle())
-        );
+        if (rule.isPresent()) {
+            // 있으면 수정
+            rule.get().updateRule(
+                    request.getNumberRuleSlot1Type(),
+                    request.getNumberRuleSlot1Custom(),
+                    request.getNumberRuleSlot2Type(),
+                    request.getNumberRuleSlot2Custom(),
+                    request.getNumberRuleSlot3Type(),
+                    request.getNumberRuleSlot3Custom(),
+                    request.getNumberRuleDateFormat(),
+                    request.getNumberRuleSeqDigits(),
+                    request.getNumberRuleSeparator(),
+                    ApprovalNumberRule.NumberRuleSeqResetCycle.valueOf(request.getNumberRuleSeqResetCycle())
+            );
+        } else {
+            // 없으면 새로 생성
+            ApprovalNumberRule newRule = ApprovalNumberRule.builder()
+                    .numberRuleCompanyId(companyId)
+                    .numberRuleEmpId(empId)
+                    .numberRuleCurrentSeq(0)
+                    .numberRuleSlot1Type(request.getNumberRuleSlot1Type())
+                    .numberRuleSlot1Custom(request.getNumberRuleSlot1Custom())
+                    .numberRuleSlot2Type(request.getNumberRuleSlot2Type())
+                    .numberRuleSlot2Custom(request.getNumberRuleSlot2Custom())
+                    .numberRuleSlot3Type(request.getNumberRuleSlot3Type())
+                    .numberRuleSlot3Custom(request.getNumberRuleSlot3Custom())
+                    .numberRuleDateFormat(request.getNumberRuleDateFormat())
+                    .numberRuleSeqDigits(request.getNumberRuleSeqDigits())
+                    .numberRuleSeparator(request.getNumberRuleSeparator())
+                    .numberRuleSeqResetCycle(
+                            ApprovalNumberRule.NumberRuleSeqResetCycle.valueOf(request.getNumberRuleSeqResetCycle()))
+                    .build();
+            numberRuleRepository.save(newRule);
+        }
+
     }
 
 

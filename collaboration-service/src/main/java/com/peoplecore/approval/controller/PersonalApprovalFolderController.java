@@ -1,8 +1,11 @@
 package com.peoplecore.approval.controller;
 
 import com.peoplecore.approval.dto.*;
+import com.peoplecore.approval.service.ApprovalDocumentListService;
 import com.peoplecore.approval.service.PersonalApprovalFolderService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -15,10 +18,12 @@ import java.util.UUID;
 public class PersonalApprovalFolderController {
 
     private final PersonalApprovalFolderService folderService;
+    private final ApprovalDocumentListService listService;
 
     @Autowired
-    public PersonalApprovalFolderController(PersonalApprovalFolderService folderService) {
+    public PersonalApprovalFolderController(PersonalApprovalFolderService folderService, ApprovalDocumentListService listService) {
         this.folderService = folderService;
+        this.listService = listService;
     }
 
     /*개인 문서함 조회 */
@@ -27,6 +32,17 @@ public class PersonalApprovalFolderController {
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId) {
         return ResponseEntity.ok(folderService.getList(companyId, empId));
+    }
+
+    /** 개인 폴더 문서 조회 */
+    @GetMapping("/{id}/documents")
+    public ResponseEntity<Page<DocumentListResponseDto>> getFolderDocuments(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @PathVariable Long id,
+            @ModelAttribute DocumentListSearchDto searchDto,
+            Pageable pageable) {
+        return ResponseEntity.ok(listService.getPersonalFolderDocuments(companyId, empId, id, searchDto, pageable));
     }
 
     /** 개인 문서함 생성 */

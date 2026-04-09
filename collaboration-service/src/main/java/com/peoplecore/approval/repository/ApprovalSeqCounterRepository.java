@@ -1,7 +1,7 @@
 package com.peoplecore.approval.repository;
 
 import com.peoplecore.approval.entity.ApprovalSeqCounter;
-import io.lettuce.core.dynamic.annotation.Param;
+import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 import org.hibernate.LockMode;
 import org.springframework.data.jpa.repository.JpaRepository;
