@@ -39,5 +39,9 @@ public class AlarmSettings {
     private Boolean popupEnabled = true;
 
 
-
+    public void update(Boolean emailEnabled, Boolean pushEnabled, Boolean popupEnabled){
+        if(emailEnabled != null) this.emailEnabled = emailEnabled;
+        if(pushEnabled != null) this.pushEnabled = pushEnabled;
+        if(popupEnabled != null) this.popupEnabled = popupEnabled;
+    }
 }
