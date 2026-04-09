@@ -6,17 +6,22 @@ import com.peoplecore.pay.enums.PayItemType;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;
 
 @Repository
-@RequiredArgsConstructor
 public class PayItemSearchRepository {
 
     private final JPAQueryFactory queryFactory;
     private final QPayItems payItems = QPayItems.payItems;
+
+    @Autowired
+    public PayItemSearchRepository(JPAQueryFactory queryFactory) {
+        this.queryFactory = queryFactory;
+    }
 
     public List<PayItems> search(UUID companyId, PayItemType type, String name, boolean isLegal){
         return queryFactory

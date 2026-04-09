@@ -2,6 +2,7 @@ package com.peoplecore.client.component;
 
 import com.peoplecore.client.dto.CompanyInfoResponse;
 import com.peoplecore.client.dto.DeptInfoResponse;
+import com.peoplecore.client.dto.EmployeeSimpleResDto;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -11,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -23,6 +26,7 @@ public class HrCacheService {
     private static final String DEPT_KEY = "hr:dept:";
     private static final String COMPANY_KEY = "hr:company:";
     private static final Duration TTL = Duration.ofHours(1);
+    private static final String EMP_KEY = "hr:emp:";
 
     @Autowired
     public HrCacheService(
@@ -112,4 +116,51 @@ public class HrCacheService {
             log.warn("회사 캐시 무효화 실패 companyId={}", companyId);
         }
     }
+
+//    사원정보 일괄 조회
+    public List<EmployeeSimpleResDto> getEmployees(List<Long> empIds){
+        List<EmployeeSimpleResDto> result = new ArrayList<>();
+        List<Long> missedIds = new ArrayList<>();
+
+//        1. redis에서 개별캐시 조회
+        for(Long empId : empIds){
+            try{
+                EmployeeSimpleResDto cached = (EmployeeSimpleResDto) redisTemplate.opsForValue().get(EMP_KEY + empId);
+                if (cached != null){
+                    result.add(cached);
+                    continue;
+                }
+            } catch (Exception e){
+                log.warn("Redis 조회 실패 empId={}, error={}", empId, e.getMessage());
+            }
+            missedIds.add(empId);
+        }
+
+//        2. 캐시 miss분 hr-service 호출
+        if(!missedIds.isEmpty()){
+            List<EmployeeSimpleResDto> fetched = hrServiceClient.getEmployees(missedIds);
+
+//            3. 호출 결과 캐싱 후 결과 병합
+            for (EmployeeSimpleResDto emp : fetched){
+                try {
+                    redisTemplate.opsForValue().set(EMP_KEY +emp.getEmpId(), emp, TTL);
+                } catch (Exception e){
+                    log.warn("Redis 저장 실패 empId={}, error={}", emp.getEmpId(), e.getMessage());
+                }
+                result.add(emp);
+            }
+        }
+        return result;
+    }
+
+    public void evictEmployee(Long empId){
+        try{
+            redisTemplate.delete(EMP_KEY + empId);
+            log.info("사원 캐시 무효화 empId={}", empId);
+        } catch (Exception e){
+            log.warn("사원 캐시 무효화 실패 empId={}", empId);
+        }
+    }
+
+
 }
