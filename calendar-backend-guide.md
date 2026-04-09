@@ -1070,36 +1070,94 @@ public class InterestCalendarUpdateRequest {
 ```java
 package com.peoplecore.calendar.dto;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
 @Getter
+@NoArgsConstructor
+@AllArgsConstructor
 public class AnnualLeaveSettingRequest {
 
-    private List<Long> calendarIds;  // 연동할 캘린더 ID 목록
-    private Boolean isPublic;        // 연차 일정 공개 여부
+    private List<CalendarLinkItem> calendars;
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CalendarLinkItem {
+        private Long calendarId;
+        private Boolean isPublic;   // 이 캘린더에서 연차를 공개할지
+    }
 }
 ```
+
+> **요청 예시:**
+> ```json
+> {
+>   "calendars": [
+>     { "calendarId": 5, "isPublic": true },
+>     { "calendarId": 8, "isPublic": false }
+>   ]
+> }
+> ```
 
 #### `AnnualLeaveSettingResponse.java`
 
 ```java
 package com.peoplecore.calendar.dto;
 
+import com.peoplecore.calendar.entity.AnnualLeaveSetting;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.util.List;
 
 @Getter
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class AnnualLeaveSettingResponse {
 
-    private List<Long> linkedCalendarIds;
-    private Boolean isPublic;
+    private List<LinkedCalendar> calendars;
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LinkedCalendar {
+        private Long calendarId;
+        private String calendarName;
+        private Boolean isPublic;
+    }
+
+    public static AnnualLeaveSettingResponse from(List<AnnualLeaveSetting> settings) {
+        List<LinkedCalendar> calendars = settings.stream()
+                .map(s -> LinkedCalendar.builder()
+                        .calendarId(s.getMyCalendar().getMyCalendarsId())
+                        .calendarName(s.getMyCalendar().getCalendarName())
+                        .isPublic(s.getIsPublic())
+                        .build())
+                .toList();
+        return AnnualLeaveSettingResponse.builder()
+                .calendars(calendars)
+                .build();
+    }
 }
 ```
+
+> **응답 예시:**
+> ```json
+> {
+>   "calendars": [
+>     { "calendarId": 5, "calendarName": "내 일정(기본)", "isPublic": true },
+>     { "calendarId": 8, "calendarName": "프로젝트", "isPublic": false }
+>   ]
+> }
+> ```
 
 ---
 
@@ -1918,17 +1976,11 @@ public class CalendarSettingsService {
 
         if (settings.isEmpty()) {
             return AnnualLeaveSettingResponse.builder()
-                    .linkedCalendarIds(List.of())
-                    .isPublic(true)
+                    .calendars(List.of())
                     .build();
         }
 
-        return AnnualLeaveSettingResponse.builder()
-                .linkedCalendarIds(settings.stream()
-                        .map(s -> s.getMyCalendar().getMyCalendarsId())
-                        .toList())
-                .isPublic(settings.get(0).getIsPublic())
-                .build();
+        return AnnualLeaveSettingResponse.from(settings);
     }
 
     /** 연차 연동 설정 저장 (기존 삭제 후 재생성) */
@@ -1938,27 +1990,25 @@ public class CalendarSettingsService {
         // 기존 설정 삭제
         settingRepository.deleteByCompanyIdAndEmpId(companyId, empId);
 
-        // 새 설정 저장
-        List<AnnualLeaveSetting> newSettings = request.getCalendarIds().stream()
-                .map(calId -> {
-                    MyCalendars cal = myCalendarsRepository.findById(calId)
+        // 새 설정 저장 — 캘린더별 isPublic 개별 적용
+        List<AnnualLeaveSetting> newSettings = request.getCalendars().stream()
+                .map(item -> {
+                    MyCalendars cal = myCalendarsRepository.findById(item.getCalendarId())
                             .orElseThrow(() -> new BusinessException(
-                                    "캘린더를 찾을 수 없습니다. id=" + calId, HttpStatus.NOT_FOUND));
+                                    "캘린더를 찾을 수 없습니다. id=" + item.getCalendarId(),
+                                    HttpStatus.NOT_FOUND));
                     return AnnualLeaveSetting.builder()
                             .empId(empId)
                             .companyId(companyId)
                             .myCalendar(cal)
-                            .isPublic(request.getIsPublic())
+                            .isPublic(item.getIsPublic())
                             .build();
                 })
                 .toList();
 
         settingRepository.saveAll(newSettings);
 
-        return AnnualLeaveSettingResponse.builder()
-                .linkedCalendarIds(request.getCalendarIds())
-                .isPublic(request.getIsPublic())
-                .build();
+        return AnnualLeaveSettingResponse.from(newSettings);
     }
 }
 ```
@@ -2228,7 +2278,7 @@ package com.peoplecore.calendar.controller;
 
 import com.peoplecore.calendar.dto.AnnualLeaveSettingRequest;
 import com.peoplecore.calendar.dto.AnnualLeaveSettingResponse;
-import com.peoplecore.calendar.service.CalendarSettingsService;
+import com.peoplecore.calendar.service.AnnualLeaveSettingsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -3246,4 +3296,4 @@ hr-service/src/main/java/com/peoplecore/employee/
 │                                                                     │
 │  hr-service ──(Kafka "alarm-event")──→ collaboration-service        │
 │  hr-service ──(Kafka "hr-dept-updated")──→ HrEventConsumer          │
-└─────────────────────────────────────────────────�
+└─────────────────────────────────────────────────

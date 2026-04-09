@@ -1,9 +1,6 @@
 package com.peoplecore.calendar.dtos;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 import java.util.List;
 
@@ -12,9 +9,16 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class AnnualLeaveSettingReqDto {
-//    연차연동설정
 
 //    연동할 캘린더 ID 목록
-    private List<Long> calendarIds;
-    private Boolean isPublic;
+    private List<CalendarLinkItem> calendars;
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class CalendarLinkItem{
+        private Long calendarId;
+        private Boolean isPublic;
+    }
 }

@@ -6,7 +6,6 @@ import com.peoplecore.calendar.entity.QEventsNotifications;
 import com.peoplecore.calendar.entity.QMyCalendars;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 

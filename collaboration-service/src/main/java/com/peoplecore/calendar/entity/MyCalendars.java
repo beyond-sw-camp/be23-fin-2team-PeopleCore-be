@@ -34,6 +34,10 @@ public class MyCalendars extends BaseTimeEntity {
     @Column(nullable = false)
     private UUID companyId;
 
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isDefault = false;
+
 
     public void updateName(String calendarName){
         this.calendarName = calendarName;
@@ -46,5 +50,9 @@ public class MyCalendars extends BaseTimeEntity {
     }
     public void updateSortOrder(Integer sortOrder){
         this.sortOrder = sortOrder;
+    }
+
+    public boolean isDefaultCalendar(){
+        return Boolean.TRUE.equals(this.isDefault);
     }
 }

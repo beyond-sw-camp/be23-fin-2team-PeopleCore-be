@@ -1,9 +1,7 @@
 package com.peoplecore.calendar.dtos;
 
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import com.peoplecore.calendar.entity.AnnualLeaveSetting;
+import lombok.*;
 
 import java.util.List;
 
@@ -12,8 +10,31 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class AnnualLeaveSettingResDto {
-//    연차연동설정
 
-    private List<Long> linkedCalendarIds;
-    private Boolean isPublic;
+    private List<LinkedCalendar> calendars;
+
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LinkedCalendar {
+        private Long calendarIds;
+        private String calendarName;
+        private Boolean isPublic;
+    }
+
+    public static AnnualLeaveSettingResDto fromEntity(List<AnnualLeaveSetting> settings) {
+        List<LinkedCalendar> calendars = settings.stream()
+                .map(s -> LinkedCalendar.builder()
+                        .calendarIds(s.getMyCalendar().getMyCalendarsId())
+                        .calendarName(s.getMyCalendar().getCalendarName())
+                        .isPublic(s.getIsPublic())
+                        .build())
+                .toList();
+        return AnnualLeaveSettingResDto.builder()
+                .calendars(calendars)
+                .build();
+    }
 }
+
+
