@@ -25,13 +25,13 @@ public interface ResignRepository extends JpaRepository<Resign, Long>,ResignRepo
 
 
 //    퇴직상세 조회
-    @Query("SELECT r FROM Resign r" +
-    "JOIN FETCH r.employee e" +
-    "JOIN FETCH r.department" +
-    "JOIN FETCH r.grade" +
-    "LEFT JOIN  FETCH r.title" +
-    "WHERE e company.companyId = :companyId" +
-    "AND r.resignId = :resignId" +
+    @Query("SELECT r FROM Resign r " +
+    "JOIN FETCH r.employee e " +
+    "JOIN FETCH r.department " +
+    "JOIN FETCH r.grade " +
+    "LEFT JOIN  FETCH r.title " +
+    "WHERE e.company.companyId = :companyId " +
+    "AND r.resignId = :resignId " +
     "AND r.isDeleted = false")
     Optional<Resign> findDetailByCompanyAndId(@Param("companyId") UUID companyId,
                                               @Param("resignId") Long resignId);

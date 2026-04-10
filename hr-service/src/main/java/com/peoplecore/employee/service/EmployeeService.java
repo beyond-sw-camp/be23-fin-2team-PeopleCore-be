@@ -32,6 +32,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -155,7 +156,7 @@ public class EmployeeService {
                             .build());
 
                 } catch (Exception e) {
-                    throw new BusinessException("파일 업로들에 실패했습니다", HttpStatus.BAD_REQUEST);
+                    throw new BusinessException("파일 업로드에 실패했습니다", HttpStatus.BAD_REQUEST);
                 }
             }
         }
@@ -165,14 +166,18 @@ public class EmployeeService {
     }
 
     //        사번생성: ex. YYYYMM-0001
-    private String generateEmpNum(UUID commpanyId, LocalDate hireDate) {
+    private String generateEmpNum(UUID companyId, LocalDate hireDate) {
         String prefix = hireDate.format(DateTimeFormatter.ofPattern("yyyyMM"));
-        long count = employeeRepository.countByCompanyIdAndEmpNumStartingWith(commpanyId, prefix);
-        String empNum = String.format("%s-%04d", prefix, count + 1);
-        if (employeeRepository.existsByCompany_CompanyIdAndEmpNum(commpanyId, empNum)) {
-            empNum = String.format("%s-%04d", prefix, count + 2);
+//        비관적 락, 가장 큰 사번 조회
+        Optional<String>maxEmpNum = employeeRepository.findMaxEmpNumWithLock(companyId,prefix);
+//        다음 순번 계산
+        long nextSeq;
+        if(maxEmpNum.isPresent()){
+            nextSeq = Long.parseLong(maxEmpNum.get().split("-")[1])+1;
+        }else{
+            nextSeq = 1L;
         }
-        return empNum;
+        return String.format("%s-%04d", prefix, nextSeq);
     }
 
     //    비밀번호 생성 / 분기 처리

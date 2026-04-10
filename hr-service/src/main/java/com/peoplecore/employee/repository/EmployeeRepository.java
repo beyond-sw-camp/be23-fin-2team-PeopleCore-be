@@ -4,7 +4,9 @@ import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.title.domain.Title;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -86,6 +88,17 @@ AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
     List<Employee>findExpiringContracts(@Param("companyId")UUID companyId, @Param("now")LocalDate now, @Param("deadline")LocalDate deadline);
 
 
+//    계약 만료 예정자 건수만 조회
+    @Query("""
+SELECT COUNT(e) FROM Employee e
+WHERE e.company.companyId = :companyId
+AND e.contractEndDate BETWEEN : now AND : deadline
+AND e.empStatus = com.peoplecore.cmployee.domain.EmpStatus.ACTIVE
+""")
+    int countExpiringContracts(@Param("companyId")UUID companyId,
+                               @Param("now")LocalDate now,
+                               @Param("deadline")LocalDate deadline);
+
 
 //    사번 채번
 //    동일 사번 여부 체크
@@ -111,6 +124,14 @@ AND e.empNum LIKE :prefix%
             @Param("companyId") UUID companyId,
             @Param("deptId") Long deptId
     );
+
+//    비관적 락: 해당prefix 중 가장 큰 값 조회
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT MAX(e.empNum)FROM Employee e " +
+            "WHERE e.company.companyId = :companyId " +
+            "AND e.empNum LIKE :prefix%")
+    Optional<String>findMaxEmpNumWithLock(@Param("companyId") UUID companyId,
+                                          @Param("prefix") String prefix);
 
 
 //사원상세조회
