@@ -41,7 +41,10 @@ public class PayItems {
     private Integer sortOrder;
 
     @Builder.Default
-    private Boolean isActive = true;
+    private Boolean isActive = true;    //사용, 미사용
+
+    @Builder.Default
+    private Boolean isDeleted = false; //삭제 -> 화면에서 안보여줌
 
 //    항목분류
     @Enumerated(EnumType.STRING)
@@ -77,4 +80,8 @@ public class PayItems {
         this.isActive = !this.isActive;
     }
 
+    public void softDelete(){
+        this.isDeleted = true;
+        this.isActive = false;
+    }
 }

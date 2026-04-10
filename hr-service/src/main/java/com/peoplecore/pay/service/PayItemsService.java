@@ -97,10 +97,10 @@ public class PayItemsService {
             throw new CustomException(ErrorCode.NOT_FOUND);
         }
 
-//        항목 사용여부 검증 -> 사용시 삭제X
+//        항목 사용여부 검증 -> 사용시 소프트딜리트
         for(PayItems item : items){
             if (salaryContractDetailRepository.existsByPayItemId(item.getPayItemId()) || payrollDetailsRepository.existsByPayItemId(item.getPayItemId())){
-                throw new CustomException(ErrorCode.PAY_ITEM_IN_USE);
+                item.softDelete();
             }
         }
 
