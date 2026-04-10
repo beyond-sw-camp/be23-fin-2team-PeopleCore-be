@@ -402,7 +402,7 @@ public class ApprovalFormService {
 
     private final List<String> subFolderNames = List.of("스크립트 양식", "보고-시행문", "회계-총무", "일반기안", "교육", "휴가", "출장", "인사");
 
-
+    @Transactional
     public void initFormFolder(UUID companyId) {
         try {
             if (approvalFormFolderRepository.existsByFolderCompanyId(companyId)) {
@@ -488,6 +488,9 @@ public class ApprovalFormService {
                             .folderId(subFolder)
                             .formSortOrder(j + 1)
                             .build();
+                    if (approvalFormRepository.existsByCompanyIdAndFormNameAndIsCurrent(companyId, formName, true)) {
+                        continue; // 이미 존재하면 skip
+                    }
                     ApprovalForm saved = approvalFormRepository.save(form);
                     String objectName = String.format("forms/%s/%s_v%d.html", companyId, saved.getFormCode(), saved.getFormVersion());
                     minioService.uploadFormHtml(objectName, formHtml);
