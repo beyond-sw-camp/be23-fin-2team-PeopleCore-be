@@ -29,4 +29,6 @@ public interface ApprovalFormFolderRepository extends JpaRepository<ApprovalForm
     // 해당 폴더에 양식이 존재하는지 확인 (삭제 시 검증용)
     @Query("SELECT COUNT(f) > 0 FROM ApprovalForm f WHERE f.folderId.folderId = :folderId")
     boolean existsFormByFolderId(@Param("folderId") Long folderId);
+
+    boolean existsByFolderCompanyId(UUID folderCompanyId);
 }

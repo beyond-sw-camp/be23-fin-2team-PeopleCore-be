@@ -20,7 +20,9 @@ import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
 public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCustomRepository {
@@ -513,7 +515,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
      * 기안자 기반: draft, temp
      */
     @Override
-    public DocumentCountResponse countAllBoxes(UUID companyId, Long empId) {
+    public DocumentCountResponse countAllBoxes(UUID companyId, Long empId, Long deptId) {
         QApprovalLine subLine = new QApprovalLine("subLine");
 
         /* 결재 대기: 나=APPROVER, PENDING, 내 step=최소 PENDING step, 문서 PENDING */
@@ -594,6 +596,61 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .where(doc.companyId.eq(companyId), doc.empId.eq(empId))
                 .fetchOne();
 
+        /* 부서 문서함: 완료/수신/발신 — 별도 1회 */
+        Tuple deptResult = jpaQueryFactory
+                .select(
+                        new CaseBuilder()
+                                .when(doc.empDeptId.eq(deptId)
+                                        .and(doc.approvalStatus.eq(ApprovalStatus.APPROVED)))
+                                .then(1).otherwise(0).sum(),
+                        new CaseBuilder()
+                                .when(doc.approvalStatus.eq(ApprovalStatus.PENDING)
+                                        .and(JPAExpressions.selectOne()
+                                                .from(line)
+                                                .where(line.docId.eq(doc),
+                                                        line.empDeptId.eq(deptId),
+                                                        line.approvalRole.eq(ApprovalRole.APPROVER),
+                                                        line.approvalLineStatus.eq(ApprovalLineStatus.PENDING))
+                                                .exists()))
+                                .then(1).otherwise(0).sum(),
+                        new CaseBuilder()
+                                .when(doc.empDeptId.eq(deptId)
+                                        .and(doc.approvalStatus.ne(ApprovalStatus.DRAFT)))
+                                .then(1).otherwise(0).sum()
+                )
+                .from(doc)
+                .where(doc.companyId.eq(companyId))
+                .fetchOne();
+
+        /* 부서 폴더별 문서 개수 */
+        Map<Long, Long> deptFolderCounts = jpaQueryFactory
+                .select(doc.deptFolderId, doc.count())
+                .from(doc)
+                .where(doc.companyId.eq(companyId),
+                        doc.deptFolderId.isNotNull(),
+                        doc.empDeptId.eq(deptId))
+                .groupBy(doc.deptFolderId)
+                .fetch()
+                .stream()
+                .collect(Collectors.toMap(
+                        t -> t.get(doc.deptFolderId),
+                        t -> t.get(doc.count())
+                ));
+
+        /* 개인 폴더별 문서 개수 */
+        Map<Long, Long> personalFolderCounts = jpaQueryFactory
+                .select(folderDoc.personalFolderId, folderDoc.count())
+                .from(folderDoc)
+                .where(folderDoc.companyId.eq(companyId),
+                        folderDoc.empId.eq(empId))
+                .groupBy(folderDoc.personalFolderId)
+                .fetch()
+                .stream()
+                .collect(Collectors.toMap(
+                        t -> t.get(folderDoc.personalFolderId),
+                        t -> t.get(folderDoc.count())
+                ));
+
         return DocumentCountResponse.builder()
                 .waiting(result != null && result.get(0, Integer.class) != null ? result.get(0, Integer.class) : 0)
                 .ccView(result != null && result.get(1, Integer.class) != null ? result.get(1, Integer.class) : 0)
@@ -603,6 +660,11 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .inbox(result != null && result.get(5, Integer.class) != null ? result.get(5, Integer.class) : 0)
                 .draft(drafterResult != null && drafterResult.get(0, Integer.class) != null ? drafterResult.get(0, Integer.class) : 0)
                 .temp(drafterResult != null && drafterResult.get(1, Integer.class) != null ? drafterResult.get(1, Integer.class) : 0)
+                .deptCompleted(deptResult != null && deptResult.get(0, Integer.class) != null ? deptResult.get(0, Integer.class) : 0)
+                .deptReceived(deptResult != null && deptResult.get(1, Integer.class) != null ? deptResult.get(1, Integer.class) : 0)
+                .deptSent(deptResult != null && deptResult.get(2, Integer.class) != null ? deptResult.get(2, Integer.class) : 0)
+                .deptFolderCounts(deptFolderCounts)
+                .personalFolderCounts(personalFolderCounts)
                 .build();
     }
 

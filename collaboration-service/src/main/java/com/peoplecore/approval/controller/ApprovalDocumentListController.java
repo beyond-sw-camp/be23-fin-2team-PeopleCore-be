@@ -28,8 +28,9 @@ public class ApprovalDocumentListController {
     @GetMapping("/counts")
     public ResponseEntity<DocumentCountResponse> getDocumentCounts(
             @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long empId) {
-        return ResponseEntity.ok(listService.getDocumentCounts(companyId, empId));
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestHeader("X-User-Department") Long deptId) {
+        return ResponseEntity.ok(listService.getDocumentCounts(companyId, empId, deptId));
     }
 
     /* === 결재하기 === */
