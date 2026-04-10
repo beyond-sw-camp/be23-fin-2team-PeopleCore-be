@@ -15,7 +15,9 @@
 6. [예약 알림 스케줄러](#6-예약-알림-스케줄러)
 7. [사원 정보 조회 (서비스 간 통신)](#7-사원-정보-조회-서비스-간-통신)
 8. [전사 일정 관리 (Admin 전용)](#8-전사-일정-관리-admin-전용)
-9. [파일 위치 요약](#9-파일-위치-요약)
+9. [참석자 초대 · 승인 · 거절](#9-참석자-초대--승인--거절)
+10. [휴일 관리 (사내휴일 + 법정공휴일)](#10-휴일-관리-사내휴일--법정공휴일)
+11. [파일 위치 요약](#11-파일-위치-요약)
 
 ---
 
@@ -3145,23 +3147,1154 @@ Events event = Events.builder()
 
 ---
 
-## 9. 파일 위치 요약
+## 9. 참석자 초대 · 승인 · 거절
+
+> 일정 등록 시 참석자를 선택하면 PENDING 상태로 초대 레코드가 생성되고 Kafka 알림이 발송됩니다.
+> 참석자가 승인하면 해당 참석자의 **기본 캘린더에 일정이 연결**되고, 일정 생성자에게 응답 알림이 갑니다.
+> 거절 시에도 생성자에게 거절 알림이 발송됩니다.
+
+### 9-1. `EventAttendees.java` 수정 — Events 직접 참조 + 비즈니스 메서드
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/entity/EventAttendees.java`
+
+> 기존 엔티티가 `EventInstances`를 참조하고 있지만, 단일 일정 참석자 플로우에서는
+> `Events`를 직접 참조하는 것이 훨씬 단순합니다. `EventInstances`는 반복 일정의
+> 개별 인스턴스 관리용이므로, 참석자는 원본 일정(`Events`)에 연결합니다.
+
+```java
+package com.peoplecore.calendar.entity;
+
+import com.peoplecore.calendar.enums.InviteStatus;
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+@Getter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class EventAttendees {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long eventAttendeesId;
+
+    // 초대받은 사원 ID
+    private Long invitedEmpId;
+
+    // 참석 상태
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private InviteStatus inviteStatus = InviteStatus.PENDING;
+
+    private String rejectReason;
+
+    @Builder.Default
+    private Boolean isHidden = false;
+
+    private LocalDateTime invitedAt;
+    private LocalDateTime respondedAt;
+
+    @Column(nullable = false)
+    private UUID companyId;
+
+    // ── 변경: EventInstances → Events 직접 참조 ──
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "events_id", nullable = false)
+    private Events events;
+
+    // ────────────────────────────────────────────
+    // 비즈니스 메서드
+    // ────────────────────────────────────────────
+
+    /** 참석 승인 */
+    public void approve() {
+        this.inviteStatus = InviteStatus.APPROVED;
+        this.respondedAt = LocalDateTime.now();
+    }
+
+    /** 참석 거절 */
+    public void reject(String reason) {
+        this.inviteStatus = InviteStatus.REJECTED;
+        this.rejectReason = reason;
+        this.respondedAt = LocalDateTime.now();
+    }
+
+    /** 참석자 본인 확인 */
+    public boolean isOwner(Long empId) {
+        return this.invitedEmpId.equals(empId);
+    }
+}
+```
+
+> **DDL 변경 필요:** 기존 `event_instances` FK를 `events_id` FK로 변경해야 합니다.
+
+### 9-2. `EventAttendeesRepository.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/repository/EventAttendeesRepository.java`
+
+```java
+package com.peoplecore.calendar.repository;
+
+import com.peoplecore.calendar.entity.EventAttendees;
+import com.peoplecore.calendar.enums.InviteStatus;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+
+public interface EventAttendeesRepository extends JpaRepository<EventAttendees, Long> {
+
+    /** 일정별 참석자 목록 */
+    List<EventAttendees> findByEvents_EventsIdAndCompanyId(Long eventsId, UUID companyId);
+
+    /** 특정 참석자 조회 (응답 처리용) */
+    Optional<EventAttendees> findByEvents_EventsIdAndInvitedEmpIdAndCompanyId(
+            Long eventsId, Long invitedEmpId, UUID companyId);
+
+    /** 내가 받은 초대 목록 (PENDING만) */
+    List<EventAttendees> findByInvitedEmpIdAndCompanyIdAndInviteStatus(
+            Long invitedEmpId, UUID companyId, InviteStatus status);
+}
+```
+
+### 9-3. `AttendeeResDto.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/dtos/AttendeeResDto.java`
+
+```java
+package com.peoplecore.calendar.dtos;
+
+import com.peoplecore.calendar.entity.EventAttendees;
+import com.peoplecore.calendar.enums.InviteStatus;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDateTime;
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class AttendeeResDto {
+
+    private Long eventAttendeesId;
+    private Long invitedEmpId;
+    private InviteStatus inviteStatus;
+    private String rejectReason;
+    private LocalDateTime invitedAt;
+    private LocalDateTime respondedAt;
+
+    public static AttendeeResDto fromEntity(EventAttendees attendee) {
+        return AttendeeResDto.builder()
+                .eventAttendeesId(attendee.getEventAttendeesId())
+                .invitedEmpId(attendee.getInvitedEmpId())
+                .inviteStatus(attendee.getInviteStatus())
+                .rejectReason(attendee.getRejectReason())
+                .invitedAt(attendee.getInvitedAt())
+                .respondedAt(attendee.getRespondedAt())
+                .build();
+    }
+}
+```
+
+### 9-4. `AttendeeRespondReqDto.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/dtos/AttendeeRespondReqDto.java`
+
+```java
+package com.peoplecore.calendar.dtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class AttendeeRespondReqDto {
+    private Boolean accepted;       // true=승인, false=거절
+    private String rejectReason;    // 거절 시 사유 (optional)
+}
+```
+
+### 9-5. `EventResDto.java` 수정 — 참석자 목록 추가
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/dtos/EventResDto.java`
+
+> 기존 `fromEntity` 메서드에서는 참석자를 포함할 수 없으므로 (Events 엔티티에 attendees 관계가 없음),
+> **참석자를 외부에서 세팅**하는 방식으로 처리합니다.
+
+```java
+// ─── 기존 필드 아래에 추가 ───
+
+private List<AttendeeResDto> attendees;
+
+// ─── fromEntity는 기존 그대로 유지 (attendees=null) ───
+// 참석자 포함이 필요한 곳에서는 아래 오버로드 사용:
+
+public static EventResDto fromEntityWithAttendees(Events events, List<AttendeeResDto> attendees) {
+    EventResDto dto = fromEntity(events);
+    dto.setAttendees(attendees);
+    return dto;
+}
+```
+
+### 9-6. `CalendarEventService.java` 수정 — 참석자 저장 + 응답 처리
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/service/CalendarEventService.java`
+
+> `createEvent()`에 참석자 레코드 저장 로직을 추가하고,
+> 참석자 응답(승인/거절) 메서드를 새로 작성합니다.
+
+#### 의존성 추가
+
+```java
+// 기존 필드에 추가
+private final EventAttendeesRepository eventAttendeesRepository;
+private final MyCalendarsRepository myCalendarsRepository;  // 이미 있음
+
+// 생성자에 EventAttendeesRepository 추가
+@Autowired
+public CalendarEventService(MyCalendarsRepository myCalendarsRepository,
+                            EventsRepository eventsRepository,
+                            RepeatedRulesRepository repeatedRulesRepository,
+                            EventsNotificationsRepository eventsNotificationsRepository,
+                            InterestCalendarsRepository interestCalendarsRepository,
+                            AlarmEventPublisher alarmEventPublisher,
+                            EventAttendeesRepository eventAttendeesRepository) {
+    this.myCalendarsRepository = myCalendarsRepository;
+    this.eventsRepository = eventsRepository;
+    this.repeatedRulesRepository = repeatedRulesRepository;
+    this.eventsNotificationsRepository = eventsNotificationsRepository;
+    this.interestCalendarsRepository = interestCalendarsRepository;
+    this.alarmEventPublisher = alarmEventPublisher;
+    this.eventAttendeesRepository = eventAttendeesRepository;
+}
+```
+
+#### createEvent() 수정 — 참석자 레코드 저장
+
+```java
+@Transactional
+public EventResDto createEvent(UUID companyId, Long empId, EventCreateReqDto reqDto) {
+    MyCalendars calendar = myCalendarsRepository.findById(reqDto.getMyCalendarsId())
+            .orElseThrow(() -> new CustomException(ErrorCode.CALENDAR_NOT_FOUND));
+    validateCalendarOwner(calendar, empId);
+
+    // 반복규칙 저장
+    RepeatedRules repeatedRules = saveRepeatedRule(companyId, reqDto.getRepeatedRule());
+
+    Events event = Events.builder()
+            .empId(empId)
+            .title(reqDto.getTitle())
+            .description(reqDto.getDescription())
+            .location(reqDto.getLocation())
+            .startAt(reqDto.getStartAt())
+            .endAt(reqDto.getEndAt())
+            .isAllDay(reqDto.getIsAllDay())
+            .isPublic(reqDto.getIsPublic())
+            .isAllEmployees(false)
+            .companyId(companyId)
+            .myCalendars(calendar)
+            .repeatedRules(repeatedRules)
+            .build();
+
+    eventsRepository.save(event);
+
+    // 알림설정 저장
+    saveNotifications(event, reqDto.getNotifications());
+
+    // ── 참석자 레코드 저장 (추가) ──
+    saveAttendees(companyId, event, reqDto.getAttendeeEmpIds());
+
+    // 참석자에게 초대 알림 발송 (Kafka)
+    sendAttendeeAlarm(companyId, event, reqDto.getAttendeeEmpIds());
+
+    return EventResDto.fromEntity(event);
+}
+```
+
+#### 참석자 저장 Private 메서드
+
+```java
+// ── 참석자 레코드 저장 ──
+private void saveAttendees(UUID companyId, Events event, List<Long> attendeeEmpIds) {
+    if (attendeeEmpIds == null || attendeeEmpIds.isEmpty()) return;
+
+    List<EventAttendees> attendees = attendeeEmpIds.stream()
+            .map(invitedEmpId -> EventAttendees.builder()
+                    .invitedEmpId(invitedEmpId)
+                    .inviteStatus(InviteStatus.PENDING)
+                    .isHidden(false)
+                    .invitedAt(LocalDateTime.now())
+                    .companyId(companyId)
+                    .events(event)
+                    .build())
+            .toList();
+
+    eventAttendeesRepository.saveAll(attendees);
+}
+```
+
+#### 참석자 응답 (승인/거절) 메서드
+
+```java
+// ────────────────────────────────────────────
+// 참석자 응답 처리 (승인 / 거절)
+// ────────────────────────────────────────────
+@Transactional
+public AttendeeResDto respondToInvite(UUID companyId, Long empId, Long eventsId,
+                                       AttendeeRespondReqDto reqDto) {
+
+    // 1. 참석자 레코드 조회
+    EventAttendees attendee = eventAttendeesRepository
+            .findByEvents_EventsIdAndInvitedEmpIdAndCompanyId(eventsId, empId, companyId)
+            .orElseThrow(() -> new CustomException(ErrorCode.ATTENDEE_NOT_FOUND));
+
+    // 이미 응답한 경우
+    if (attendee.getInviteStatus() != InviteStatus.PENDING) {
+        throw new CustomException(ErrorCode.ATTENDEE_ALREADY_RESPONDED);
+    }
+
+    // 2. 승인 / 거절 처리
+    if (Boolean.TRUE.equals(reqDto.getAccepted())) {
+        attendee.approve();
+
+        // 3. 승인 시 → 참석자의 기본 캘린더에 일정 복제
+        copyEventToAttendeeCalendar(companyId, empId, attendee.getEvents());
+
+        // 4. 생성자에게 "승인" 알림
+        sendRespondAlarm(companyId, attendee.getEvents(), empId, true);
+    } else {
+        attendee.reject(reqDto.getRejectReason());
+
+        // 4. 생성자에게 "거절" 알림
+        sendRespondAlarm(companyId, attendee.getEvents(), empId, false);
+    }
+
+    return AttendeeResDto.fromEntity(attendee);
+}
+
+// ── 승인 시 참석자 캘린더에 일정 복제 ──
+private void copyEventToAttendeeCalendar(UUID companyId, Long attendeeEmpId, Events originalEvent) {
+
+    // 참석자의 기본 캘린더 조회
+    MyCalendars defaultCalendar = myCalendarsRepository
+            .findByCompanyIdAndEmpIdAndIsDefaultTrue(companyId, attendeeEmpId)
+            .orElseThrow(() -> new CustomException(ErrorCode.CALENDAR_NOT_FOUND));
+
+    // 원본 일정을 참석자의 기본 캘린더에 복제 저장
+    Events copied = Events.builder()
+            .empId(attendeeEmpId)
+            .title(originalEvent.getTitle())
+            .description(originalEvent.getDescription())
+            .location(originalEvent.getLocation())
+            .startAt(originalEvent.getStartAt())
+            .endAt(originalEvent.getEndAt())
+            .isAllDay(originalEvent.getIsAllDay())
+            .isPublic(false)              // 참석자 본인 캘린더 → 비공개
+            .isAllEmployees(false)
+            .companyId(companyId)
+            .myCalendars(defaultCalendar)
+            .repeatedRules(originalEvent.getRepeatedRules())
+            .build();
+
+    eventsRepository.save(copied);
+}
+
+// ── 응답 알림 발송 (생성자에게) ──
+private void sendRespondAlarm(UUID companyId, Events event, Long respondEmpId, boolean accepted) {
+    String status = accepted ? "수락" : "거절";
+
+    alarmEventPublisher.publisher(AlarmEvent.builder()
+            .companyId(companyId)
+            .alarmType("Calendar")
+            .alarmContent(event.getTitle() + " 일정 초대를 " + status + "하였습니다")
+            .alarmLink("/calendar?eventId=" + event.getEventsId())
+            .alarmRefType("EVENT_RESPOND")
+            .alarmRefId(event.getEventsId())
+            .empIds(List.of(event.getEmpId()))  // 일정 생성자에게만
+            .build());
+}
+```
+
+#### 일정 상세 조회 수정 — 참석자 포함
+
+```java
+// 기존 getEvent() 수정
+public EventResDto getEvent(UUID companyId, Long eventsId) {
+    Events event = findEventOrThrow(eventsId, companyId);
+
+    // 참석자 목록 조회
+    List<AttendeeResDto> attendees = eventAttendeesRepository
+            .findByEvents_EventsIdAndCompanyId(eventsId, companyId)
+            .stream()
+            .map(AttendeeResDto::fromEntity)
+            .toList();
+
+    return EventResDto.fromEntityWithAttendees(event, attendees);
+}
+```
+
+#### 필요한 import 추가
+
+```java
+import com.peoplecore.calendar.dtos.AttendeeResDto;
+import com.peoplecore.calendar.dtos.AttendeeRespondReqDto;
+import com.peoplecore.calendar.entity.EventAttendees;
+import com.peoplecore.calendar.enums.InviteStatus;
+import com.peoplecore.calendar.repository.EventAttendeesRepository;
+```
+
+### 9-7. `MyCalendarsRepository.java` — 기본 캘린더 조회 메서드 추가
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/repository/MyCalendarsRepository.java`
+
+```java
+// 기존 메서드들 아래에 추가
+
+/** 기본 캘린더 조회 (참석 승인 시 사용) */
+Optional<MyCalendars> findByCompanyIdAndEmpIdAndIsDefaultTrue(UUID companyId, Long empId);
+```
+
+### 9-8. `CalendarEventController.java` — 참석자 응답 API 추가
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/controller/CalendarEventController.java`
+
+```java
+// 기존 엔드포인트들 아래에 추가
+
+/** 참석자 응답 (승인/거절) */
+@PatchMapping("/events/{eventsId}/attendees/respond")
+public ResponseEntity<AttendeeResDto> respondToInvite(
+        @RequestHeader("X-User-Company") UUID companyId,
+        @RequestHeader("X-User-Id") Long empId,
+        @PathVariable Long eventsId,
+        @RequestBody AttendeeRespondReqDto request) {
+    return ResponseEntity.ok(
+            calendarEventService.respondToInvite(companyId, empId, eventsId, request));
+}
+
+/** 내가 받은 초대 목록 (PENDING) */
+@GetMapping("/events/invitations")
+public ResponseEntity<List<AttendeeResDto>> getMyInvitations(
+        @RequestHeader("X-User-Company") UUID companyId,
+        @RequestHeader("X-User-Id") Long empId) {
+    return ResponseEntity.ok(
+            calendarEventService.getMyPendingInvitations(companyId, empId));
+}
+```
+
+> `getMyPendingInvitations` 서비스 메서드:
+
+```java
+// CalendarEventService에 추가
+public List<AttendeeResDto> getMyPendingInvitations(UUID companyId, Long empId) {
+    return eventAttendeesRepository
+            .findByInvitedEmpIdAndCompanyIdAndInviteStatus(empId, companyId, InviteStatus.PENDING)
+            .stream()
+            .map(AttendeeResDto::fromEntity)
+            .toList();
+}
+```
+
+### 9-9. 참석자 플로우 요약
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                   참석자 초대 플로우                       │
+│                                                         │
+│  1. 일정 생성자가 참석자 선택하여 일정 등록                  │
+│     POST /api/calendar/events                           │
+│     body: { ..., attendeeEmpIds: [2, 3, 5] }           │
+│                                                         │
+│  2. EventAttendees 레코드 생성 (PENDING)                  │
+│     + Kafka 알림 → 참석자들에게 초대 알림                   │
+│                                                         │
+│  3. 참석자가 초대 목록 확인                                │
+│     GET /api/calendar/events/invitations                │
+│                                                         │
+│  4. 참석자가 승인/거절 응답                                │
+│     PATCH /api/calendar/events/{id}/attendees/respond   │
+│     body: { accepted: true }                            │
+│            또는 { accepted: false, rejectReason: "..." } │
+│                                                         │
+│  5-A. 승인 시:                                           │
+│     - inviteStatus → APPROVED                           │
+│     - 참석자의 기본 캘린더에 일정 복제                      │
+│     - 일정 생성자에게 "수락" 알림 (Kafka)                  │
+│                                                         │
+│  5-B. 거절 시:                                           │
+│     - inviteStatus → REJECTED                           │
+│     - 일정 생성자에게 "거절" 알림 (Kafka)                  │
+│                                                         │
+│  6. 일정 상세 조회 시 참석자 목록 + 상태 포함               │
+│     GET /api/calendar/events/{id}                       │
+│     response: { ..., attendees: [{empId, status}, ...]} │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 9-10. ErrorCode 추가 필요
+
+```java
+// common/exception/ErrorCode.java에 추가
+
+ATTENDEE_NOT_FOUND(HttpStatus.NOT_FOUND, "참석자 정보를 찾을 수 없습니다."),
+ATTENDEE_ALREADY_RESPONDED(HttpStatus.BAD_REQUEST, "이미 응답한 초대입니다."),
+```
+
+---
+
+## 10. 휴일 관리 (사내휴일 + 법정공휴일)
+
+> **사내휴일**: 전사 일정 등록 시 `isHoliday=true` 체크 → `Holidays` 테이블에 `COMPANY` 타입 자동 INSERT
+> **법정공휴일**: 공공데이터포털 API로 자동 동기화 → `Holidays` 테이블에 `NATIONAL` 타입 저장
+> **근태 연동**: hr-service에서 `Holidays` 테이블 직접 조회 (common 엔티티)
+
+### 10-1. 전사 일정 `isHoliday` 플래그 추가
+
+#### `CompanyEventRequest.java` 수정
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/dto/CompanyEventRequest.java`
+
+```java
+// ─── 기존 필드 아래에 추가 ───
+
+private Boolean isHoliday;   // true 시 사내휴일로 등록 → Holidays 테이블 자동 INSERT
+```
+
+#### `CompanyEventResponse.java` 수정
+
+```java
+// ─── 기존 필드 아래에 추가 ───
+
+private Boolean isHoliday;   // 사내휴일 여부
+
+// from() 메서드의 builder에 추가:
+//  .isHoliday(isHoliday)
+
+// from() 메서드 시그니처 변경:
+public static CompanyEventResponse from(Events event, String creatorName, Boolean isHoliday) {
+    return CompanyEventResponse.builder()
+            .eventsId(event.getEventsId())
+            .title(event.getTitle())
+            .description(event.getDescription())
+            .location(event.getLocation())
+            .startAt(event.getStartAt())
+            .endAt(event.getEndAt())
+            .isAllDay(event.getIsAllDay())
+            .companyId(event.getCompanyId())
+            .creatorName(creatorName)
+            .createdAt(event.getCreatedAt())
+            .isHoliday(isHoliday)
+            .build();
+}
+```
+
+### 10-2. `CompanyEventService.java` 수정 — Holidays 자동 연동
+
+```java
+// ── 의존성 추가 ──
+private final HolidayRepository holidayRepository;
+
+// 생성자에 HolidayRepository 추가
+@Autowired
+public CompanyEventService(EventsRepository eventsRepository,
+                           HrCacheService hrCacheService,
+                           AlarmEventPublisher alarmEventPublisher,
+                           HolidayRepository holidayRepository) {
+    this.eventsRepository = eventsRepository;
+    this.hrCacheService = hrCacheService;
+    this.alarmEventPublisher = alarmEventPublisher;
+    this.holidayRepository = holidayRepository;
+}
+```
+
+#### createCompanyEvent() 수정
+
+```java
+@Transactional
+public CompanyEventResponse createCompanyEvent(UUID companyId, Long empId,
+                                                CompanyEventRequest request) {
+    Events event = Events.builder()
+            .empId(empId)
+            .title(request.getTitle())
+            .description(request.getDescription())
+            .location(request.getLocation())
+            .startAt(request.getStartAt())
+            .endAt(request.getEndAt())
+            .isAllDay(request.getIsAllDay())
+            .isPublic(true)
+            .isAllEmployees(true)
+            .companyId(companyId)
+            .myCalendars(null)
+            .build();
+
+    eventsRepository.save(event);
+
+    // ── 사내휴일 자동 등록 (추가) ──
+    boolean isHoliday = Boolean.TRUE.equals(request.getIsHoliday());
+    if (isHoliday) {
+        saveCompanyHoliday(companyId, empId, event);
+    }
+
+    // 전 직원에게 알림 (Kafka)
+    alarmEventPublisher.publisher(AlarmEvent.builder()
+            .companyId(companyId)
+            .alarmType("Calendar")
+            .alarmTitle("전사 일정 등록")
+            .alarmContent(request.getTitle() + " 전사 일정이 등록되었습니다.")
+            .alarmLink("/calendar?eventId=" + event.getEventsId())
+            .alarmRefType("COMPANY_EVENT")
+            .alarmRefId(event.getEventsId())
+            .empIds(List.of())
+            .build());
+
+    return CompanyEventResponse.from(event, getCreatorName(empId), isHoliday);
+}
+```
+
+#### 사내휴일 저장 Private 메서드
+
+```java
+// ── 사내휴일 Holidays 테이블 INSERT ──
+private void saveCompanyHoliday(UUID companyId, Long empId, Events event) {
+    // 종일 일정이면 startAt 날짜만, 아니면 startAt 날짜 기준
+    LocalDate holidayDate = event.getStartAt().toLocalDate();
+
+    Holidays holiday = Holidays.builder()
+            .date(holidayDate)
+            .holidayName(event.getTitle())
+            .holidayType(HolidayType.COMPANY)
+            .isRepeating(false)             // 사내휴일은 매년 반복 아님 (해당 연도만)
+            .companyId(companyId)
+            .empId(empId)
+            .build();
+
+    holidayRepository.save(holiday);
+}
+```
+
+> **import 추가:**
+> ```java
+> import com.peoplecore.entity.Holidays;
+> import com.peoplecore.entity.HolidayType;
+> import com.peoplecore.calendar.repository.HolidayRepository;
+> import java.time.LocalDate;
+> ```
+
+#### deleteCompanyEvent() 수정 — 휴일 연동 삭제
+
+```java
+@Transactional
+public void deleteCompanyEvent(UUID companyId, Long eventsId) {
+    Events event = findCompanyEventOrThrow(eventsId, companyId);
+    event.softDelete();
+
+    // ── 연동된 사내휴일도 삭제 (추가) ──
+    deleteLinkedCompanyHoliday(companyId, event);
+}
+
+private void deleteLinkedCompanyHoliday(UUID companyId, Events event) {
+    LocalDate holidayDate = event.getStartAt().toLocalDate();
+    holidayRepository.deleteByCompanyIdAndDateAndHolidayTypeAndHolidayName(
+            companyId, holidayDate, HolidayType.COMPANY, event.getTitle());
+}
+```
+
+#### HolidayRepository — 삭제 메서드 추가
+
+```java
+// HolidayRepository.java에 추가
+
+void deleteByCompanyIdAndDateAndHolidayTypeAndHolidayName(
+        UUID companyId, LocalDate date, HolidayType holidayType, String holidayName);
+```
+
+### 10-3. 법정공휴일 외부 API 연동
+
+> 공공데이터포털 (data.go.kr)의 **특일정보 API**를 사용하여 법정공휴일을 자동 동기화합니다.
+> API: `http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo`
+
+#### `HolidayApiClient.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/client/HolidayApiClient.java`
+
+```java
+package com.peoplecore.calendar.client;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.web.util.UriComponentsBuilder;
+import org.w3c.dom.Document;
+import org.w3c.dom.NodeList;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+
+@Component
+@Slf4j
+public class HolidayApiClient {
+
+    @Value("${holiday.api.service-key}")
+    private String serviceKey;
+
+    private final RestTemplate restTemplate;
+
+    private static final String API_URL =
+            "http://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getRestDeInfo";
+
+    @Autowired
+    public HolidayApiClient(RestTemplate restTemplate) {
+        this.restTemplate = restTemplate;
+    }
+
+    /**
+     * 특정 연도의 법정공휴일 목록 조회
+     * @param year 조회할 연도 (예: 2026)
+     * @return HolidayInfo 리스트
+     */
+    public List<HolidayInfo> fetchNationalHolidays(int year) {
+        List<HolidayInfo> holidays = new ArrayList<>();
+
+        // 1~12월 순회 (API가 월 단위 조회)
+        for (int month = 1; month <= 12; month++) {
+            fetchMonthHolidays(year, month, holidays);
+        }
+
+        return holidays;
+    }
+
+    private void fetchMonthHolidays(int year, int month, List<HolidayInfo> holidays) {
+        String url = UriComponentsBuilder.fromHttpUrl(API_URL)
+                .queryParam("serviceKey", serviceKey)
+                .queryParam("solYear", String.valueOf(year))
+                .queryParam("solMonth", String.format("%02d", month))
+                .queryParam("numOfRows", "30")
+                .build()
+                .toUriString();
+
+        try {
+            String xml = restTemplate.getForObject(url, String.class);
+            parseXmlResponse(xml, holidays);
+        } catch (Exception e) {
+            log.error("법정공휴일 API 조회 실패 year={}, month={}", year, month, e);
+        }
+    }
+
+    private void parseXmlResponse(String xml, List<HolidayInfo> holidays) {
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            Document doc = builder.parse(
+                    new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
+
+            NodeList items = doc.getElementsByTagName("item");
+
+            for (int i = 0; i < items.getLength(); i++) {
+                var item = items.item(i);
+                String dateName = getTagValue(item, "dateName");
+                String locdate = getTagValue(item, "locdate");
+                String isHoliday = getTagValue(item, "isHoliday");
+
+                if ("Y".equals(isHoliday)) {
+                    LocalDate date = LocalDate.parse(locdate,
+                            DateTimeFormatter.ofPattern("yyyyMMdd"));
+                    holidays.add(new HolidayInfo(date, dateName));
+                }
+            }
+        } catch (Exception e) {
+            log.error("법정공휴일 XML 파싱 실패", e);
+        }
+    }
+
+    private String getTagValue(org.w3c.dom.Node item, String tagName) {
+        var element = (org.w3c.dom.Element) item;
+        NodeList nodeList = element.getElementsByTagName(tagName);
+        if (nodeList.getLength() > 0) {
+            return nodeList.item(0).getTextContent();
+        }
+        return null;
+    }
+
+    // ── Inner DTO ──
+    public record HolidayInfo(LocalDate date, String name) {}
+}
+```
+
+#### `application.yml` 설정 추가
+
+```yaml
+# collaboration-service의 application.yml에 추가
+holiday:
+  api:
+    service-key: ${HOLIDAY_API_KEY}   # 공공데이터포털 인증키
+```
+
+#### `RestTemplate` Bean 등록
+
+```java
+// 기존 Config 클래스에 추가하거나 별도 생성
+@Configuration
+public class RestTemplateConfig {
+
+    @Bean
+    public RestTemplate restTemplate() {
+        return new RestTemplate();
+    }
+}
+```
+
+### 10-4. `HolidayResDto.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/dtos/HolidayResDto.java`
+
+```java
+package com.peoplecore.calendar.dtos;
+
+import com.peoplecore.entity.Holidays;
+import com.peoplecore.entity.HolidayType;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.time.LocalDate;
+
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class HolidayResDto {
+
+    private Long holidayId;
+    private LocalDate date;
+    private String holidayName;
+    private HolidayType holidayType;
+    private Boolean isRepeating;
+
+    public static HolidayResDto fromEntity(Holidays holiday) {
+        return HolidayResDto.builder()
+                .holidayId(holiday.getHolidayId())
+                .date(holiday.getDate())
+                .holidayName(holiday.getHolidayName())
+                .holidayType(holiday.getHolidayType())
+                .isRepeating(holiday.getIsRepeating())
+                .build();
+    }
+}
+```
+
+### 10-5. `HolidayService.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/service/HolidayService.java`
+
+```java
+package com.peoplecore.calendar.service;
+
+import com.peoplecore.calendar.client.HolidayApiClient;
+import com.peoplecore.calendar.dtos.HolidayResDto;
+import com.peoplecore.calendar.repository.HolidayRepository;
+import com.peoplecore.entity.Holidays;
+import com.peoplecore.entity.HolidayType;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+@Service
+@Slf4j
+@Transactional(readOnly = true)
+public class HolidayService {
+
+    private final HolidayRepository holidayRepository;
+    private final HolidayApiClient holidayApiClient;
+
+    @Autowired
+    public HolidayService(HolidayRepository holidayRepository,
+                          HolidayApiClient holidayApiClient) {
+        this.holidayRepository = holidayRepository;
+        this.holidayApiClient = holidayApiClient;
+    }
+
+    // ────────────────────────────────────────────
+    // 기간별 휴일 조회 (캘린더 뷰에서 사용)
+    // ────────────────────────────────────────────
+    public List<HolidayResDto> getHolidays(UUID companyId, LocalDate start, LocalDate end) {
+        return holidayRepository.findByCompanyIdAndPeriod(companyId, start, end)
+                .stream()
+                .map(HolidayResDto::fromEntity)
+                .toList();
+    }
+
+    // ────────────────────────────────────────────
+    // 법정공휴일 외부 API 동기화
+    // ────────────────────────────────────────────
+    @Transactional
+    public int syncNationalHolidays(UUID companyId, Long adminEmpId, int year) {
+
+        // 1. 외부 API로 해당 연도 법정공휴일 조회
+        List<HolidayApiClient.HolidayInfo> fetched = holidayApiClient.fetchNationalHolidays(year);
+
+        // 2. 기존 해당 연도 NATIONAL 공휴일 삭제 후 재삽입 (idempotent)
+        LocalDate yearStart = LocalDate.of(year, 1, 1);
+        LocalDate yearEnd = LocalDate.of(year, 12, 31);
+        holidayRepository.deleteByCompanyIdAndHolidayTypeAndDateBetween(
+                companyId, HolidayType.NATIONAL, yearStart, yearEnd);
+
+        // 3. 신규 INSERT
+        List<Holidays> holidays = fetched.stream()
+                .map(info -> Holidays.builder()
+                        .date(info.date())
+                        .holidayName(info.name())
+                        .holidayType(HolidayType.NATIONAL)
+                        .isRepeating(isYearlyRepeating(info.name()))
+                        .companyId(companyId)
+                        .empId(adminEmpId)
+                        .build())
+                .toList();
+
+        holidayRepository.saveAll(holidays);
+
+        log.info("법정공휴일 동기화 완료 companyId={}, year={}, count={}",
+                companyId, year, holidays.size());
+
+        return holidays.size();
+    }
+
+    // ── 매년 반복 공휴일 판별 (대체공휴일은 false) ──
+    private boolean isYearlyRepeating(String holidayName) {
+        // 대체공휴일, 임시공휴일 등은 매년 반복 아님
+        if (holidayName != null && holidayName.contains("대체")) return false;
+        if (holidayName != null && holidayName.contains("임시")) return false;
+        return true;
+    }
+}
+```
+
+#### HolidayRepository — 동기화용 삭제 메서드 추가
+
+```java
+// HolidayRepository.java에 추가
+
+void deleteByCompanyIdAndHolidayTypeAndDateBetween(
+        UUID companyId, HolidayType holidayType, LocalDate start, LocalDate end);
+```
+
+### 10-6. `HolidayController.java` (신규)
+
+**파일 위치:** `collaboration-service/src/main/java/com/peoplecore/calendar/controller/HolidayController.java`
+
+```java
+package com.peoplecore.calendar.controller;
+
+import com.peoplecore.auth.RoleRequired;
+import com.peoplecore.calendar.dtos.HolidayResDto;
+import com.peoplecore.calendar.service.HolidayService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/api/calendar/holidays")
+public class HolidayController {
+
+    private final HolidayService holidayService;
+
+    @Autowired
+    public HolidayController(HolidayService holidayService) {
+        this.holidayService = holidayService;
+    }
+
+    /** 기간별 휴일 조회 (캘린더 뷰용 — 법정공휴일 + 사내휴일 통합) */
+    @GetMapping
+    public ResponseEntity<List<HolidayResDto>> getHolidays(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate end) {
+        return ResponseEntity.ok(holidayService.getHolidays(companyId, start, end));
+    }
+
+    /** 법정공휴일 외부 API 동기화 (Admin 전용) */
+    @PostMapping("/sync-national")
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    public ResponseEntity<Map<String, Object>> syncNationalHolidays(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam int year) {
+        int count = holidayService.syncNationalHolidays(companyId, empId, year);
+        return ResponseEntity.ok(Map.of(
+                "year", year,
+                "syncedCount", count,
+                "message", year + "년 법정공휴일 " + count + "건 동기화 완료"));
+    }
+}
+```
+
+### 10-7. hr-service — HolidayRepository 추가 (근태 연동)
+
+**파일 위치:** `hr-service/src/main/java/com/peoplecore/attendence/repository/HolidayRepository.java`
+
+> `Holidays`가 common 엔티티이므로 hr-service에서도 레포를 만들어 직접 조회할 수 있습니다.
+> 근태 서비스에서 특정 날짜가 공휴일/사내휴일인지 판별할 때 사용합니다.
+
+```java
+package com.peoplecore.attendence.repository;
+
+import com.peoplecore.entity.Holidays;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.UUID;
+
+public interface HolidayRepository extends JpaRepository<Holidays, Long> {
+
+    /** 특정 날짜가 휴일인지 확인 (isRepeating=true인 경우 월/일만 비교) */
+    @Query("""
+        SELECT h FROM Holidays h
+        WHERE h.companyId = :companyId
+        AND (
+            (h.isRepeating = true AND MONTH(h.date) = MONTH(:targetDate) AND DAY(h.date) = DAY(:targetDate))
+            OR
+            (h.isRepeating = false AND h.date = :targetDate)
+        )
+        """)
+    List<Holidays> findHolidaysOnDate(@Param("companyId") UUID companyId,
+                                       @Param("targetDate") LocalDate targetDate);
+
+    /** 기간 내 휴일 목록 (근태 통계용) */
+    @Query("""
+        SELECT h FROM Holidays h
+        WHERE h.companyId = :companyId
+        AND ((h.isRepeating = true) OR (h.date BETWEEN :start AND :end))
+        """)
+    List<Holidays> findByCompanyIdAndPeriod(@Param("companyId") UUID companyId,
+                                             @Param("start") LocalDate start,
+                                             @Param("end") LocalDate end);
+}
+```
+
+#### 근태 서비스에서 사용 예시
+
+```java
+// 근태 계산 시 휴일 체크 로직 (hr-service)
+
+@Autowired
+private HolidayRepository holidayRepository;
+
+/**
+ * 특정 날짜가 근무일인지 판별
+ * 1) WorkGroup.groupWorkDay 비트마스크로 요일 체크
+ * 2) Holidays 테이블에서 공휴일/사내휴일 체크
+ */
+public boolean isWorkingDay(UUID companyId, LocalDate date, WorkGroup workGroup) {
+    // 1. 요일 체크 (월=1, 화=2, 수=4, 목=8, 금=16, 토=32, 일=64)
+    int dayBit = 1 << (date.getDayOfWeek().getValue() - 1);
+    if ((workGroup.getGroupWorkDay() & dayBit) == 0) {
+        return false;  // 비근무 요일
+    }
+
+    // 2. 공휴일/사내휴일 체크
+    List<Holidays> holidays = holidayRepository.findHolidaysOnDate(companyId, date);
+    if (!holidays.isEmpty()) {
+        return false;  // 휴일
+    }
+
+    return true;
+}
+```
+
+### 10-8. 휴일 관리 플로우 요약
+
+```
+┌─────────────────────────────────────────────────────────┐
+│              사내휴일 (전사일정 연동)                      │
+│                                                         │
+│  Admin이 전사일정 등록 시 isHoliday=true 체크             │
+│    → Events 테이블 INSERT (isAllEmployees=true)          │
+│    → Holidays 테이블 INSERT (COMPANY 타입) ← 자동        │
+│                                                         │
+│  전사일정 삭제 시                                         │
+│    → Events softDelete                                  │
+│    → Holidays 레코드도 삭제 ← 자동                       │
+│                                                         │
+│  캘린더 뷰: 전사일정으로 표시 + 휴일 아이콘               │
+│  근태 시스템: Holidays 조회 → 비근무일 처리              │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│              법정공휴일 (외부 API 동기화)                  │
+│                                                         │
+│  Admin이 관리 화면에서 연도 선택 후 "동기화" 클릭          │
+│    POST /api/calendar/holidays/sync-national?year=2026  │
+│                                                         │
+│  1. 공공데이터포털 API (1~12월 순회) 호출                 │
+│  2. 기존 해당 연도 NATIONAL 레코드 삭제                   │
+│  3. 조회된 공휴일 bulk INSERT                            │
+│     - 설날, 추석 등 → isRepeating=true                   │
+│     - 대체공휴일 → isRepeating=false                     │
+│                                                         │
+│  캘린더 뷰: GET /api/calendar/holidays?start=&end=       │
+│  근태 시스템: hr-service HolidayRepository 직접 조회      │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 11. 파일 위치 요약
 
 ```
 collaboration-service/src/main/java/com/peoplecore/calendar/
 ├── controller/
-│   ├── CalendarEventController.java        ← 일정 CRUD (일반 사원)
+│   ├── CalendarEventController.java        ← 일정 CRUD + 참석자 응답 API (수정)
 │   ├── CompanyEventController.java         ← 전사 일정 CRUD (Admin 전용, 신규)
+│   ├── HolidayController.java             ← 휴일 조회 + 법정공휴일 동기화 (신규)
 │   ├── MyCalendarController.java           ← 내 캘린더 관리
 │   ├── InterestCalendarController.java     ← 관심 캘린더 + 공유 요청
 │   └── CalendarSettingsController.java     ← 연차 연동 설정
 │
 ├── service/
-│   ├── CalendarEventService.java           ← 일정 비즈니스 로직 + 즉시 알림 (일반 사원)
-│   ├── CompanyEventService.java            ← 전사 일정 비즈니스 로직 (Admin 전용, 신규)
+│   ├── CalendarEventService.java           ← 일정 로직 + 참석자 저장/응답 (수정)
+│   ├── CompanyEventService.java            ← 전사 일정 + isHoliday 연동 (수정)
+│   ├── HolidayService.java                ← 휴일 조회 + 법정공휴일 API 동기화 (신규)
 │   ├── MyCalendarService.java              ← 내 캘린더 비즈니스 로직
 │   ├── InterestCalendarService.java        ← 관심 캘린더 + 공유 요청 + 즉시 알림
 │   └── CalendarSettingsService.java        ← 연차 연동 설정
+│
+├── client/
+│   └── HolidayApiClient.java              ← 공공데이터포털 API 클라이언트 (신규)
 │
 ├── scheduler/
 │   └── EventNotificationScheduler.java     ← 예약 알림 (N분 전 팝업/이메일/푸시)
@@ -3170,22 +4303,26 @@ collaboration-service/src/main/java/com/peoplecore/calendar/
 │   ├── EventsRepository.java              ← 기본 JPA (extends EventsCustomRepository)
 │   ├── EventsCustomRepository.java        ← QueryDSL 인터페이스
 │   ├── EventsCustomRepositoryImpl.java    ← QueryDSL 구현체 (BooleanExpression 패턴)
-│   ├── MyCalendarsRepository.java
+│   ├── EventAttendeesRepository.java      ← 참석자 레포 (신규)
+│   ├── MyCalendarsRepository.java         ← 수정 (findByIsDefaultTrue 추가)
 │   ├── InterestCalendarsRepository.java
 │   ├── CalendarShareRequestsRepository.java
 │   ├── EventsNotificationsRepository.java
 │   ├── RepeatedRulesRepository.java
-│   ├── HolidaysRepository.java
+│   ├── HolidayRepository.java             ← 수정 (삭제 메서드 추가)
 │   └── AnnualLeaveSettingRepository.java
 │
-├── dto/
-│   ├── EventCreateRequest.java
-│   ├── EventUpdateRequest.java
-│   ├── EventResponse.java
-│   ├── RepeatedRuleRequest.java
-│   ├── RepeatedRuleResponse.java
-│   ├── NotificationRequest.java
-│   ├── NotificationResponse.java
+├── dtos/
+│   ├── EventCreateReqDto.java
+│   ├── EventUpdateReqDto.java
+│   ├── EventResDto.java                   ← 수정 (attendees 필드 + fromEntityWithAttendees)
+│   ├── AttendeeResDto.java                ← 참석자 응답 DTO (신규)
+│   ├── AttendeeRespondReqDto.java         ← 참석자 승인/거절 요청 (신규)
+│   ├── HolidayResDto.java                 ← 휴일 응답 DTO (신규)
+│   ├── RepeatedRulesReqDto.java
+│   ├── RepeatedRulesResDto.java
+│   ├── NotificationReqDto.java
+│   ├── NotificationResDto.java
 │   ├── MyCalendarCreateRequest.java
 │   ├── MyCalendarUpdateRequest.java
 │   ├── MyCalendarResponse.java
@@ -3193,22 +4330,22 @@ collaboration-service/src/main/java/com/peoplecore/calendar/
 │   ├── ShareRequestResponse.java
 │   ├── InterestCalendarResponse.java
 │   ├── InterestCalendarUpdateRequest.java
-│   ├── CompanyEventRequest.java              ← 전사 일정 요청 (신규)
-│   ├── CompanyEventResponse.java             ← 전사 일정 응답 (신규)
+│   ├── CompanyEventRequest.java           ← 수정 (isHoliday 추가)
+│   ├── CompanyEventResponse.java          ← 수정 (isHoliday 추가)
 │   ├── AnnualLeaveSettingRequest.java
 │   └── AnnualLeaveSettingResponse.java
 │
 ├── entity/
 │   ├── Events.java                  ← 수정 (비즈니스 메서드 + notifications 관계 추가)
-│   ├── MyCalendars.java             ← 수정 (비즈니스 메서드 추가)
+│   ├── MyCalendars.java             ← 수정 (비즈니스 메서드 + isDefault 추가)
 │   ├── InterestCalendars.java       ← 수정 (비즈니스 메서드 추가)
 │   ├── CalendarShareRequests.java   ← 수정 (approve/reject/cancel 추가)
+│   ├── EventAttendees.java          ← 수정 (Events 직접 참조 + approve/reject 메서드)
 │   ├── AnnualLeaveSetting.java      ← 신규 (연차 연동 설정)
 │   ├── EventInstances.java          ← 기존 유지
-│   ├── EventAttendees.java          ← 기존 유지
 │   ├── EventsNotifications.java     ← 기존 유지
 │   ├── RepeatedRules.java           ← 기존 유지
-│   └── Holidays.java                ← 기존 유지
+│   └── Holidays.java                ← 기존 유지 (common 엔티티)
 │
 └── enums/                           ← 기존 유지 (변경 없음)
     ├── EventInstancesType.java
@@ -3230,13 +4367,17 @@ collaboration-service/src/main/java/com/peoplecore/client/
     ├── CompanyInfoResponse.java       ← 기존 유지
     └── EmployeeSimpleResponse.java    ← 신규
 
-hr-service/src/main/java/com/peoplecore/employee/
-├── controller/
-│   └── InternalEmployeeController.java  ← 신규 (/internal/employee)
-├── dto/
-│   └── InternalEmployeeResponseDto.java ← 신규
-└── repository/
-    └── EmployeeRepository.java          ← 기존 + findByEmpIdsWithDeptAndGrade() 추가
+hr-service/src/main/java/com/peoplecore/
+├── employee/
+│   ├── controller/
+│   │   └── InternalEmployeeController.java  ← 신규 (/internal/employee)
+│   ├── dto/
+│   │   └── InternalEmployeeResponseDto.java ← 신규
+│   └── repository/
+│       └── EmployeeRepository.java          ← 기존 + findByEmpIdsWithDeptAndGrade() 추가
+│
+└── attendence/repository/
+    └── HolidayRepository.java               ← 신규 (근태 연동용, common 엔티티 조회)
 ```
 
 ---
@@ -3245,11 +4386,13 @@ hr-service/src/main/java/com/peoplecore/employee/
 
 | Method | Endpoint | 설명 |
 |--------|----------|------|
-| `POST` | `/api/calendar/events` | 일정 등록 |
+| `POST` | `/api/calendar/events` | 일정 등록 (참석자 포함) |
 | `PUT` | `/api/calendar/events/{eventsId}` | 일정 수정 |
 | `DELETE` | `/api/calendar/events/{eventsId}` | 일정 삭제 |
-| `GET` | `/api/calendar/events/{eventsId}` | 일정 상세 |
+| `GET` | `/api/calendar/events/{eventsId}` | 일정 상세 (참석자 목록 포함) |
 | `GET` | `/api/calendar/events?start=&end=` | 기간별 일정 목록 |
+| `PATCH` | `/api/calendar/events/{eventsId}/attendees/respond` | 참석자 승인/거절 응답 |
+| `GET` | `/api/calendar/events/invitations` | 내가 받은 초대 목록 (PENDING) |
 | `GET` | `/api/calendar/my-calendars` | 내 캘린더 목록 |
 | `POST` | `/api/calendar/my-calendars` | 내 캘린더 추가 |
 | `PATCH` | `/api/calendar/my-calendars/{id}` | 내 캘린더 수정 (이름/색상/보이기) |
@@ -3261,11 +4404,13 @@ hr-service/src/main/java/com/peoplecore/employee/
 | `GET` | `/api/calendar/interest` | 관심 캘린더 목록 |
 | `PATCH` | `/api/calendar/interest/{id}` | 관심 캘린더 설정 변경 |
 | `DELETE` | `/api/calendar/interest/{id}` | 관심 캘린더 삭제 |
-| `POST` | `/api/calendar/company-events` | 전사 일정 등록 (Admin) |
+| `POST` | `/api/calendar/company-events` | 전사 일정 등록 (Admin, isHoliday 포함) |
 | `PUT` | `/api/calendar/company-events/{eventsId}` | 전사 일정 수정 (Admin) |
-| `DELETE` | `/api/calendar/company-events/{eventsId}` | 전사 일정 삭제 (Admin) |
+| `DELETE` | `/api/calendar/company-events/{eventsId}` | 전사 일정 삭제 (Admin, 휴일 연동 삭제) |
 | `GET` | `/api/calendar/company-events` | 전사 일정 목록 (Admin, 페이징) |
 | `GET` | `/api/calendar/company-events/{eventsId}` | 전사 일정 상세 (Admin) |
+| `GET` | `/api/calendar/holidays?start=&end=` | 기간별 휴일 조회 (법정+사내) |
+| `POST` | `/api/calendar/holidays/sync-national?year=` | 법정공휴일 동기화 (Admin) |
 | `GET` | `/api/calendar/settings/annual-leave` | 연차 연동 설정 조회 |
 | `POST` | `/api/calendar/settings/annual-leave` | 연차 연동 설정 저장 |
 
@@ -3299,6 +4444,10 @@ hr-service/src/main/java/com/peoplecore/employee/
 │    │   InterestCalendarService.respondShareRequest()                │
 │    │     → AlarmEventPublisher.publisher() → Kafka → DB + SSE       │
 │    │                                                                │
+│    ├─ 참석자 초대 응답 알림 (승인/거절 → 생성자에게)                    │
+│    │   CalendarEventService.sendRespondAlarm()                      │
+│    │     → AlarmEventPublisher.publisher() → Kafka → DB + SSE       │
+│    │                                                                │
 │    └─ 전사 일정 등록 알림 (Admin)                                     │
 │        CompanyEventService.createCompanyEvent()                     │
 │          → AlarmEventPublisher.publisher() → Kafka → DB + SSE       │
@@ -3318,4 +4467,3 @@ hr-service/src/main/java/com/peoplecore/employee/
 │    └─ AlarmEventPublisher.publisher() → Kafka → DB + SSE             │
 └─────────────────────────────────────────────────────────────────────┘
 ```
-│    �

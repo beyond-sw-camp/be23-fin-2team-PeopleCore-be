@@ -55,9 +55,9 @@ public class CalendarEventService {
                 .endAt(reqDto.getEndAt())
                 .isAllDay(reqDto.getIsAllDay())
                 .isPublic(reqDto.getIsPublic())
-                .isAllEmployees(false)
+                .isAllEmployees(false)  //전사 일정 생성 불가
                 .companyId(companyId)
-                .myCalendars(calendar)
+                .myCalendars(calendar)  //개인 캘린더
                 .repeatedRules(repeatedRules)
                 .build();
 
@@ -156,8 +156,6 @@ public class CalendarEventService {
 //                .map(EventResponse::from)
 //                .toList();
     }
-
-
 
 
     private Events findEventOrThrow(Long eventsId, UUID companyId){

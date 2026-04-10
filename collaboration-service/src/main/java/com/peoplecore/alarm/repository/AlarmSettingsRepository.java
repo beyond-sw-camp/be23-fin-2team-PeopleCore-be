@@ -9,7 +9,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface AlarmSettingsRepository extends JpaRepository {
+public interface AlarmSettingsRepository extends JpaRepository<AlarmSettings, Long> {
 
 //    사원 전체 알림 설정 목록
     List<AlarmSettings> findByCompanyIdAndEmpId(UUID companyId, Long EmpId);

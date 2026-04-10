@@ -36,6 +36,5 @@ public class AlarmSettingsController {
             @RequestBody AlarmSettingsReqDto reqDto){
         return ResponseEntity.ok(alarmSettingsService.updateSetting(companyId, empId, reqDto));
     }
-            )
 
 }
