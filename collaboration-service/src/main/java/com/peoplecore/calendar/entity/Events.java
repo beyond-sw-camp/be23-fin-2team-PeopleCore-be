@@ -87,4 +87,14 @@ public class Events extends BaseTimeEntity {
     public boolean isDelete(){
         return this.deletedAt != null;
     }
+
+    public void updateCompanyEvent(String title, String description, String location, LocalDateTime startAt, LocalDateTime endAt, Boolean isAllDay){
+
+        this.title = title;
+        this.description = description;
+        this.location = location;
+        this.startAt = startAt;
+        this.endAt = endAt;
+        this.isAllDay = isAllDay;
+    }
 }
