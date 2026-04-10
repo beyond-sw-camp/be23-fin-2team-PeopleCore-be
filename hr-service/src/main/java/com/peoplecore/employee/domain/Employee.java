@@ -206,5 +206,14 @@ public class Employee extends BaseTimeEntity {
         return this.deleteAt !=null;
     }
 
+//    재직상태 변경
+    public void updateStatus(EmpStatus status){
+        this.empStatus = status;
+    }
+
+//    퇴직일 세팅
+    public void updateResignDate(LocalDate resignDate){
+        this.empResign = resignDate;
+    }
 
 }

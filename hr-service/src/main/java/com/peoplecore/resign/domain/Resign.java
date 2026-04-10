@@ -39,18 +39,37 @@ public class Resign {
     @JoinColumn(name = "dept_id", nullable = false)
     private Department department;
 
-    @Column(name = "emp_name")
-    private String empName;
-
-    @Column(name = "resign_reason")
-    private String resignReason; //퇴직사유
-
-    @Column(name = "resign_date")
-    private LocalDate resignDate; //퇴직 예정일
-
     @Column(name = "processed_at")
-    private LocalDateTime processedAt; //
+    private LocalDateTime processedAt; //퇴직처리 일시
 
-    @Column(name = "doc_ id")
-    private Long docId;
+    @Column(name = "doc_id")
+    private Long docId; //결제문서 id(상세)
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "approval_status")
+    @Builder.Default
+    private ApprovalStatus approvalStatus = ApprovalStatus.PENDING; //결제대기 기본값
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "retire_status")
+    @Builder.Default
+    private RetireStatus retireStatus = RetireStatus.ACTIVE; //재직자 기본값
+
+    @Column(name = "is_deleted")
+    @Builder.Default
+    private Boolean isDeleted = false; //softDelete
+
+    @Column(name = "registered_date")
+    private LocalDate registeredDate; //신청일
+
+
+    public void processRetire() {
+        this.retireStatus = RetireStatus.RESIGNED;
+        this.processedAt = LocalDateTime.now();
+    }
+
+    public void softDelete(){
+        this.isDeleted = true;
+    }
+
 }
