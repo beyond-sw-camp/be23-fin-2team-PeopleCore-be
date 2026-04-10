@@ -63,4 +63,7 @@ public interface ApprovalFormRepository extends JpaRepository<ApprovalForm, Long
     void updateSortOrder(@Param("companyId") UUID companyId,
                          @Param("formId") Long formId,
                          @Param("sortOrder") Integer sortOrder);
+
+
+    boolean existsByCompanyIdAndFormNameAndIsCurrent(UUID companyId, String formName,Boolean isCurrent);
 }
