@@ -76,5 +76,18 @@ public class SalaryContract {
     @Column(name = "form_version")
     private Long formVersion;
 
+//    soft delete 삭제일
+    @Column(name = "delete_at")
+    private LocalDate deletedAt;
+
+//    soft delete처리(삭제일에 현재 날짜 세팅)
+    public void softDelete(){
+        this.deletedAt = LocalDate.now();
+    }
+
+//    삭제 여부 확인 (deleteAt null아닐 시 = 삭제된 상태)
+    public boolean isDeleted(){
+        return this.deletedAt !=null;
+    }
 
 }

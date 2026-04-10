@@ -19,12 +19,12 @@ public class ApprovalSignatureResponseDto {
     private Long sigManagerId;
 
     /*조회 데이터는 commonAttach에서 하고 인사취고 권위자가 등록해주는건 approvalsignature에서 조회 */
-    public static ApprovalSignatureResponseDto from(CommonAttachFile attachFile, Long sigManagerId) {
+    public static ApprovalSignatureResponseDto from(CommonAttachFile attachFile, Long sigManagerId, String presignedUrl) {
         return ApprovalSignatureResponseDto.builder()
                 .attachId(attachFile.getAttachId())
                 .sigEmpId(attachFile.getEntityId())
                 .originalFileName(attachFile.getOriginalFileName())
-                .fileUrl(attachFile.getFileUrl())
+                .fileUrl(presignedUrl)
                 .fileSize(attachFile.getFileSize())
                 .sigManagerId(sigManagerId)
                 .build();

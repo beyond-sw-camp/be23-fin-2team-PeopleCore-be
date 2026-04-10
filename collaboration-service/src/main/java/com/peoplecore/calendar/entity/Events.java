@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -15,6 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(name = "events")
 public class Events extends BaseTimeEntity {
 
     @Id
@@ -52,10 +55,46 @@ public class Events extends BaseTimeEntity {
     private UUID companyId;
 
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "my_calendars_id")
     private MyCalendars myCalendars;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(nullable = false)
+    @JoinColumn(name = "repeated_rules_id")
     private RepeatedRules repeatedRules;
 
+    @OneToMany(mappedBy = "events", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<EventsNotifications> notifications = new ArrayList<>();
+
+
+    public void update(String title, String description, String location, LocalDateTime startAt, LocalDateTime endAt, Boolean isAllDay, Boolean isPublic, MyCalendars myCalendars){
+
+        this.title = title;
+        this.description = description;
+        this.location = location;
+        this.startAt = startAt;
+        this.endAt = endAt;
+        this.isAllDay = isAllDay;
+        this.isPublic = isPublic;
+        this.myCalendars = myCalendars;
+
+    }
+
+    public void softDelete(){
+        this.deletedAt = LocalDateTime.now();
+    }
+
+    public boolean isDelete(){
+        return this.deletedAt != null;
+    }
+
+    public void updateCompanyEvent(String title, String description, String location, LocalDateTime startAt, LocalDateTime endAt, Boolean isAllDay){
+
+        this.title = title;
+        this.description = description;
+        this.location = location;
+        this.startAt = startAt;
+        this.endAt = endAt;
+        this.isAllDay = isAllDay;
+    }
 }

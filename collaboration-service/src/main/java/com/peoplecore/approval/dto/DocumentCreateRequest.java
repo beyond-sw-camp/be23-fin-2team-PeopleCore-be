@@ -22,7 +22,10 @@ public class DocumentCreateRequest {
     private String docTitle;
     private String docType;
     private String docData;
+    private String docOpinion;
     private Boolean isEmergency;
+    private Long personalFolderId;
+    private Long deptFolderId;
 
     //    결재선 목록
     private List<ApprovalLineRequest> approvalLines;
@@ -34,6 +37,7 @@ public class DocumentCreateRequest {
     public static class ApprovalLineRequest {
         private Long empId;
         private String empName;
+        private Long empDeptId;
         private String empDeptName;
         private String empGrade;
         private String empTitle;

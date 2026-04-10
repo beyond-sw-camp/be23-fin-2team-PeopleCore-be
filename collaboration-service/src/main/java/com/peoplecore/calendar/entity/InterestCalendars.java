@@ -14,12 +14,12 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-    // 관심캘린더 뷰설정
+@Table(name = "interest_calendars")    // 관심캘린더 뷰설정
 public class InterestCalendars {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+    private Long interestCalendarsId;
 
 //    보는사원ID - API조회
     private Long viewerEmpId;
@@ -30,7 +30,7 @@ public class InterestCalendars {
     private Boolean isVisible;
 
     @Column(length = 7)
-    private String insDisplayColor;
+    private String shareDisplayColor;
 
 //    사이드바순서
     private Integer sortOrder;
@@ -45,4 +45,14 @@ public class InterestCalendars {
     @JoinColumn( nullable = false)
     private CalendarShareRequests calendarShareRequest;
 
+
+    public void updateColor(String color){
+        this.shareDisplayColor = color;
+    }
+    public void toggleVisible(){
+        this.isVisible = !Boolean.TRUE.equals(this.isVisible);
+    }
+    public void updateSortOrder(Integer sortOrder){
+        this.sortOrder = sortOrder;
+    }
 }

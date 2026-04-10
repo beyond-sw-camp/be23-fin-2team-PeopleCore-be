@@ -29,7 +29,7 @@ public class AlarmSettings {
     @Column(length = 50)
     private String service;
     @Column(length = 50)
-    private String eventTyps;
+    private String eventTypes;
 
     @Builder.Default
     private Boolean emailEnabled = true;
@@ -37,4 +37,11 @@ public class AlarmSettings {
     private Boolean pushEnabled = true;
     @Builder.Default
     private Boolean popupEnabled = true;
+
+
+    public void update(Boolean emailEnabled, Boolean pushEnabled, Boolean popupEnabled){
+        if(emailEnabled != null) this.emailEnabled = emailEnabled;
+        if(pushEnabled != null) this.pushEnabled = pushEnabled;
+        if(popupEnabled != null) this.popupEnabled = popupEnabled;
+    }
 }

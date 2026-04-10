@@ -1,6 +1,7 @@
 package com.peoplecore.approval.controller;
 
 
+import com.peoplecore.approval.dto.DocumentCountResponse;
 import com.peoplecore.approval.dto.DocumentListResponseDto;
 import com.peoplecore.approval.dto.DocumentListSearchDto;
 import com.peoplecore.approval.service.ApprovalDocumentListService;
@@ -22,7 +23,17 @@ public class ApprovalDocumentListController {
         this.listService = listService;
     }
 
-    /* === 개인 문서함 === */
+    /* === 전체 문서함 건수 === */
+
+    @GetMapping("/counts")
+    public ResponseEntity<DocumentCountResponse> getDocumentCounts(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestHeader("X-User-Department") Long deptId) {
+        return ResponseEntity.ok(listService.getDocumentCounts(companyId, empId, deptId));
+    }
+
+    /* === 결재하기 === */
 
     @GetMapping("/waiting")
     public ResponseEntity<Page<DocumentListResponseDto>> getWaitingDocuments(
@@ -31,15 +42,6 @@ public class ApprovalDocumentListController {
             @ModelAttribute DocumentListSearchDto searchDto,
             Pageable pageable) {
         return ResponseEntity.ok(listService.getWaitingDocuments(companyId, empId, searchDto, pageable));
-    }
-
-    @GetMapping("/received")
-    public ResponseEntity<Page<DocumentListResponseDto>> getReceivedDocuments(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long empId,
-            @ModelAttribute DocumentListSearchDto searchDto,
-            Pageable pageable) {
-        return ResponseEntity.ok(listService.getReceivedDocuments(companyId, empId, searchDto, pageable));
     }
 
     @GetMapping("/cc-view")
@@ -94,15 +96,6 @@ public class ApprovalDocumentListController {
             @ModelAttribute DocumentListSearchDto searchDto,
             Pageable pageable) {
         return ResponseEntity.ok(listService.getCcViewBoxDocuments(companyId, empId, searchDto, pageable));
-    }
-
-    @GetMapping("/sent")
-    public ResponseEntity<Page<DocumentListResponseDto>> getSentDocuments(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long empId,
-            @ModelAttribute DocumentListSearchDto searchDto,
-            Pageable pageable) {
-        return ResponseEntity.ok(listService.getSentDocuments(companyId, empId, searchDto, pageable));
     }
 
     @GetMapping("/inbox")

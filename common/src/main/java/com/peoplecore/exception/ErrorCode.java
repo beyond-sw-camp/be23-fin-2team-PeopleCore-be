@@ -63,6 +63,38 @@ public enum ErrorCode {
     // 퇴직연금설정
     RETIREMENT_PROVIDER_REQUIRED(400, "DB형/DB+DC형은 퇴직연금 운용사를 입력해주세요."),
 
+    // 사원 계좌
+    EMP_ACCOUNT_NOT_FOUND(404, "사원 계좌 정보를 찾을 수 없습니다."),
+    RETIREMENT_ACCOUNT_NOT_FOUND(404, "퇴직연금 계좌 정보를 찾을 수 없습니다."),
+
+    // 캘린더
+    CALENDAR_NOT_FOUND(404, "캘린더를 찾을 수 없습니다."),
+    CALENDAR_NAME_DUPLICATE(409, "이미 같은 이름의 캘린더가 존재합니다."),
+    CALENDAR_OWNER_MISMATCH(403, "본인의 캘린더만 관리할 수 있습니다."),
+    DEFAULT_CALENDAR_CANNOT_DELETE(400, "기본 캘린더는 삭제할 수 없습니다."),
+    DEFAULT_CALENDAR_CANNOT_RENAME(400, "기본 캘린더의 이름은 변경할 수 없습니다."),
+
+    // 일정
+    EVENT_NOT_FOUND(404, "일정을 찾을 수 없습니다."),
+    EVENT_DELETED(404, "삭제된 일정입니다."),
+    EVENT_ACCESS_DENIED(403, "접근 권한이 없습니다."),
+    EVENT_OWNER_MISMATCH(403, "본인의 일정만 수정/삭제할 수 있습니다."),
+    EVENT_REGISTER_DENIED(403, "본인의 캘린더에만 일정을 등록할 수 있습니다."),
+
+    // 관심 캘린더 / 공유 요청
+    INTEREST_CALENDAR_NOT_FOUND(404, "관심 캘린더를 찾을 수 없습니다."),
+    INTEREST_CALENDAR_OWNER_MISMATCH(403, "본인의 관심 캘린더만 관리할 수 있습니다."),
+    SHARE_REQUEST_NOT_FOUND(404, "공유 요청을 찾을 수 없습니다."),
+    SHARE_REQUEST_SELF(400, "본인에게는 공유 요청을 보낼 수 없습니다."),
+    SHARE_REQUEST_DUPLICATE(409, "이미 대기 중인 요청이 있습니다."),
+    SHARE_REQUEST_ALREADY_PROCESSED(400, "이미 처리된 요청입니다."),
+    SHARE_REQUEST_ACCESS_DENIED(403, "본인에게 온 요청만 처리할 수 있습니다."),
+
+//    전사 캘린더
+    COMPANY_EVENT_NOT_FOUND(404, "전사 일정을 찾을 수 없습니다."),
+    COMPANY_EVENT_NOT_COMPANY(400, "전사 일정이 아닙니다."),
+
+
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),
     BAD_REQUEST(400, "잘못된 요청입니다."),
@@ -73,8 +105,13 @@ public enum ErrorCode {
     GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다."),
     TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다."),
     MANUAL_PASSWORD_REQUIRED(400, "비밀번호를 직접 입력해야 합니다."),
-    SALARY_CONTRACT_NOT_FOUND(500, "파일 업로드에 실패했습니다"),
-    FILE_UPLOAD_FAILED(404, "파일 업로드에 실패했습니다");
+
+
+//    연봉
+    SALARY_CONTRACT_NOT_FOUND(404, "계약서를 찾을 수 없습니다."),
+    SALARY_CONTRACT_ALREADY_DELETED(400, "이미 삭제된 계약서입니다."),
+    EMPLOYEE_NOT_RESIGNED(400, "퇴직 상태인 사원의 계약서만 삭제할 수 있습니다."),
+    FILE_UPLOAD_FAILED(500, "파일 업로드에 실패했습니다.");
 
 
     private final int status;
