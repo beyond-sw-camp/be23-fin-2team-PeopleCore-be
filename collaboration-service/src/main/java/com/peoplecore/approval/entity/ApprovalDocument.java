@@ -133,6 +133,9 @@ public class ApprovalDocument extends BaseTimeEntity {
     /*개인 문서함 id */
     private Long personalFolderId;
 
+    /*부서 문서함 id */
+    private Long deptFolderId;
+
     /*결재 완성 시 저장되는 url*/
     private String docUrl;
 
@@ -183,6 +186,16 @@ public class ApprovalDocument extends BaseTimeEntity {
     /*개인 문서함 배정*/
     public void assignPersonalFolder(Long personalFolderId) {
         this.personalFolderId = personalFolderId;
+    }
+
+    /*부서 문서함 배정*/
+    public void assignDeptFolder(Long deptFolderId) {
+        this.deptFolderId = deptFolderId;
+    }
+
+    /*완성 문서 URL 저장*/
+    public void assignDocUrl(String docUrl) {
+        this.docUrl = docUrl;
     }
 
     /*반려된 문서 재기안시 내용 수정 (REJECT일때만 호출)*/

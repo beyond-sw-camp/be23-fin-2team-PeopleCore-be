@@ -25,4 +25,7 @@ public interface AutoClassifyRuleRepository extends JpaRepository<AutoClassifyRu
 
     /** 자동분류 실행용: 사원의 활성 규칙 목록 */
     List<AutoClassifyRule> findByCompanyIdAndEmpIdAndIsActiveTrueOrderBySortOrder(UUID companyId, Long empId);
+
+    /** 특정 폴더에 연결된 규칙 목록 (이관용) */
+    List<AutoClassifyRule> findByCompanyIdAndEmpIdAndTargetFolderId(UUID companyId, Long empId, Long targetFolderId);
 }

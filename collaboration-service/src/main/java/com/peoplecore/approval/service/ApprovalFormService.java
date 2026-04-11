@@ -3,6 +3,7 @@ package com.peoplecore.approval.service;
 import com.peoplecore.approval.dto.*;
 import com.peoplecore.approval.entity.ApprovalForm;
 import com.peoplecore.approval.entity.ApprovalFormFolder;
+import com.peoplecore.approval.entity.FormWritePermission;
 import com.peoplecore.approval.entity.FrequentForm;
 import com.peoplecore.approval.repository.ApprovalFormFolderRepository;
 import com.peoplecore.approval.repository.ApprovalFormRepository;
@@ -15,10 +16,15 @@ import com.peoplecore.common.service.MinioService;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StreamUtils;
+import org.springframework.web.servlet.resource.ResourceResolver;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 @Service
@@ -34,6 +40,7 @@ public class ApprovalFormService {
     private final CommonCodeGroupRepository commonCodeGroupRepository;
     private final CommonCodeRepository commonCodeRepository;
     private final MinioService minioService;
+    private final ResourcePatternResolver resourcePatternResolver;
 
     @Autowired
     public ApprovalFormService(ApprovalFormFolderRepository approvalFormFolderRepository,
@@ -41,13 +48,14 @@ public class ApprovalFormService {
                                FrequentFormRepository frequentFormRepository,
                                CommonCodeGroupRepository commonCodeGroupRepository,
                                CommonCodeRepository commonCodeRepository,
-                               MinioService minioService) {
+                               MinioService minioService, ResourcePatternResolver resourcePatternResolver) {
         this.approvalFormFolderRepository = approvalFormFolderRepository;
         this.approvalFormRepository = approvalFormRepository;
         this.frequentFormRepository = frequentFormRepository;
         this.commonCodeGroupRepository = commonCodeGroupRepository;
         this.commonCodeRepository = commonCodeRepository;
         this.minioService = minioService;
+        this.resourcePatternResolver = resourcePatternResolver;
     }
 
     //    결재 양식 폴더 조회하는 메서드
@@ -390,5 +398,117 @@ public class ApprovalFormService {
             form.updateBatchSettings(request.getFormIsPublic(), request.getFormMobileYn(), request.getFormPreApprovalYn());
         }
         return forms.stream().map(FormListResponse::from).toList();
+    }
+
+    private final List<String> subFolderNames = List.of("스크립트 양식", "보고-시행문", "회계-총무", "일반기안", "교육", "휴가", "출장", "인사");
+
+    @Transactional
+    public void initFormFolder(UUID companyId) {
+        try {
+            if (approvalFormFolderRepository.existsByFolderCompanyId(companyId)) {
+                log.info("========================  이미 회사 루트 폴더가 존재합니다. companyId = {}", companyId);
+                return;
+            }
+
+            String folderPath = "forms/" + companyId + "/양식모음";
+
+            ApprovalFormFolder folder = ApprovalFormFolder.builder()
+                    .folderCompanyId(companyId)
+                    .folderName("양식모음")
+                    .parent(null)
+                    .folderPath(folderPath)
+                    .folderIsVisible(true)
+                    .folderSortOrder(1)
+                    .build();
+            approvalFormFolderRepository.save(folder);
+            Map<String, ApprovalFormFolder> formFolderMap = new HashMap<>();
+
+            for (int i = 0; i < subFolderNames.size(); i++) {
+                ApprovalFormFolder subFolder = ApprovalFormFolder.builder()
+                        .folderCompanyId(companyId)
+                        .folderName(subFolderNames.get(i))
+                        .parent(folder)
+                        .folderPath(folderPath + "/" + subFolderNames.get(i))
+                        .folderIsVisible(true)
+                        .folderSortOrder(i + 1)
+                        .build();
+                approvalFormFolderRepository.save(subFolder);
+                formFolderMap.put(subFolderNames.get(i), subFolder);
+            }
+
+            CommonCodeGroup codeGroup = commonCodeGroupRepository.findByCompanyIdAndGroupCodeAndIsActiveTrue(companyId, FORM_CODE_GROUP).orElseGet(() -> commonCodeGroupRepository.save(CommonCodeGroup.builder()
+                    .companyId(companyId)
+                    .groupCode(FORM_CODE_GROUP)
+                    .groupName("결재 양식 코드")
+                    .groupDescription("결재 양식을 관리하는 코드 ")
+                    .isActive(true)
+                    .build()));
+
+            for (Map.Entry<String, ApprovalFormFolder> entry : formFolderMap.entrySet()) {
+                String folderName = entry.getKey();
+                ApprovalFormFolder subFolder = entry.getValue();
+
+                Resource[] resources = resourcePatternResolver.getResources("classpath:default-forms/" + folderName + "/*.html");
+
+                for (int j = 0; j < resources.length; j++) {
+                    Resource resource = resources[j];
+
+                    /*1. 파일명에서 .html제거 -> formName으로 저장하기 위해 */
+                    String fileName = resource.getFilename();
+                    if (fileName == null) continue;
+                    String formName = fileName.replace(".html", "");
+                    /*2. html 내용 읽기 -> formHtml
+                     * getInputStream : resource 객체가 가리키는 파일의 내용을 바이트 스트림으로 열어주는 메서드 반환은 바이트 데이터
+                     * StreamUtils.copyToString : 바이트 스트림-> String으로 변환해주는 Spring 유ㅠ틸 / UTF_8 인코딩으로 해석해라 라는 뜻. 한글이 포함된 HTML이기 때문에
+                     *  순서는 파일 열기 -> 바이트 읽기 -> UTF_8 문자열로 반환 -> formHtml에 담기*/
+                    String formHtml = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+
+                    /*3. formCode 생성
+                     * String.format : 숫자를 일정한 형식의 문자열로 변환
+                     * % : 서식 시작
+                     * 0 : 빈자리를 0으로 채움
+                     * 3 : 최소 3자리
+                     * d : 정수*/
+                    String formCode = formName + "_" + String.format("%03d", j + 1);
+
+                    /* 4. ApprovalForm 엔티티 생성 -> 저장 */
+                    ApprovalForm form = ApprovalForm.builder()
+                            .companyId(companyId)
+                            .formName(formName)
+                            .formCode(formCode)
+                            .formHtml(formHtml)
+                            .isSystem(true)
+                            .isActive(true)
+                            .isCurrent(true)
+                            .formWritePermission(FormWritePermission.ALL)
+                            .formIsPublic(true)
+                            .formRetentionYear(5)
+                            .formMobileYn(false)
+                            .formPreApprovalYn(true)
+                            .folderId(subFolder)
+                            .formSortOrder(j + 1)
+                            .build();
+                    if (approvalFormRepository.existsByCompanyIdAndFormNameAndIsCurrent(companyId, formName, true)) {
+                        continue; // 이미 존재하면 skip
+                    }
+                    ApprovalForm saved = approvalFormRepository.save(form);
+                    String objectName = String.format("forms/%s/%s_v%d.html", companyId, saved.getFormCode(), saved.getFormVersion());
+                    minioService.uploadFormHtml(objectName, formHtml);
+
+
+                    Integer maxCodeSort = commonCodeRepository.findMaxSortOrder(codeGroup.getGroupId());
+                    CommonCode commonCode = CommonCode.builder()
+                            .groupId(codeGroup.getGroupId())
+                            .codeValue(saved.getFormCode())
+                            .codeName(saved.getFormName())
+                            .sortOrder(maxCodeSort + 1)
+                            .isActive(true)
+                            .build();
+                    commonCodeRepository.save(commonCode);
+                }
+            }
+        } catch (Exception e) {
+            log.error("오류가 발생했습니다. e = {}", e.getMessage());
+        }
     }
 }

@@ -31,11 +31,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
 
     @Query("""
-        SELECT e.dept.deptId, COUNT(e)
-        FROM Employee e
-        WHERE e.company.companyId = :companyId
-        GROUP BY e.dept.deptId
-    """)
+                SELECT e.dept.deptId, COUNT(e)
+                FROM Employee e
+                WHERE e.company.companyId = :companyId
+                GROUP BY e.dept.deptId
+            """)
     List<Object[]> countByCompanyIdGroupByDeptId(UUID companyId);
 
     boolean existsByGrade(Grade grade);
@@ -51,6 +51,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     int countByCompany_CompanyIdAndEmpStatusNot(UUID companyId, EmpStatus status);
 
     int countByCompany_CompanyIdAndEmpStatus(UUID companyId, EmpStatus status);
+
     int countByCompany_CompanyIdAndDept_DeptId(UUID companyId, Long deptId);
 
     @Query("""
@@ -179,7 +180,11 @@ AND e.empResignDate >= :fromDate
     List<Employee>findResignedAfter(@Param("companyId")UUID companyId,@Param("fromDate")LocalDate fromDate);
 
 
-// 산재보험 업종 삭제시, 사원에 배정되어있는지 체크
+    // 산재보험 업종 삭제시, 사원에 배정되어있는지 체크
     boolean existsByJobTypes_JobTypesId(Long jobTypesId);
 
+
+//    캘린더 목록 조회시 여러 사원 한번에 조회(dept,grade,title LAZY조회로 N+1 발행하므로 query문으로 해결
+    @Query("SELECT e FROM Employee e JOIN FETCH e.dept JOIN FETCH e.grade LEFT JOIN FETCH e.title WHERE e.empId IN :empIds AND e.deleteAt IS NULL")
+    List<Employee> findByEmpIdsWithDeptAndGrade(@Param("empIds") List<Long> empIds);
 }

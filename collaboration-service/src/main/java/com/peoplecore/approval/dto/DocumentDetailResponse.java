@@ -27,6 +27,7 @@ public class DocumentDetailResponse {
     private Boolean isEmergency;
     private LocalDateTime docSubmittedAt;
     private LocalDateTime docCompleteAt;
+    private String docUrl;
 
     //    기안자 정보
     private Long empId;
@@ -103,6 +104,7 @@ public class DocumentDetailResponse {
                 .isEmergency(doc.getIsEmergency())
                 .docSubmittedAt(doc.getDocSubmittedAt())
                 .docCompleteAt(doc.getDocCompleteAt())
+                .docUrl(doc.getDocUrl())
                 .empId(doc.getEmpId())
                 .empName(doc.getEmpName())
                 .empDeptName(doc.getEmpDeptName())

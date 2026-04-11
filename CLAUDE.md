@@ -39,7 +39,7 @@ Mend.io 기반 결과
 
 ### 공통 코드 엔티티 사용 권장
 - collaboration-service모듈에 있는 코드를 작성할때면 해당 서비스 모듈에 있는 common/entity에 있는 공통 테이블 사용 권장 
-- 
+- 의존성 주입시에는 @Autowired를 쓸 것
 ---
 
 ## 비즈니스 로직
