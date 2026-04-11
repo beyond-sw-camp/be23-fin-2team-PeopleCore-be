@@ -30,8 +30,8 @@ face_collection = chroma_client.get_or_create_collection(
 )
 
 # 유사도 임계값 (코사인 거리 기준 — 낮을수록 유사)
-SIMILARITY_THRESHOLD = 0.6    # 로그인: 이 값 이하면 동일인으로 인증
-DUPLICATE_THRESHOLD = 0.4     # 등록: 이 값 이하면 이미 등록된 동일인으로 판단
+SIMILARITY_THRESHOLD = 0.07   # 로그인: 이 값 이하면 동일인으로 인증
+DUPLICATE_THRESHOLD = 0.07     # 등록: 이 값 이하면 이미 등록된 동일인으로 판단
 
 
 # ── 요청 모델 ──
@@ -59,6 +59,14 @@ def extract_face_vector(base64_image: str) -> list[float]:
     try:
         image_data = base64.b64decode(base64_image)
         image = Image.open(io.BytesIO(image_data))
+        # 처리 속도를 위해 긴 변 640px로 리사이즈 (비율 유지)
+        max_dim = max(image.size)
+        if max_dim > 640:
+            scale = 640 / max_dim
+            image = image.resize(
+                (int(image.width * scale), int(image.height * scale)),
+                Image.LANCZOS,
+            )
         image_array = np.array(image)
     except Exception:
         raise HTTPException(status_code=400, detail="이미지 디코딩에 실패했습니다.")
@@ -172,6 +180,8 @@ def recognize_face(request: RecognizeRequest):
 
     distance = results["distances"][0][0]
     metadata = results["metadatas"][0][0]
+
+    print(f"[DEBUG] 인증 시도 → 매칭 대상: {metadata['emp_name']}(ID:{metadata['emp_id']}), distance: {distance:.6f}")
 
     # 5. 임계값 확인 (코사인 거리: 0에 가까울수록 유사)
     if distance > SIMILARITY_THRESHOLD:

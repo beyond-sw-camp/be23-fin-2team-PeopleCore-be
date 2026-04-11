@@ -41,7 +41,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/password",
             "/hr-service/auth/email",
             "/hr-service/auth/face/login",
-            "/hr-service/auth/face/health"
+            "/hr-service/auth/face/health",
+            "/hr-service/ws",
+            "/hr-service/chat/files"
     );
 
     //  hr담당자만 추가 접근 가능 경로
