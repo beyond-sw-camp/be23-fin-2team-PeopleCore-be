@@ -45,10 +45,12 @@ public class ResignService {
     @Transactional(readOnly = true)
     public ResignStatusDto getStatus(UUID companyId){
         return ResignStatusDto.builder()
-//                퇴직처리 대기
+//                퇴직처리 대기 (결재완료 + 재직)
                 .processableCount(resignRepository.countByEmployee_Company_CompanyIdAndIsDeletedFalseAndApprovalStatusAndRetireStatus(companyId, ApprovalStatus.APPROVED, RetireStatus.ACTIVE))
+//                스케줄러 대기 (인사팀 처리완료, 퇴직예정일 대기)
+                .confirmedCount(resignRepository.countByEmployee_Company_CompanyIdAndIsDeletedFalseAndRetireStatus(companyId, RetireStatus.CONFIRMED))
 //                퇴직완료
-                .completedCount(resignRepository.countByEmployee_Company_CompanyIdAndIsDeletedFalseAndRetireStatus(companyId,RetireStatus.RESIGNED))
+                .completedCount(resignRepository.countByEmployee_Company_CompanyIdAndIsDeletedFalseAndRetireStatus(companyId, RetireStatus.RESIGNED))
 //                결재대기
                 .pendingCount(resignRepository.countByEmployee_Company_CompanyIdAndIsDeletedFalseAndApprovalStatus(companyId, ApprovalStatus.PENDING))
                 .build();
@@ -67,24 +69,31 @@ public class ResignService {
             throw new IllegalArgumentException("결제가 완료되지 않은 건은 퇴직 처리 할 수 없습니다");
         }
 
-        if(resign.getRetireStatus()==RetireStatus.RESIGNED){
-            throw new IllegalArgumentException("이미 처리된 퇴직 건 수 입니다");
+        if(resign.getRetireStatus()!=RetireStatus.ACTIVE){
+            throw new IllegalArgumentException("이미 처리된 퇴직 건입니다");
         }
 
-        resign.processRetire();
+        resign.confirmRetire(); // ACTIVE -> CONFIRMED (스케줄러 대기)
+    }
 
-//        employee테이블: 재직상태 -> 퇴직, 퇴직일 세팅
-        Employee employee = resign.getEmployee();
-        employee.updateStatus(EmpStatus.RESIGNED);
-        employee.updateResignDate(LocalDate.now());
+    //스케줄러용: CONFIRMED 상태이고 퇴직예정일이 오늘 이하인 건들 퇴직 처리
+    public void processScheduledResigns() {
+        List<Resign> targets = resignRepository.findAllByRetireStatusAndIsDeletedFalseAndResignDateLessThanEqual(
+                RetireStatus.CONFIRMED, LocalDate.now());
 
+        for (Resign resign : targets) {
+            resign.processRetire();
+            Employee employee = resign.getEmployee();
+            employee.updateStatus(EmpStatus.RESIGNED);
+            employee.updateResignDate(resign.getResignDate());
+        }
     }
 
     public void deleteResign(UUID companyId, Long resignId){
         Resign resign = resignRepository.findByResignIdAndEmployee_Company_CompanyIdAndIsDeletedFalse(resignId,companyId).orElseThrow(()->new IllegalArgumentException("해당퇴직정보를 찾을 수 없습니다"));
 
         if(resign.getRetireStatus()!=RetireStatus.RESIGNED){
-            throw new IllegalArgumentException("퇴직 완료된 건마 삭제가 가능합니다");
+            throw new IllegalArgumentException("퇴직 완료된 건만 삭제가 가능합니다");
         }
         resign.softDelete();
     }

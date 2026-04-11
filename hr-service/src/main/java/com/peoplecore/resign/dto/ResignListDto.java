@@ -22,6 +22,7 @@ public class ResignListDto {
     private String gradeName;
     private String empStatus; //재직상태 active, resigned
     private String approvalStatus; // 결재상태 pending, approved
+    private LocalDate resignDate; //퇴직예정일자
     private LocalDate registeredDate; //신청일
 
     public static ResignListDto fromEntity(Resign resign){
@@ -33,6 +34,7 @@ public class ResignListDto {
                 .gradeName(resign.getGrade().getGradeName())
                 .empStatus(resign.getRetireStatus().name())
                 .approvalStatus(resign.getApprovalStatus().name())
+                .resignDate(resign.getResignDate())
                 .registeredDate(resign.getRegisteredDate())
                 .build();
     }

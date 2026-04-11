@@ -22,8 +22,9 @@ public class ResignDetailDto {
     private String gradeName;
     private LocalDate hireDate;
     private String empStatus;
-    private String approvalStatus;  //재직상태
-    private LocalDate registeredDate;   //결재상태
+    private String approvalStatus;  //결재상태
+    private LocalDate resignDate;   //퇴직예정일자
+    private LocalDate registeredDate;   //신청일
 
     public static ResignDetailDto fromEntity(Resign resign){
         return ResignDetailDto.builder()
@@ -33,8 +34,10 @@ public class ResignDetailDto {
                 .empName(resign.getEmployee().getEmpName())
                 .deptName(resign.getDepartment().getDeptName())
                 .gradeName(resign.getGrade().getGradeName())
+                .hireDate(resign.getEmployee().getEmpHireDate())
                 .empStatus(resign.getRetireStatus().name())
                 .approvalStatus(resign.getApprovalStatus().name())
+                .resignDate(resign.getResignDate())
                 .registeredDate(resign.getRegisteredDate())
                 .build();
     }

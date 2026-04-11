@@ -59,9 +59,16 @@ public class Resign {
     @Builder.Default
     private Boolean isDeleted = false; //softDelete
 
+    @Column(name = "resign_date")
+    private LocalDate resignDate; //퇴직예정일자 (전자결재에서 받아오기)
+
     @Column(name = "registered_date")
     private LocalDate registeredDate; //신청일
 
+
+    public void confirmRetire() {
+        this.retireStatus = RetireStatus.CONFIRMED;
+    }
 
     public void processRetire() {
         this.retireStatus = RetireStatus.RESIGNED;
