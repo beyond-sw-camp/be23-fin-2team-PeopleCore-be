@@ -206,7 +206,7 @@ private Long version;
 
 `ApprovalSeqCounter`에 이중 락을 적용했습니다. 채번 시 `PESSIMISTIC_WRITE` 락으로 카운터 행을 선점하고, `@Version`으로 추가 안전장치를 두었습니다. `DataIntegrityViolationException` 발생 시 최대 3회까지 자동 재시도합니다.
 
-```java
+```
 @Lock(LockModeType.PESSIMISTIC_WRITE)
 @Query("SELECT s FROM ApprovalSeqCounter s WHERE ...")
 Optional<ApprovalSeqCounter> findWithLock(...);
