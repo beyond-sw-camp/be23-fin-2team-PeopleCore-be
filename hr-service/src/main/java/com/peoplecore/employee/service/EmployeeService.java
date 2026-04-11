@@ -65,7 +65,7 @@ public class EmployeeService {
 
     //    1.사원조회 및 등록
     public Page<EmployeeListDto> getEmployee(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField employeeSortField, Pageable pageable) {
-        Page<Employee> employees = employeeRepository.findAllwithFilter(companyId, keyword, deptId, empType, empStatus, employeeSortField, pageable);
+        Page<Employee> employees = employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, employeeSortField, pageable);
         return employees.map(EmployeeListDto::fromEntity);
     }
 
@@ -155,7 +155,7 @@ public class EmployeeService {
                             .build());
 
                 } catch (Exception e) {
-                    throw new BusinessException("파일 업로들에 실패했습니다", HttpStatus.BAD_REQUEST);
+                    throw new BusinessException("파일 업로드에 실패했습니다", HttpStatus.BAD_REQUEST);
                 }
             }
         }

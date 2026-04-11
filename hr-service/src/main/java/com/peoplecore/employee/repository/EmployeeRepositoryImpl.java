@@ -24,7 +24,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
 
 
     @Override
-    public Page<Employee> findAllwithFilter(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField sortField, Pageable pageable) {
+    public Page<Employee> findAllWithFilter(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField sortField, Pageable pageable) {
         // 실제 데이터 조회 (fetch join으로 N+1 방지)
         List<Employee> content = queryFactory
                 .selectFrom(qEmployee)                      // Employee 테이블 조회

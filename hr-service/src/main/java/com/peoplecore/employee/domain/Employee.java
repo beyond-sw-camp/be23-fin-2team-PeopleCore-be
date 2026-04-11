@@ -5,6 +5,7 @@ import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.pay.domain.InsuranceJobTypes;
+import com.peoplecore.pay.enums.RetirementType;
 import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
 import lombok.*;
@@ -72,7 +73,7 @@ public class Employee extends BaseTimeEntity {
     private EmpType empType;
 
     @Column(name = "emp_resign")
-    private LocalDate empResign;
+    private LocalDate empResignDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "emp_status", nullable = false)
@@ -206,5 +207,8 @@ public class Employee extends BaseTimeEntity {
         return this.deleteAt !=null;
     }
 
-
+//    퇴직연금 유형 변경
+    public void updateRetirementType(RetirementType retirementType) {
+        this.retirementType = retirementType;
+}
 }

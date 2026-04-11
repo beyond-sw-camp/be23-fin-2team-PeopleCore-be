@@ -38,4 +38,7 @@ public class PayrollDetails {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
+    @Column(length = 100)   //스냅샷용 항목명
+    private String payItemName;
+
 }

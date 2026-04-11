@@ -71,8 +71,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     @Query("""
             SELECT COUNT(e) FROM Employee e
             WHERE e.company.companyId = :companyId
-            AND YEAR(e.empResign) = :year
-            AND MONTH(e.empResign) = :month""")
+            AND YEAR(e.empResignDate) = :year
+            AND MONTH(e.empResignDate) = :month""")
     int countResignedThisMonth(@Param("companyId") UUID companyId, @Param("year") int year, @Param("month") int month);
 
 //    계약만료 30일 이내 예정자
@@ -153,14 +153,17 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     @Query("""
             SELECT e FROM Employee e
             WHERE e.company.companyId = :companyId
-            AND e.empResign IS NOT NULL
-            AND e.empResign >= :fromDate
+            AND e.empResignDate IS NOT NULL
+            AND e.empResignDate >= :fromDate
             """)
     List<Employee> findResignedAfter(@Param("companyId") UUID companyId, @Param("fromDate") LocalDate fromDate);
 
 
     // 산재보험 업종 삭제시, 사원에 배정되어있는지 체크
     boolean existsByJobTypes_JobTypesId(Long jobTypesId);
+
+// 직원 월급여 예상지급공제시, 재직+휴직중인 사원만
+    List<Employee> findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(UUID companyId, List<EmpStatus> empStatuses);
 
 
 //    캘린더 목록 조회시 여러 사원 한번에 조회(dept,grade,title LAZY조회로 N+1 발행하므로 query문으로 해결
