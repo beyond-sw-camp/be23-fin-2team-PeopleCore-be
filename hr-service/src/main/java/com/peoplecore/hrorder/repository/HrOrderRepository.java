@@ -33,4 +33,16 @@ public interface HrOrderRepository extends JpaRepository<HrOrder, Long>,HrOrderR
 
 //    스케줄러(승인 중 발령일)
     List<HrOrder> findByStatusAndEffectiveDateLessThanEqual(OrderStatus status, LocalDate date);
+
+//    사원별 발령이력 조회(APPLIED상태, 최신순)
+    @Query("""
+SELECT o FROM HrOrder o
+JOIN FETCH o.employee e
+WHERE e.empId = :empId
+AND e.company.companyId = :companyId
+AND o.deletedAt IS NULL
+ORDER BY o.effectiveDate DESC
+""")
+    List<HrOrder>findHistoryByEmpId(@Param("companyId")UUID companyId,
+                                    @Param("empId")Long empId);
 }

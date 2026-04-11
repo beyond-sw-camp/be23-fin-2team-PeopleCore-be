@@ -6,6 +6,7 @@ import com.peoplecore.hrorder.dto.HrOrderCreateReqDto;
 import com.peoplecore.hrorder.dto.HrOrderUpdateReqDto;
 import com.peoplecore.hrorder.service.HrOrderService;
 import jakarta.validation.Valid;
+import jakarta.ws.rs.Path;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -101,6 +102,14 @@ public class HrOrderController {
     @PostMapping("/apply-scheduled")
     public ResponseEntity<Integer> applyScheduled() {
         return ResponseEntity.ok(hrOrderService.applyAllScheduledOrders());
+    }
+
+
+//    사원별 발령 이력조회
+    @GetMapping("/history/{empId}")
+    public ResponseEntity<?>history(@RequestHeader("X-User-Company")UUID companyId,
+                                    @PathVariable Long empId){
+        return ResponseEntity.ok(hrOrderService.history(companyId,empId));
     }
 }
 

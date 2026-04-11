@@ -13,10 +13,7 @@ import com.peoplecore.formsetup.service.FormFieldSetupService;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.grade.repository.GradeRepository;
 import com.peoplecore.hrorder.domain.*;
-import com.peoplecore.hrorder.dto.HrOrderCreateReqDto;
-import com.peoplecore.hrorder.dto.HrOrderDetailResDto;
-import com.peoplecore.hrorder.dto.HrOrderListReqDto;
-import com.peoplecore.hrorder.dto.HrOrderUpdateReqDto;
+import com.peoplecore.hrorder.dto.*;
 import com.peoplecore.hrorder.repository.HrOrderDetailRepository;
 import com.peoplecore.hrorder.repository.HrOrderRepository;
 import com.peoplecore.title.domain.Title;
@@ -83,6 +80,7 @@ public class HrOrderService {
         long formVersion = System.currentTimeMillis(); // 타임스탬프로 폼 버전 식별
 
         HrOrder hrOrder = HrOrder.builder()
+                .company(employee.getCompany())
                 .employee(employee)
                 .createBy(userId)
                 .orderType(req.getOrderType()) //발령유형
@@ -193,19 +191,19 @@ public class HrOrderService {
         order.updateStatus(OrderStatus.REJECTED);
     }
 
-//    8.통보 //TODO: 알림서비스 호출
-    public void notifyOrder(UUID companyId, Long orderId){
-        HrOrder order = getOrderAndValidate(companyId,orderId,OrderStatus.CONFIRMED, "승인 완료된 상태만 통보가 가능합니다");
+    //    8.통보 //TODO: 알림서비스 호출
+    public void notifyOrder(UUID companyId, Long orderId) {
+        HrOrder order = getOrderAndValidate(companyId, orderId, OrderStatus.CONFIRMED, "승인 완료된 상태만 통보가 가능합니다");
 
         Employee employee = order.getEmployee();
 
 //        변경 상세에서 내용 조립
-        List<HrOrderDetail>details =hrOrderDetailRepository.findByHrOrder_OrderId(orderId);
+        List<HrOrderDetail> details = hrOrderDetailRepository.findByHrOrder_OrderId(orderId);
         StringBuilder content = new StringBuilder();
         content.append(employee.getEmpName()).append("님, ");
-        for(HrOrderDetail d : details){
+        for (HrOrderDetail d : details) {
             String before = resolveTargetName(d.getTargetType(), d.getBeforeId());
-            String after = resolveTargetName(d.getTargetType(),d.getAfterId());
+            String after = resolveTargetName(d.getTargetType(), d.getAfterId());
             content.append(before).append("->").append(after).append(" ");
         }
         content.append("발령이 확정되었습니다. (발령일: ").append(order.getEffectiveDate()).append(")");
@@ -214,8 +212,8 @@ public class HrOrderService {
                 .companyId(companyId)
                 .alarmType("Hr")
                 .alarmTitle("인사발령 통보")
-                .alarmContent(employee.getEmpName() + "님"+order.getOrderType().name() + "이(가) 확정되었습니다")
-                .alarmLink("/hr/appointment/"+orderId) //프론트발령 상세페이지
+                .alarmContent(employee.getEmpName() + "님" + order.getOrderType().name() + "이(가) 확정되었습니다")
+                .alarmLink("/hr/appointment/" + orderId) //프론트발령 상세페이지
                 .alarmRefType("HR_ORDER")
                 .alarmRefId(orderId)
                 .empIds(List.of(employee.getEmpId())) //대상사원 1명
@@ -233,33 +231,63 @@ public class HrOrderService {
 
     }
 
-//    9. 발령일 도래 시 일괄 반영 (confirmed상태, 발령일이 오늘 이전인 건 조회)
-    public int applyAllScheduledOrders(){
-        List<HrOrder>orders =hrOrderRepository.findByStatusAndEffectiveDateLessThanEqual(
+    //    9. 발령일 도래 시 일괄 반영 (confirmed상태, 발령일이 오늘 이전인 건 조회)
+    public int applyAllScheduledOrders() {
+        List<HrOrder> orders = hrOrderRepository.findByStatusAndEffectiveDateLessThanEqual(
                 OrderStatus.CONFIRMED, LocalDate.now());
         int count = 0;
-        for(HrOrder order : orders){
+        for (HrOrder order : orders) {
 //            해당발령 변경상세 조회
-            List<HrOrderDetail>details = hrOrderDetailRepository.findByHrOrder_OrderId(order.getOrderId());
+            List<HrOrderDetail> details = hrOrderDetailRepository.findByHrOrder_OrderId(order.getOrderId());
             Employee employee = order.getEmployee();
 
 //            변경 상세별 employee 실반영
-            for(HrOrderDetail d: details){
-                if(d.getTargetType() == OrderDetailTargetType.DEPARTMENT){
+            for (HrOrderDetail d : details) {
+                if (d.getTargetType() == OrderDetailTargetType.DEPARTMENT) {
                     Department department = departmentRepository.findById(d.getAfterId()).orElse(null);
-                    if(department != null)employee.updateDept(department);
-                }else if(d.getTargetType() == OrderDetailTargetType.GRADE){
+                    if (department != null) employee.updateDept(department);
+                } else if (d.getTargetType() == OrderDetailTargetType.GRADE) {
                     Grade grade = gradeRepository.findById(d.getAfterId()).orElse(null);
-                    if(grade != null) employee.updateGrade(grade);
-                }else if(d.getTargetType() == OrderDetailTargetType.TITLE){
+                    if (grade != null) employee.updateGrade(grade);
+                } else if (d.getTargetType() == OrderDetailTargetType.TITLE) {
                     Title title = titleRepository.findById(d.getAfterId()).orElse(null);
-                    if(title != null)employee.updateTitle(title);
+                    if (title != null) employee.updateTitle(title);
                 }
             }
             order.updateStatus(OrderStatus.APPLIED);
             count++;
         }
         return count;
+    }
+
+
+    //    사원별 발령 이력 조회
+    @Transactional(readOnly = true)
+    public List<HrOrderHistoryResDto> history(UUID companyId, Long empId) {
+        List<HrOrder> orders = hrOrderRepository.findHistoryByEmpId(companyId, empId);
+        List<HrOrderHistoryResDto> result = new ArrayList<>();
+
+        for (HrOrder order : orders) {
+            List<HrOrderDetail> detailEntities = hrOrderDetailRepository.findByHrOrder_OrderId(order.getOrderId());
+            List<HrOrderHistoryResDto.DetailChange> detailChange = new ArrayList<>();
+
+            for (HrOrderDetail d : detailEntities) {
+                detailChange.add(HrOrderHistoryResDto.DetailChange.builder()
+                        .targetType(d.getTargetType().name())
+                        .beforeName(resolveTargetName(d.getTargetType(), d.getBeforeId()))
+                        .afterName(resolveTargetName(d.getTargetType(), d.getAfterId()))
+                        .build());
+            }
+            result.add(HrOrderHistoryResDto.builder()
+                    .orderId(order.getOrderId())
+                    .orderType(order.getOrderType().name())
+                    .effectiveDate(order.getEffectiveDate().toString())
+                    .status(order.getStatus().name())
+                    .createAt(order.getCreatedAt().toString())
+                    .detailChange(detailChange)
+                    .build());
+        }
+        return result;
     }
 
 
