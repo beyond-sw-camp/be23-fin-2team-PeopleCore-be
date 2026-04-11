@@ -120,7 +120,7 @@ public class HrStatusService {
 
         Map<YearMonth, Integer> resignedMap = new HashMap<>();
         for (Employee emp : resignedList) {
-            YearMonth ym = YearMonth.from(emp.getEmpResign());
+            YearMonth ym = YearMonth.from(emp.getEmpResignDate());
             resignedMap.put(ym, resignedMap.getOrDefault(ym, 0) + 1);
         }
 //        6개월 구간 1개월씩 순회

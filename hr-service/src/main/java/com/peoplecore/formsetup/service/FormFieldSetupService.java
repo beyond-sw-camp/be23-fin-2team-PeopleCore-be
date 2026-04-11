@@ -1,6 +1,8 @@
 package com.peoplecore.formsetup.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.company.domain.Company;
+import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.formsetup.domain.FieldType;
 import com.peoplecore.formsetup.domain.FormFieldSetup;
 import com.peoplecore.formsetup.domain.FormType;
@@ -23,12 +25,14 @@ public class FormFieldSetupService {
 
 
     private final FormFieldSetupRepository repository;
+    private final CompanyRepository companyRepository;
     private final ObjectMapper objectMapper;
     private final PayItemsRepository payItemsRepository;
 
     @Autowired
-    public FormFieldSetupService(FormFieldSetupRepository repository, ObjectMapper objectMapper, PayItemsRepository payItemsRepository) {
+    public FormFieldSetupService(FormFieldSetupRepository repository, CompanyRepository companyRepository, ObjectMapper objectMapper, PayItemsRepository payItemsRepository) {
         this.repository = repository;
+        this.companyRepository = companyRepository;
         this.objectMapper = objectMapper;
         this.payItemsRepository = payItemsRepository;
     }
@@ -36,7 +40,7 @@ public class FormFieldSetupService {
 
     // 1. 폼 설정 조회 (회사 등록 시 들어간 sql)
     public List<FormFieldSetupResponse> getSetup(UUID companyId, FormType formType) {
-        List<FormFieldSetup> entities = repository.findAllByCompanyIdAndFormTypeOrderBySectionAscSortOrderAsc(companyId, formType);
+        List<FormFieldSetup> entities = repository.findAllByCompany_CompanyIdAndFormTypeOrderBySectionAscSortOrderAsc(companyId, formType);
         List<FormFieldSetupResponse> result = new ArrayList<>();
         for (FormFieldSetup entity : entities) {
 //            연봉 form 조회 시 급여부분 skip
@@ -83,7 +87,7 @@ public class FormFieldSetupService {
 
 
         //      기존 데이터 조회
-        List<FormFieldSetup> existingList = repository.findAllByCompanyIdAndFormTypeOrderBySectionAscSortOrderAsc(companyId, formType);
+        List<FormFieldSetup> existingList = repository.findAllByCompany_CompanyIdAndFormTypeOrderBySectionAscSortOrderAsc(companyId, formType);
 
 //        fieldKey기준으로 Map변환 -빠른 조회(수정-update할 목록 )
         Map<String, FormFieldSetup> existingMap = new HashMap<>();
@@ -115,8 +119,9 @@ public class FormFieldSetupService {
                         toJson(req.getOptions()), req.getAutoFillFrom());
                 toSave.add(existing);
             } else { //or 등록
+                Company company = companyRepository.getReferenceById(companyId);
                 toSave.add(FormFieldSetup.builder()
-                        .companyId(companyId)
+                        .company(company)
                         .formType(formType)
                         .fieldKey(req.getFieldKey())
                         .label(req.getLabel())
@@ -152,7 +157,7 @@ public class FormFieldSetupService {
     // 3. 기본값으로 초기화
     public List<FormFieldSetupResponse> resetSetup(UUID companyId, FormType formType) {
 //        기존 삭제
-        repository.deleteAllByCompanyIdAndFormType(companyId, formType);
+        repository.deleteAllByCompany_CompanyIdAndFormType(companyId, formType);
         repository.flush();
 //        기본값 생성
         initDefault(companyId, formType);
@@ -307,8 +312,9 @@ public class FormFieldSetupService {
             String options,
             String autoFillFrom
     ) {
+        Company company = companyRepository.getReferenceById(companyId);
         return FormFieldSetup.builder()
-                .companyId(companyId)
+                .company(company)
                 .formType(formType)
                 .fieldKey(fieldKey)
                 .label(label)

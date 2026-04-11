@@ -72,8 +72,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     @Query("""
 SELECT COUNT(e) FROM Employee e
 WHERE e.company.companyId = :companyId
-AND YEAR(e.empResign) = :year
-AND MONTH(e.empResign) = :month""")
+AND YEAR(e.empResignDate) = :year
+AND MONTH(e.empResignDate) = :month""")
     int countResignedThisMonth(@Param("companyId")UUID companyId, @Param("year")int year,@Param("month")int month);
 
 //    계약만료 30일 이내 예정자
@@ -93,7 +93,7 @@ AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
 SELECT COUNT(e) FROM Employee e
 WHERE e.company.companyId = :companyId
 AND e.contractEndDate BETWEEN : now AND : deadline
-AND e.empStatus = com.peoplecore.cmployee.domain.EmpStatus.ACTIVE
+AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
 """)
     int countExpiringContracts(@Param("companyId")UUID companyId,
                                @Param("now")LocalDate now,
@@ -173,8 +173,8 @@ AND e.empHireDate >= :fromDate
     @Query("""
 SELECT e FROM Employee e
 WHERE e.company.companyId = :companyId
-AND e.empResign IS NOT NULL
-AND e.empResign >= :fromDate
+AND e.empResignDate IS NOT NULL
+AND e.empResignDate >= :fromDate
 """)
     List<Employee>findResignedAfter(@Param("companyId")UUID companyId,@Param("fromDate")LocalDate fromDate);
 

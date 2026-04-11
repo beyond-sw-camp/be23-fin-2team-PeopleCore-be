@@ -1,9 +1,11 @@
 package com.peoplecore.hrorder.domain;
 
 import com.peoplecore.company.domain.Company;
+import com.peoplecore.department.domain.Department;
 import com.peoplecore.employee.domain.Employee;
 import jakarta.persistence.*;
 import lombok.*;
+import org.springframework.cglib.core.Local;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -24,7 +26,6 @@ public class HrOrder {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "order_id")
     private Long orderId;
-
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
@@ -53,7 +54,7 @@ public class HrOrder {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     @Builder.Default
-    private OrderStatus status = OrderStatus.REGISTERED;
+    private OrderStatus status = OrderStatus.PENDING;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -67,4 +68,35 @@ public class HrOrder {
 
     @Column(name = "form_version")
     private Long formVersion;           // 폼 버전
+
+    @Column(name = "deleted_at")
+    private LocalDate deletedAt;
+
+    public void updateOrder(OrderType orderType, LocalDate effectiveDate, String formValues){
+        this.orderType = orderType; //발령유형
+        this.effectiveDate = effectiveDate; //발령일
+        this.formValues = formValues;//폼 입력값
+    }
+
+    public void softDelete(){
+        this.deletedAt = LocalDate.now();
+    }
+//    삭제조회용
+    public boolean isDeleted(){
+        return this.deletedAt != null;
+    }
+
+//    상태 update(승인)
+    public void updateStatus(OrderStatus status){
+        this.status = status;
+    }
+
+//    통보
+    public void markNotified(){
+        this.isNotified = true;
+        this.notifiedAt = LocalDateTime.now();
+    }
+
+
 }
+
