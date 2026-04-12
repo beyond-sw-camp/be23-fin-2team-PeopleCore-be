@@ -32,7 +32,7 @@ public class HrStatusService {
         int hiredThisMonth = employeeRepository.countHiredThisMonth(companyId, now.getYear(), now.getMonthValue());
         int resignedThisMonth = employeeRepository.countResignedThisMonth(companyId, now.getYear(), now.getMonthValue());
 //        계약만료 30일 이내의 인원
-        int contractExpiring = employeeRepository.findExpiringContracts(companyId, now, now.plusDays(30)).size();
+        int contractExpiring = employeeRepository.countExpiringContracts(companyId, now, now.plusDays(30));
 
         return WorkforceSummaryDto.builder()
                 .total(total)
@@ -120,7 +120,7 @@ public class HrStatusService {
 
         Map<YearMonth, Integer> resignedMap = new HashMap<>();
         for (Employee emp : resignedList) {
-            YearMonth ym = YearMonth.from(emp.getEmpResign());
+            YearMonth ym = YearMonth.from(emp.getEmpResignDate());
             resignedMap.put(ym, resignedMap.getOrDefault(ym, 0) + 1);
         }
 //        6개월 구간 1개월씩 순회

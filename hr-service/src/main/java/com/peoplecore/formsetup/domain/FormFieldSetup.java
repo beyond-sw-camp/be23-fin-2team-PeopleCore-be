@@ -1,5 +1,6 @@
 package com.peoplecore.formsetup.domain;
 
+import com.peoplecore.company.domain.Company;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -19,8 +20,9 @@ public class FormFieldSetup {
     @Column(name = "setup_id")
     private Long setupId;
 
-    @Column(name = "company_id", nullable = false)
-    private UUID companyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "form_type", nullable = false, length = 30)

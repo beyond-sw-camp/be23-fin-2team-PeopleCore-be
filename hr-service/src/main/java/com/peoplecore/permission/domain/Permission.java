@@ -1,5 +1,7 @@
 package com.peoplecore.permission.domain;
 
+import com.peoplecore.employee.domain.EmpRole;
+import com.peoplecore.employee.domain.Employee;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -18,20 +20,24 @@ public class Permission {
     @Column(name = "permission_id")
     private Long permissionId;
 
-    @Column(name = "emp_id", nullable = false)
-    private Long empId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "emp_id", nullable = false)
+    private Employee employee;
 
     @Column(name = "emp_name")
     private String empName;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "requested_role")
-    private String requestedRole;
+    private EmpRole requestedRole;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "emp_current_role")
-    private String currentRole;
+    private EmpRole currentRole;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status")
-    private String status;
+    private PermissionStatus status;
 
     @Column(name = "reason")
     private String reason;

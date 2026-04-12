@@ -68,7 +68,7 @@ services:
     volumes:
       - minio-data:/data
     command: server /data --console-address ":9001"
-#    권한 설정 (read)
+  #    권한 설정 (read)
   face-api:
     build:
       context: ./hr-service/face-module

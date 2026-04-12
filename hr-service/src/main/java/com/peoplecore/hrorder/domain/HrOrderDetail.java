@@ -16,8 +16,9 @@ public class HrOrderDetail {
     @Column(name = "order_detail_id")
     private Long orderDetailId;
 
-    @Column(name = "order_id", nullable = false)
-    private Long orderId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "order_id", nullable = false)
+    private HrOrder hrOrder;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "target_type", nullable = false)
