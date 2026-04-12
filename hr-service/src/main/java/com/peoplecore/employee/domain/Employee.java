@@ -100,6 +100,10 @@ public class Employee extends BaseTimeEntity {
     @JoinColumn(name = "work_group_id")
     private WorkGroup workGroup;
 
+    /*근무 그룹 배정 일시*/
+    private LocalDateTime workGroupAssignedAt;
+
+
     @Column(nullable = false)
     @Builder.Default
     private Integer dependentsCount = 1;
@@ -226,6 +230,12 @@ public class Employee extends BaseTimeEntity {
     }
     public void updateTitle(Title title){
         this.title = title;
+    }
+
+    /* 근무 그룹 배정 / 변경 */
+    public void assignWorkGroup(WorkGroup workGroup) {
+        this.workGroup = workGroup;
+        this.workGroupAssignedAt = (workGroup != null) ? LocalDateTime.now() : null;
     }
 
 }

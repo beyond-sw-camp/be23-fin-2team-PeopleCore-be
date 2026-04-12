@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
@@ -151,6 +152,7 @@ public class EmployeeService {
                 .empMailboxSize(requestDto.getEmpMailboxSize()) //사용. 5gb고정 하드 코딩// 커스��� 고려
                 .empStatus(EmpStatus.ACTIVE)
                 .workGroup(workGroup)
+                .workGroupAssignedAt(LocalDateTime.now())
                 .build();
 
         Employee savedEmployee = employeeRepository.save(employee);

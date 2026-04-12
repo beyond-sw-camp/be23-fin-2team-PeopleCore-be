@@ -19,6 +19,7 @@ import com.peoplecore.pay.service.InsuranceRatesService;
 import com.peoplecore.pay.service.PayItemsService;
 import com.peoplecore.pay.service.PaySettingsService;
 import com.peoplecore.title.service.TitleService;
+import com.peoplecore.vacation.service.VacationPolicyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -48,9 +49,10 @@ public class CompanyService {
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final WorkGroupService workGroupService;
+    private final VacationPolicyService vacationPolicyService;
 
     @Autowired
-    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService) {
+    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, VacationPolicyService vacationPolicyService) {
         this.companyRepository = companyRepository;
         this.departmentService = departmentService;
         this.gradeService = gradeService;
@@ -64,6 +66,7 @@ public class CompanyService {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.workGroupService = workGroupService;
+        this.vacationPolicyService = vacationPolicyService;
     }
 
     //    1. 회사 등록 + 기본데이터 세팅 + superAdmin 생성
@@ -101,6 +104,7 @@ public class CompanyService {
         insuranceRatesService.initDefault(company);
         paySettingsService.initDefault(company);
         workGroupService.initDefault(company);
+        vacationPolicyService.initDefault(company);
 
 
         // superAdmin 계정 생성

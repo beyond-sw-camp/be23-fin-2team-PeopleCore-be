@@ -116,7 +116,26 @@ public enum ErrorCode {
     /*워크 그룹 */
     WORK_GROUP_NOT_FOUND(404, "근무 그룹을 찾을 수 없습니다."),
     WORK_GROUP_CODE_DUPLICATE(409, "이미 존재하는 근무 그룹 코드입니다."),
-    WORK_GROUP_HAS_MEMBERS(409, "소속된 멤버가 있어 삭제할 수 없습니다.");
+    WORK_GROUP_HAS_MEMBERS(409, "소속된 멤버가 있어 삭제할 수 없습니다."),
+
+    /**
+     * 이관 source 와 target 이 동일 그룹인 경우
+     */
+    WORK_GROUP_TRANSFER_SAME_TARGET(400, "이관 대상 그룹이 현재 그룹과 동일합니다."),
+
+    /**
+     * source / target 이 서로 다른 회사 소속일 경우 (타 회사로 이관 불가)
+     */
+    WORK_GROUP_TRANSFER_DIFFERENT_COMPANY(400, "다른 회사의 근무 그룹으로는 이관할 수 없습니다."),
+
+    WORK_GROUP_TRANSFER_INVALID_MEMBERS(400, "이관 요청에 유효하지 않은 사원이 포함되어 있습니다."),
+
+    /* 연차 정책 */
+    VACATION_POLICY_NOT_FOUND(404, "연차 정책이 존재하지 않습니다."),
+    VACATION_POLICY_DUPLICATED(409, "연차 정책이 중복 존재합니다. 관리자에게 문의하세요."),
+    VACATION_POLICY_FISCAL_START_REQUIRED(400, "회계연도 시작일(mm-dd)을 지정해 주세요."),
+    VACATION_POLICY_FISCAL_START_INVALID(400, "회계연도 시작일 형식이 올바르지 않습니다. (예: 01-01)"),
+    VACATION_RULE_NOT_FOUND(404, "연차 발생 규칙이 존재하지 않습니다.");
 
     private final int status;
     private final String message;

@@ -194,4 +194,26 @@ AND e.empResignDate >= :fromDate
 
     /* 근무 그룹 별 소속 사원 (페이지네이션)*/
     Page<Employee> findByWorkGroup_WorkGroupId(Long workGroupId, Pageable pageable);
+
+/* 근무 그룹 전체 소속 사원 조회*/
+    @Query("""
+           SELECT e FROM Employee e
+           LEFT JOIN FETCH e.dept
+           LEFT JOIN FETCH e.grade
+           LEFT JOIN FETCH e.title
+           WHERE e.workGroup.workGroupId = :workGroupId
+           """)
+    List<Employee> findAllByWorkGroupIdFetchJoin(@Param("workGroupId") Long workGroupId);
+
+    /* 특정 근무ㅜ 그룹 소속 사원중 지정된 ID 목록에 해당하는 사원 조회*/
+    @Query("""
+           SELECT e FROM Employee e
+           LEFT JOIN FETCH e.dept
+           LEFT JOIN FETCH e.grade
+           LEFT JOIN FETCH e.title
+           WHERE e.workGroup.workGroupId = :workGroupId
+             AND e.empId IN :empIds
+           """)
+    List<Employee> findByWorkGroupIdAndEmpIdsFetchJoin(@Param("workGroupId") Long workGroupId,
+                                                       @Param("empIds") List<Long> empIds);
 }

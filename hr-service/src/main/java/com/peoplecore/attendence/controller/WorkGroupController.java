@@ -1,12 +1,10 @@
 package com.peoplecore.attendence.controller;
 
 import com.netflix.discovery.converters.Auto;
-import com.peoplecore.attendence.dto.WorkGroupDetailResDto;
-import com.peoplecore.attendence.dto.WorkGroupMemberResDto;
-import com.peoplecore.attendence.dto.WorkGroupReqDto;
-import com.peoplecore.attendence.dto.WorkGroupResDto;
+import com.peoplecore.attendence.dto.*;
 import com.peoplecore.attendence.service.WorkGroupService;
 import com.peoplecore.auth.RoleRequired;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -67,4 +65,10 @@ public class WorkGroupController {
     }
 
 
+    /*근무 그룹 소속 사원 이관 */
+    @PutMapping("/member/transfer/{sourceWorkGroupId}")
+    public ResponseEntity<WorkGroupTransferResDto> transferMember(@PathVariable Long sourceWorkGroupId, @Valid @RequestBody WorkGroupTransferReqDto dto) {
+
+        return ResponseEntity.ok(workGroupService.transferEmp(sourceWorkGroupId, dto));
+    }
 }

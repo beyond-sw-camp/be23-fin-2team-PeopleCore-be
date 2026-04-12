@@ -27,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Slf4j
 @Service
@@ -84,6 +85,7 @@ public class SuperAdminAccountService {
                 .empRole(EmpRole.HR_SUPER_ADMIN)
                 .empPassword(passwordEncoder.encode(tempPassword))
                 .workGroup(defaultWorkGroup)
+                .workGroupAssignedAt(LocalDateTime.now())
                 .mustChangePassword(true)
                 .build();
 

@@ -6,6 +6,8 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import com.peoplecore.employee.domain.Employee;
 
+import java.time.LocalDateTime;
+
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -36,6 +38,10 @@ public class WorkGroupMemberResDto {
      * 직책명 (직책 없을 수 있음 → nullable)
      */
     private String titleName;
+    /**
+     * 근무 그룹 배정 일시 (nullable)
+     */
+    private LocalDateTime assignedAt;
 
     /** 근무 그룹에 속한 직원들  리스트 반환*/
     public static WorkGroupMemberResDto from(Employee emp) {
@@ -45,6 +51,7 @@ public class WorkGroupMemberResDto {
                 .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
                 .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)
                 .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
+                .assignedAt(emp.getWorkGroupAssignedAt())
                 .build();
     }
 }

@@ -1,14 +1,12 @@
 package com.peoplecore.attendence.service;
 
-import com.peoplecore.attendence.dto.WorkGroupDetailResDto;
-import com.peoplecore.attendence.dto.WorkGroupMemberResDto;
-import com.peoplecore.attendence.dto.WorkGroupReqDto;
-import com.peoplecore.attendence.dto.WorkGroupResDto;
+import com.peoplecore.attendence.dto.*;
 import com.peoplecore.attendence.entity.WorkGroup;
 import com.peoplecore.attendence.repository.WorkGroupRepository;
 import com.peoplecore.attendence.repository.WorkGroupSearchRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
+import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
@@ -20,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -133,4 +132,52 @@ public class WorkGroupService {
 
         workGroupRepository.save(defaultGroup);
     }
+
+
+    /**
+     * 근무 그룹 간 사원 이관
+     */
+    public WorkGroupTransferResDto transferEmp(Long sourceWorkGroupId, WorkGroupTransferReqDto dto) {
+        /* source / target 근무 그룹 검증 */
+        WorkGroup source = workGroupRepository.findByWorkGroupIdAndGroupDeleteAtIsNull(sourceWorkGroupId)
+                .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+
+        WorkGroup target = workGroupRepository.findByWorkGroupIdAndGroupDeleteAtIsNull(dto.getTargetWorkGroupId())
+                .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+
+        /* 동일 그룹 체크 */
+        if (source.getWorkGroupId().equals(target.getWorkGroupId())) {
+            throw new CustomException(ErrorCode.WORK_GROUP_TRANSFER_SAME_TARGET);
+        }
+
+        /* 회사 일치 체크 */
+        if (!source.getCompany().getCompanyId().equals(target.getCompany().getCompanyId())) {
+            throw new CustomException(ErrorCode.WORK_GROUP_TRANSFER_DIFFERENT_COMPANY);
+        }
+
+        /* 이관 대상 조회 (JOIN FETCH → dept/grade/title 동시 로딩, N+1 방지) */
+        List<Long> requestIds = dto.getEmpIds();
+        List<Employee> targets = employeeRepository.findByWorkGroupIdAndEmpIdsFetchJoin(sourceWorkGroupId, requestIds);
+
+        /* 엄격 검증: 요청 ID 중 source 미소속/미존재 포함 시 전체 거부 */
+        if (targets.size() != requestIds.size()) {
+            throw new CustomException(ErrorCode.WORK_GROUP_TRANSFER_INVALID_MEMBERS);
+        }
+
+        /* 재배정 + 응답 DTO 수집 (평탄 리스트 순회이므로 for-each) */
+        List<WorkGroupMemberResDto> workGroupMembers = new ArrayList<>(targets.size());
+        for (Employee emp : targets) {
+            emp.assignWorkGroup(target);
+            workGroupMembers.add(WorkGroupMemberResDto.from(emp));
+        }
+
+        /* 결과 요약 반환 */
+        return WorkGroupTransferResDto.builder()
+                .sourceWorkGroupId(source.getWorkGroupId())
+                .targetWorkGroupId(target.getWorkGroupId())
+                .moveCount(workGroupMembers.size())
+                .movedMembers(workGroupMembers)
+                .build();
+    }
+
 }
