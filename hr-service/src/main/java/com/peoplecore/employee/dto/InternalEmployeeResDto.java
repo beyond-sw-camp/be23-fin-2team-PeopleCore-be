@@ -1,4 +1,4 @@
-package com.peoplecore.client.dto;
+package com.peoplecore.employee.dto;
 
 import com.peoplecore.employee.domain.Employee;
 import lombok.AllArgsConstructor;

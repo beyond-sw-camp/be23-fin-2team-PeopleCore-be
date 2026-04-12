@@ -1,6 +1,6 @@
 package com.peoplecore.employee.controller;
 
-import com.peoplecore.client.dto.InternalEmployeeResDto;
+import com.peoplecore.employee.dto.InternalEmployeeResDto;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;

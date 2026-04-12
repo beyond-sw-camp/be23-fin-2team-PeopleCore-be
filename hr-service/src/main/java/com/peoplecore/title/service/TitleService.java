@@ -14,6 +14,7 @@ import com.peoplecore.employee.repository.EmployeeRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -63,8 +64,11 @@ public class TitleService {
             throw new IllegalArgumentException("이미 존재하는 직책명입니다.");
         }
 
-        String titleCode = titleRepository.findTopByCompanyIdOrderByTitleCodeDesc(companyId)
-                .map(t -> String.format("%03d", Integer.parseInt(t.getTitleCode()) + 1))
+        String titleCode = titleRepository.findAllByCompanyId(companyId).stream()
+                .map(Title::getTitleCode)
+                .filter(code -> code.matches("\\d+"))
+                .max(Comparator.naturalOrder())
+                .map(code -> String.format("%03d", Integer.parseInt(code) + 1))
                 .orElse("001");
 
         Title title = Title.builder()
@@ -132,7 +136,7 @@ public class TitleService {
             Title.builder()
                     .companyId(company.getCompanyId())
                     .titleName("미배정")
-                    .titleCode("DEFAULT")
+                    .titleCode("000")
                     .build()
         );
     }

@@ -1,6 +1,6 @@
 package com.peoplecore.calendar.service;
 
-import com.peoplecore.alarm.service.AlarmService;
+import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.calendar.dtos.InterestCalendarResDto;
 import com.peoplecore.calendar.dtos.InterestCalendarUpdateReqDto;
 import com.peoplecore.calendar.dtos.ShareRequestCreateDto;
@@ -21,7 +21,6 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.GetMapping;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -36,14 +35,14 @@ public class InterestCalenderService {
 
     private final InterestCalendarsRepository interestCalendarsRepository;
     private final CalendarShareRequestsRepository calendarShareRequestsRepository;
-    private final AlarmService alarmService;
+    private final AlarmEventPublisher alarmEventPublisher;
     private final HrCacheService hrCacheService;
 
     @Autowired
-    public InterestCalenderService(InterestCalendarsRepository interestCalendarsRepository, CalendarShareRequestsRepository calendarShareRequestsRepository, AlarmService alarmService, HrCacheService hrCacheService) {
+    public InterestCalenderService(InterestCalendarsRepository interestCalendarsRepository, CalendarShareRequestsRepository calendarShareRequestsRepository, AlarmEventPublisher alarmEventPublisher, HrCacheService hrCacheService) {
         this.interestCalendarsRepository = interestCalendarsRepository;
         this.calendarShareRequestsRepository = calendarShareRequestsRepository;
-        this.alarmService = alarmService;
+        this.alarmEventPublisher = alarmEventPublisher;
         this.hrCacheService = hrCacheService;
     }
 
@@ -75,7 +74,7 @@ public class InterestCalenderService {
         calendarShareRequestsRepository.save(shareRequest);
 
         // 상대방에게 알람
-        alarmService.createAndPush(AlarmEvent.builder()
+        alarmEventPublisher.publisher(AlarmEvent.builder()
                         .companyId(companyId)
                         .alarmType("Calendar")
                         .alarmTitle("캘린더 공유 요청")
@@ -116,7 +115,7 @@ public class InterestCalenderService {
         String title = accepted ? "캘린더 공유 승인" : "캘린더 공유 거절";
         String content = accepted ? "캘린더 공유 요청이 승인되었습니다" : "캘린더 공유 요청이 거절되었습니다" ;
 
-        alarmService.createAndPush(AlarmEvent.builder()
+        alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("Calendar")
                 .alarmTitle(title)
@@ -131,7 +130,7 @@ public class InterestCalenderService {
         Map<Long, EmployeeSimpleResDto> empMap = getEmpMap(
                 List.of(shareRequest.getFromEmpId(), shareRequest.getToEmpId()));
 
-            return ShareRequestResDto.fromEntity(shareRequest, getEmpName(empMap, shareRequest.getFromEmpId()),getEmpName(empMap, shareRequest.getToEmpId()));
+        return ShareRequestResDto.fromEntity(shareRequest, getEmpName(empMap, shareRequest.getFromEmpId()),getEmpName(empMap, shareRequest.getToEmpId()));
     }
 
 

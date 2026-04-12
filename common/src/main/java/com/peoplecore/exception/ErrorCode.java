@@ -71,6 +71,8 @@ public enum ErrorCode {
     CALENDAR_NOT_FOUND(404, "캘린더를 찾을 수 없습니다."),
     CALENDAR_NAME_DUPLICATE(409, "이미 같은 이름의 캘린더가 존재합니다."),
     CALENDAR_OWNER_MISMATCH(403, "본인의 캘린더만 관리할 수 있습니다."),
+    DEFAULT_CALENDAR_CANNOT_DELETE(400, "기본 캘린더는 삭제할 수 없습니다."),
+    DEFAULT_CALENDAR_CANNOT_RENAME(400, "기본 캘린더의 이름은 변경할 수 없습니다."),
 
     // 일정
     EVENT_NOT_FOUND(404, "일정을 찾을 수 없습니다."),
@@ -87,6 +89,11 @@ public enum ErrorCode {
     SHARE_REQUEST_DUPLICATE(409, "이미 대기 중인 요청이 있습니다."),
     SHARE_REQUEST_ALREADY_PROCESSED(400, "이미 처리된 요청입니다."),
     SHARE_REQUEST_ACCESS_DENIED(403, "본인에게 온 요청만 처리할 수 있습니다."),
+
+//    전사 캘린더
+    COMPANY_EVENT_NOT_FOUND(404, "전사 일정을 찾을 수 없습니다."),
+    COMPANY_EVENT_NOT_COMPANY(400, "전사 일정이 아닙니다."),
+
 
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),
