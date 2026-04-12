@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
@@ -81,8 +81,8 @@ public class WorkGroup extends BaseTimeEntity {
     @Column(nullable = false)
     private String groupDevice;
 
-    /** 삭제 일시 - null일 경우 활ㄹ성화 */
-    private LocalDateTime groupDeleteat;
+    /** 삭제 일시 - null일 경우 활성화 */
+    private LocalDateTime groupDeleteAt;
 
     /** 생성자 id */
     @Column(nullable = false)

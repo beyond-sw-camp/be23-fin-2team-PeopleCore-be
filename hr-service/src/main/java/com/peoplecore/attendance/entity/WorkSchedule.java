@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
@@ -45,7 +45,7 @@ public class WorkSchedule extends BaseTimeEntity {
     @Column(nullable = false)
     private Integer scheStandMinute;
 
-    /** 유연 근무 여부 - 인사과 설정 defalt ==false */
+    /** 유연 근무 여부 - 인사과 설정 default == false */
     @Column(nullable = false)
     private Boolean scheIsFlexible;
 

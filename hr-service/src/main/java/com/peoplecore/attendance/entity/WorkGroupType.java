@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 public enum WorkGroupType {
     FIXED,      // 고정근로

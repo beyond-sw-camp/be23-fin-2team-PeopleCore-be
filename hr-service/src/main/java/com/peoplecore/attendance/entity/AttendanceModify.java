@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
@@ -15,7 +15,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class AttendenceModify extends BaseTimeEntity {
+public class AttendanceModify extends BaseTimeEntity {
 
     /** 근태수정요청 ID */
     @Id
