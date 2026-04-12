@@ -1,5 +1,7 @@
 package com.peoplecore.company.service;
 
+import com.peoplecore.attendence.entity.WorkGroup;
+import com.peoplecore.attendence.repository.WorkGroupRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.dtos.CompanyCreateReqDto;
 import com.peoplecore.department.domain.Department;
@@ -25,6 +27,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Slf4j
 @Service
@@ -41,24 +44,30 @@ public class SuperAdminAccountService {
     private final InsuranceJobTypesRepository insuranceJobTypesRepository;
     private final PasswordEncoder passwordEncoder;
     private final EmployeeRepository employeeRepository;
+    private final WorkGroupRepository workGroupRepository;
 
     @Autowired
-    public SuperAdminAccountService(DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, InsuranceJobTypesRepository insuranceJobTypesRepository, PasswordEncoder passwordEncoder, EmployeeRepository employeeRepository) {
+    public SuperAdminAccountService(DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, InsuranceJobTypesRepository insuranceJobTypesRepository, PasswordEncoder passwordEncoder, EmployeeRepository employeeRepository, WorkGroupRepository workGroupRepository) {
         this.departmentRepository = departmentRepository;
         this.gradeRepository = gradeRepository;
         this.titleRepository = titleRepository;
         this.insuranceJobTypesRepository = insuranceJobTypesRepository;
         this.passwordEncoder = passwordEncoder;
         this.employeeRepository = employeeRepository;
+        this.workGroupRepository = workGroupRepository;
     }
 
     @Transactional
-    public void createSuperAdmin(Company company, CompanyCreateReqDto reqDto){
+    public void createSuperAdmin(Company company, CompanyCreateReqDto reqDto) {
 
-        Department defaultDepartment = departmentRepository.findByCompany_CompanyIdAndDeptName(company.getCompanyId(), "미배정").orElseThrow(()-> new CustomException(ErrorCode.DEPARTMENT_NOT_FOUND) );
-        Grade defaultGrade = gradeRepository.findByCompanyIdAndGradeName(company.getCompanyId(), "미배정").orElseThrow(()-> new CustomException(ErrorCode.GRADE_NOT_FOUND));
-        Title defaultTitle = titleRepository.findByCompanyIdAndTitleName(company.getCompanyId(), "미배정").orElseThrow(()-> new CustomException(ErrorCode.TITLE_NOT_FOUND));
-        InsuranceJobTypes defaultJobType = insuranceJobTypesRepository.findByCompany_CompanyIdAndName(company.getCompanyId(),"기본업종").orElseThrow(()-> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
+        Department defaultDepartment = departmentRepository.findByCompany_CompanyIdAndDeptName(company.getCompanyId(), "미배정").orElseThrow(() -> new CustomException(ErrorCode.DEPARTMENT_NOT_FOUND));
+        Grade defaultGrade = gradeRepository.findByCompanyIdAndGradeName(company.getCompanyId(), "미배정").orElseThrow(() -> new CustomException(ErrorCode.GRADE_NOT_FOUND));
+        Title defaultTitle = titleRepository.findByCompanyIdAndTitleName(company.getCompanyId(), "미배정").orElseThrow(() -> new CustomException(ErrorCode.TITLE_NOT_FOUND));
+        InsuranceJobTypes defaultJobType = insuranceJobTypesRepository.findByCompany_CompanyIdAndName(company.getCompanyId(), "기본업종").orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
+
+        WorkGroup defaultWorkGroup = workGroupRepository
+                .findByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(company.getCompanyId(), "DEFAULT")
+                .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
 
         Employee superAdmin = Employee.builder()
                 .company(company)
@@ -75,7 +84,8 @@ public class SuperAdminAccountService {
                 .empStatus(EmpStatus.ACTIVE)
                 .empRole(EmpRole.HR_SUPER_ADMIN)
                 .empPassword(passwordEncoder.encode(tempPassword))
-                .workGroupId(1L)
+                .workGroup(defaultWorkGroup)
+                .workGroupAssignedAt(LocalDateTime.now())
                 .mustChangePassword(true)
                 .build();
 

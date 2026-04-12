@@ -77,5 +77,7 @@ public class EmployeeCreateRequestDto {
 
     private String empMailboxSize;
 
+    private Long workGroupId;  // 선택된 근무 그룹 ID (null이면 기본 그룹 자동 배정)
+
 }
 
