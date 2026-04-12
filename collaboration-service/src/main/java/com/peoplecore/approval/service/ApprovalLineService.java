@@ -117,25 +117,24 @@ public class ApprovalLineService {
                     .changeReason(comment != null ? comment : "최종 승인")
                     .changedAt(LocalDateTime.now())
                     .build());
-        }
+
 
 //        사직서 승인 시 hr-service로 이벤트 발행
-        String formCode= document.getFormId().getFormCode();
-        if(formCode != null && formCode.startsWith("사직서")){
-            try{
-                ResignApprovedEvent resignApprovedEvent = ResignApprovedEvent.builder()
-                        .companyId(companyId)
-                        .docId(document.getDocId())
-                        .empId(document.getEmpId())
-                        .docData(document.getDocData())
-                        .build();
-                kafkaTemplate.send("resign-approved", objectMapper.writeValueAsString(resignApprovedEvent));
-            }catch (Exception e){
-                log.error("퇴직 승인 이벤트 발행 실패: {}", e.getMessage());
+            String formCode = document.getFormId().getFormCode();
+            if (formCode != null && formCode.startsWith("사직서")) {
+                try {
+                    ResignApprovedEvent resignApprovedEvent = ResignApprovedEvent.builder()
+                            .companyId(companyId)
+                            .docId(document.getDocId())
+                            .empId(document.getEmpId())
+                            .docData(document.getDocData())
+                            .build();
+                    kafkaTemplate.send("resign-approved", objectMapper.writeValueAsString(resignApprovedEvent));
+                } catch (Exception e) {
+                    log.error("퇴직 승인 이벤트 발행 실패: {}", e.getMessage());
+                }
             }
         }
-
-
 
         /*기안자에게 승인 알림 발행 */
         alarmEventPublisher.publisher(AlarmEvent.builder()
