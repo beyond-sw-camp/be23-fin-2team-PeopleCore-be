@@ -2,9 +2,11 @@ package com.peoplecore.attendence.entity;
 
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
+
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.UUID;
+
 import lombok.*;
 
 /**
@@ -22,69 +24,87 @@ public class WorkGroup extends BaseTimeEntity {
         ALL
     }
 
-    /** 근무 그룹 iid */
+    /**
+     * 근무 그룹 id
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long workGroupId;
 
-    /** 회사 id */
+    /**
+     * 회사 id
+     */
     @Column(nullable = false)
     private UUID groupCompanyId;
 
-    /** 근무 그룹 명 */
+    /**
+     * 근무 그룹 명
+     */
     @Column(nullable = false)
     private String groupName;
 
-    /** 근무 그룹 코드 - unique */
+    /**
+     * 근무 그룹 코드 - unique
+     */
     @Column(nullable = false)
     private String groupCode;
 
-    /** 근무 그룹 설명 */
+    /**
+     * 근무 그룹 설명
+     */
     @Column(columnDefinition = "TEXT")
     private String groupDesc;
 
-    /** 근무제유형 */
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private WorkGroupType groupType;
-
-    /** 출근 시간 */
+    /**
+     * 출근 시간
+     */
     @Column(nullable = false)
     private LocalTime groupStartTime;
 
-    /** 퇴근 시간 */
+    /**
+     * 퇴근 시간
+     */
     @Column(nullable = false)
     private LocalTime groupEndTime;
 
-    /** 근무 요일 - 비트 마스크(월1,화2,수4,목8,금16,토32,일 64) 기본값 월~금 -> 컨버터 코드 작성 */
+    /**
+     * 근무 요일 - 비트 마스크(월1,화2,수4,목8,금16,토32,일 64) 기본값 월~금 -> 컨버터 코드 작성
+     */
     @Column(nullable = false)
     private Integer groupWorkDay;
 
-    /** 휴게 시작 시간 */
+    /**
+     * 휴게 시작 시간
+     */
     @Column(nullable = false)
     private LocalTime groupBreakStart;
 
-    /** 휴게 종료 시간 */
+    /**
+     * 휴게 종료 시간
+     */
     @Column(nullable = false)
     private LocalTime groupBreakEnd;
 
-    /** 지동 출퇴근 여부 */
-    @Column(nullable = false)
-    private Boolean groupAutoCheck;
-
-    /** 초과 근무 인정 방식 - 결제 승인만, 전체 인정 */
+    /**
+     * 초과 근무 인정 방식 - 결제 승인만, 전체 인정
+     */
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private GroupOvertimeRecognize groupOvertimeRecognize;
 
-    /** 근태 체크 디바이스 */
+    /** 모바일 출퇴근 허용 여부 */
     @Column(nullable = false)
-    private String groupDevice;
+    @Builder.Default
+    private Boolean groupMobileCheck = false;
 
-    /** 삭제 일시 - null일 경우 활ㄹ성화 */
-    private LocalDateTime groupDeleteat;
+    /**
+     * 삭제 일시 - null일 경우 활ㄹ성화
+     */
+    private LocalDateTime groupDeleteAt;
 
-    /** 생성자 id */
+    /**
+     * 생성자 id
+     */
     @Column(nullable = false)
     private Long groupManagerId;
 

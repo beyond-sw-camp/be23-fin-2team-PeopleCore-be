@@ -17,7 +17,7 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class VacationPolicy extends BaseTimeEntity {
+public class  VacationPolicy extends BaseTimeEntity {
 
     public enum PolicyBaseType {
         HIRE,
@@ -62,23 +62,7 @@ public class VacationPolicy extends BaseTimeEntity {
     @Column(nullable = false)
     private String policyAlarmDay;
 
-    /**
-     * 초과 근무 신청 단위
-     */
-    @Column(nullable = false)
-    private Integer policyOvertimeMin;
 
-    /**
-     * 초과 근무 사전 결재
-     */
-    @Column(nullable = false)
-    private Boolean policyOvertimeBeforeApproval;
-
-    /**
-     * 초과 근무 사후 결재
-     */
-    @Column(nullable = false)
-    private Boolean policyOvertimeAfterApproval;
 
     /** 연차 발생 규칙 목록 (양방향) */
     @OneToMany(mappedBy = "vacationPolicy", cascade = CascadeType.ALL)

@@ -1,5 +1,6 @@
 package com.peoplecore.employee.domain;
 
+import com.peoplecore.attendence.entity.WorkGroup;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
@@ -95,7 +96,9 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "simple_password")
     private String simplePassword;
 
-    private Long workGroupId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn
+    private WorkGroup workGroup;
 
     @Column(nullable = false)
     @Builder.Default
