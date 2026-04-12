@@ -1,6 +1,6 @@
-//package com.peoplecore.attendence.entity;
+//package com.peoplecore.attendence.domain;
 //
-//import com.peoplecore.entity.BaseTimeEntity;
+//import com.peoplecore.domain.BaseTimeEntity;
 //import jakarta.persistence.*;
 //import java.time.LocalDate;
 //import java.util.UUID;
