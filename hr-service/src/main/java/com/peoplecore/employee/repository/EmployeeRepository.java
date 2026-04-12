@@ -4,6 +4,8 @@ import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.title.domain.Title;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -41,8 +43,6 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     boolean existsByTitle(Title title);
 
 
-
-
     /// ////////rim 사원관리
 
     //  카드조회용
@@ -66,7 +66,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     );
 
 
-//    카드조회 (인사 현황)
+    //    카드조회 (인사 현황)
 //    해당달의 퇴직자
     @Query("""
             SELECT COUNT(e) FROM Employee e
@@ -75,7 +75,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
             AND MONTH(e.empResign) = :month""")
     int countResignedThisMonth(@Param("companyId") UUID companyId, @Param("year") int year, @Param("month") int month);
 
-//    계약만료 30일 이내 예정자
+    //    계약만료 30일 이내 예정자
     @Query("""
             SELECT e FROM Employee e
             JOIN FETCH e.dept
@@ -87,12 +87,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     List<Employee> findExpiringContracts(@Param("companyId") UUID companyId, @Param("now") LocalDate now, @Param("deadline") LocalDate deadline);
 
 
-
-//    사번 채번
+    //    사번 채번
 //    동일 사번 여부 체크
     boolean existsByCompany_CompanyIdAndEmpNum(UUID companyId, String empNum);
 
-//    특정 prefix로 시작하는 사번 개수 조회
+    //    특정 prefix로 시작하는 사번 개수 조회
     @Query("""
             SELECT COUNT(e) FROM Employee e
             WHERE e.company.companyId = :companyId
@@ -114,12 +113,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     );
 
 
-//사원상세조회
+    //사원상세조회
     Optional<Employee> findByEmpIdAndCompany_CompanyId(Long empId, UUID companyId);
 
 
-
-//    재직자 조회
+    //    재직자 조회
     @Query("""
             SELECT e FROM Employee e
             JOIN FETCH e.dept
@@ -141,7 +139,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     List<Employee> findActiveByCompanyAndDept(@Param("companyId") UUID companyId, @Param("deptId") Long deptId);
 
 
-//    최근 6개월 입사자 조회
+    //    최근 6개월 입사자 조회
     @Query("""
             SELECT e FROM Employee e
             WHERE e.company.companyId = :companyId
@@ -163,7 +161,14 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     boolean existsByJobTypes_JobTypesId(Long jobTypesId);
 
 
-//    캘린더 목록 조회시 여러 사원 한번에 조회(dept,grade,title LAZY조회로 N+1 발행하므로 query문으로 해결
+    //    캘린더 목록 조회시 여러 사원 한번에 조회(dept,grade,title LAZY조회로 N+1 발행하므로 query문으로 해결
     @Query("SELECT e FROM Employee e JOIN FETCH e.dept JOIN FETCH e.grade LEFT JOIN FETCH e.title WHERE e.empId IN :empIds AND e.deleteAt IS NULL")
     List<Employee> findByEmpIdsWithDeptAndGrade(@Param("empIds") List<Long> empIds);
+
+
+    /* 근무 그룹별 소속 사원 수 조회*/
+    Long countByWorkGroup_WorkGroupId(Long workGroupId);
+
+    /* 근무 그룹 별 소속 사원 (페이지네이션)*/
+    Page<Employee> findByWorkGroup_WorkGroupId(Long workGroupId, Pageable pageable);
 }

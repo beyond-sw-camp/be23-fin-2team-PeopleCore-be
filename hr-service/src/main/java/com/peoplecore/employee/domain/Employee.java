@@ -97,7 +97,7 @@ public class Employee extends BaseTimeEntity {
     private String simplePassword;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn
+    @JoinColumn(name = "work_group_id")
     private WorkGroup workGroup;
 
     @Column(nullable = false)

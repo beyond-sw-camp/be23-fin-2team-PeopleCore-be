@@ -1,17 +1,24 @@
 package com.peoplecore.attendence.entity;
 
+import com.peoplecore.attendence.dto.WorkGroupReqDto;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.UUID;
 
 import lombok.*;
 
 /**
  * 근무 그룹
  */
+@Table(
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_work_group_company_code",
+                columnNames = {"company_id", "group_code"}
+        )
+)
 @Entity
 @Getter
 @NoArgsConstructor
@@ -34,8 +41,9 @@ public class WorkGroup extends BaseTimeEntity {
     /**
      * 회사 id
      */
-    @Column(nullable = false)
-    private UUID groupCompanyId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "company_id", nullable = false)
+    private Company company;
 
     /**
      * 근무 그룹 명
@@ -92,7 +100,9 @@ public class WorkGroup extends BaseTimeEntity {
     @Column(nullable = false)
     private GroupOvertimeRecognize groupOvertimeRecognize;
 
-    /** 모바일 출퇴근 허용 여부 */
+    /**
+     * 모바일 출퇴근 허용 여부
+     */
     @Column(nullable = false)
     @Builder.Default
     private Boolean groupMobileCheck = false;
@@ -105,7 +115,26 @@ public class WorkGroup extends BaseTimeEntity {
     /**
      * 생성자 id
      */
-    @Column(nullable = false)
     private Long groupManagerId;
+    /*생성자 이름 */
+    private String groupManagerName;
 
+
+    public void softDelete() {
+        this.groupDeleteAt = LocalDateTime.now();
+        this.groupCode = this.groupCode + "_DELETED_" + System.currentTimeMillis();
+
+    }
+
+    public void update(WorkGroupReqDto dto) {
+        this.groupName = dto.getGroupName();
+        this.groupDesc = dto.getGroupDesc();
+        this.groupStartTime = dto.getGroupStartTime();
+        this.groupEndTime = dto.getGroupEndTime();
+        this.groupWorkDay = dto.getGroupWorkDay();
+        this.groupBreakStart = dto.getGroupBreakStart();
+        this.groupBreakEnd = dto.getGroupBreakEnd();
+        this.groupOvertimeRecognize = dto.getGroupOvertimeRecognize();
+        this.groupMobileCheck = dto.getGroupMobileCheck();
+    }
 }

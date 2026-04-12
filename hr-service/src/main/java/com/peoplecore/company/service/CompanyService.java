@@ -2,6 +2,7 @@ package com.peoplecore.company.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.attendence.service.WorkGroupService;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.domain.CompanyStatus;
 import com.peoplecore.company.domain.ContractType;
@@ -46,9 +47,10 @@ public class CompanyService {
     private final CollaborationClient collaborationClient;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private final WorkGroupService workGroupService;
 
     @Autowired
-    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
+    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService) {
         this.companyRepository = companyRepository;
         this.departmentService = departmentService;
         this.gradeService = gradeService;
@@ -61,6 +63,7 @@ public class CompanyService {
         this.collaborationClient = collaborationClient;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
+        this.workGroupService = workGroupService;
     }
 
     //    1. 회사 등록 + 기본데이터 세팅 + superAdmin 생성
@@ -97,6 +100,7 @@ public class CompanyService {
         payItemsService.initDefault(company);
         insuranceRatesService.initDefault(company);
         paySettingsService.initDefault(company);
+        workGroupService.initDefault(company);
 
 
         // superAdmin 계정 생성
