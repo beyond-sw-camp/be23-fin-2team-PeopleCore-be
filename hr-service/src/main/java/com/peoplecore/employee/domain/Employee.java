@@ -72,7 +72,7 @@ public class Employee extends BaseTimeEntity {
     private EmpType empType;
 
     @Column(name = "emp_resign")
-    private LocalDate empResign;
+    private LocalDate empResignDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "emp_status", nullable = false)
@@ -130,7 +130,6 @@ public class Employee extends BaseTimeEntity {
     private String empAddressDetail;
 
 
-    //하드코딩 커스텀 고려
     @Column(name = "emp_mailbox_size")
     @Builder.Default
     private String empMailboxSize= "5GB";
@@ -206,5 +205,24 @@ public class Employee extends BaseTimeEntity {
         return this.deleteAt !=null;
     }
 
+//    재직상태 변경
+    public void updateStatus(EmpStatus status){
+        this.empStatus = status;
+    }
+
+//    퇴직일 세팅
+    public void updateResignDate(LocalDate resignDate){
+        this.empResignDate = resignDate;
+    }
+//    일괄 사원정보 업데이트(인사발령)
+    public void updateDept(Department department){
+        this.dept = department;
+    }
+    public void updateGrade(Grade grade){
+        this.grade =grade;
+    }
+    public void updateTitle(Title title){
+        this.title = title;
+    }
 
 }

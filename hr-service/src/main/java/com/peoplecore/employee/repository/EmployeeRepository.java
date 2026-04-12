@@ -4,7 +4,9 @@ import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.title.domain.Title;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -69,23 +71,34 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 //    카드조회 (인사 현황)
 //    해당달의 퇴직자
     @Query("""
-            SELECT COUNT(e) FROM Employee e
-            WHERE e.company.companyId = :companyId
-            AND YEAR(e.empResign) = :year
-            AND MONTH(e.empResign) = :month""")
-    int countResignedThisMonth(@Param("companyId") UUID companyId, @Param("year") int year, @Param("month") int month);
+SELECT COUNT(e) FROM Employee e
+WHERE e.company.companyId = :companyId
+AND YEAR(e.empResignDate) = :year
+AND MONTH(e.empResignDate) = :month""")
+    int countResignedThisMonth(@Param("companyId")UUID companyId, @Param("year")int year,@Param("month")int month);
 
 //    계약만료 30일 이내 예정자
     @Query("""
-            SELECT e FROM Employee e
-            JOIN FETCH e.dept
-            WHERE e.company.companyId = :companyId
-            AND e.contractEndDate IS NOT NULL
-            AND e.contractEndDate BETWEEN :now AND :deadline
-            AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
-            """)
-    List<Employee> findExpiringContracts(@Param("companyId") UUID companyId, @Param("now") LocalDate now, @Param("deadline") LocalDate deadline);
+SELECT e FROM Employee e
+JOIN FETCH e.dept
+WHERE e.company.companyId = :companyId
+AND e.contractEndDate IS NOT NULL
+AND e.contractEndDate BETWEEN :now AND :deadline
+AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
+""")
+    List<Employee>findExpiringContracts(@Param("companyId")UUID companyId, @Param("now")LocalDate now, @Param("deadline")LocalDate deadline);
 
+
+//    계약 만료 예정자 건수만 조회
+    @Query("""
+SELECT COUNT(e) FROM Employee e
+WHERE e.company.companyId = :companyId
+AND e.contractEndDate BETWEEN : now AND : deadline
+AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
+""")
+    int countExpiringContracts(@Param("companyId")UUID companyId,
+                               @Param("now")LocalDate now,
+                               @Param("deadline")LocalDate deadline);
 
 
 //    사번 채번
@@ -94,24 +107,32 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
 //    특정 prefix로 시작하는 사번 개수 조회
     @Query("""
-            SELECT COUNT(e) FROM Employee e
-            WHERE e.company.companyId = :companyId
-            AND e.empNum LIKE :prefix%
-            """)
-    long countByCompanyIdAndEmpNumStartingWith(@Param("companyId") UUID companyId, @Param("prefix") String prefix);
+SELECT COUNT(e) FROM Employee e
+WHERE e.company.companyId = :companyId
+AND e.empNum LIKE :prefix%
+""")
+    long countByCompanyIdAndEmpNumStartingWith(@Param("companyId")UUID companyId, @Param("prefix")String prefix);
 
     @Query("""
-                SELECT e FROM Employee e
-                JOIN FETCH e.title t
-                JOIN FETCH e.grade g
-                WHERE e.dept.deptId = :deptId
-                AND e.company.companyId = :companyId
-                AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
-            """)
+        SELECT e FROM Employee e
+        JOIN FETCH e.title t
+        JOIN FETCH e.grade g
+        WHERE e.dept.deptId = :deptId
+        AND e.company.companyId = :companyId
+        AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+    """)
     List<Employee> findTitleHoldersByDeptId(
             @Param("companyId") UUID companyId,
             @Param("deptId") Long deptId
     );
+
+//    비관적 락: 해당prefix 중 가장 큰 값 조회
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT MAX(e.empNum)FROM Employee e " +
+            "WHERE e.company.companyId = :companyId " +
+            "AND e.empNum LIKE :prefix%")
+    Optional<String>findMaxEmpNumWithLock(@Param("companyId") UUID companyId,
+                                          @Param("prefix") String prefix);
 
 
 //사원상세조회
@@ -121,42 +142,42 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
 //    재직자 조회
     @Query("""
-            SELECT e FROM Employee e
-            JOIN FETCH e.dept
-            JOIN FETCH e.grade
-            WHERE e.company.companyId = :companyId
-            AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
-            """)
-    List<Employee> findActiveEmployeesWithDeptAndGrade(@Param("companyId") UUID companyId);
+SELECT e FROM Employee e
+JOIN FETCH e.dept
+JOIN FETCH e.grade
+WHERE e.company.companyId = :companyId
+AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+""")
+    List<Employee>findActiveEmployeesWithDeptAndGrade(@Param("companyId")UUID companyId);
 
     @Query("""
-            
-                        SELECT e FROM Employee e
-            JOIN FETCH e.dept
-            JOIN FETCH e.grade
-            WHERE e.company.companyId = :companyId
-            AND e.dept.deptId = :deptId
-            AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
-            """)
-    List<Employee> findActiveByCompanyAndDept(@Param("companyId") UUID companyId, @Param("deptId") Long deptId);
+
+            SELECT e FROM Employee e
+JOIN FETCH e.dept
+JOIN FETCH e.grade
+WHERE e.company.companyId = :companyId
+AND e.dept.deptId = :deptId
+AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+""")
+    List<Employee>findActiveByCompanyAndDept(@Param("companyId")UUID companyId,@Param("deptId") Long deptId);
 
 
 //    최근 6개월 입사자 조회
     @Query("""
-            SELECT e FROM Employee e
-            WHERE e.company.companyId = :companyId
-            AND e.empHireDate >= :fromDate
-            """)
-    List<Employee> findHiredAfter(@Param("companyId") UUID companyId, @Param("fromDate") LocalDate fromDate);
+SELECT e FROM Employee e
+WHERE e.company.companyId = :companyId
+AND e.empHireDate >= :fromDate
+""")
+    List<Employee>findHiredAfter(@Param("companyId")UUID companyId, @Param("fromDate")LocalDate fromDate);
 
-    //    최근 6개월 퇴사자 조회
+//    최근 6개월 퇴사자 조회
     @Query("""
-            SELECT e FROM Employee e
-            WHERE e.company.companyId = :companyId
-            AND e.empResign IS NOT NULL
-            AND e.empResign >= :fromDate
-            """)
-    List<Employee> findResignedAfter(@Param("companyId") UUID companyId, @Param("fromDate") LocalDate fromDate);
+SELECT e FROM Employee e
+WHERE e.company.companyId = :companyId
+AND e.empResignDate IS NOT NULL
+AND e.empResignDate >= :fromDate
+""")
+    List<Employee>findResignedAfter(@Param("companyId")UUID companyId,@Param("fromDate")LocalDate fromDate);
 
 
     // 산재보험 업종 삭제시, 사원에 배정되어있는지 체크
