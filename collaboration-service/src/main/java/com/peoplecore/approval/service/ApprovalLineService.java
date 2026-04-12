@@ -1,5 +1,6 @@
 package com.peoplecore.approval.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.repository.ApprovalDocumentRepository;
@@ -8,10 +9,12 @@ import com.peoplecore.approval.repository.ApprovalSignatureRepository;
 import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
 import com.peoplecore.common.service.MinioService;
 import com.peoplecore.event.AlarmEvent;
+import com.peoplecore.event.ResignApprovedEvent;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -31,15 +34,20 @@ public class ApprovalLineService {
     private final ApprovalSignatureRepository signatureRepository;
     private final AlarmEventPublisher alarmEventPublisher;
     private final MinioService minioService;
+    private final KafkaTemplate<String, String>kafkaTemplate;
+    private final ObjectMapper objectMapper;
+
 
     @Autowired
-    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService) {
+    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.historyRepository = historyRepository;
         this.signatureRepository = signatureRepository;
         this.alarmEventPublisher = alarmEventPublisher;
         this.minioService = minioService;
+        this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
     }
 
     /* 승인 처리 / 순차 처리(이전 단계가 approved여야만 승인 가능) / 마지막 결재자가 승인 해야만 문서상태 approved*/
@@ -110,6 +118,24 @@ public class ApprovalLineService {
                     .changedAt(LocalDateTime.now())
                     .build());
         }
+
+//        사직서 승인 시 hr-service로 이벤트 발행
+        String formCode= document.getFormId().getFormCode();
+        if(formCode != null && formCode.startsWith("사직서")){
+            try{
+                ResignApprovedEvent resignApprovedEvent = ResignApprovedEvent.builder()
+                        .companyId(companyId)
+                        .docId(document.getDocId())
+                        .empId(document.getEmpId())
+                        .docData(document.getDocData())
+                        .build();
+                kafkaTemplate.send("resign-approved", objectMapper.writeValueAsString(resignApprovedEvent));
+            }catch (Exception e){
+                log.error("퇴직 승인 이벤트 발행 실패: {}", e.getMessage());
+            }
+        }
+
+
 
         /*기안자에게 승인 알림 발행 */
         alarmEventPublisher.publisher(AlarmEvent.builder()

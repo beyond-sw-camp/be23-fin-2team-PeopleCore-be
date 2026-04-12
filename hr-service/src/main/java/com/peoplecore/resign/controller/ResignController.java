@@ -28,11 +28,10 @@ public class ResignController {
     @GetMapping
     public ResponseEntity<Page<ResignListDto>>getResignList(@RequestHeader("X-User-Company") UUID companyId,
                                                             @RequestParam(required = false)String keyword,
-                                                            @RequestParam(required = false)String approvalStatus,
                                                             @RequestParam(required = false)String empStatus,
                                                             @RequestParam(required = false)ResignSortField sortField,
                                                             Pageable pageable){
-        return ResponseEntity.ok(resignService.getResignList(companyId,keyword,approvalStatus,empStatus,sortField, pageable));
+        return ResponseEntity.ok(resignService.getResignList(companyId,keyword,empStatus,sortField, pageable));
     }
 
 //    2.카드 통계

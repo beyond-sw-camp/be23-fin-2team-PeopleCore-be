@@ -1,6 +1,5 @@
 package com.peoplecore.resign.repository;
 
-import com.peoplecore.resign.domain.ApprovalStatus;
 import com.peoplecore.resign.domain.Resign;
 import com.peoplecore.resign.domain.RetireStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -16,14 +15,8 @@ import java.util.UUID;
 @Repository
 public interface ResignRepository extends JpaRepository<Resign, Long>,ResignRepositoryCustom {
 
-//    퇴직처리 대기
-    long countByEmployee_Company_CompanyIdAndIsDeletedFalseAndApprovalStatusAndRetireStatus(UUID companyId, ApprovalStatus approvalStatus, RetireStatus retireStatus);
-
-//    결재대기
-    long countByEmployee_Company_CompanyIdAndIsDeletedFalseAndRetireStatus(UUID companyId,RetireStatus retireStatus);
-
-//    퇴직완료
-    long countByEmployee_Company_CompanyIdAndIsDeletedFalseAndApprovalStatus(UUID companyId, ApprovalStatus approvalStatus);
+//    상태별 카운트 (ACTIVE / CONFIRMED / RESIGNED)
+    long countByEmployee_Company_CompanyIdAndIsDeletedFalseAndRetireStatus(UUID companyId, RetireStatus retireStatus);
 
 
 //    퇴직상세 조회

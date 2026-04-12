@@ -24,7 +24,7 @@ public class ResignRepositoryImpl implements ResignRepositoryCustom{
     }
 
     @Override
-    public Page<Resign>findAllWithFilter(UUID companyId, String keyword, String approvalStatus, String empStatus, ResignSortField sortField, Pageable pageable){
+    public Page<Resign>findAllWithFilter(UUID companyId, String keyword, String empStatus, ResignSortField sortField, Pageable pageable){
 
         List<Resign>content = queryFactory
                 .selectFrom(qResign)        //테이블에서 조회
@@ -36,7 +36,6 @@ public class ResignRepositoryImpl implements ResignRepositoryCustom{
                         companyIdEq(companyId),
                         isNotDeleted(),
                         keywordContains(keyword),
-                        approvalStatusEq(approvalStatus),
                         retireStatusEq(empStatus)
                 )
                 .orderBy(getOrderSpecifier(sortField))  //정렬(기본: 신청일 최신순)
@@ -52,7 +51,6 @@ public class ResignRepositoryImpl implements ResignRepositoryCustom{
                         companyIdEq(companyId),
                         isNotDeleted(),
                         keywordContains(keyword),
-                        approvalStatusEq(approvalStatus),
                         retireStatusEq(empStatus)
                 )
                 .fetchOne(); //단건으로 조회(count)
@@ -87,11 +85,6 @@ public class ResignRepositoryImpl implements ResignRepositoryCustom{
         return keyword != null ? qResign.employee.empName.contains(keyword).or(qResign.employee.empNum.contains(keyword)) : null;
         }
 
-
-//    결재상태 필터 - 문자열을 enum으로 변환해서 비교
-    private BooleanExpression approvalStatusEq(String approvalStatus){
-        return approvalStatus != null ? qResign.approvalStatus.eq(ApprovalStatus.valueOf(approvalStatus)) : null;
-    }
 
 //    재직상태 필터 - 문자열을 enum으로 변환해서 비교
     private BooleanExpression retireStatusEq(String empStatus){

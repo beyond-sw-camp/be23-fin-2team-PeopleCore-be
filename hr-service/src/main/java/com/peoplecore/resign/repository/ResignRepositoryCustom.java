@@ -9,6 +9,6 @@ import java.util.UUID;
 
 public interface ResignRepositoryCustom {
 
-    Page<Resign> findAllWithFilter(UUID companyId, String keyword, String approvalStatus, String empStatus, ResignSortField sortField, Pageable pageable);
+    Page<Resign> findAllWithFilter(UUID companyId, String keyword, String empStatus, ResignSortField sortField, Pageable pageable);
 }
 

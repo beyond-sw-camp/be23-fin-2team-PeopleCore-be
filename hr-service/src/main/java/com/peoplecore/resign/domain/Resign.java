@@ -46,11 +46,6 @@ public class Resign {
     private Long docId; //결제문서 id(상세)
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "approval_status")
-    @Builder.Default
-    private ApprovalStatus approvalStatus = ApprovalStatus.PENDING; //결제대기 기본값
-
-    @Enumerated(EnumType.STRING)
     @Column(name = "retire_status")
     @Builder.Default
     private RetireStatus retireStatus = RetireStatus.ACTIVE; //재직자 기본값

@@ -10,9 +10,8 @@ import lombok.NoArgsConstructor;
 @Builder
 @Data
 public class ResignStatusDto {
-    private long processableCount; //퇴직처리 가능 건 수 (결재완료+재직)
-    private long confirmedCount; //퇴직처리 완료, 스케줄러 대기 건 수
-    private long completedCount; //퇴직완료건 수
-    private long pendingCount; //결재대기 건 수
+    private long processableCount; //퇴직처리 대기 건 수 (ACTIVE)
+    private long confirmedCount; //퇴직예정 건 수 (CONFIRMED, 스케줄러 대기)
+    private long completedCount; //퇴직완료 건 수 (RESIGNED)
 
 }

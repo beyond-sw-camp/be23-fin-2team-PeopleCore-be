@@ -21,8 +21,7 @@ public class ResignDetailDto {
     private String deptName;
     private String gradeName;
     private LocalDate hireDate;
-    private String empStatus;
-    private String approvalStatus;  //결재상태
+    private String empStatus; //퇴직상태 ACTIVE, CONFIRMED, RESIGNED
     private LocalDate resignDate;   //퇴직예정일자
     private LocalDate registeredDate;   //신청일
 
@@ -36,7 +35,6 @@ public class ResignDetailDto {
                 .gradeName(resign.getGrade().getGradeName())
                 .hireDate(resign.getEmployee().getEmpHireDate())
                 .empStatus(resign.getRetireStatus().name())
-                .approvalStatus(resign.getApprovalStatus().name())
                 .resignDate(resign.getResignDate())
                 .registeredDate(resign.getRegisteredDate())
                 .build();
