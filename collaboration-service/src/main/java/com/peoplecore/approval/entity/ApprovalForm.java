@@ -157,6 +157,7 @@ public class ApprovalForm extends BaseTimeEntity {
     }
 
     public void deactivate() {
+        assertNotProtected("비활성화");
         this.isActive = false;
     }
 
