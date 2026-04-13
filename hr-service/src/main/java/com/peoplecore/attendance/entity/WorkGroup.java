@@ -1,6 +1,6 @@
 package com.peoplecore.attendance.entity;
 
-import com.peoplecore.attendence.dto.WorkGroupReqDto;
+import com.peoplecore.attendance.dto.WorkGroupReqDto;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;

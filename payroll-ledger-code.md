@@ -43,9 +43,9 @@
 | 8 | Service | `PayrollService.java` | pay/service/ | 신규 |
 | 9 | Controller | `PayrollController.java` | pay/controller/ | 신규 |
 | 10 | ErrorCode | `ErrorCode.java` | common/ | 추가 |
-| 11 | Entity | `OvertimeRequest.java` | attendence/entity/ | otTypeFlag(Integer, 비트마스크) 필드 추가 |
-| 12 | Class | `OtTypeFlag.java` | attendence/entity/ | 신규 (비트마스크 상수 + 헬퍼) |
-| 13 | Repository | `OvertimeRequestRepository.java` | attendence/repository/ | 신규 |
+| 11 | Entity | `OvertimeRequest.java` | attendance/entity/ | otTypeFlag(Integer, 비트마스크) 필드 추가 |
+| 12 | Class | `OtTypeFlag.java` | attendance/entity/ | 신규 (비트마스크 상수 + 헬퍼) |
+| 13 | Repository | `OvertimeRequestRepository.java` | attendance/repository/ | 신규 |
 | 14 | Entity | `PayrollDetails.java` | pay/domain/ | otId 필드 추가 |
 | 15 | DTO | `WageInfoResDto.java` | pay/dtos/ | 신규 |
 | 16 | DTO | `ApprovedOvertimeResDto.java` | pay/dtos/ | 신규 |
@@ -940,7 +940,7 @@ Response:
 ---
 
 ## 7. OvertimeRequest 수정 (otTypeFlag 추가)
-**파일 위치**: `attendence/entity/OvertimeRequest.java`
+**파일 위치**: `attendance/entity/OvertimeRequest.java`
 
 > 초과근무 유형을 비트마스크로 표현 (중첩 가산 지원)
 
@@ -961,10 +961,10 @@ private Integer otTypeFlag;
 ---
 
 ## 8. OtTypeFlag 비트마스크 상수 (신규)
-**파일 위치**: `attendence/entity/OtTypeFlag.java`
+**파일 위치**: `attendance/entity/OtTypeFlag.java`
 
 ```java
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 /**
  * 초과근무 유형 비트마스크 상수
@@ -996,7 +996,7 @@ public final class OtTypeFlag {
 ---
 
 ## 9. OvertimeRequestRepository (신규)
-**파일 위치**: `attendence/repository/OvertimeRequestRepository.java`
+**파일 위치**: `attendance/repository/OvertimeRequestRepository.java`
 
 ```java
 package com.peoplecore.attendance.repository;
@@ -1087,7 +1087,7 @@ public class WageInfoResDto {
 ```java
 package com.peoplecore.pay.dtos;
 
-import com.peoplecore.attendence.entity.OtTypeFlag;
+import com.peoplecore.attendance.entity.OtTypeFlag;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

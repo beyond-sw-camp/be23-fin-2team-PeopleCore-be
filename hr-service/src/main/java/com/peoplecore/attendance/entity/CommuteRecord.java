@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;

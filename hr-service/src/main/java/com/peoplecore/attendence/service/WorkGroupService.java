@@ -1,9 +1,9 @@
-package com.peoplecore.attendence.service;
+package com.peoplecore.attendance.service;
 
-import com.peoplecore.attendence.dto.*;
-import com.peoplecore.attendence.entity.WorkGroup;
-import com.peoplecore.attendence.repository.WorkGroupRepository;
-import com.peoplecore.attendence.repository.WorkGroupSearchRepository;
+import com.peoplecore.attendance.dto.*;
+import com.peoplecore.attendance.entity.WorkGroup;
+import com.peoplecore.attendance.repository.WorkGroupRepository;
+import com.peoplecore.attendance.repository.WorkGroupSearchRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.employee.domain.Employee;

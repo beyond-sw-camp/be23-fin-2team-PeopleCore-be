@@ -1,8 +1,8 @@
-package com.peoplecore.attendence.dto;
+package com.peoplecore.attendance.dto;
 
 
-import com.peoplecore.attendence.entity.OtExceedAction;
-import com.peoplecore.attendence.entity.OtMinUnit;
+import com.peoplecore.attendance.entity.OtExceedAction;
+import com.peoplecore.attendance.entity.OtMinUnit;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

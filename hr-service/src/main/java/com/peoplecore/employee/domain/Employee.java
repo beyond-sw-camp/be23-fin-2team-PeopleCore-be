@@ -1,6 +1,6 @@
 package com.peoplecore.employee.domain;
 
-import com.peoplecore.attendence.entity.WorkGroup;
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;

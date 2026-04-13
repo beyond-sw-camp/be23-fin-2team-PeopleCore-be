@@ -1,9 +1,9 @@
-package com.peoplecore.attendence.service;
+package com.peoplecore.attendance.service;
 
-import com.peoplecore.attendence.dto.OverTimePolicyReqDto;
-import com.peoplecore.attendence.dto.OverTimePolicyResDto;
-import com.peoplecore.attendence.entity.OvertimePolicy;
-import com.peoplecore.attendence.repository.OverTimePolicyRepository;
+import com.peoplecore.attendance.dto.OverTimePolicyReqDto;
+import com.peoplecore.attendance.dto.OverTimePolicyResDto;
+import com.peoplecore.attendance.entity.OvertimePolicy;
+import com.peoplecore.attendance.repository.OverTimePolicyRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.exception.CustomException;

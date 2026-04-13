@@ -44,7 +44,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
     boolean existsByTitle(Title title);
 
-
+    List<Employee> findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(UUID companyId, List<EmpStatus> empStatuses);
 
 
     /// ////////rim 사원관리
