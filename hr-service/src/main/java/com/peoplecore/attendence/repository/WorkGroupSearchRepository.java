@@ -1,7 +1,7 @@
-package com.peoplecore.attendence.repository;
+package com.peoplecore.attendance.repository;
 
-import com.peoplecore.attendence.dto.WorkGroupResDto;
-import com.peoplecore.attendence.entity.QWorkGroup;
+import com.peoplecore.attendance.dto.WorkGroupResDto;
+import com.peoplecore.attendance.entity.QWorkGroup;
 import com.peoplecore.employee.domain.QEmployee;
 import com.querydsl.core.types.Projections;
 import com.querydsl.jpa.impl.JPAQueryFactory;

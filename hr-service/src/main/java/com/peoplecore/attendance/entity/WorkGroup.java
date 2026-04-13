@@ -1,6 +1,6 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
-import com.peoplecore.attendence.dto.WorkGroupReqDto;
+import com.peoplecore.attendance.dto.WorkGroupReqDto;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
@@ -107,9 +107,7 @@ public class WorkGroup extends BaseTimeEntity {
     @Builder.Default
     private Boolean groupMobileCheck = false;
 
-    /**
-     * 삭제 일시 - null일 경우 활ㄹ성화
-     */
+    /** 삭제 일시 - null일 경우 활성화 */
     private LocalDateTime groupDeleteAt;
 
     /**

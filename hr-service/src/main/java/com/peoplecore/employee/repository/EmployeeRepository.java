@@ -44,6 +44,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
     boolean existsByTitle(Title title);
 
+    List<Employee> findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(UUID companyId, List<EmpStatus> empStatuses);
+
 
     /// ////////rim 사원관리
 
@@ -68,7 +70,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     );
 
 
-    //    카드조회 (인사 현황)
+//    카드조회 (인사 현황)
 //    해당달의 퇴직자
     @Query("""
 SELECT COUNT(e) FROM Employee e
@@ -77,7 +79,7 @@ AND YEAR(e.empResignDate) = :year
 AND MONTH(e.empResignDate) = :month""")
     int countResignedThisMonth(@Param("companyId")UUID companyId, @Param("year")int year,@Param("month")int month);
 
-    //    계약만료 30일 이내 예정자
+//    계약만료 30일 이내 예정자
     @Query("""
 SELECT e FROM Employee e
 JOIN FETCH e.dept
@@ -136,11 +138,12 @@ AND e.empNum LIKE :prefix%
                                           @Param("prefix") String prefix);
 
 
-    //사원상세조회
+//사원상세조회
     Optional<Employee> findByEmpIdAndCompany_CompanyId(Long empId, UUID companyId);
 
 
-    //    재직자 조회
+
+//    재직자 조회
     @Query("""
 SELECT e FROM Employee e
 JOIN FETCH e.dept
@@ -162,7 +165,7 @@ AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
     List<Employee>findActiveByCompanyAndDept(@Param("companyId")UUID companyId,@Param("deptId") Long deptId);
 
 
-    //    최근 6개월 입사자 조회
+//    최근 6개월 입사자 조회
     @Query("""
 SELECT e FROM Employee e
 WHERE e.company.companyId = :companyId
@@ -170,7 +173,7 @@ AND e.empHireDate >= :fromDate
 """)
     List<Employee>findHiredAfter(@Param("companyId")UUID companyId, @Param("fromDate")LocalDate fromDate);
 
-//    최근 6개월 퇴사자 조회
+    //    최근 6개월 퇴사자 조회
     @Query("""
 SELECT e FROM Employee e
 WHERE e.company.companyId = :companyId
@@ -184,7 +187,7 @@ AND e.empResignDate >= :fromDate
     boolean existsByJobTypes_JobTypesId(Long jobTypesId);
 
 
-    //    캘린더 목록 조회시 여러 사원 한번에 조회(dept,grade,title LAZY조회로 N+1 발행하므로 query문으로 해결
+//    캘린더 목록 조회시 여러 사원 한번에 조회(dept,grade,title LAZY조회로 N+1 발행하므로 query문으로 해결
     @Query("SELECT e FROM Employee e JOIN FETCH e.dept JOIN FETCH e.grade LEFT JOIN FETCH e.title WHERE e.empId IN :empIds AND e.deleteAt IS NULL")
     List<Employee> findByEmpIdsWithDeptAndGrade(@Param("empIds") List<Long> empIds);
 
@@ -205,7 +208,7 @@ AND e.empResignDate >= :fromDate
            """)
     List<Employee> findAllByWorkGroupIdFetchJoin(@Param("workGroupId") Long workGroupId);
 
-    /* 특정 근무ㅜ 그룹 소속 사원중 지정된 ID 목록에 해당하는 사원 조회*/
+    /* 특정 근무 그룹 소속 사원중 지정된 ID 목록에 해당하는 사원 조회*/
     @Query("""
            SELECT e FROM Employee e
            LEFT JOIN FETCH e.dept

@@ -1,6 +1,8 @@
 package com.peoplecore.pay.domain;
 
 import com.peoplecore.company.domain.Company;
+import com.peoplecore.exception.CustomException;
+import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.enums.LegalCalcType;
 import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
@@ -9,6 +11,11 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
+import java.util.List;
+
+import static com.peoplecore.pay.enums.PayItemType.DEDUCTION;
+import static com.peoplecore.pay.enums.PayItemType.PAYMENT;
 
 @Entity
 @AllArgsConstructor
@@ -41,7 +48,10 @@ public class PayItems {
     private Integer sortOrder;
 
     @Builder.Default
-    private Boolean isActive = true;
+    private Boolean isActive = true;    //사용, 미사용
+
+    @Builder.Default
+    private Boolean isDeleted = false; //삭제 -> 화면에서 안보여줌
 
 //    항목분류
     @Enumerated(EnumType.STRING)
@@ -63,8 +73,15 @@ public class PayItems {
     @Builder.Default
     private Integer taxExemptLimit = 0;
 
+//    시스템 자동생성항목 - 정산전용 (삭제/수정 불가)
+    @Builder.Default
+    private Boolean isSystem = false;
+
 
     public void update(String payItemName, Boolean isFixed, Boolean isTaxable, Integer taxExemptLimit, PayItemCategory payItemCategory){
+        if(Boolean.TRUE.equals(this.isSystem)){
+            throw new CustomException(ErrorCode.SYSTEM_PAY_ITEM_NOT_EDITABLE);
+        }
         this.payItemName = payItemName;
         this.isFixed = isFixed;
         this.isTaxable = isTaxable;
@@ -77,4 +94,22 @@ public class PayItems {
         this.isActive = !this.isActive;
     }
 
+    public void softDelete(){
+        if(Boolean.TRUE.equals(this.isSystem)){
+            throw new CustomException(ErrorCode.SYSTEM_PAY_ITEM_NOT_DELETABLE);
+        }
+        this.isDeleted = true;
+        this.isActive = false;
+    }
+
+    public static List<PayItems> initDefault(Company company) {
+        return List.of(
+                PayItems.builder().company(company).payItemName("건강보험정산추가징수").payItemType(DEDUCTION).isSystem(true).build(),
+                PayItems.builder().company(company).payItemName("건강보험정산환급").payItemType(PAYMENT).isSystem(true).build(),
+                PayItems.builder().company(company).payItemName("장기요양정산추가징수").payItemType(DEDUCTION).isSystem(true).build(),
+                PayItems.builder().company(company).payItemName("장기요양정산환급").payItemType(PAYMENT).isSystem(true).build(),
+                PayItems.builder().company(company).payItemName("고용보험정산추가징수").payItemType(DEDUCTION).isSystem(true).build(),
+                PayItems.builder().company(company).payItemName("고용보험정산환급").payItemType(PAYMENT).isSystem(true).build()
+        );
+    }
 }

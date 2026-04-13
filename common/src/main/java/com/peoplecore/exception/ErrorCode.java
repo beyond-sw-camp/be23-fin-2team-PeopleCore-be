@@ -66,6 +66,23 @@ public enum ErrorCode {
     EMP_ACCOUNT_NOT_FOUND(404, "사원 계좌 정보를 찾을 수 없습니다."),
     RETIREMENT_ACCOUNT_NOT_FOUND(404, "퇴직연금 계좌 정보를 찾을 수 없습니다."),
 
+//    사원 퇴직연금 계좌
+    RETIREMENT_SETTINGS_NOT_FOUND(404, "회사 퇴직연금 설정 정보를 찾을 수 없습니다."),
+    RETIREMENT_TYPE_NOT_CHANGEABLE(400, "회사 퇴직연금 설정이 DB_DC가 아니므로 변경할 수 없습니다."),
+    INVALID_RETIREMENT_TYPE(400, "유효하지 않은 퇴직연금 유형입니다. DB 또는 DC만 선택 가능합니다."),
+
+    // ── 정산보험료 ──
+    INSURANCE_SETTLEMENT_NOT_FOUND(404, "정산보험료 데이터가 존재하지 않습니다."),
+    INSURANCE_PAY_ITEM_NOT_FOUND(404, "보험 공제항목(국민연금/건강보험/장기요양/고용보험)이 등록되지 않았습니다."),
+    INSURANCE_SETTLEMENT_ALREADY_APPLIED(400, "이미 급여대장에 반영된 정산 건입니다."),
+
+    PAYROLL_NOT_FOUND(400, "급여산정 데이터가 존재하지 않습니다."),
+    PAYROLL_STATUS_INVALID(409, "확정된 급여의 보험료는 재산정 불가합니다."),
+
+    // PayItems isSystem 보호
+    SYSTEM_PAY_ITEM_NOT_EDITABLE(400, "시스템 급여항목은 수정할 수 없습니다"),
+    SYSTEM_PAY_ITEM_NOT_DELETABLE(400, "시스템 급여항목은 삭제할 수 없습니다"),
+
     // 캘린더
     CALENDAR_NOT_FOUND(404, "캘린더를 찾을 수 없습니다."),
     CALENDAR_NAME_DUPLICATE(409, "이미 같은 이름의 캘린더가 존재합니다."),

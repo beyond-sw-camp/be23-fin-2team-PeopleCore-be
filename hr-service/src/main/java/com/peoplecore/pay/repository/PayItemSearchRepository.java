@@ -23,14 +23,15 @@ public class PayItemSearchRepository {
         this.queryFactory = queryFactory;
     }
 
-    public List<PayItems> search(UUID companyId, PayItemType type, String name, boolean isLegal){
+    public List<PayItems> search(UUID companyId, PayItemType type, String name, Boolean isLegal){
         return queryFactory
                 .selectFrom(payItems)
                 .where(
                         companyIdEq(companyId),     //필수조건
                         typeEq(type),               //필수조건
                         nameContains(name),         //동적조건 (null일수있음)
-                        isLegalEq(isLegal)          //동적조건
+                        isLegalEq(isLegal),          //동적조건
+                        payItems.isDeleted.eq(false)
                 )
                 .orderBy(payItems.sortOrder.asc())
                 .fetch();

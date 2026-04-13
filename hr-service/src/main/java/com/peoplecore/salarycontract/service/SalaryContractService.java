@@ -108,7 +108,7 @@ public class SalaryContractService {
             }
         }
 
-//        현재 폼 설정 스냅샹(증적)
+//        현재 폼 설정 스냅샷(증적)
         List<FormFieldSetupResponse> currentForm = formFieldSetupService.getSetup(companyId, FormType.SALARY_CONTRACT);
         String formSnapshot = toJson(currentForm); //문자열로 반환 && 저장
         long formVersion = System.currentTimeMillis(); //타임스템프 시간기반 고유 값 생성(폼 생성 시점 식별)

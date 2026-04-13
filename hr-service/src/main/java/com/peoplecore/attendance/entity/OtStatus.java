@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 public enum OtStatus {
     PENDING,    // 승인 대기

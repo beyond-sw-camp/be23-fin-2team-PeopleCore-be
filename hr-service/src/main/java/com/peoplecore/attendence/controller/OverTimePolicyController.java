@@ -1,8 +1,8 @@
-package com.peoplecore.attendence.controller;
+package com.peoplecore.attendance.controller;
 
-import com.peoplecore.attendence.dto.OverTimePolicyReqDto;
-import com.peoplecore.attendence.dto.OverTimePolicyResDto;
-import com.peoplecore.attendence.service.OverTimePolicyService;
+import com.peoplecore.attendance.dto.OverTimePolicyReqDto;
+import com.peoplecore.attendance.dto.OverTimePolicyResDto;
+import com.peoplecore.attendance.service.OverTimePolicyService;
 import com.peoplecore.auth.RoleRequired;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;

@@ -2,7 +2,7 @@ package com.peoplecore.company.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.peoplecore.attendence.service.WorkGroupService;
+import com.peoplecore.attendance.service.WorkGroupService;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.domain.CompanyStatus;
 import com.peoplecore.company.domain.ContractType;

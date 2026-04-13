@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.entity.BaseTimeEntity;
