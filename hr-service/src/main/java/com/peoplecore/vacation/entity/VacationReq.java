@@ -47,7 +47,7 @@ public class VacationReq extends BaseTimeEntity {
     @JoinColumn(name = "emp_id", nullable = false)
     private Employee employee;
 
-    /** 사원 이름 */
+    /* 신청 시점 사원 이름 (스냅샷) */
     @Column(nullable = false)
     private String reqEmpName;
 
@@ -94,18 +94,36 @@ public class VacationReq extends BaseTimeEntity {
     @Column(name = "req_emp_title", nullable = false, length = 50)
     private String reqEmpTitle;
 
+    /*
+     * collaboration-service 결재 문서 ID.
+     */
+    @Column(name = "approval_doc_id")
+    private Long approvalDocId;
+
     /** 낙관적 락 - 승인/반려 동시 처리 방지 */
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
 
-    /** 승인/반려 처리 캡슐화 */
-    public void process(VacationStatus newStatus, Employee manager, String rejectReason) {
+    /*
+     * Kafka Consumer 에서 호출 — 결재 결과 캐시 업데이트.
+     */
+    public void applyApprovalResult(VacationStatus newStatus, Employee manager, String rejectReason) {
+        if (newStatus == null) {
+            throw new IllegalArgumentException("newStatus null 불가 - vacReqId=" + this.vacReqId);
+        }
         this.vacReqStatus = newStatus;
         this.manager = manager;
         this.vacReqUpdateAt = LocalDateTime.now();
         if (newStatus == VacationStatus.REJECTED) {
             this.vacReqRejectReason = rejectReason;
         }
+    }
+
+    /*
+     * 상신 직후 반환된 문서 ID 저장.
+     */
+    public void bindApprovalDoc(Long docId) {
+        this.approvalDocId = docId;
     }
 }

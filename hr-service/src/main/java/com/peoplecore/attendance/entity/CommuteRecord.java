@@ -14,19 +14,19 @@ import java.util.UUID;
 
 /**
  * 출퇴근 기록 (월별 파티션).
- *
+ * <p>
  * PK 전략 (Hibernate 6 + MySQL 파티션 호환):
- *  - JPA 매핑은 단일 PK(comRecId) 만 사용. @IdClass 를 쓰면 Hibernate 가 auto_increment 컬럼을
- *    PK 뒤로 밀어 MySQL "auto_increment 는 key 첫 컬럼" 제약과 충돌함.
- *  - DB 레벨에서는 CommuteRecordPartitionInitializer 가 ALTER 로 (com_rec_id, work_date)
- *    복합 PK 로 재정의 → 이 상태에서 RANGE COLUMNS(work_date) 파티션 적용.
- *
+ * - JPA 매핑은 단일 PK(comRecId) 만 사용. @IdClass 를 쓰면 Hibernate 가 auto_increment 컬럼을
+ * PK 뒤로 밀어 MySQL "auto_increment 는 key 첫 컬럼" 제약과 충돌함.
+ * - DB 레벨에서는 CommuteRecordPartitionInitializer 가 ALTER 로 (com_rec_id, work_date)
+ * 복합 PK 로 재정의 → 이 상태에서 RANGE COLUMNS(work_date) 파티션 적용.
+ * <p>
  * 비즈니스 유일성:
- *  - UNIQUE(company_id, emp_id, work_date) — 중복 체크인/race condition 차단.
- *
+ * - UNIQUE(company_id, emp_id, work_date) — 중복 체크인/race condition 차단.
+ * <p>
  * 인덱스:
- *  - (company_id, emp_id, work_date) 회사 범위 사원별 조회
- *  - (emp_id, work_date) 개인 근태 조회
+ * - (company_id, emp_id, work_date) 회사 범위 사원별 조회
+ * - (emp_id, work_date) 개인 근태 조회
  */
 @Entity
 @Getter
@@ -48,7 +48,7 @@ import java.util.UUID;
 )
 public class CommuteRecord extends BaseTimeEntity {
 
-    /**
+    /*
      * 출퇴근 기록 ID - JPA 매핑상 단일 PK (AUTO_INCREMENT).
      * DB 레벨에서는 Initializer 가 (com_rec_id, work_date) 복합 PK 로 재정의 (파티셔닝용).
      */
@@ -57,7 +57,7 @@ public class CommuteRecord extends BaseTimeEntity {
     @Column(name = "com_rec_id", nullable = false)
     private Long comRecId;
 
-    /**
+    /*
      * 근무 일자 (월별 파티션 키).
      * insert 시 반드시 세팅 → 서비스 레이어에서 LocalDate.now() 주입.
      * JPA 매핑상 @Id 아님 — DB 레벨 복합 PK 의 2번째 컬럼은 Initializer 담당.
@@ -128,6 +128,48 @@ public class CommuteRecord extends BaseTimeEntity {
     @Column(name = "holiday_reason", length = 20)
     private HolidayReason holidayReason;
 
+    /*
+     * 실 근무 분 (휴게시간 차감 완료).
+     *  - 체크아웃 시점에 서비스가 계산해서 저장
+     *  - 계산: (checkOut - checkIn) - (WorkGroup 휴게구간 ∩ 재사구간)
+     */
+    @Column(name = "actual_work_minutes", nullable = false)
+    @Builder.Default
+    private Long actualWorkMinutes = 0L;
+
+    /*
+     * 중복 제거 총 초과분 (관리자 지표용, 수당 계산엔 불필요).
+     *  - 계산: max(0, checkOut - groupEndTime)
+     */
+    @Column(name = "overtime_minutes", nullable = false)
+    @Builder.Default
+    private Long overtimeMinutes = 0L;
+
+    /*
+     * 인정된 연장수당 대상 분.
+     *  - APPROVED OvertimeRequest 기간과 정시 초과 구간의 교집합
+     */
+    @Column(name = "recognized_extended_minutes", nullable = false)
+    @Builder.Default
+    private Long recognizedExtendedMinutes = 0L;
+
+    /*
+     * 인정된 야간수당 대상 분.
+     *  - 인정 구간과 야간(22:00~06:00) 교집합
+     *  - 연장분과 중복 카운트 가능 (근기법 가산수당 중복)
+     */
+    @Column(name = "recognized_night_minutes", nullable = false)
+    @Builder.Default
+    private Long recognizedNightMinutes = 0L;
+
+    /*
+     * 인정된 휴일수당 대상 분.
+     *  - 휴일(groupWorkDay 비트 OFF or HolidayLookup 매칭) 근무 구간
+     */
+    @Column(name = "recognized_holiday_minutes", nullable = false)
+    @Builder.Default
+    private Long recognizedHolidayMinutes = 0L;
+
     /* 출근 체크인 처리 - 시각/IP/offsite/상태/휴일이유 일괄 세팅 */
     public void checkIn(LocalDateTime at, String ip, boolean offsite,
                         CheckInStatus status, HolidayReason reason) {
@@ -144,10 +186,10 @@ public class CommuteRecord extends BaseTimeEntity {
 
 
     /* 퇴근 체크아웃 처리 - 시각/IP/상태 일괄 세팅
-    * 가드 : 체크인 없이 호출 붉가
-    * 이미 체크아웃된 레코드에 재호출 불가
-    *
-    * 지정 넘겨서 퇴근 찍을 시 허용 */
+     * 가드 : 체크인 없이 호출 붉가
+     * 이미 체크아웃된 레코드에 재호출 불가
+     *
+     * 지정 넘겨서 퇴근 찍을 시 허용 */
     public void checkOut(LocalDateTime at, String ip, CheckOutStatus status) {
         if (this.comRecCheckIn == null) {
             throw new IllegalStateException(
@@ -166,4 +208,31 @@ public class CommuteRecord extends BaseTimeEntity {
         this.checkOutIp = ip;
         this.checkOutStatus = status;
     }
+
+
+    /* 급여연동 분 컬럼 일괄 갱신 */
+    public void applyPayrollMinutes(Long actualWork, Long overtime, Long extended, Long night, Long holiday) {
+        if (actualWork == null || overtime == null
+                || extended == null || night == null || holiday == null) {
+            throw new IllegalArgumentException("급여 연동 분 컬럼은 null 허용 안 됨");
+        }
+        long maxTyped = Math.max(extended, Math.max(night, holiday));
+        if (overtime < maxTyped) {
+            throw new IllegalArgumentException(
+                    "overtimeMinutes < max(recognized_*) 불변식 위반: overtime=" + overtime
+                            + ", ext=" + extended + ", night=" + night + ", holiday=" + holiday);
+        }
+        if (actualWork < overtime) {
+            throw new IllegalArgumentException(
+                    "actualWorkMinutes < overtimeMinutes 불변식 위반: actual=" + actualWork
+                            + ", overtime=" + overtime);
+        }
+        this.actualWorkMinutes = actualWork;
+        this.overtimeMinutes = overtime;
+        this.recognizedExtendedMinutes = extended;
+        this.recognizedNightMinutes = night;
+        this.recognizedHolidayMinutes = holiday;
+    }
+
 }
+

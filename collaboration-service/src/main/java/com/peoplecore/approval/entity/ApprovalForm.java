@@ -49,7 +49,7 @@ public class ApprovalForm extends BaseTimeEntity {
     @Column(nullable = false, columnDefinition = "MEDIUMTEXT")
     private String formHtml;
 
-    /**
+    /*
      * 기본 제공 수정 여부 - default == true == 개발자 제공 양식
      */
     @Column(nullable = false)
@@ -129,9 +129,19 @@ public class ApprovalForm extends BaseTimeEntity {
     @Column(nullable = false)
     private Integer formSortOrder;
 
-    public void updateForm(String formName, String formHtml, FormWritePermission  formWritePermission,
+    /*
+     * 수정/비활성화 보호 양식 여부.
+     * 보호 대상 초기 seed 예: 급여지급결의서, 추가근로신청서, 사직서
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isProtected = false;
+
+    /* 양식 내용 수정 */
+    public void updateForm(String formName, String formHtml, FormWritePermission formWritePermission,
                            Boolean formIsPublic, Integer formRetentionYear,
                            Boolean formMobileYn, Boolean formPreApprovalYn) {
+        assertNotProtected("양식 내용");
         this.formName = formName;
         this.formHtml = formHtml;
         this.formWritePermission = formWritePermission;
@@ -150,9 +160,22 @@ public class ApprovalForm extends BaseTimeEntity {
         this.isActive = false;
     }
 
+    /* 일괄 설정 수정 */
     public void updateBatchSettings(Boolean formIsPublic, Boolean formMobileYn, Boolean formPreApprovalYn) {
+        assertNotProtected("일괄 설정");
         if (formIsPublic != null) this.formIsPublic = formIsPublic;
         if (formMobileYn != null) this.formMobileYn = formMobileYn;
         if (formPreApprovalYn != null) this.formPreApprovalYn = formPreApprovalYn;
+    }
+
+    /*
+     * 시스템 양식 보호 가드 — 공통 예외 메시지.
+     */
+    private void assertNotProtected(String action) {
+        if (Boolean.TRUE.equals(this.isProtected)) {
+            throw new IllegalStateException(
+                    "보호된 양식은 " + action + " 할 수 없습니다 - formId=" + this.formId
+                            + ", formCode=" + this.formCode);
+        }
     }
 }
