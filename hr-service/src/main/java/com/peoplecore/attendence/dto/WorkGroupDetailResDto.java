@@ -1,6 +1,6 @@
-package com.peoplecore.attendence.dto;
+package com.peoplecore.attendance.dto;
 
-import com.peoplecore.attendence.entity.WorkGroup;
+import com.peoplecore.attendance.entity.WorkGroup;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

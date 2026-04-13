@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.dto;
+package com.peoplecore.attendance.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

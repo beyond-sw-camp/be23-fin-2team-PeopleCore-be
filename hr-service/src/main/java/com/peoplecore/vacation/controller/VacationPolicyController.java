@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.UUID;
 
 @RestController
-@RequestMapping("/attendence")
+@RequestMapping("/attendance")
 @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
 public class VacationPolicyController {
 
@@ -34,7 +34,7 @@ public class VacationPolicyController {
         return ResponseEntity.ok(vacationPolicyService.getVacationGrantBasis(companyId));
     }
 
-    /*연자 지급 기준 변경 */
+    /*연차 지급 기준 변경 */
     @PutMapping("/leave-grant-basis")
     public ResponseEntity<VacationGrantBasisDto> updateVacationGrantBasis(@RequestHeader("X-User-Company") UUID companyId, @RequestBody @Valid VacationGrantBasisDto dto) {
         return ResponseEntity.ok(vacationPolicyService.updateVacationGrantBasis(companyId, dto));

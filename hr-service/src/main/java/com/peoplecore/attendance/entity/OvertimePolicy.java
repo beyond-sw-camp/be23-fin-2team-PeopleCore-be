@@ -1,6 +1,6 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
-import com.peoplecore.attendence.dto.OverTimePolicyReqDto;
+import com.peoplecore.attendance.dto.OverTimePolicyReqDto;
 import com.peoplecore.company.domain.Company;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;

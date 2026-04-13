@@ -1,7 +1,7 @@
 package com.peoplecore.employee.service;
 
-import com.peoplecore.attendence.entity.WorkGroup;
-import com.peoplecore.attendence.repository.WorkGroupRepository;
+import com.peoplecore.attendance.entity.WorkGroup;
+import com.peoplecore.attendance.repository.WorkGroupRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.department.domain.Department;

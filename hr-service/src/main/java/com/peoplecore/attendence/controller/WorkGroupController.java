@@ -1,8 +1,8 @@
-package com.peoplecore.attendence.controller;
+package com.peoplecore.attendance.controller;
 
 import com.netflix.discovery.converters.Auto;
-import com.peoplecore.attendence.dto.*;
-import com.peoplecore.attendence.service.WorkGroupService;
+import com.peoplecore.attendance.dto.*;
+import com.peoplecore.attendance.service.WorkGroupService;
 import com.peoplecore.auth.RoleRequired;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;

@@ -1,11 +1,12 @@
 package com.peoplecore.employee.domain;
 
-import com.peoplecore.attendence.entity.WorkGroup;
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.pay.domain.InsuranceJobTypes;
+import com.peoplecore.pay.enums.RetirementType;
 import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
 import lombok.*;
@@ -137,6 +138,7 @@ public class Employee extends BaseTimeEntity {
     private String empAddressDetail;
 
 
+    //하드코딩 커스텀 고려
     @Column(name = "emp_mailbox_size")
     @Builder.Default
     private String empMailboxSize= "5GB";
@@ -212,6 +214,10 @@ public class Employee extends BaseTimeEntity {
         return this.deleteAt !=null;
     }
 
+//    퇴직연금 유형 변경
+    public void updateRetirementType(RetirementType retirementType) {
+        this.retirementType = retirementType;
+}
 //    재직상태 변경
     public void updateStatus(EmpStatus status){
         this.empStatus = status;

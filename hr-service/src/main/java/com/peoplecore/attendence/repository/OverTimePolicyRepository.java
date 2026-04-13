@@ -1,6 +1,6 @@
-package com.peoplecore.attendence.repository;
+package com.peoplecore.attendance.repository;
 
-import com.peoplecore.attendence.entity.OvertimePolicy;
+import com.peoplecore.attendance.entity.OvertimePolicy;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
