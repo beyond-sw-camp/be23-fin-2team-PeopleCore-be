@@ -26,6 +26,10 @@ out/
 !.idea/gradle.xml
 !.idea/.gitignore
 
+payroll-ledger-code.md
+severance-estimate-code.md
+severance-ledger-code.md
+
 # ============================
 # Spring Boot
 # ============================

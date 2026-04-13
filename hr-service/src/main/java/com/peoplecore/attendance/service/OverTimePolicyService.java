@@ -47,8 +47,6 @@ public class OverTimePolicyService {
             return OvertimePolicy.builder()
                     .company(company)
                     .otMinUnit(dto.getOtMinUnit())
-                    .otPolicyBefore(dto.getOtPolicyBefore())
-                    .otPolicyAfter(dto.getOtPolicyAfter())
                     .otPolicyWeeklyMaxHour(dto.getOtPolicyWeeklyMaxHour())
                     .otPolicyWarningHour(dto.getOtPolicyWarningHour())
                     .otExceedAction(dto.getOtExceedAction())

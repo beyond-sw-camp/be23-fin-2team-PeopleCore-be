@@ -22,9 +22,6 @@ public class OverTimePolicyResDto {
     /*사전 결재 필요 여부 */
     private Boolean otPolicyBefore;
 
-    /*사후 결재 필요 여부 */
-    private Boolean otPolicyAfter;
-
     /* 주간 최대 근무 시간*/
     private Integer otPolicyWeeklyMaxHour;
 
@@ -38,8 +35,6 @@ public class OverTimePolicyResDto {
         return OverTimePolicyResDto.builder()
                 .otPolicyId(entity.getOtPolicyId())
                 .otMinUnit(entity.getOtMinUnit())
-                .otPolicyBefore(entity.getOtPolicyBefore())
-                .otPolicyAfter(entity.getOtPolicyAfter())
                 .otPolicyWeeklyMaxHour(entity.getOtPolicyWeeklyMaxHour())
                 .otPolicyWarningHour(entity.getOtPolicyWarningHour())
                 .otExceedAction(entity.getOtExceedAction())
@@ -50,7 +45,6 @@ public class OverTimePolicyResDto {
         return OverTimePolicyResDto.builder()
                 .otMinUnit(OtMinUnit.FIFTEEN)
                 .otPolicyBefore(true)
-                .otPolicyAfter(false)
                 .otPolicyWeeklyMaxHour(52)
                 .otPolicyWarningHour(45)
                 .otExceedAction(OtExceedAction.NOTIFY)

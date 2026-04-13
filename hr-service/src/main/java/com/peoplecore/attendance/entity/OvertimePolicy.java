@@ -32,16 +32,6 @@ public class OvertimePolicy {
     @Column(nullable = false)
     private OtMinUnit otMinUnit = OtMinUnit.FIFTEEN;
 
-    /*사전 결재 필요 여부 */
-    @Builder.Default
-    @Column(nullable = false)
-    private Boolean otPolicyBefore = true;
-
-    /*사후 결재 필요 여부 */
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean otPolicyAfter = false;
-
     /* 주간 최대 근무 시간*/
     @Column(nullable = false)
     @Builder.Default
@@ -66,8 +56,6 @@ public class OvertimePolicy {
 
     public void update(OverTimePolicyReqDto dto, Long empId, String empName) {
         this.otMinUnit = dto.getOtMinUnit();
-        this.otPolicyBefore = dto.getOtPolicyBefore();
-        this.otPolicyAfter = dto.getOtPolicyAfter();
         this.otPolicyWeeklyMaxHour = dto.getOtPolicyWeeklyMaxHour();
         this.otPolicyWarningHour = dto.getOtPolicyWarningHour();
         this.otExceedAction = dto.getOtExceedAction();
