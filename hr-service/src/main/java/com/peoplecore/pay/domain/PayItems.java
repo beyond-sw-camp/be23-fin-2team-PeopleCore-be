@@ -102,14 +102,4 @@ public class PayItems {
         this.isActive = false;
     }
 
-    public static List<PayItems> initDefault(Company company) {
-        return List.of(
-                PayItems.builder().company(company).payItemName("건강보험정산추가징수").payItemType(DEDUCTION).isSystem(true).build(),
-                PayItems.builder().company(company).payItemName("건강보험정산환급").payItemType(PAYMENT).isSystem(true).build(),
-                PayItems.builder().company(company).payItemName("장기요양정산추가징수").payItemType(DEDUCTION).isSystem(true).build(),
-                PayItems.builder().company(company).payItemName("장기요양정산환급").payItemType(PAYMENT).isSystem(true).build(),
-                PayItems.builder().company(company).payItemName("고용보험정산추가징수").payItemType(DEDUCTION).isSystem(true).build(),
-                PayItems.builder().company(company).payItemName("고용보험정산환급").payItemType(PAYMENT).isSystem(true).build()
-        );
-    }
 }
