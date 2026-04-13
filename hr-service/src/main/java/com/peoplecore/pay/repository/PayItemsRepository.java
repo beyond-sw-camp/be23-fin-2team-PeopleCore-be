@@ -18,6 +18,9 @@ public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
 
     List<PayItems>findByCompany_CompanyIdAndPayItemTypeAndIsActiveTrueOrderBySortOrderAsc(UUID companyId, PayItemType payItemType);
 
+    List<PayItems> findByCompany_CompanyIdAndPayItemTypeAndPayItemNameIn(UUID companyId, PayItemType payItemType, List<String> payItemNames);
 
-//    관리화면 - 삭제되지 않은 항목만 조회(삭제X, 비활성O,X)
+
+//    정산전용 PayItems 조회 (isSystem=true인 항목만)
+    List<PayItems> findByCompany_CompanyIdAndPayItemNameInAndIsSystemTrue(UUID companyId, List<String> payItemNames);
 }

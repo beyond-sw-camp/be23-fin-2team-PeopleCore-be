@@ -20,6 +20,7 @@
 | 8 | GET | `/pay/admin/payroll/{payrollRunId}/employees/{empId}/approved-overtime` | 이달 승인된 전자결재 |
 | 9 | POST | `/pay/admin/payroll/{payrollRunId}/employees/{empId}/apply-overtime/{otId}` | 전자결재 건별 적용 |
 | 10 | POST | `/pay/admin/payroll/{payrollRunId}/employees/{empId}/apply-all-overtime` | 전자결재 전체 적용 |
+| 10-1 | POST | `/pay/admin/payroll/calc-deductions` | 지급합계 기반 공제항목 실시간 계산 |
 | 11 | GET | `/pay/admin/leave-allowance/year-end` | 연말 미사용 연차 산정 목록 |
 | 12 | GET | `/pay/admin/leave-allowance/resigned` | 퇴직자 연차 정산 목록 |
 | 13 | POST | `/pay/admin/leave-allowance/calculate` | 수당 산정 (대상자 선택) |
@@ -42,8 +43,8 @@
 | 8 | Service | `PayrollService.java` | pay/service/ | 신규 |
 | 9 | Controller | `PayrollController.java` | pay/controller/ | 신규 |
 | 10 | ErrorCode | `ErrorCode.java` | common/ | 추가 |
-| 11 | Entity | `OvertimeRequest.java` | attendence/entity/ | otType 필드 추가 |
-| 12 | Enum | `OtType.java` | attendence/entity/ | 신규 (OVERTIME, NIGHT, HOLIDAY) |
+| 11 | Entity | `OvertimeRequest.java` | attendence/entity/ | otTypeFlag(Integer, 비트마스크) 필드 추가 |
+| 12 | Class | `OtTypeFlag.java` | attendence/entity/ | 신규 (비트마스크 상수 + 헬퍼) |
 | 13 | Repository | `OvertimeRequestRepository.java` | attendence/repository/ | 신규 |
 | 14 | Entity | `PayrollDetails.java` | pay/domain/ | otId 필드 추가 |
 | 15 | DTO | `WageInfoResDto.java` | pay/dtos/ | 신규 |
@@ -1070,13 +1071,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class WageInfoResDto {
 
-    private Long hourlyWage;                    // 시급 (통상임금 ÷ 209)
-    private Long dailyWage;                     // 일당 (시급 × 8)
-
-    // 유형별 가산율 (회사 설정값, PayItems.premiumRate)
-    private BigDecimal overtimePremiumRate;      // 연장근로 가산율 (기본 0.5)
-    private BigDecimal nightPremiumRate;         // 야간근로 가산율 (기본 0.5)
-    private BigDecimal holidayPremiumRate;       // 휴일근로 가산율 (기본 0.5)
+    private Long hourlyWage;            // 시급 (통상임금 ÷ 209)
+    private Long dailyWage;             // 일당 (시급 × 8)
+    private Long overtimeHourlyWage;    // 가산 시급 (시급 × 1.5, 단일 유형 기준)
 }
 ```
 
@@ -1137,7 +1134,6 @@ public class ApprovedOvertimeResDto {
 ```java
 // ── 의존성 추가 (생성자에 추가) ──
 @Autowired private OvertimeRequestRepository overtimeRequestRepository;
-@Autowired private SalaryContractRepository salaryContractRepository;
 
 
 // ══════════════════════════════════════════════════
@@ -1160,7 +1156,7 @@ public WageInfoResDto getWageInfo(UUID companyId, Long payrollRunId, Long empId)
     long hourlyWage = Math.round((double) monthlySalary / 209);
     // 일당 = 시급 × 8
     long dailyWage = hourlyWage * 8;
-    // 할증시급 = 시급 × 1.5
+    // 가산 시급 = 시급 × 1.5 (단일 유형 기준)
     long overtimeHourlyWage = Math.round(hourlyWage * 1.5);
 
     return WageInfoResDto.builder()
@@ -1190,7 +1186,7 @@ public ApprovedOvertimeResDto getApprovedOvertime(UUID companyId, Long payrollRu
     // 이미 적용된 otId 목록
     List<Long> appliedOtIds = overtimeRequestRepository.findAppliedOtIds(payrollRunId, empId);
 
-    // 시급 계산 (할증용)
+    // 시급 조회
     WageInfoResDto wageInfo = getWageInfo(companyId, payrollRunId, empId);
 
     long totalHours = 0L;
@@ -1203,15 +1199,19 @@ public ApprovedOvertimeResDto getApprovedOvertime(UUID companyId, Long payrollRu
         LocalDateTime end = ot.getOtActEnd() != null ? ot.getOtActEnd() : ot.getOtPlanEnd();
 
         long hours = java.time.Duration.between(start, end).toHours();
-        long amount = hours * wageInfo.getOvertimeHourlyWage();
+
+        // 비트마스크 기반 가산율 계산 (고정 0.5 × 유형 수)
+        double premiumRate = calcPremiumRate(ot.getOtTypeFlag());
+        long amount = Math.round(wageInfo.getHourlyWage() * premiumRate * hours);
 
         totalHours += hours;
         totalAmount += amount;
 
         items.add(ApprovedOvertimeResDto.OvertimeItemDto.builder()
                 .otId(ot.getOtId())
-                .otType(ot.getOtType())
-                .otTypeName(resolveOtTypeName(ot.getOtType()))
+                .otTypeFlag(ot.getOtTypeFlag())
+                .otTypeLabel(OtTypeFlag.toLabel(ot.getOtTypeFlag()))
+                .premiumRate(BigDecimal.valueOf(premiumRate))
                 .otDate(ot.getOtDate().toLocalDate())
                 .hours(hours)
                 .amount(amount)
@@ -1248,21 +1248,25 @@ public void applyOvertime(UUID companyId, Long payrollRunId, Long empId, Long ot
     OvertimeRequest ot = overtimeRequestRepository.findById(otId)
             .orElseThrow(() -> new CustomException(ErrorCode.OVERTIME_NOT_FOUND));
 
-    // 시간/금액 계산
+    // 시급 + 가산율 계산
     WageInfoResDto wageInfo = getWageInfo(companyId, payrollRunId, empId);
     LocalDateTime start = ot.getOtActStart() != null ? ot.getOtActStart() : ot.getOtPlanStart();
     LocalDateTime end = ot.getOtActEnd() != null ? ot.getOtActEnd() : ot.getOtPlanEnd();
     long hours = java.time.Duration.between(start, end).toHours();
-    long amount = hours * wageInfo.getOvertimeHourlyWage();
 
-    // otType → LegalCalcType 매핑으로 법정수당 항목 찾기
-    LegalCalcType legalType = mapToLegalCalcType(ot.getOtType());
+    double premiumRate = calcPremiumRate(ot.getOtTypeFlag());
+    long amount = Math.round(wageInfo.getHourlyWage() * premiumRate * hours);
+
+    // 비트마스크에서 대표 법정수당 항목 결정 (우선순위: 휴일 > 야간 > 연장)
+    LegalCalcType legalType = resolvePrimaryLegalType(ot.getOtTypeFlag());
     PayItems payItem = payItemsRepository
             .findByCompany_CompanyIdAndIsLegalTrueAndLegalCalcType(companyId, legalType)
             .orElseThrow(() -> new CustomException(ErrorCode.PAY_ITEM_NOT_FOUND));
 
     Employee emp = employeeRepository.findById(empId)
             .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+    String label = OtTypeFlag.toLabel(ot.getOtTypeFlag());
 
     // PayrollDetails 생성
     PayrollDetails detail = PayrollDetails.builder()
@@ -1273,7 +1277,7 @@ public void applyOvertime(UUID companyId, Long payrollRunId, Long empId, Long ot
             .payItemType(PayItemType.PAYMENT)
             .amount(amount)
             .otId(otId)
-            .memo(resolveOtTypeName(ot.getOtType()) + " " + hours + "시간")
+            .memo(label + " " + hours + "시간 (" + premiumRate + "배)")
             .company(run.getCompany())
             .build();
     payrollDetailsRepository.save(detail);
@@ -1316,7 +1320,6 @@ private void recalculateTotals(PayrollRuns run) {
             .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
             .mapToLong(PayrollDetails::getAmount).sum();
 
-    // 사원 수 = 중복 제거된 empId 수
     int empCount = (int) allDetails.stream()
             .map(d -> d.getEmployee().getEmpId())
             .distinct().count();
@@ -1325,23 +1328,24 @@ private void recalculateTotals(PayrollRuns run) {
 }
 
 
-// ── 헬퍼: OtType → 한글명 ──
-private String resolveOtTypeName(OtType otType) {
-    return switch (otType) {
-        case OVERTIME -> "연장근로";
-        case NIGHT    -> "야간근로";
-        case HOLIDAY  -> "휴일근로";
-    };
+// ── 헬퍼: 비트마스크 → 총 가산율 계산 (고정 0.5 × 유형 수) ──
+// 예: otTypeFlag=3(연장+야간) → 1.0 + 0.5 + 0.5 = 2.0배
+//     otTypeFlag=7(연장+야간+휴일) → 1.0 + 0.5 + 0.5 + 0.5 = 2.5배
+private double calcPremiumRate(int otTypeFlag) {
+    double rate = 1.0;
+    if (OtTypeFlag.hasOvertime(otTypeFlag)) rate += 0.5;
+    if (OtTypeFlag.hasNight(otTypeFlag))    rate += 0.5;
+    if (OtTypeFlag.hasHoliday(otTypeFlag))  rate += 0.5;
+    return rate;
 }
 
 
-// ── 헬퍼: OtType → LegalCalcType ──
-private LegalCalcType mapToLegalCalcType(OtType otType) {
-    return switch (otType) {
-        case OVERTIME -> LegalCalcType.OVERTIME;
-        case NIGHT    -> LegalCalcType.NIGHT;
-        case HOLIDAY  -> LegalCalcType.HOLIDAY;
-    };
+// ── 헬퍼: 비트마스크 → 대표 법정수당 항목 결정 (PayItems 조회용) ──
+// 복수 유형 중첩 시 우선순위: 휴일 > 야간 > 연장
+private LegalCalcType resolvePrimaryLegalType(int otTypeFlag) {
+    if (OtTypeFlag.hasHoliday(otTypeFlag))  return LegalCalcType.HOLIDAY;
+    if (OtTypeFlag.hasNight(otTypeFlag))    return LegalCalcType.NIGHT;
+    return LegalCalcType.OVERTIME;
 }
 ```
 
@@ -1416,6 +1420,144 @@ public ResponseEntity<Void> applyAllOvertime(
         @PathVariable Long empId) {
     payrollService.applyAllOvertime(companyId, payrollRunId, empId);
     return ResponseEntity.ok().build();
+}
+
+/**
+ * 지급합계 기반 공제항목 실시간 계산
+ * POST /pay/admin/payroll/calc-deductions
+ *
+ * 프론트에서 지급항목 입력할 때마다 호출 → 공제항목 금액을 실시간 갱신
+ */
+@PostMapping("/calc-deductions")
+public ResponseEntity<CalcDeductionResDto> calcDeductions(
+        @RequestHeader("X-User-Company") UUID companyId,
+        @RequestBody CalcDeductionReqDto request) {
+    return ResponseEntity.ok(
+            payrollService.calcDeductions(companyId, request));
+}
+```
+
+---
+
+## 15-1. 공제 실시간 계산 DTO + Service
+
+### CalcDeductionReqDto (신규)
+**파일 위치**: `pay/dtos/CalcDeductionReqDto.java`
+
+```java
+package com.peoplecore.pay.dtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
+@Getter
+@NoArgsConstructor
+@AllArgsConstructor
+public class CalcDeductionReqDto {
+
+    private Long totalPay;          // 지급합계 (지급항목 전체 합)
+    private Long empId;             // 사원 ID (부양가족수, 세율옵션 조회용)
+}
+```
+
+### CalcDeductionResDto (신규)
+**파일 위치**: `pay/dtos/CalcDeductionResDto.java`
+
+```java
+package com.peoplecore.pay.dtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class CalcDeductionResDto {
+
+    // 4대보험 (근로자 부담분)
+    private Long nationalPension;       // 국민연금
+    private Long healthInsurance;       // 건강보험
+    private Long longTermCare;          // 장기요양보험
+    private Long employmentInsurance;   // 고용보험
+
+    // 세금
+    private Long incomeTax;             // 근로소득세
+    private Long localIncomeTax;        // 근로지방소득세
+
+    // 합계
+    private Long totalDeduction;        // 공제합계
+    private Long netPay;                // 공제 후 지급액
+}
+```
+
+### PayrollService에 추가
+**파일 위치**: `pay/service/PayrollService.java`
+
+```java
+// ── 의존성 추가 ──
+@Autowired private InsuranceRatesRepository insuranceRatesRepository;
+@Autowired private TaxWithholdingService taxWithholdingService;
+
+
+// ══════════════════════════════════════════════════
+//  지급합계 기반 공제항목 실시간 계산
+//  프론트에서 지급항목 수정할 때마다 호출
+// ══════════════════════════════════════════════════
+public CalcDeductionResDto calcDeductions(UUID companyId, CalcDeductionReqDto request) {
+
+    long totalPay = request.getTotalPay();
+
+    // 해당 연도 보험요율 조회
+    int currentYear = LocalDate.now().getYear();
+    InsuranceRates rates = insuranceRatesRepository
+            .findByCompany_CompanyIdAndYear(companyId, currentYear)
+            .orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_RATES_NOT_FOUND));
+
+    // ── 4대보험 (근로자 부담분) ──
+
+    // 국민연금 = 보수월액 × 요율 ÷ 2 (상/하한 적용)
+    long pensionBase = totalPay;
+    if (pensionBase > rates.getPensionUpperLimit()) pensionBase = rates.getPensionUpperLimit();
+    if (pensionBase < rates.getPensionLowerLimit()) pensionBase = rates.getPensionLowerLimit();
+    long pension = Math.round(pensionBase * rates.getNationalPension().doubleValue() / 2);
+
+    // 건강보험 = 보수월액 × 요율 ÷ 2
+    long health = Math.round(totalPay * rates.getHealthInsurance().doubleValue() / 2);
+
+    // 장기요양보험 = 건강보험(전액) × 요율 ÷ 2
+    long healthTotal = Math.round(totalPay * rates.getHealthInsurance().doubleValue());
+    long ltc = Math.round(healthTotal * rates.getLongTermCare().doubleValue() / 2);
+
+    // 고용보험 = 보수월액 × 근로자요율
+    long employment = Math.round(totalPay * rates.getEmploymentInsurance().doubleValue());
+
+    // ── 소득세 ──
+    Employee emp = employeeRepository.findById(request.getEmpId())
+            .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+    TaxWithholdingResDto tax = taxWithholdingService.getTax(
+            currentYear, totalPay, emp.getDependentsCount());
+
+    long incomeTax = tax.getIncomeTax();
+    long localIncomeTax = tax.getLocalIncomeTax();
+
+    // ── 합계 ──
+    long totalDeduction = pension + health + ltc + employment + incomeTax + localIncomeTax;
+
+    return CalcDeductionResDto.builder()
+            .nationalPension(pension)
+            .healthInsurance(health)
+            .longTermCare(ltc)
+            .employmentInsurance(employment)
+            .incomeTax(incomeTax)
+            .localIncomeTax(localIncomeTax)
+            .totalDeduction(totalDeduction)
+            .netPay(totalPay - totalDeduction)
+            .build();
 }
 ```
 
@@ -2216,6 +2358,11 @@ Response:
 }
 ```
 
+> 프론트에서 표시 예시:
+> - 시급: 14,354원
+> - 일당 (8h): 114,832원
+> - 연장/야간/휴일(1.5배): 21,531원/h
+
 ### 이달 승인된 전자결재 조회
 ```
 GET /pay/admin/payroll/1/employees/1/approved-overtime
@@ -2226,8 +2373,9 @@ Response:
   "items": [
     {
       "otId": 10,
-      "otType": "OVERTIME",
-      "otTypeName": "연장근로",
+      "otTypeFlag": 1,
+      "otTypeLabel": "연장",
+      "premiumRate": 1.5,
       "otDate": "2026-04-05",
       "hours": 2,
       "amount": 43062,
@@ -2235,5 +2383,632 @@ Response:
     },
     {
       "otId": 11,
-      "otType": "NIGHT",
-      "otTypeName": "�
+      "otTypeFlag": 3,
+      "otTypeLabel": "연장+야간",
+      "premiumRate": 2.0,
+      "otDate": "2026-04-18",
+      "hours": 2,
+      "amount": 57416,
+      "applied": false
+    },
+    {
+      "otId": 12,
+      "otTypeFlag": 4,
+      "otTypeLabel": "휴일",
+      "premiumRate": 1.5,
+      "otDate": "2026-04-20",
+      "hours": 4,
+      "amount": 86124,
+      "applied": false
+    }
+  ],
+  "totalHours": 8,
+  "totalAmount": 186602
+}
+```
+
+### 건별 적용
+```
+POST /pay/admin/payroll/1/employees/1/apply-overtime/10
+Headers: X-User-Company: {companyId}
+```
+
+### 전체 적용
+```
+POST /pay/admin/payroll/1/employees/1/apply-all-overtime
+Headers: X-User-Company: {companyId}
+```
+
+### 연말 미사용 연차 목록
+```
+GET /pay/admin/leave-allowance/year-end?year=2026
+Headers: X-User-Company: {companyId}
+
+Response:
+{
+  "totalTarget": 5,
+  "calculatedCount": 0,
+  "appliedCount": 0,
+  "totalAllowanceAmount": 2116746,
+  "employees": [
+    {
+      "allowanceId": 1,
+      "empId": 1,
+      "empName": "김민수",
+      "deptName": "개발팀",
+      "gradeName": "대리",
+      "hireDate": "2022-03-02",
+      "resignDate": null,
+      "normalMonthlySalary": 3500000,
+      "dailyWage": 133971,
+      "totalLeaveDays": 15,
+      "usedLeaveDays": 10,
+      "unusedLeaveDays": 5,
+      "allowanceAmount": 669855,
+      "status": "CALCULATED",
+      "appliedMonth": null
+    }
+  ]
+}
+```
+
+### 수당 산정
+```
+POST /pay/admin/leave-allowance/calculate?year=2026&type=YEAR_END
+Headers: X-User-Company: {companyId}
+Body: [1, 2, 3, 4, 5]
+```
+
+### 미사용일수 수정
+```
+PUT /pay/admin/leave-allowance/1/unused-days?days=4.0
+Headers: X-User-Company: {companyId}
+```
+
+### 급여대장 반영
+```
+POST /pay/admin/leave-allowance/apply-to-payroll
+Headers: X-User-Company: {companyId}
+Body: [1, 2, 3]
+```
+
+---
+
+## 참고: 수당 계산 공식
+
+### 비트마스크 가산율 계산
+| otTypeFlag | 유형 | 가산율 계산 | 기본값 |
+|------------|------|------------|--------|
+| 1 | 연장 | 1.0 + 연장가산율 | 1.5배 |
+| 2 | 야간 | 1.0 + 야간가산율 | 1.5배 |
+| 3 | 연장+야간 | 1.0 + 연장가산율 + 야간가산율 | 2.0배 |
+| 4 | 휴일 | 1.0 + 휴일가산율 | 1.5배 |
+| 5 | 휴일+연장 | 1.0 + 휴일가산율 + 연장가산율 | 2.0배 |
+| 6 | 휴일+야간 | 1.0 + 휴일가산율 + 야간가산율 | 2.0배 |
+| 7 | 휴일+연장+야간 | 1.0 + 전부 | 2.5배 |
+
+> 가산율 고정 0.5 (50%), 유형이 중첩될수록 0.5씩 추가
+
+### 연차수당 산정 공식
+| 항목 | 공식 |
+|------|------|
+| 통상임금(월) | 연봉 ÷ 12 |
+| 일 통상임금 | 통상임금(월) ÷ 209 × 8 |
+| 연차수당 | 미사용 연차일수 × 일 통상임금 |
+| 시급 | 통상임금(월) ÷ 209 |
+
+### 반영 시점
+- **연말 미사용 연차**: 해당연도 12월 급여대장에 반영
+- **퇴직자 연차 정산**: 퇴직월 급여대장에 반영
+
+### 조건
+- 급여정책 → 법정수당산정에 연차수당(`LegalCalcType.LEAVE`)이 활성화(PayItems에 등록)되어야 사용 가능
+- 급여대장이 `CALCULATING` 상태일 때만 반영 가능
+
+
+---
+
+## 27. 입사일 기준 연차수당 산정 — 추가 코드
+
+> 회사의 연차부여 정책(`VacationPolicy.policyBaseType`)에 따라 화면 분기:
+> - `FISCAL` (회계년도 기준) → 기존 연말 미사용 연차 산정 (§23 getYearEndList 그대로)
+> - `HIRE` (입사일 기준) → 매월 입사 기념일 도래 사원 대상 산정 (이 섹션에서 추가)
+> - `RESIGNED` (퇴직자) → 기존 퇴직자 정산 (정책 무관, 그대로)
+
+### API 추가
+
+| # | Method | URL | 설명 |
+|---|--------|-----|------|
+| 16 | GET | `/pay/admin/leave-allowance/policy-type` | 회사 연차정책 타입 조회 (FISCAL/HIRE) |
+| 17 | GET | `/pay/admin/leave-allowance/anniversary?yearMonth=2026-04` | 입사일 기준 연차수당 대상자 목록 |
+
+### 파일 체크리스트 추가
+
+| # | 구분 | 파일명 | 위치 | 작업 |
+|---|------|--------|------|------|
+| 27 | Enum | `AllowanceType.java` | pay/enums/ | 수정 (FISCAL_YEAR, ANNIVERSARY 추가) |
+| 28 | Repository | `VacationPolicyRepository.java` | vacation/repository/ | 신규 |
+| 29 | DTO | `LeavePolicyTypeResDto.java` | pay/dtos/ | 신규 |
+| 30 | Service | `LeaveAllowanceService.java` | pay/service/ | anniversary 메서드 추가 |
+| 31 | Controller | `LeaveAllowanceController.java` | pay/controller/ | 엔드포인트 추가 |
+
+---
+
+### 27-1. AllowanceType enum 수정
+**파일 위치**: `pay/enums/AllowanceType.java`
+
+> 기존 YEAR_END → FISCAL_YEAR 리네임, ANNIVERSARY 추가
+
+```java
+package com.peoplecore.pay.enums;
+
+public enum AllowanceType {
+    FISCAL_YEAR,    // 회계년도 기준 (구 YEAR_END)
+    ANNIVERSARY,    // 입사일 기준
+    RESIGNED        // 퇴직자 정산
+}
+```
+
+> ⚠️ 기존 코드에서 `AllowanceType.YEAR_END`를 쓰는 곳은 모두 `AllowanceType.FISCAL_YEAR`로 변경
+> - §23 LeaveAllowanceService: `getYearEndList`, `createPendingRecords`, `resolveTargetMonth`
+> - §24 LeaveAllowanceController: `/year-end` 엔드포인트 (URL은 유지, enum만 변경)
+
+---
+
+### 27-2. VacationPolicyRepository (신규)
+**파일 위치**: `vacation/repository/VacationPolicyRepository.java`
+
+```java
+package com.peoplecore.vacation.repository;
+
+import com.peoplecore.vacation.entity.VacationPolicy;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+public interface VacationPolicyRepository extends JpaRepository<VacationPolicy, Long> {
+
+    Optional<VacationPolicy> findByCompanyId(UUID companyId);
+}
+```
+
+---
+
+### 27-3. LeavePolicyTypeResDto (신규)
+**파일 위치**: `pay/dtos/LeavePolicyTypeResDto.java`
+
+> 프론트엔드가 탭을 분기하기 위한 정책 타입 응답
+
+```java
+package com.peoplecore.pay.dtos;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class LeavePolicyTypeResDto {
+
+    private String policyBaseType;          // "FISCAL" 또는 "HIRE"
+    private String fiscalYearStart;         // 회계년도 시작일 (mm-dd), HIRE면 null
+}
+```
+
+---
+
+### 27-4. LeaveAllowanceService — 추가 메서드
+**파일 위치**: `pay/service/LeaveAllowanceService.java`
+
+> 기존 §23 Service에 아래 의존성 + 메서드 추가
+
+#### 추가 의존성
+
+```java
+    @Autowired private VacationPolicyRepository vacationPolicyRepository;
+```
+
+#### 정책 타입 조회
+
+```java
+    // ══════════════════════════════════════════════════
+    //  회사 연차정책 타입 조회
+    // ══════════════════════════════════════════════════
+    public LeavePolicyTypeResDto getPolicyType(UUID companyId) {
+        VacationPolicy policy = vacationPolicyRepository.findByCompanyId(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_POLICY_NOT_FOUND));
+
+        return LeavePolicyTypeResDto.builder()
+                .policyBaseType(policy.getPolicyBaseType().name())
+                .fiscalYearStart(policy.getPolicyFiscalYearStart())
+                .build();
+    }
+```
+
+#### 입사일 기준 연차수당 목록
+
+```java
+    // ══════════════════════════════════════════════════
+    //  입사일 기준 연차수당 대상자 목록
+    // ══════════════════════════════════════════════════
+
+    /**
+     * yearMonth(예: "2026-04") 에 입사 기념일이 도래하는 사원들의
+     * 연차수당 산정 현황을 반환한다.
+     *
+     * 입사 기념일 = empHireDate의 월(月)이 조회 월과 같은 사원
+     * 예: 입사일 2022-04-15 → 매년 4월이 기념일
+     */
+    public LeaveAllowanceSummaryResDto getAnniversaryList(UUID companyId, String yearMonth) {
+
+        int targetYear = Integer.parseInt(yearMonth.substring(0, 4));
+        int targetMonth = Integer.parseInt(yearMonth.substring(5, 7));
+
+        List<LeaveAllowance> list = leaveAllowanceRepository
+                .findAllByCompanyAndYearAndType(companyId, targetYear, AllowanceType.ANNIVERSARY);
+
+        // 해당 월 기념일 대상자만 필터
+        List<LeaveAllowance> filtered = list.stream()
+                .filter(la -> la.getEmployee().getEmpHireDate() != null
+                        && la.getEmployee().getEmpHireDate().getMonthValue() == targetMonth)
+                .toList();
+
+        // 최초 조회 시 PENDING 레코드 자동 생성
+        if (filtered.isEmpty()) {
+            createAnniversaryPendingRecords(companyId, targetYear, targetMonth);
+            list = leaveAllowanceRepository
+                    .findAllByCompanyAndYearAndType(companyId, targetYear, AllowanceType.ANNIVERSARY);
+            filtered = list.stream()
+                    .filter(la -> la.getEmployee().getEmpHireDate() != null
+                            && la.getEmployee().getEmpHireDate().getMonthValue() == targetMonth)
+                    .toList();
+        }
+
+        List<LeaveAllowanceResDto> employees = filtered.stream()
+                .map(LeaveAllowanceResDto::fromEntity)
+                .toList();
+
+        long calculatedCount = filtered.stream()
+                .filter(la -> la.getStatus() == AllowanceStatus.CALCULATED
+                           || la.getStatus() == AllowanceStatus.APPLIED)
+                .count();
+
+        long appliedCount = filtered.stream()
+                .filter(la -> la.getStatus() == AllowanceStatus.APPLIED)
+                .count();
+
+        long totalAmount = filtered.stream()
+                .filter(la -> la.getAllowanceAmount() != null)
+                .mapToLong(LeaveAllowance::getAllowanceAmount)
+                .sum();
+
+        return LeaveAllowanceSummaryResDto.builder()
+                .totalTarget(filtered.size())
+                .calculatedCount((int) calculatedCount)
+                .appliedCount((int) appliedCount)
+                .totalAllowanceAmount(totalAmount)
+                .employees(employees)
+                .build();
+    }
+```
+
+#### 입사일 기준 PENDING 레코드 생성
+
+```java
+    // ── 헬퍼: 입사일 기준 대상 사원 PENDING 레코드 생성 ──
+    @Transactional
+    private void createAnniversaryPendingRecords(UUID companyId, int year, int month) {
+
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
+
+        // 재직/휴직 사원 중 입사 월이 대상 월인 사원
+        List<Employee> targets = employeeRepository
+                .findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(
+                        companyId, List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE))
+                .stream()
+                .filter(e -> e.getEmpHireDate() != null
+                        && e.getEmpHireDate().getMonthValue() == month)
+                .toList();
+
+        for (Employee emp : targets) {
+            if (leaveAllowanceRepository.existsByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(
+                    companyId, emp.getEmpId(), year, AllowanceType.ANNIVERSARY)) {
+                continue;
+            }
+
+            LeaveAllowance allowance = LeaveAllowance.builder()
+                    .company(company)
+                    .employee(emp)
+                    .year(year)
+                    .allowanceType(AllowanceType.ANNIVERSARY)
+                    .status(AllowanceStatus.PENDING)
+                    .build();
+            leaveAllowanceRepository.save(allowance);
+        }
+    }
+```
+
+#### calculate 메서드 — ANNIVERSARY 분기 추가
+
+> 기존 §23의 `calculate` 메서드에서 VacationRemainder 조회 부분을 분기 처리
+
+```java
+    /**
+     * 수당 산정 (기존 calculate 메서드 수정)
+     *
+     * ANNIVERSARY 타입일 때:
+     * - 미사용일수 = VacationRemainder에서 직전 연차기간(입사기념일~입사기념일) 잔여
+     * - vacRemYear 기준: 현재 기준연도 - 1 (만료되는 기간의 잔여)
+     */
+    @Transactional
+    public void calculate(UUID companyId, Integer year, AllowanceType type, List<Long> empIds) {
+
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
+
+        payItemsRepository.findByCompany_CompanyIdAndIsLegalTrueAndLegalCalcType(companyId, LegalCalcType.LEAVE)
+                .orElseThrow(() -> new CustomException(ErrorCode.LEAVE_ALLOWANCE_NOT_ENABLED));
+
+        for (Long empId : empIds) {
+            Employee emp = employeeRepository.findById(empId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+            if (leaveAllowanceRepository.existsByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(
+                    companyId, empId, year, type)) {
+                continue;
+            }
+
+            // 통상임금(월) = 연봉 ÷ 12
+            SalaryContract contract = salaryContractRepository
+                    .findTopByEmployee_EmpIdAndStatusOrderByContractYearDesc(empId, ContractStatus.SIGNED)
+                    .orElse(null);
+            if (contract == null) continue;
+
+            long monthlySalary = contract.getTotalAmount()
+                    .divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR)
+                    .longValue();
+
+            // 일 통상임금 = 통상임금(월) ÷ 209 × 8
+            long dailyWage = Math.round((double) monthlySalary / 209 * 8);
+
+            // ── 연차 잔여 조회 (정책별 분기) ──
+            BigDecimal totalDays;
+            BigDecimal usedDays;
+            BigDecimal unusedDays;
+
+            if (type == AllowanceType.ANNIVERSARY) {
+                // 입사일 기준: 직전 연차기간의 잔여일수
+                // 입사기념일 도래 시 만료되는 기간 = year - 1년차
+                int lookupYear = year - 1;
+                VacationRemainder remainder = vacationRemainderRepository
+                        .findByCompanyIdAndEmpIdAndVacRemYear(companyId, empId, lookupYear)
+                        .orElse(null);
+
+                totalDays = remainder != null ? remainder.getVacRemTotalDay() : BigDecimal.ZERO;
+                usedDays = remainder != null ? remainder.getVacRemUsedDay() : BigDecimal.ZERO;
+                unusedDays = totalDays.subtract(usedDays);
+            } else {
+                // 회계년도 기준 / 퇴직자: 해당 연도 잔여
+                VacationRemainder remainder = vacationRemainderRepository
+                        .findByCompanyIdAndEmpIdAndVacRemYear(companyId, empId, year)
+                        .orElse(null);
+
+                totalDays = remainder != null ? remainder.getVacRemTotalDay() : BigDecimal.ZERO;
+                usedDays = remainder != null ? remainder.getVacRemUsedDay() : BigDecimal.ZERO;
+                unusedDays = totalDays.subtract(usedDays);
+            }
+
+            if (unusedDays.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            long amount = unusedDays.multiply(BigDecimal.valueOf(dailyWage)).longValue();
+
+            LeaveAllowance allowance = LeaveAllowance.builder()
+                    .company(company)
+                    .employee(emp)
+                    .year(year)
+                    .allowanceType(type)
+                    .resignDate(type == AllowanceType.RESIGNED ? emp.getEmpResign() : null)
+                    .status(AllowanceStatus.PENDING)
+                    .build();
+
+            allowance.calculate(monthlySalary, dailyWage, totalDays, usedDays, unusedDays, amount);
+            leaveAllowanceRepository.save(allowance);
+        }
+    }
+```
+
+#### resolveTargetMonth — ANNIVERSARY 분기 추가
+
+```java
+    // ── 헬퍼: 반영 대상 월 결정 (수정) ──
+    private String resolveTargetMonth(LeaveAllowance la) {
+        if (la.getAllowanceType() == AllowanceType.FISCAL_YEAR) {
+            // 회계년도 → 해당연도 12월
+            return la.getYear() + "-12";
+
+        } else if (la.getAllowanceType() == AllowanceType.ANNIVERSARY) {
+            // 입사일 기준 → 입사 기념일 월
+            if (la.getEmployee().getEmpHireDate() == null) {
+                throw new CustomException(ErrorCode.EMPLOYEE_HIRE_DATE_NOT_FOUND);
+            }
+            int month = la.getEmployee().getEmpHireDate().getMonthValue();
+            return la.getYear() + "-" + String.format("%02d", month);
+
+        } else {
+            // 퇴직자 → 퇴직월
+            if (la.getResignDate() == null) {
+                throw new CustomException(ErrorCode.LEAVE_ALLOWANCE_NO_RESIGN_DATE);
+            }
+            return la.getResignDate().getYear() + "-"
+                    + String.format("%02d", la.getResignDate().getMonthValue());
+        }
+    }
+```
+
+---
+
+### 27-5. LeaveAllowanceController — 엔드포인트 추가
+**파일 위치**: `pay/controller/LeaveAllowanceController.java`
+
+> 기존 §24 Controller에 아래 엔드포인트 추가
+
+```java
+    /**
+     * 회사 연차정책 타입 조회 (프론트엔드 탭 분기용)
+     * GET /pay/admin/leave-allowance/policy-type
+     *
+     * 응답: { "policyBaseType": "FISCAL", "fiscalYearStart": "01-01" }
+     *       or { "policyBaseType": "HIRE", "fiscalYearStart": null }
+     */
+    @GetMapping("/policy-type")
+    public ResponseEntity<LeavePolicyTypeResDto> getPolicyType(
+            @RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(
+                leaveAllowanceService.getPolicyType(companyId));
+    }
+
+
+    /**
+     * [탭1-B] 입사일 기준 연차수당 대상자 목록
+     * GET /pay/admin/leave-allowance/anniversary?yearMonth=2026-04
+     *
+     * → 해당 월에 입사 기념일이 도래하는 사원 목록
+     */
+    @GetMapping("/anniversary")
+    public ResponseEntity<LeaveAllowanceSummaryResDto> getAnniversaryList(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam String yearMonth) {
+        return ResponseEntity.ok(
+                leaveAllowanceService.getAnniversaryList(companyId, yearMonth));
+    }
+```
+
+> 기존 `/year-end` 엔드포인트의 내부 호출도 YEAR_END → FISCAL_YEAR 변경:
+```java
+    // 기존 코드 수정
+    @GetMapping("/year-end")
+    public ResponseEntity<LeaveAllowanceSummaryResDto> getYearEndList(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam Integer year) {
+        return ResponseEntity.ok(
+                leaveAllowanceService.getFiscalYearList(companyId, year));  // 메서드명 변경
+    }
+```
+
+> 기존 Service의 `getYearEndList` → `getFiscalYearList`로 리네임:
+```java
+    public LeaveAllowanceSummaryResDto getFiscalYearList(UUID companyId, Integer year) {
+        return buildSummary(companyId, year, AllowanceType.FISCAL_YEAR);
+    }
+```
+
+---
+
+### 27-6. ErrorCode 추가
+
+```java
+// ── 연차수당 (입사일 기준) ──
+VACATION_POLICY_NOT_FOUND(HttpStatus.NOT_FOUND, "연차부여 정책이 설정되지 않았습니다."),
+EMPLOYEE_HIRE_DATE_NOT_FOUND(HttpStatus.BAD_REQUEST, "사원의 입사일 정보가 없습니다."),
+```
+
+---
+
+### 프론트엔드 탭 분기 가이드
+
+```
+[페이지 로드]
+1. GET /leave-allowance/policy-type
+   └─ policyBaseType 확인
+
+2. 탭 렌더링
+   ├─ FISCAL → [탭1] 회계년도 미사용 연차 (GET /year-end?year=2026)
+   ├─ HIRE   → [탭1] 입사일 기준 연차     (GET /anniversary?yearMonth=2026-04)
+   └─ 공통   → [탭2] 퇴직자 연차 정산     (GET /resigned?year=2026)
+```
+
+### 회계년도 vs 입사일 기준 비교
+
+| 구분 | 회계년도 (FISCAL) | 입사일 (HIRE) |
+|------|-------------------|---------------|
+| AllowanceType | `FISCAL_YEAR` | `ANNIVERSARY` |
+| 조회 파라미터 | `year` (연도) | `yearMonth` (연월) |
+| 대상자 | 전 사원 일괄 | 해당 월 입사 기념일 도래 사원 |
+| 연차기간 | 1/1 ~ 12/31 | 입사일 ~ 입사일 다음해 |
+| VacationRemainder 조회 | `vacRemYear = year` | `vacRemYear = year - 1` |
+| 급여반영 대상월 | 해당연도 12월 | 입사 기념일 월 |
+| 산정 시기 | 연말 1회 | 매월 (해당 월 대상자) |
+
+nth=2026-04
+     *
+     * → 해당 월에 입사 기념일이 도래하는 사원 목록
+     */
+    @GetMapping("/anniversary")
+    public ResponseEntity<LeaveAllowanceSummaryResDto> getAnniversaryList(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam String yearMonth) {
+        return ResponseEntity.ok(
+                leaveAllowanceService.getAnniversaryList(companyId, yearMonth));
+    }
+```
+
+> 기존 `/year-end` 엔드포인트의 내부 호출도 YEAR_END → FISCAL_YEAR 변경:
+```java
+    // 기존 코드 수정
+    @GetMapping("/year-end")
+    public ResponseEntity<LeaveAllowanceSummaryResDto> getYearEndList(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam Integer year) {
+        return ResponseEntity.ok(
+                leaveAllowanceService.getFiscalYearList(companyId, year));  // 메서드명 변경
+    }
+```
+
+> 기존 Service의 `getYearEndList` → `getFiscalYearList`로 리네임:
+```java
+    public LeaveAllowanceSummaryResDto getFiscalYearList(UUID companyId, Integer year) {
+        return buildSummary(companyId, year, AllowanceType.FISCAL_YEAR);
+    }
+```
+
+---
+
+### 27-6. ErrorCode 추가
+
+```java
+// ── 연차수당 (입사일 기준) ──
+VACATION_POLICY_NOT_FOUND(HttpStatus.NOT_FOUND, "연차부여 정책이 설정되지 않았습니다."),
+EMPLOYEE_HIRE_DATE_NOT_FOUND(HttpStatus.BAD_REQUEST, "사원의 입사일 정보가 없습니다."),
+```
+
+---
+
+### 프론트엔드 탭 분기 가이드
+
+```
+[페이지 로드]
+1. GET /leave-allowance/policy-type
+   └─ policyBaseType 확인
+
+2. 탭 렌더링
+   ├─ FISCAL → [탭1] 회계년도 미사용 연차 (GET /year-end?year=2026)
+   ├─ HIRE   → [탭1] 입사일 기준 연차     (GET /anniversary?yearMonth=2026-04)
+   └─ 공통   → [탭2] 퇴직자 연차 정산     (GET /resigned?year=2026)
+```
+
+### 회계년도 vs 입사일 기준 비교
+
+| 구분 | 회계년도 (FISCAL) | 입사일 (HIRE) |
+|------|-------------------|---------------|
+| AllowanceType | `FISCAL_YEAR` | `ANNIVERSARY` |
+| 조회 파라미터 | `year` (연도) | `yearMonth` (연월) |
+| 대상자 | 전 사원 일괄 | 해당 월 입사 기념일 도래 사원 |
+| 연차기간 | 1/1 ~ 12/31 | 입사일 ~ 입사일 다음해 |
+| VacationRemainder 조회 | `vacRemYear = year` | `vacRemYear = year - 1` |
+| 급여반영 대상월 | 해당연도 12월 | 입사 기념일 월 |
+| 산정 시기 | 연말 1회 | 매월 (해당 월 대상자) |

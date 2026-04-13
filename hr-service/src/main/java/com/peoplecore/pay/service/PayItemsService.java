@@ -99,7 +99,7 @@ public class PayItemsService {
 
 //        항목 사용여부 검증 -> 사용시 소프트딜리트
         for(PayItems item : items){
-            if (salaryContractDetailRepository.existsByPayItemId(item.getPayItemId()) || payrollDetailsRepository.existsByPayItemId(item.getPayItemId())){
+            if (salaryContractDetailRepository.existsByPayItemId(item.getPayItemId()) || payrollDetailsRepository.existsByPayItems_PayItemId(item.getPayItemId())){
                 item.softDelete();
             }
         }

@@ -1,6 +1,8 @@
 package com.peoplecore.pay.domain;
 
 import com.peoplecore.company.domain.Company;
+import com.peoplecore.employee.domain.Employee;
+import com.peoplecore.pay.enums.PayItemType;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -19,19 +21,20 @@ public class PayrollDetails {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long payrollDetailsId;
 
-    @Column(nullable = false)
-    private Long payrollRunId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payroll_run_id", nullable = false)
+    private PayrollRuns payrollRuns;
 
-    @Column(nullable = false)
-    private Long empId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "emp_id", nullable = false)
+    private Employee employee;
 
-    @Column(nullable = false)
-    private Long payItemId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pay_item_id", nullable = false)
+    private PayItems payItems;
 
 //    항목별금액
-    @Column(nullable = false)
     private Long amount;
-
     private String memo;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -40,5 +43,9 @@ public class PayrollDetails {
 
     @Column(length = 100)   //스냅샷용 항목명
     private String payItemName;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private PayItemType payItemType;    // 스냅샷용
 
 }
