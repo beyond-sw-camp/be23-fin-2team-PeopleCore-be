@@ -278,7 +278,6 @@ public class SalaryContractService {
 
 
 //    5. 계약서 삭제(soft delete)
-
 //    재직상태=퇴직 인 사원의 계약서만 삭제가능
     public void delete(UUID companyId, Long contractId){
 

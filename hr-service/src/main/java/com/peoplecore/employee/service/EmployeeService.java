@@ -1,5 +1,7 @@
 package com.peoplecore.employee.service;
 
+import com.peoplecore.attendence.entity.WorkGroup;
+import com.peoplecore.attendence.repository.WorkGroupRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.department.domain.Department;
@@ -13,6 +15,7 @@ import com.peoplecore.employee.dto.EmployeeUpdateRequestDto;
 import com.peoplecore.employee.repository.EmployeeFileRepository;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.BusinessException;
+import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.grade.repository.GradeRepository;
@@ -30,8 +33,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -46,10 +51,12 @@ public class EmployeeService {
     private final PasswordEncoder passwordEncoder;
     private final MinioService minioService;
     private final EmployeeFileRepository employeeFileRepository;
+    private final WorkGroupRepository workGroupRepository;
 
+    public static final String DEFAULT_CODE = "DEFAULT";
 
     @Autowired
-    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository) {
+    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository) {
         this.employeeRepository = employeeRepository;
         this.companyRepository = companyRepository;
         this.departmentRepository = departmentRepository;
@@ -58,7 +65,7 @@ public class EmployeeService {
         this.passwordEncoder = passwordEncoder;
         this.minioService = minioService;
         this.employeeFileRepository = employeeFileRepository;
-
+        this.workGroupRepository = workGroupRepository;
     }
 
     private static final String EMAIL_DOMAIN = "@peoplecore.com";
@@ -114,6 +121,13 @@ public class EmployeeService {
 
         String rawPassword = resolvePassword(requestDto);
 
+
+        /* 회사 기본 근무 그룹 조회 */
+        WorkGroup workGroup = workGroupRepository
+                .findByWorkGroupIdAndGroupDeleteAtIsNull(requestDto.getWorkGroupId())
+                .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+
+
 //        사원 저장
         Employee employee = Employee.builder()
                 .company(company)
@@ -137,6 +151,8 @@ public class EmployeeService {
                 .empPassword(passwordEncoder.encode(rawPassword))
                 .empMailboxSize(requestDto.getEmpMailboxSize()) //사용. 5gb고정 하드 코딩// 커스��� 고려
                 .empStatus(EmpStatus.ACTIVE)
+                .workGroup(workGroup)
+                .workGroupAssignedAt(LocalDateTime.now())
                 .build();
 
         Employee savedEmployee = employeeRepository.save(employee);
@@ -165,14 +181,18 @@ public class EmployeeService {
     }
 
     //        사번생성: ex. YYYYMM-0001
-    private String generateEmpNum(UUID commpanyId, LocalDate hireDate) {
+    private String generateEmpNum(UUID companyId, LocalDate hireDate) {
         String prefix = hireDate.format(DateTimeFormatter.ofPattern("yyyyMM"));
-        long count = employeeRepository.countByCompanyIdAndEmpNumStartingWith(commpanyId, prefix);
-        String empNum = String.format("%s-%04d", prefix, count + 1);
-        if (employeeRepository.existsByCompany_CompanyIdAndEmpNum(commpanyId, empNum)) {
-            empNum = String.format("%s-%04d", prefix, count + 2);
+//        비관적 락, 가장 큰 사번 조회
+        Optional<String>maxEmpNum = employeeRepository.findMaxEmpNumWithLock(companyId,prefix);
+//        다음 순번 계산
+        long nextSeq;
+        if(maxEmpNum.isPresent()){
+            nextSeq = Long.parseLong(maxEmpNum.get().split("-")[1])+1;
+        }else{
+            nextSeq = 1L;
         }
-        return empNum;
+        return String.format("%s-%04d", prefix, nextSeq);
     }
 
     //    비밀번호 생성 / 분기 처리
@@ -211,16 +231,16 @@ public class EmployeeService {
     }
 
 
-//    4. 사원 상세조회
+    //    4. 사원 상세조회
     @Transactional(readOnly = true)
-    public EmpDetailResponseDto getEmployeeDetail(UUID companyId, Long empId){
+    public EmpDetailResponseDto getEmployeeDetail(UUID companyId, Long empId) {
 
-        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(()-> new EntityNotFoundException("사원을 찾을 수 없습니다"));
+        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
         return EmpDetailResponseDto.from(employee);
 
     }
 
-//    5. 사원 정보 수정
+    //    5. 사원 정보 수정
     public EmpDetailResponseDto updateEmployee(UUID companyId, Long empId, EmployeeUpdateRequestDto requestDto) {
 
         Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId)
@@ -257,9 +277,9 @@ public class EmployeeService {
         return EmpDetailResponseDto.from(employee);
     }
 
-//    6.사원 삭제
-    public void deleteEmployee(UUID companyId, Long empId){
-        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId,companyId).orElseThrow(()->new EntityNotFoundException("사원을 찾을 수 없습니다"));
+    //    6.사원 삭제
+    public void deleteEmployee(UUID companyId, Long empId) {
+        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
         employee.softDelete();
     }
 

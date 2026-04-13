@@ -1,5 +1,6 @@
 package com.peoplecore.employee.domain;
 
+import com.peoplecore.attendence.entity.WorkGroup;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
@@ -96,7 +97,13 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "simple_password")
     private String simplePassword;
 
-    private Long workGroupId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "work_group_id")
+    private WorkGroup workGroup;
+
+    /*근무 그룹 배정 일시*/
+    private LocalDateTime workGroupAssignedAt;
+
 
     @Column(nullable = false)
     @Builder.Default
@@ -211,4 +218,30 @@ public class Employee extends BaseTimeEntity {
     public void updateRetirementType(RetirementType retirementType) {
         this.retirementType = retirementType;
 }
+//    재직상태 변경
+    public void updateStatus(EmpStatus status){
+        this.empStatus = status;
+    }
+
+//    퇴직일 세팅
+    public void updateResignDate(LocalDate resignDate){
+        this.empResignDate = resignDate;
+    }
+//    일괄 사원정보 업데이트(인사발령)
+    public void updateDept(Department department){
+        this.dept = department;
+    }
+    public void updateGrade(Grade grade){
+        this.grade =grade;
+    }
+    public void updateTitle(Title title){
+        this.title = title;
+    }
+
+    /* 근무 그룹 배정 / 변경 */
+    public void assignWorkGroup(WorkGroup workGroup) {
+        this.workGroup = workGroup;
+        this.workGroupAssignedAt = (workGroup != null) ? LocalDateTime.now() : null;
+    }
+
 }

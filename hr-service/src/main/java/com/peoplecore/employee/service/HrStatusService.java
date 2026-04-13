@@ -32,7 +32,7 @@ public class HrStatusService {
         int hiredThisMonth = employeeRepository.countHiredThisMonth(companyId, now.getYear(), now.getMonthValue());
         int resignedThisMonth = employeeRepository.countResignedThisMonth(companyId, now.getYear(), now.getMonthValue());
 //        계약만료 30일 이내의 인원
-        int contractExpiring = employeeRepository.findExpiringContracts(companyId, now, now.plusDays(30)).size();
+        int contractExpiring = employeeRepository.countExpiringContracts(companyId, now, now.plusDays(30));
 
         return WorkforceSummaryDto.builder()
                 .total(total)
