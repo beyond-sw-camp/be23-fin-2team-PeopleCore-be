@@ -26,11 +26,6 @@ public interface WorkGroupRepository extends JpaRepository<WorkGroup, Long> {
     Optional<WorkGroup> findByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(UUID companyID, String groupCode);
 
     /* 사원 생성 시 드롭다운 용 근무 그룹 옵션 */
-    @Query("SELECT new com.peoplecore.attendance.dto.WorkGroupOptionResDto(" +
-            "  w.workGroupId, w.groupName, w.groupCode) " +
-            "FROM WorkGroup w " +
-            "WHERE w.company.companyId = :companyId " +
-            "  AND w.groupDeleteAt IS NULL " +
-            "ORDER BY w.groupName ASC")
-    List<WorkGroupOptionResDto> findOptionsByCompanyId(@Param("companyId") UUID companyId);
+    List<WorkGroup> findByCompany_CompanyIdAndGroupDeleteAtIsNullOrderByGroupNameAsc(UUID companyId);
+
 }

@@ -183,7 +183,15 @@ public class WorkGroupService {
     /* 사원 생성용 근무 그룹 조회 메서드 */
     @Transactional(readOnly = true)
     public List<WorkGroupOptionResDto> getWorkGroupOptions(UUID companyId) {
-        return workGroupRepository.findOptionsByCompanyId(companyId);
+        return workGroupRepository
+                .findByCompany_CompanyIdAndGroupDeleteAtIsNullOrderByGroupNameAsc(companyId)
+                .stream()
+                .map(w -> WorkGroupOptionResDto.builder()
+                        .workGroupId(w.getWorkGroupId())
+                        .workGroupName(w.getGroupName())
+                        .groupCode(w.getGroupCode())
+                        .build())
+                .toList();
     }
 
 }
