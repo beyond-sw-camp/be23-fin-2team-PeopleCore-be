@@ -54,6 +54,7 @@ replay_pid*
 .env.*
 *.secret
 secrets/
+scripts/search/debezium-connector.json
 
 # ============================
 # OS 생성 파일
