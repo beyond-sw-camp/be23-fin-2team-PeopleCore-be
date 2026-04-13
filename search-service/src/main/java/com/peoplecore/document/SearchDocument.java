@@ -5,16 +5,14 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.elasticsearch.annotations.DateFormat;
 import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
-import org.springframework.data.elasticsearch.annotations.Setting;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 
 @Document(indexName = "unified_search")
-@Setting(settingPath = "/elasticsearch/settings.json")
 @Getter
 @Builder
 @NoArgsConstructor
@@ -42,6 +40,6 @@ public class SearchDocument {
     @Field(type = FieldType.Object)
     private Map<String, Object> metadata;
 
-    @Field(type = FieldType.Date)
-    private LocalDateTime createdAt;
+    @Field(type = FieldType.Date, format = DateFormat.date_optional_time)
+    private String createdAt;
 }

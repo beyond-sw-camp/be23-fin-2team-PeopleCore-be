@@ -7,7 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
-@RequestMapping("/search-service/search")
+@RequestMapping("/search")
 @RequiredArgsConstructor
 public class SearchController {
 

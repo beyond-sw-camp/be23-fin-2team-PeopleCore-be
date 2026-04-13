@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.time.LocalDateTime;
 import java.util.Map;
 
 @Getter
@@ -20,6 +19,6 @@ public class SearchResultItem {
     private String title;
     private String content;
     private Map<String, Object> metadata;
-    private LocalDateTime createdAt;
+    private String createdAt;
     private float score;
 }
