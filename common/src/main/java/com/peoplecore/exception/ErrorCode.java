@@ -153,6 +153,10 @@ public enum ErrorCode {
     VACATION_POLICY_FISCAL_START_INVALID(400, "회계연도 시작일 형식이 올바르지 않습니다. (예: 01-01)"),
     VACATION_RULE_NOT_FOUND(404, "연차 발생 규칙이 존재하지 않습니다."),
 
+    OVERTIME_REQUEST_NOT_FOUND(404, "초과근무 신청을 찾을 수 없습니다"),
+    VACATION_REQ_NOT_FOUND(404, "휴가 신청을 찾을 수 없습니다"),
+    OVERTIME_EXCEEDS_WEEKLY_MAX(400, "주간 최대 근무시간을 초과하여 신청할 수 없습니다"),
+
     /*회사 허용 IP*/
     ALLOWED_IP_NOT_FOUND(404, "허용 IP를 찾을 수 없습니다."),
     ALLOWED_IP_DUPLICATE(409, "이미 등록된 IP 대역입니다."),

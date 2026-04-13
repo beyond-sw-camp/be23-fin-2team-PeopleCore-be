@@ -19,9 +19,6 @@ public class OverTimePolicyResDto {
     /* 초과 근무 신청 최소 단위*/
     private OtMinUnit otMinUnit;
 
-    /*사전 결재 필요 여부 */
-    private Boolean otPolicyBefore;
-
     /* 주간 최대 근무 시간*/
     private Integer otPolicyWeeklyMaxHour;
 
@@ -44,7 +41,6 @@ public class OverTimePolicyResDto {
     public static OverTimePolicyResDto defaultPolicy() {
         return OverTimePolicyResDto.builder()
                 .otMinUnit(OtMinUnit.FIFTEEN)
-                .otPolicyBefore(true)
                 .otPolicyWeeklyMaxHour(52)
                 .otPolicyWarningHour(45)
                 .otExceedAction(OtExceedAction.NOTIFY)

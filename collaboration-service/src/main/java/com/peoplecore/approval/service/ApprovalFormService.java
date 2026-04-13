@@ -32,6 +32,19 @@ import java.util.*;
 @Transactional(readOnly = true)
 public class ApprovalFormService {
 
+
+    /*
+     * 수정/비활성화 보호 대상 시스템 양식 식별자.
+     *  - 키 형식: "{folderName}/{formName}"
+     *  - initFormFolder() 에서 해당 키에 매칭되는 양식만 isProtected=true 로 저장
+     *  - 운영 중 보호 대상 추가/해제는 DB UPDATE 로 isProtected 플래그만 바꾸면 됨
+     */
+    private static final java.util.Set<String> PROTECTED_FORM_KEYS = java.util.Set.of(
+            "보고-시행문/급여지급결의서",
+            "휴가/초과근로신청서",
+            "인사/사직서 #2"
+    );
+
     private static final String FORM_CODE_GROUP = "FORM_CODE";
 
     private final ApprovalFormFolderRepository approvalFormFolderRepository;
@@ -471,6 +484,9 @@ public class ApprovalFormService {
                      * d : 정수*/
                     String formCode = formName + "_" + String.format("%03d", j + 1);
 
+                    /* 보호 대상 양식은 isProtected = true 로 세팅 */
+                    boolean isProtectedForm = PROTECTED_FORM_KEYS.contains(folderName + "/" + formName);
+
                     /* 4. ApprovalForm 엔티티 생성 -> 저장 */
                     ApprovalForm form = ApprovalForm.builder()
                             .companyId(companyId)
@@ -478,6 +494,7 @@ public class ApprovalFormService {
                             .formCode(formCode)
                             .formHtml(formHtml)
                             .isSystem(true)
+                            .isProtected(isProtectedForm)
                             .isActive(true)
                             .isCurrent(true)
                             .formWritePermission(FormWritePermission.ALL)
