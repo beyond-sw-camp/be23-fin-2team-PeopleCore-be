@@ -292,6 +292,45 @@ public class PayItemsService {
                         .isTaxable(false).isFixed(false)
                         .isActive(true).sortOrder(7)
                         .taxExemptLimit(0)
+                        .build(),
+
+                // ══════ 정산전용 항목 (isSystem = true, 삭제/수정 불가) ══════
+
+                PayItems.builder()
+                        .company(company).payItemName("건강보험정산추가징수")
+                        .payItemType(PayItemType.DEDUCTION)
+                        .isSystem(true).isActive(true).isFixed(true)
+                        .sortOrder(901)
+                        .build(),
+                PayItems.builder()
+                        .company(company).payItemName("건강보험정산환급")
+                        .payItemType(PayItemType.PAYMENT)
+                        .isSystem(true).isActive(true).isFixed(true)
+                        .sortOrder(902)
+                        .build(),
+                PayItems.builder()
+                        .company(company).payItemName("장기요양정산추가징수")
+                        .payItemType(PayItemType.DEDUCTION)
+                        .isSystem(true).isActive(true).isFixed(true)
+                        .sortOrder(903)
+                        .build(),
+                PayItems.builder()
+                        .company(company).payItemName("장기요양정산환급")
+                        .payItemType(PayItemType.PAYMENT)
+                        .isSystem(true).isActive(true).isFixed(true)
+                        .sortOrder(904)
+                        .build(),
+                PayItems.builder()
+                        .company(company).payItemName("고용보험정산추가징수")
+                        .payItemType(PayItemType.DEDUCTION)
+                        .isSystem(true).isActive(true).isFixed(true)
+                        .sortOrder(905)
+                        .build(),
+                PayItems.builder()
+                        .company(company).payItemName("고용보험정산환급")
+                        .payItemType(PayItemType.PAYMENT)
+                        .isSystem(true).isActive(true).isFixed(true)
+                        .sortOrder(906)
                         .build()
         );
         payItemsRepository.saveAll(defaults);
