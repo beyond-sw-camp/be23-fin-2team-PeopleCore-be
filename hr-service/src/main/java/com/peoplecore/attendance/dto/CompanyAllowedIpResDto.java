@@ -1,6 +1,6 @@
-package com.peoplecore.attendence.dto;
+package com.peoplecore.attendance.dto;
 
-import com.peoplecore.attendence.entity.CompanyAllowedIp;
+import com.peoplecore.attendance.entity.CompanyAllowedIp;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;

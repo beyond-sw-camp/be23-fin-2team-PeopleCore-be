@@ -1,7 +1,7 @@
 package com.peoplecore.company.controller;
 
-import com.peoplecore.attendence.dto.CompanyAllowedIpReqDto;
-import com.peoplecore.attendence.dto.CompanyAllowedIpResDto;
+import com.peoplecore.attendance.dto.CompanyAllowedIpReqDto;
+import com.peoplecore.attendance.dto.CompanyAllowedIpResDto;
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.company.service.CompanyAllowedIpService;
 import jakarta.validation.Valid;

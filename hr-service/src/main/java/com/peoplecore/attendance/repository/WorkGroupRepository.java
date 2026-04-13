@@ -1,14 +1,12 @@
 package com.peoplecore.attendance.repository;
 
-import com.peoplecore.attendence.dto.WorkGroupOptionResDto;
-import com.peoplecore.attendence.entity.WorkGroup;
+import com.peoplecore.attendance.dto.WorkGroupOptionResDto;
 import com.peoplecore.attendance.entity.WorkGroup;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import javax.swing.text.html.Option;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -28,7 +26,7 @@ public interface WorkGroupRepository extends JpaRepository<WorkGroup, Long> {
     Optional<WorkGroup> findByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(UUID companyID, String groupCode);
 
     /* 사원 생성 시 드롭다운 용 근무 그룹 옵션 */
-    @Query("SELECT new com.peoplecore.attendence.dto.WorkGroupOptionResDto(" +
+    @Query("SELECT new com.peoplecore.attendance.dto.WorkGroupOptionResDto(" +
             "  w.workGroupId, w.groupName, w.groupCode) " +
             "FROM WorkGroup w " +
             "WHERE w.company.companyId = :companyId " +

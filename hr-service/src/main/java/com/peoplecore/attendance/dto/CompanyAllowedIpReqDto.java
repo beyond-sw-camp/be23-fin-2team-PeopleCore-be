@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.dto;
+package com.peoplecore.attendance.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;

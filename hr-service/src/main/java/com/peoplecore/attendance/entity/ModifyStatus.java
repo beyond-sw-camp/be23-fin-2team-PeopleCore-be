@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;

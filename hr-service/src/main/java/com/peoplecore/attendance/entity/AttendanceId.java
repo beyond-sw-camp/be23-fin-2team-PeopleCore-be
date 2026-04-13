@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;

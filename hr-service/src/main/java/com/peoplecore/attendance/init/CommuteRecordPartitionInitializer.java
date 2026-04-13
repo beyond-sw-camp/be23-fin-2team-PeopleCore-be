@@ -1,4 +1,4 @@
-package com.peoplecore.attendence.init;
+package com.peoplecore.attendance.init;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,7 +34,10 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
     /*파티션 시작 기준 월(너무 과거 데이터까지는 커버할 필요 X) */
     private static final YearMonth START_MONTH = YearMonth.of(2026, 1);
 
-    /**
+    /* commute_record 에 걸어야 하는 UNIQUE 제약 이름 */
+    private static final String COMMUTE_UNIQUE_KEY = "uk_commute_company_emp_date";
+
+    /*
      * 파티션을 적용할 (테이블명, 파티션 키 컬럼명) 목록
      */
     private static final List<TablePartition> TARGETS = List.of(
@@ -51,9 +54,12 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        // 1) 파티션 적용 (기존 로직)
         for (TablePartition target : TARGETS) {
             applyIfAbsent(target);
         }
+        // 2) commute_record UNIQUE 제약 보장 (B-1)
+        ensureCommuteUniqueKey();
     }
 
     /* 테이블별로 파티션 적용(없을 때만 )*/
@@ -89,8 +95,36 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
         log.info("{} 파티션 생성 완료 ({}개월 + pmax)", t.tableName, MONTHS_TO_CREATE);
     }
 
+    /* comute_record
+    * 목적 : 체크인 버튼 연타/동시 요청시 같은날 중복 레코드 생성 방지
+    * 동작 : 인덱스 존재 여부 조회, 이미 있으면 스킵, 없을 때만 테이블 생성 */
+    private void ensureCommuteUniqueKey() {
+        Integer cnt = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.STATISTICS " +
+                        "WHERE TABLE_SCHEMA = DATABASE() " +
+                        "  AND TABLE_NAME = 'commute_record' " +
+                        "  AND INDEX_NAME = ? " +
+                        "  AND NON_UNIQUE = 0",
+                Integer.class, COMMUTE_UNIQUE_KEY);
+
+        if (cnt != null && cnt > 0) {
+            log.info("commute_record UNIQUE 제약 {} 이미 존재 - 스킵", COMMUTE_UNIQUE_KEY);
+            return;
+        }
+
+        String ddl = "ALTER TABLE commute_record " +
+                "ADD CONSTRAINT " + COMMUTE_UNIQUE_KEY + " " +
+                "UNIQUE (company_id, emp_id, work_date)";
+
+        log.info("commute_record UNIQUE 제약 생성 DDL 실행: {}", COMMUTE_UNIQUE_KEY);
+        jdbcTemplate.execute(ddl);
+        log.info("commute_record UNIQUE 제약 생성 완료");
+    }
+
 
     /*파티션 대상 테이블 메타 */
     private record TablePartition(String tableName, String partitionKey) {
     }
+
+
 }

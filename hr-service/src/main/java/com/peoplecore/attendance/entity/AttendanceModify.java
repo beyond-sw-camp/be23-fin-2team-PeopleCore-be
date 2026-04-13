@@ -1,14 +1,16 @@
-package com.peoplecore.attendence.entity;
+package com.peoplecore.attendance.entity;
 
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
-
-import lombok.*;
 
 /**
  * 근태수정요청
@@ -27,7 +29,7 @@ import lombok.*;
                         columnList = "emp_id, atten_work_date")
         }
 )
-public class AttendenceModify extends BaseTimeEntity {
+public class AttendanceModify extends BaseTimeEntity {
 
     /**
      * 근태수정요청 ID

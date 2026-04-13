@@ -1,9 +1,9 @@
 package com.peoplecore.company.service;
 
-import com.peoplecore.attendence.dto.CompanyAllowedIpReqDto;
-import com.peoplecore.attendence.dto.CompanyAllowedIpResDto;
-import com.peoplecore.attendence.entity.CompanyAllowedIp;
-import com.peoplecore.attendence.repository.CompanyAllowedIpRepository;
+import com.peoplecore.attendance.dto.CompanyAllowedIpReqDto;
+import com.peoplecore.attendance.dto.CompanyAllowedIpResDto;
+import com.peoplecore.attendance.entity.CompanyAllowedIp;
+import com.peoplecore.attendance.repository.CompanyAllowedIpRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.exception.CustomException;
@@ -88,7 +88,20 @@ public class CompanyAllowedIpService {
         companyAllowedIpRepository.delete(ip);
     }
 
-/*TODO: 출퇴근 로직 만들기 */
+    /* 클라이언트 IP가 해당 회사의 활성 러용 대역 중 하나에 속하는지 판정
+     * 출퇴근 체크인 시 근무지 내/외 판단 근거  */
+    public boolean matches(UUID companyId, String clientIp) {
+        if (clientIp == null || clientIp.isBlank()) return false;
+
+        byte[] clientBytes = parseIp(clientIp.trim());
+        if (clientBytes == null) return false;
+
+        List<CompanyAllowedIp> activeCidrs = companyAllowedIpRepository.findByCompany_CompanyIdAndIsActiveTrue(companyId);
+        for (CompanyAllowedIp ip : activeCidrs) {
+            if (cidrContains(ip.getIpCidr(), clientBytes)) return true;
+        }
+        return false;
+    }
 
 
 

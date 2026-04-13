@@ -3,9 +3,13 @@ package com.peoplecore.attendance.entity;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
 import java.time.LocalDate;
 import java.util.UUID;
-import lombok.*;
 
 /**
  * 근태(월별 파티션) 테이블 -- 일일 근태 집계/확정본
