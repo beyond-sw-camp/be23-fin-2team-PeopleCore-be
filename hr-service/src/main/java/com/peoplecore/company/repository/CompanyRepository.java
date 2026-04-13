@@ -10,7 +10,6 @@ import java.util.UUID;
 
 @Repository
 public interface CompanyRepository extends JpaRepository<Company, UUID> {
-
-    boolean existsByCompanyIp(String companyIp);
+    /** 상태별 회사 목록 조회 (예: ACTIVE 회사만 조회) */
     List<Company> findByCompanyStatus(CompanyStatus companyStatus);
 }

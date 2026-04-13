@@ -72,11 +72,6 @@ public class CompanyService {
     //    1. 회사 등록 + 기본데이터 세팅 + superAdmin 생성
     @Transactional
     public CompanyResDto createCompany(CompanyCreateReqDto reqDto) {
-
-        if (companyRepository.existsByCompanyIp(reqDto.getCompanyIp())) {
-            throw new CustomException(ErrorCode.COMPANY_IP_DUPLICATE);
-        }
-
         if (!reqDto.getContractEndAt().isAfter(reqDto.getContractStartAt())) {
             throw new CustomException(ErrorCode.INVALID_CONTRACT_DATE);
         }
@@ -86,7 +81,6 @@ public class CompanyService {
         Company company = Company.builder()
                 .companyName(reqDto.getCompanyName())
                 .foundedAt(reqDto.getFoundedAt())
-                .companyIp(reqDto.getCompanyIp())
                 .contractStartAt(reqDto.getContractStartAt())
                 .contractEndAt(reqDto.getContractEndAt())
                 .contractType(reqDto.getContractType())

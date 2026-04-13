@@ -35,7 +35,6 @@ public enum ErrorCode {
 
     //    회사 설정
     COMPANY_NOT_FOUND(404, "회사를 찾을 수 없습니다"),
-    COMPANY_IP_DUPLICATE(409, "이미 등록된 IP 주소입니다"),
     INVALID_STATUS_TRANSITION(400, "허용되지 않는 상태 변경입니다"),
     INVALID_CONTRACT_DATE(400, "계약 종료일은 시작일 이후여야 합니다"),
 
@@ -135,7 +134,12 @@ public enum ErrorCode {
     VACATION_POLICY_DUPLICATED(409, "연차 정책이 중복 존재합니다. 관리자에게 문의하세요."),
     VACATION_POLICY_FISCAL_START_REQUIRED(400, "회계연도 시작일(mm-dd)을 지정해 주세요."),
     VACATION_POLICY_FISCAL_START_INVALID(400, "회계연도 시작일 형식이 올바르지 않습니다. (예: 01-01)"),
-    VACATION_RULE_NOT_FOUND(404, "연차 발생 규칙이 존재하지 않습니다.");
+    VACATION_RULE_NOT_FOUND(404, "연차 발생 규칙이 존재하지 않습니다."),
+
+    /*회사 허용 IP*/
+    ALLOWED_IP_NOT_FOUND(404, "허용 IP를 찾을 수 없습니다."),
+    ALLOWED_IP_DUPLICATE(409, "이미 등록된 IP 대역입니다."),
+    INVALID_CIDR_FORMAT(400, "유효하지 않은 CIDR 형식입니다.");
 
     private final int status;
     private final String message;
