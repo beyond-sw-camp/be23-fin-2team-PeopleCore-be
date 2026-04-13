@@ -1,0 +1,29 @@
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "korean": {
+          "type": "custom",
+          "tokenizer": "nori_tokenizer",
+          "filter": ["lowercase", "nori_part_of_speech"]
+        },
+        "korean_search": {
+          "type": "custom",
+          "tokenizer": "nori_tokenizer",
+          "filter": ["lowercase"]
+        }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "type":      { "type": "keyword" },
+      "companyId": { "type": "keyword" },
+      "sourceId":  { "type": "keyword" },
+      "title":     { "type": "text", "analyzer": "korean", "search_analyzer": "korean_search" },
+      "content":   { "type": "text", "analyzer": "korean", "search_analyzer": "korean_search" },
+      "metadata":  { "type": "object" },
+      "createdAt": { "type": "date", "format": "date_optional_time" }
+    }
+  }
+}
