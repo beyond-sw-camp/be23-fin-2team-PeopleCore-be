@@ -13,7 +13,7 @@ import java.util.UUID;
 
 @Repository
 public interface WorkGroupRepository extends JpaRepository<WorkGroup, Long> {
-    /* 회사별 근무 그룹 목록 (삭제 X) */
+    /* 회사별 근무 그룹 목록 (삭제 안된것들 ) */
     List<WorkGroup> findByCompany_CompanyIdAndGroupDeleteAtIsNull(UUID companyId);
 
     /*단일 근무 그룹 조회 */
