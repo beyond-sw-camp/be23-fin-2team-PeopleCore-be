@@ -1,10 +1,12 @@
 package com.peoplecore.employee.domain;
 
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.pay.domain.InsuranceJobTypes;
+import com.peoplecore.pay.enums.RetirementType;
 import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
 import lombok.*;
@@ -72,7 +74,7 @@ public class Employee extends BaseTimeEntity {
     private EmpType empType;
 
     @Column(name = "emp_resign")
-    private LocalDate empResign;
+    private LocalDate empResignDate;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "emp_status", nullable = false)
@@ -95,7 +97,13 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "simple_password")
     private String simplePassword;
 
-    private Long workGroupId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "work_group_id")
+    private WorkGroup workGroup;
+
+    /*근무 그룹 배정 일시*/
+    private LocalDateTime workGroupAssignedAt;
+
 
     @Column(nullable = false)
     @Builder.Default
@@ -206,5 +214,34 @@ public class Employee extends BaseTimeEntity {
         return this.deleteAt !=null;
     }
 
+//    퇴직연금 유형 변경
+    public void updateRetirementType(RetirementType retirementType) {
+        this.retirementType = retirementType;
+}
+//    재직상태 변경
+    public void updateStatus(EmpStatus status){
+        this.empStatus = status;
+    }
+
+//    퇴직일 세팅
+    public void updateResignDate(LocalDate resignDate){
+        this.empResignDate = resignDate;
+    }
+//    일괄 사원정보 업데이트(인사발령)
+    public void updateDept(Department department){
+        this.dept = department;
+    }
+    public void updateGrade(Grade grade){
+        this.grade =grade;
+    }
+    public void updateTitle(Title title){
+        this.title = title;
+    }
+
+    /* 근무 그룹 배정 / 변경 */
+    public void assignWorkGroup(WorkGroup workGroup) {
+        this.workGroup = workGroup;
+        this.workGroupAssignedAt = (workGroup != null) ? LocalDateTime.now() : null;
+    }
 
 }

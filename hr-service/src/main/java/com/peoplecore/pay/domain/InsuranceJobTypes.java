@@ -38,6 +38,9 @@ public class InsuranceJobTypes {
     @Builder.Default
     private Boolean isActive = true;
 
+    @Builder.Default
+    private Boolean isDeleted = false;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
@@ -51,5 +54,10 @@ public class InsuranceJobTypes {
 
     public void toggleActive(){
         this.isActive = !this.isActive;
+    }
+
+    public void softDelete(){
+        this.isDeleted = true;
+        this.isActive = false;
     }
 }

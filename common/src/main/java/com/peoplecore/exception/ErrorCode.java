@@ -33,7 +33,7 @@ public enum ErrorCode {
     DEPARTMENT_HAS_CHILDREN(400, "하위 부서가 있어 삭제할 수 없습니다."),
     DEPARTMENT_CIRCULAR_REFERENCE(400, "하위 부서를 상위 부서로 지정할 수 없습니다."),
 
-//    회사 설정
+    //    회사 설정
     COMPANY_NOT_FOUND(404, "회사를 찾을 수 없습니다"),
     COMPANY_IP_DUPLICATE(409, "이미 등록된 IP 주소입니다"),
     INVALID_STATUS_TRANSITION(400, "허용되지 않는 상태 변경입니다"),
@@ -52,7 +52,7 @@ public enum ErrorCode {
     INSURANCE_RATES_NOT_FOUND(404, "해당 연도의 보험요율을 찾을 수 없습니다."),
     INSURANCE_JOB_TYPE_DUPLICATE(409, "이미 존재하는 업종명입니다."),
 
-//    급여항목
+    //    급여항목
     PAY_ITEM_IN_USE(409, "사용 중인 급여항목은 삭제할 수 없습니다."),
     INSURANCE_JOB_TYPE_IN_USE(409, "사원에 배정된 업종은 삭제할 수 없습니다."),
 
@@ -66,6 +66,23 @@ public enum ErrorCode {
     // 사원 계좌
     EMP_ACCOUNT_NOT_FOUND(404, "사원 계좌 정보를 찾을 수 없습니다."),
     RETIREMENT_ACCOUNT_NOT_FOUND(404, "퇴직연금 계좌 정보를 찾을 수 없습니다."),
+
+//    사원 퇴직연금 계좌
+    RETIREMENT_SETTINGS_NOT_FOUND(404, "회사 퇴직연금 설정 정보를 찾을 수 없습니다."),
+    RETIREMENT_TYPE_NOT_CHANGEABLE(400, "회사 퇴직연금 설정이 DB_DC가 아니므로 변경할 수 없습니다."),
+    INVALID_RETIREMENT_TYPE(400, "유효하지 않은 퇴직연금 유형입니다. DB 또는 DC만 선택 가능합니다."),
+
+    // ── 정산보험료 ──
+    INSURANCE_SETTLEMENT_NOT_FOUND(404, "정산보험료 데이터가 존재하지 않습니다."),
+    INSURANCE_PAY_ITEM_NOT_FOUND(404, "보험 공제항목(국민연금/건강보험/장기요양/고용보험)이 등록되지 않았습니다."),
+    INSURANCE_SETTLEMENT_ALREADY_APPLIED(400, "이미 급여대장에 반영된 정산 건입니다."),
+
+    PAYROLL_NOT_FOUND(400, "급여산정 데이터가 존재하지 않습니다."),
+    PAYROLL_STATUS_INVALID(409, "확정된 급여의 보험료는 재산정 불가합니다."),
+
+    // PayItems isSystem 보호
+    SYSTEM_PAY_ITEM_NOT_EDITABLE(400, "시스템 급여항목은 수정할 수 없습니다"),
+    SYSTEM_PAY_ITEM_NOT_DELETABLE(400, "시스템 급여항목은 삭제할 수 없습니다"),
 
     // 캘린더
     CALENDAR_NOT_FOUND(404, "캘린더를 찾을 수 없습니다."),
@@ -90,7 +107,7 @@ public enum ErrorCode {
     SHARE_REQUEST_ALREADY_PROCESSED(400, "이미 처리된 요청입니다."),
     SHARE_REQUEST_ACCESS_DENIED(403, "본인에게 온 요청만 처리할 수 있습니다."),
 
-//    전사 캘린더
+    //    전사 캘린더
     COMPANY_EVENT_NOT_FOUND(404, "전사 일정을 찾을 수 없습니다."),
     COMPANY_EVENT_NOT_COMPANY(400, "전사 일정이 아닙니다."),
 
@@ -100,19 +117,42 @@ public enum ErrorCode {
     BAD_REQUEST(400, "잘못된 요청입니다."),
     INTERNAL_SERVER_ERROR(500, "서버 내부 오류가 발생했습니다."),
 
-//    사원관리
+    //    사원관리
     EMPLOYEE_NOT_FOUND(404, "사원을 찾을 수 없습니다."),
     GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다."),
     TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다."),
     MANUAL_PASSWORD_REQUIRED(400, "비밀번호를 직접 입력해야 합니다."),
 
 
-//    연봉
+    //    연봉
     SALARY_CONTRACT_NOT_FOUND(404, "계약서를 찾을 수 없습니다."),
     SALARY_CONTRACT_ALREADY_DELETED(400, "이미 삭제된 계약서입니다."),
     EMPLOYEE_NOT_RESIGNED(400, "퇴직 상태인 사원의 계약서만 삭제할 수 있습니다."),
-    FILE_UPLOAD_FAILED(500, "파일 업로드에 실패했습니다.");
+    FILE_UPLOAD_FAILED(500, "파일 업로드에 실패했습니다."),
 
+    /*워크 그룹 */
+    WORK_GROUP_NOT_FOUND(404, "근무 그룹을 찾을 수 없습니다."),
+    WORK_GROUP_CODE_DUPLICATE(409, "이미 존재하는 근무 그룹 코드입니다."),
+    WORK_GROUP_HAS_MEMBERS(409, "소속된 멤버가 있어 삭제할 수 없습니다."),
+
+    /**
+     * 이관 source 와 target 이 동일 그룹인 경우
+     */
+    WORK_GROUP_TRANSFER_SAME_TARGET(400, "이관 대상 그룹이 현재 그룹과 동일합니다."),
+
+    /**
+     * source / target 이 서로 다른 회사 소속일 경우 (타 회사로 이관 불가)
+     */
+    WORK_GROUP_TRANSFER_DIFFERENT_COMPANY(400, "다른 회사의 근무 그룹으로는 이관할 수 없습니다."),
+
+    WORK_GROUP_TRANSFER_INVALID_MEMBERS(400, "이관 요청에 유효하지 않은 사원이 포함되어 있습니다."),
+
+    /* 연차 정책 */
+    VACATION_POLICY_NOT_FOUND(404, "연차 정책이 존재하지 않습니다."),
+    VACATION_POLICY_DUPLICATED(409, "연차 정책이 중복 존재합니다. 관리자에게 문의하세요."),
+    VACATION_POLICY_FISCAL_START_REQUIRED(400, "회계연도 시작일(mm-dd)을 지정해 주세요."),
+    VACATION_POLICY_FISCAL_START_INVALID(400, "회계연도 시작일 형식이 올바르지 않습니다. (예: 01-01)"),
+    VACATION_RULE_NOT_FOUND(404, "연차 발생 규칙이 존재하지 않습니다.");
 
     private final int status;
     private final String message;

@@ -88,10 +88,9 @@ public class InsuranceJobTypesService {
 
 //        사용중인지 검증
         if(employeeRepository.existsByJobTypes_JobTypesId(jobTypesId)){
-            System.out.println(jobTypes.getName() +" 항목이 사용중입니다.");
-            throw new CustomException(ErrorCode.PAY_ITEM_IN_USE);
+            //        항목 사용여부 검증 -> 사용시 소프트딜리트
+            jobTypes.softDelete();
         }
-
         insuranceJobTypesRepository.delete(jobTypes);
     }
 

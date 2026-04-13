@@ -108,7 +108,7 @@ public class SalaryContractService {
             }
         }
 
-//        현재 폼 설정 스냅샹(증적)
+//        현재 폼 설정 스냅샷(증적)
         List<FormFieldSetupResponse> currentForm = formFieldSetupService.getSetup(companyId, FormType.SALARY_CONTRACT);
         String formSnapshot = toJson(currentForm); //문자열로 반환 && 저장
         long formVersion = System.currentTimeMillis(); //타임스템프 시간기반 고유 값 생성(폼 생성 시점 식별)
@@ -278,7 +278,6 @@ public class SalaryContractService {
 
 
 //    5. 계약서 삭제(soft delete)
-
 //    재직상태=퇴직 인 사원의 계약서만 삭제가능
     public void delete(UUID companyId, Long contractId){
 

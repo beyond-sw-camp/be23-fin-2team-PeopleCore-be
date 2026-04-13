@@ -30,8 +30,12 @@ public class SalaryContractDetail {
     private Integer amount;
 
     //    비고
-    @Column(name = "details", length = 255)
+    @Column(name = "details")
     private String details;
+
+    //    급여 항목명 - 스냅샷용
+    @Column(length = 100)
+    private String payItemName;
 
 
     public void assignContract(SalaryContract contract) {

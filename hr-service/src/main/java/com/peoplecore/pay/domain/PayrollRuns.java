@@ -41,5 +41,10 @@ public class PayrollRuns {
     private LocalDate payDate;
 
 
-
+    public void updateTotals(int empCount, long totalPay, long totalDeduction, long netPay){
+        this.totalEmployees = empCount;
+        this.totalPay = totalPay;
+        this.totalDeduction = totalDeduction;
+        this.totalNetPay = netPay;
+    }
 }

@@ -25,17 +25,24 @@ public class EmpAccounts extends BaseTimeEntity {
     @JoinColumn(name="emp_id", nullable = false)
     private Employee employee;
 
-    @Column(length = 50)
+    @Column(length = 50, nullable = false)
     private String bankName;
 
-    @Column(length = 50)
+    @Column(length = 50, nullable = false)
     private String accountNumber;
 
-    @Column(length = 50)
+//    예금주
+    @Column(length = 50, nullable = false)
     private String accountHolder;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
+
+    public void update(String bankName, String accountNumber, String accountHolder){
+        this.bankName = bankName;
+        this.accountNumber = accountNumber;
+        this.accountHolder = accountHolder;
+    }
 }
