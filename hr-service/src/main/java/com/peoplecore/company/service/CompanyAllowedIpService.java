@@ -60,7 +60,7 @@ public class CompanyAllowedIpService {
      * CIDR 변경시 중복 검사 (자기 자신 제외) 수행.*/
     @Transactional
     public CompanyAllowedIpResDto update(UUID companyId, Long id, CompanyAllowedIpReqDto dto) {
-        CompanyAllowedIp ip = companyAllowedIpRepository.findByIdAndCompany_CompanyId(id, companyId).orElseThrow(() -> new CustomException(ErrorCode.ALLOWED_IP_DUPLICATE));
+        CompanyAllowedIp ip = companyAllowedIpRepository.findByIdAndCompany_CompanyId(id, companyId).orElseThrow(() -> new CustomException(ErrorCode.ALLOWED_IP_NOT_FOUND));
 
         String normalized = normalizeCidr(dto.getIpCidr());
 

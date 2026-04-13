@@ -1,5 +1,6 @@
 package com.peoplecore.attendence.entity;
 
+import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -8,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * 초과근무 신청
@@ -17,6 +19,15 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(
+        name = "overtime_request",
+        indexes = {
+                @Index(name = "idx_ot_req_company_status",
+                        columnList = "company_id, ot_status"),
+                @Index(name = "idx_ot_req_emp_date",
+                        columnList = "emp_id, ot_date")
+        }
+)
 public class OvertimeRequest extends BaseTimeEntity {
 
     /**
@@ -26,11 +37,16 @@ public class OvertimeRequest extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long otId;
 
+    /* 회사 Id*/
+    @Column(nullable = false)
+    private UUID companyId;
+
     /**
      * 사원 아이디
      */
-    @Column(nullable = false)
-    private Long empId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "emp_id", nullable = false)
+    private Employee employee;
 
     /**
      * 신청 날짜
@@ -76,7 +92,30 @@ public class OvertimeRequest extends BaseTimeEntity {
     /**
      * 처리자 사원 id
      */
-    @Column(nullable = false)
-    private Long managerId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "manager_id")
+    private Employee manager;
 
+    /**
+     * 낙관적 락 - 승인/반려 동시 처리 방지
+     */
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
+    /**
+     * 승인/반려/취소 처리 캡슐화
+     */
+    public void process(OtStatus newStatus, Employee manager) {
+        this.otStatus = newStatus;
+        this.manager = manager;
+    }
+
+    /**
+     * 실제 초과근무 시작/종료 기록
+     */
+    public void recordActual(LocalDateTime start, LocalDateTime end) {
+        this.otActStart = start;
+        this.otActEnd = end;
+    }
 }
