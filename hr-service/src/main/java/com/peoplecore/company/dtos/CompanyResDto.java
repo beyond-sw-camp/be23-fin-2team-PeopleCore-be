@@ -20,7 +20,6 @@ public class CompanyResDto {
     private UUID companyId;
     private String companyName;
     private LocalDate foundedAt;
-    private String companyIp;
     private LocalDate contractStartAt;
     private LocalDate contractEndAt;
     private ContractType contractType;
@@ -33,7 +32,6 @@ public class CompanyResDto {
                 .companyId(company.getCompanyId())
                 .companyName(company.getCompanyName())
                 .foundedAt(company.getFoundedAt())
-                .companyIp(company.getCompanyIp())
                 .contractStartAt(company.getContractStartAt())
                 .contractEndAt(company.getContractEndAt())
                 .contractType(company.getContractType())

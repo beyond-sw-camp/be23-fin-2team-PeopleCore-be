@@ -122,7 +122,7 @@ public class EmployeeService {
         String rawPassword = resolvePassword(requestDto);
 
 
-        /* 회사 기본 근무 그룹 조회 */
+        /* 회사 근무 그룹 조회 */
         WorkGroup workGroup = workGroupRepository
                 .findByWorkGroupIdAndGroupDeleteAtIsNull(requestDto.getWorkGroupId())
                 .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));

@@ -4,11 +4,13 @@ import com.peoplecore.attendance.dto.WorkGroupReqDto;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-
-import lombok.*;
 
 /**
  * 근무 그룹

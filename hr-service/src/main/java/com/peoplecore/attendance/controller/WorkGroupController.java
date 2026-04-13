@@ -71,4 +71,12 @@ public class WorkGroupController {
 
         return ResponseEntity.ok(workGroupService.transferEmp(sourceWorkGroupId, dto));
     }
+
+    /* 사원 생성용 근무 그룹 조회 api*/
+    @GetMapping("/options")
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    public ResponseEntity<List<WorkGroupOptionResDto>> getWorkGroupOptions(
+            @RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(workGroupService.getWorkGroupOptions(companyId));
+    }
 }
