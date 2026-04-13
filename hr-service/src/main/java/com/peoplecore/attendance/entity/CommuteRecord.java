@@ -12,14 +12,21 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/*
- * 출퇴근 기록(월별 파티션)
- * comRecDate가 mysql range Colums 파티션 키 -> pk에 반드시 포함되어야 함
- * comRecId 는 Auto_Increment (mysql은 복합 pk의 첫 컬럼에 한해 자동 증가 허용);
- * 파티셔닝 테이블은 ddl-auto로 생성 되지 않음 -> 최초 1회 Alter Table로 적용
- * 인덱스 :
- * company_id, emp_id, com_rec_date) - 회사 범위 내 사원별 조회 대쉬 보드
- * emp_id, com_rec_date - 개인 근태 조회
+/**
+ * 출퇴근 기록 (월별 파티션).
+ *
+ * PK 전략 (Hibernate 6 + MySQL 파티션 호환):
+ *  - JPA 매핑은 단일 PK(comRecId) 만 사용. @IdClass 를 쓰면 Hibernate 가 auto_increment 컬럼을
+ *    PK 뒤로 밀어 MySQL "auto_increment 는 key 첫 컬럼" 제약과 충돌함.
+ *  - DB 레벨에서는 CommuteRecordPartitionInitializer 가 ALTER 로 (com_rec_id, work_date)
+ *    복합 PK 로 재정의 → 이 상태에서 RANGE COLUMNS(work_date) 파티션 적용.
+ *
+ * 비즈니스 유일성:
+ *  - UNIQUE(company_id, emp_id, work_date) — 중복 체크인/race condition 차단.
+ *
+ * 인덱스:
+ *  - (company_id, emp_id, work_date) 회사 범위 사원별 조회
+ *  - (emp_id, work_date) 개인 근태 조회
  */
 @Entity
 @Getter
@@ -28,6 +35,10 @@ import java.util.UUID;
 @Builder
 @Table(
         name = "commute_record",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_commute_company_emp_date",
+                columnNames = {"company_id", "emp_id", "work_date"}
+        ),
         indexes = {
                 @Index(name = "idx_commute_company_emp_date",
                         columnList = "company_id, emp_id, work_date"),
@@ -35,23 +46,22 @@ import java.util.UUID;
                         columnList = "emp_id, work_date")
         }
 )
-@IdClass(CommuteRecordId.class)
 public class CommuteRecord extends BaseTimeEntity {
 
     /**
-     * 출퇴근  기록 ID - 복합 PK 1
+     * 출퇴근 기록 ID - JPA 매핑상 단일 PK (AUTO_INCREMENT).
+     * DB 레벨에서는 Initializer 가 (com_rec_id, work_date) 복합 PK 로 재정의 (파티셔닝용).
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "com_rec_id", nullable = false)
     private Long comRecId;
 
-    /*
-     * 근무 일자 - 복합 PK 2 & 월별 파티션 키
-     * insert 시 반드시 세팅  -> 서비스 레이어에서 LocalDateTime.now 주입
-     * 근무 일자 (복합 PK 2 & 월별 파티션 키). 필드명 알파벳 순서상 comRecId 뒤에 오도록 'workDate' 명명.
+    /**
+     * 근무 일자 (월별 파티션 키).
+     * insert 시 반드시 세팅 → 서비스 레이어에서 LocalDate.now() 주입.
+     * JPA 매핑상 @Id 아님 — DB 레벨 복합 PK 의 2번째 컬럼은 Initializer 담당.
      */
-    @Id
     @Column(name = "work_date", nullable = false)
     private LocalDate workDate;
 

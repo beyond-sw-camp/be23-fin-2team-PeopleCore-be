@@ -15,34 +15,52 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-/* commute_record 월별 파티션 초기화기
-
-    두 테이블에 range columns 파티션 적용
-
- * 기준 월부터 N개월치 파티션 + pmax 생성
- * ddl-auto가 파티션 ddl을 생성하지 못하는 한계를 우회하는 용도  */
+/**
+ * commute_record / attendance 테이블의 파티션 + 복합 PK + UNIQUE 제약 초기화기.
+ *
+ * 배경 (리팩토링 인수인계):
+ *  - 두 테이블은 월별 RANGE COLUMNS 파티션이 필요.
+ *  - Hibernate 6 @IdClass + @GeneratedValue(IDENTITY) 구조가 MySQL "auto_increment 는
+ *    key 의 첫 컬럼이어야 한다" 제약과 충돌 → CREATE TABLE 자체가 실패.
+ *  - 해결: JPA 엔티티는 단일 PK(Long) 로만 매핑, DB 레벨 복합 PK + 파티션은 이 클래스가 ALTER 로 재정의.
+ *  - 비즈니스 유일성(company_id, emp_id, date) 은 엔티티 @UniqueConstraint 로 보장 (본 클래스는 2차 방어).
+ *
+ * run() 순서 (순서 중요):
+ *  1) 각 테이블에 UNIQUE 제약 보장
+ *     → PK 를 교체해도 (company_id, emp_id, date) 유일성이 끊기지 않도록 먼저 수행.
+ *  2) 각 테이블에 대해 PK 복합 재정의 → PARTITION BY RANGE COLUMNS.
+ *     PK 재정의 이유: MySQL 은 파티션 키가 PK/UK 에 반드시 포함되어야 함.
+ *     엔티티의 단일 PK(id) 만으로는 파티션 키를 포함하지 못함.
+ */
 @Slf4j
 @Component
 @SuppressWarnings({"SqlSourceToSinkFlow", "SqlNoDataSourceInspection", "SpellCheckingInspection"})
 @Order(1)
 public class CommuteRecordPartitionInitializer implements ApplicationRunner {
 
-    /* 생성할 월 개수 (현재 월 기준 앞쪽 N개월) */
+    /** 생성할 월 개수 (START_MONTH 기준으로 앞쪽 N개월) */
     private static final int MONTHS_TO_CREATE = 24;
 
-
-    /*파티션 시작 기준 월(너무 과거 데이터까지는 커버할 필요 X) */
+    /** 파티션 시작 기준 월 (과거 데이터 커버 범위 제한) */
     private static final YearMonth START_MONTH = YearMonth.of(2026, 1);
 
-    /* commute_record 에 걸어야 하는 UNIQUE 제약 이름 */
-    private static final String COMMUTE_UNIQUE_KEY = "uk_commute_company_emp_date";
-
-    /*
-     * 파티션을 적용할 (테이블명, 파티션 키 컬럼명) 목록
+    /**
+     * 파티션 적용 대상.
+     *  - tableName    : 테이블명
+     *  - partitionKey : 파티션 키 컬럼 (날짜)
+     *  - idColumn     : AUTO_INCREMENT PK 컬럼 (복합 PK 첫 컬럼으로 유지해야 함)
+     *  - uniqueKeyName: UNIQUE 제약 이름
+     *  - uniqueKeyCols: UNIQUE 컬럼 목록 (쉼표 구분, 파티션 키 포함 필수)
      */
     private static final List<TablePartition> TARGETS = List.of(
-            new TablePartition("commute_record", "work_date"),
-            new TablePartition("attendance", "atten_work_date")
+            new TablePartition(
+                    "commute_record", "work_date", "com_rec_id",
+                    "uk_commute_company_emp_date",
+                    "company_id, emp_id, work_date"),
+            new TablePartition(
+                    "attendance", "atten_work_date", "atten_id",
+                    "uk_attendance_company_emp_date",
+                    "company_id, emp_id, atten_work_date")
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -54,16 +72,25 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        // 1) 파티션 적용 (기존 로직)
+        // 1) UNIQUE 제약 먼저 보장 — PK 교체 전에 유일성을 DB 가 지키도록
         for (TablePartition target : TARGETS) {
-            applyIfAbsent(target);
+            ensureUniqueKey(target);
         }
-        // 2) commute_record UNIQUE 제약 보장 (B-1)
-        ensureCommuteUniqueKey();
+        // 2) 테이블별 PK 복합 재정의 + 파티션 적용
+        for (TablePartition target : TARGETS) {
+            applyPartitioningIfAbsent(target);
+        }
     }
 
-    /* 테이블별로 파티션 적용(없을 때만 )*/
-    private void applyIfAbsent(TablePartition t) {
+    /**
+     * 파티션이 없으면
+     *  (a) PK 를 (idColumn, partitionKey) 복합으로 재정의 후
+     *  (b) PARTITION BY RANGE COLUMNS DDL 실행.
+     * 파티션이 이미 있으면 두 스텝 모두 스킵 (idempotent).
+     *
+     * @throws org.springframework.dao.DataAccessException DDL 실행 실패 시
+     */
+    private void applyPartitioningIfAbsent(TablePartition t) {
         Integer partitionCount = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.PARTITIONS " +
                         "WHERE TABLE_SCHEMA = DATABASE() " +
@@ -76,6 +103,16 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
             return;
         }
 
+        // (a) PK 복합 재정의: 단일 PK(id) → 복합 PK(id, 파티션키)
+        //     MySQL 제약: 파티션 키는 PK/UK 에 반드시 포함되어야 함.
+        String alterPk = String.format(
+                "ALTER TABLE %s DROP PRIMARY KEY, ADD PRIMARY KEY (%s, %s)",
+                t.tableName, t.idColumn, t.partitionKey);
+        log.info("{} PK 복합 재정의 DDL 실행: PK({}, {})",
+                t.tableName, t.idColumn, t.partitionKey);
+        jdbcTemplate.execute(alterPk);
+
+        // (b) PARTITION BY RANGE COLUMNS — 24개월 + pmax
         String partitions = IntStream.range(0, MONTHS_TO_CREATE).mapToObj(i -> {
             YearMonth ym = START_MONTH.plusMonths(i);
             LocalDate nextMonthFirst = ym.plusMonths(1).atDay(1);
@@ -89,42 +126,52 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
                 partitions + ",\n  " +
                 "PARTITION pmax VALUES LESS THAN (MAXVALUE)\n)";
 
-
         log.info("{} 파티션 생성 DDL 실행", t.tableName);
         jdbcTemplate.execute(ddl);
         log.info("{} 파티션 생성 완료 ({}개월 + pmax)", t.tableName, MONTHS_TO_CREATE);
     }
 
-    /* comute_record
-    * 목적 : 체크인 버튼 연타/동시 요청시 같은날 중복 레코드 생성 방지
-    * 동작 : 인덱스 존재 여부 조회, 이미 있으면 스킵, 없을 때만 테이블 생성 */
-    private void ensureCommuteUniqueKey() {
+    /**
+     * (company_id, emp_id, date) UNIQUE 제약이 없으면 추가.
+     *
+     * 역할:
+     *  - 동시 요청/중복 체크인 race condition 차단 (주 방어는 엔티티 @UniqueConstraint,
+     *    본 메서드는 Hibernate 가 누락한 경우 대비 2차 방어).
+     *
+     * 파티션 테이블 제약:
+     *  - MySQL 은 UNIQUE 인덱스가 파티션 키를 포함해야 함 → 모든 대상 UK 는 날짜 컬럼 포함.
+     *
+     * @throws org.springframework.dao.DataAccessException DDL 실행 실패 시
+     */
+    private void ensureUniqueKey(TablePartition t) {
         Integer cnt = jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM information_schema.STATISTICS " +
                         "WHERE TABLE_SCHEMA = DATABASE() " +
-                        "  AND TABLE_NAME = 'commute_record' " +
+                        "  AND TABLE_NAME = ? " +
                         "  AND INDEX_NAME = ? " +
                         "  AND NON_UNIQUE = 0",
-                Integer.class, COMMUTE_UNIQUE_KEY);
+                Integer.class, t.tableName, t.uniqueKeyName);
 
         if (cnt != null && cnt > 0) {
-            log.info("commute_record UNIQUE 제약 {} 이미 존재 - 스킵", COMMUTE_UNIQUE_KEY);
+            log.info("{} UNIQUE 제약 {} 이미 존재 - 스킵", t.tableName, t.uniqueKeyName);
             return;
         }
 
-        String ddl = "ALTER TABLE commute_record " +
-                "ADD CONSTRAINT " + COMMUTE_UNIQUE_KEY + " " +
-                "UNIQUE (company_id, emp_id, work_date)";
+        String ddl = "ALTER TABLE " + t.tableName + " " +
+                "ADD CONSTRAINT " + t.uniqueKeyName + " " +
+                "UNIQUE (" + t.uniqueKeyCols + ")";
 
-        log.info("commute_record UNIQUE 제약 생성 DDL 실행: {}", COMMUTE_UNIQUE_KEY);
+        log.info("{} UNIQUE 제약 생성 DDL 실행: {}", t.tableName, t.uniqueKeyName);
         jdbcTemplate.execute(ddl);
-        log.info("commute_record UNIQUE 제약 생성 완료");
+        log.info("{} UNIQUE 제약 생성 완료", t.tableName);
     }
 
-
-    /*파티션 대상 테이블 메타 */
-    private record TablePartition(String tableName, String partitionKey) {
-    }
-
-
+    /** 파티션 대상 테이블 메타 */
+    private record TablePartition(
+            String tableName,
+            String partitionKey,
+            String idColumn,
+            String uniqueKeyName,
+            String uniqueKeyCols
+    ) {}
 }

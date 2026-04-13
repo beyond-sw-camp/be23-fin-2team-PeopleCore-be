@@ -12,11 +12,20 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 /**
- * 근태(월별 파티션) 테이블 -- 일일 근태 집계/확정본
- * 복합 pK : (attenId, attenWorkDate)
- * commuteRecord 와( company_id, emp_id, work_date) 로 1: 1 매칭됨
- *  인덱스 : (company_id, emp_id, atten_work_date) - 대시보드 집계
- *  (emp_id, atten_work_date)  - 개인 근태 조회
+ * 근태(월별 파티션) 테이블 -- 일일 근태 집계/확정본.
+ *
+ * PK 전략 (Hibernate 6 + MySQL 파티션 호환):
+ *  - JPA 매핑은 단일 PK(attenId) 만 사용. @IdClass 를 쓰면 Hibernate 가 auto_increment 컬럼을
+ *    PK 뒤로 밀어 MySQL "auto_increment 는 key 첫 컬럼" 제약과 충돌함.
+ *  - DB 레벨에서는 CommuteRecordPartitionInitializer 가 ALTER 로 (atten_id, atten_work_date)
+ *    복합 PK 로 재정의 → 이 상태에서 RANGE COLUMNS(atten_work_date) 파티션 적용.
+ *
+ * 비즈니스 유일성:
+ *  - UNIQUE(company_id, emp_id, atten_work_date) 로 DB 가 보장. CommuteRecord 와 1:1 매칭.
+ *
+ * 인덱스:
+ *  - (company_id, emp_id, atten_work_date) 대시보드 집계
+ *  - (emp_id, atten_work_date) 개인 근태 조회
  */
 @Entity
 @Getter
@@ -25,6 +34,10 @@ import java.util.UUID;
 @Builder
 @Table(
         name = "attendance",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_attendance_company_emp_date",
+                columnNames = {"company_id", "emp_id", "atten_work_date"}
+        ),
         indexes = {
                 @Index(name = "idx_attendance_company_emp_date",
                         columnList = "company_id, emp_id, atten_work_date"),
@@ -32,18 +45,21 @@ import java.util.UUID;
                         columnList = "emp_id, atten_work_date")
         }
 )
-@IdClass(AttendanceId.class)
 public class Attendance extends BaseTimeEntity {
 
-    /** 근태 ID 복합키 1 -Auto_increment */
+    /**
+     * 근태 ID - JPA 매핑상 단일 PK (AUTO_INCREMENT).
+     * DB 레벨에서는 Initializer 가 (atten_id, atten_work_date) 복합 PK 로 재정의 (파티셔닝용).
+     */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "atten_id", nullable = false)
     private Long attenId;
 
-    /** 근무 일자 - 복합키 2
-     * insert시 반드시 세팅  */
-    @Id
+    /**
+     * 근무 일자 (월별 파티션 키).
+     * insert 시 반드시 세팅. JPA 매핑상 @Id 아님 — DB 레벨 복합 PK 의 2번째 컬럼은 Initializer 담당.
+     */
     @Column(name = "atten_work_date", nullable = false)
     private LocalDate attenWorkDate;
 
