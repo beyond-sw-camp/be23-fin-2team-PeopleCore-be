@@ -7,4 +7,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/eval/stages")
 public class StageController {
+
+//    단계개폐 스케줄러처리
+//    TODO: 남은 일정 연장 // 마감 = 수정불가, 진행중=endDate연장, 대기 = 자유 편집
 }

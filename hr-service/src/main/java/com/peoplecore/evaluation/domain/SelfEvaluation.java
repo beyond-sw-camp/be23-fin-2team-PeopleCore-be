@@ -37,9 +37,10 @@ public class SelfEvaluation extends BaseTimeEntity {
     @Column(name = "evidence", length = 500)
     private String evidence; // 근거자료
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "approval_status", length = 20)
     @Builder.Default
-    private String approvalStatus = "대기"; // 승인 상태
+    private SelfEvalApprovalStatus approvalStatus = SelfEvalApprovalStatus.PENDING; // 승인 상태
 
     @Column(name = "reject_reason", length = 500)
     private String rejectReason; // 반려 사유

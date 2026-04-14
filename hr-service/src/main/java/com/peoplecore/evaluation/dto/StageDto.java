@@ -28,8 +28,8 @@ public class StageDto {
                 .orderNo(s.getOrderNo())
                 .startDate(s.getStartDate())
                 .endDate(s.getEndDate())
-//              DB status enum → 한글 라벨
-                .status(s.getStatus().getLabel())
+//              enum 이름 그대로 (프론트에서 라벨 매핑)
+                .status(s.getStatus().name())
                 .build();
     }
 }

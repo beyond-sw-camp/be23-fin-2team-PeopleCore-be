@@ -56,9 +56,10 @@ public class Goal extends BaseTimeEntity {
     @Column(name = "target_unit", length = 10)
     private String targetUnit; // 목표 단위
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "approval_status", length = 20)
     @Builder.Default
-    private String approvalStatus = "대기"; // 승인 상태 (대기/승인/반려)
+    private GoalApprovalStatus approvalStatus = GoalApprovalStatus.PENDING; // 승인 상태 (대기/승인/반려)
 
     @Column(name = "reject_reason", length = 500)
     private String rejectReason; // 반려 사유

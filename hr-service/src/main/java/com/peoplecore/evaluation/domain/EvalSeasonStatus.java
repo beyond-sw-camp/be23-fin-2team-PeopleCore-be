@@ -1,15 +1,8 @@
 package com.peoplecore.evaluation.domain;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
-
-// 평가시즌 상태
-@Getter
-@RequiredArgsConstructor
+// 평가시즌 상태 (프론트가 한글 라벨 매핑)
 public enum EvalSeasonStatus {
-    DRAFT("준비중"),
-    OPEN("진행중"),
-    CLOSED("완료");
-
-    private final String label; // 한글 라벨 (프론트 표시용)
+    DRAFT,   // 준비중
+    OPEN,    // 진행중
+    CLOSED   // 완료
 }

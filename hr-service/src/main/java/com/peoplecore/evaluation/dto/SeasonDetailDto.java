@@ -43,7 +43,7 @@ public class SeasonDetailDto {
                 .period(s.getPeriod())
                 .startDate(s.getStartDate())
                 .endDate(s.getEndDate())
-                .status(s.getStatus().getLabel())      // DB status enum → 한글 라벨
+                .status(s.getStatus().name())          // enum 이름 그대로 (프론트에서 라벨 매핑)
                 .stages(stageDtos)
                 .rules(rulesDto)
                 .build();

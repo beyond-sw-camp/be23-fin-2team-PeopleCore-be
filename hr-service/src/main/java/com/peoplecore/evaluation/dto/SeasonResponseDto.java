@@ -29,7 +29,7 @@ public class SeasonResponseDto {
                 .period(season.getPeriod())
                 .startDate(season.getStartDate())
                 .endDate(season.getEndDate())
-                .status(season.getStatus().getLabel()) // DB status enum → 한글 라벨
+                .status(season.getStatus().name()) // enum 이름 그대로 (프론트에서 라벨 매핑)
                 .build();
     }
 }
