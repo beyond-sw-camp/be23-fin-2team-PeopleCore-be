@@ -20,11 +20,13 @@ public class KpiTemplate extends BaseTimeEntity {
     @Column(name = "kpi_id")
     private Long kpiId; // KPI PK
 
-    @Column(name = "department", length = 30)
-    private String department; // 부서 (COMMON/영업팀 등)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "department_option_id")
+    private KpiOption department; // 부서 옵션 (KpiOption DEPARTMENT)
 
-    @Column(name = "category", length = 30)
-    private String category; // 카테고리 (업무성과/역량개발/조직기여)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_option_id")
+    private KpiOption category; // 카테고리 옵션 (KpiOption CATEGORY)
 
     @Column(name = "name", length = 100)
     private String name; // 지표명
@@ -32,12 +34,13 @@ public class KpiTemplate extends BaseTimeEntity {
     @Column(name = "description", length = 300)
     private String description; // 설명
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "direction")
-    private KpiDirection direction; // 방향성 (UP/DOWN/MAINTAIN)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "direction_option_id")
+    private KpiOption direction; // 방향성 옵션 (KpiOption DIRECTION)
 
-    @Column(name = "unit", length = 20)
-    private String unit; // 단위 (PERCENT/COUNT/WON/HOUR/SCORE/DAY)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "unit_option_id")
+    private KpiOption unit; // 단위 옵션 (KpiOption UNIT)
 
     @Column(name = "baseline", precision = 12, scale = 2)
     private BigDecimal baseline; // 사내평균(기준값)

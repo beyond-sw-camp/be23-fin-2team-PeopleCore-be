@@ -40,4 +40,19 @@ public class Season extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private EvalSeasonStatus status; // 시즌 상태
+
+    public String calcStatusLabel(){
+        LocalDate today = LocalDate.now();
+        if(startDate == null ||endDate == null)return "준비중";
+        if (today.isBefore(startDate))             return "준비중";
+        if (today.isAfter(endDate))                return "완료";
+        return "진행중";
+    }
+
+    public void updateBasicInfo(String name, String period, LocalDate startDate, LocalDate endDate){
+        this.name = name;
+        this.period = period;
+        this.startDate = startDate;
+        this.endDate =endDate;
+    }
 }
