@@ -8,10 +8,12 @@ import com.peoplecore.attendance.dto.AttendanceEmployeeHistoryResDto;
 import com.peoplecore.attendance.dto.AttendanceOvertimeRowResDto;
 import com.peoplecore.attendance.dto.AttendancePeriodListRowResDto;
 import com.peoplecore.attendance.dto.AttendanceWeeklyDailyStatsResDto;
+import com.peoplecore.attendance.dto.AttendanceWeeklyHeadlineResDto;
 import com.peoplecore.attendance.dto.PagedResDto;
 import com.peoplecore.attendance.entity.AttendanceCardType;
 import com.peoplecore.attendance.entity.EmploymentFilter;
 import com.peoplecore.attendance.service.AttendanceAdminService;
+import com.peoplecore.attendance.service.AttendanceAggregateService;
 
 import com.peoplecore.auth.RoleRequired;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,10 +46,34 @@ import java.util.UUID;
 public class AttendanceAdminController {
 
     private final AttendanceAdminService adminService;
+    private final AttendanceAggregateService aggregateService; // 집계탭(주간) 서비스
 
     @Autowired
-    public AttendanceAdminController(AttendanceAdminService adminService) {
+    public AttendanceAdminController(AttendanceAdminService adminService,
+                                     AttendanceAggregateService aggregateService) {
         this.adminService = adminService;
+        this.aggregateService = aggregateService;
+    }
+
+    /**
+     * 집계탭 상단 4개 카드 (출근율 / 지각율 / 결근 사원수 / 주간 최대근무 초과 사원수).
+     *
+     * GET /attendance/admin/daily/aggregate/headline
+     *   ?weekStart=yyyy-MM-dd                    (해당 주의 임의 요일 가능, 서비스에서 월요일로 정규화)
+     *   &employmentFilter=ALL|ACTIVE|ON_LEAVE    (default ALL)
+     */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @GetMapping("/aggregate/headline")
+    public ResponseEntity<AttendanceWeeklyHeadlineResDto> getAggregateHeadline(
+            @RequestHeader("X-User-Company") UUID companyId,                // 회사 UUID
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)    // 주 시작일 (월요일로 정규화됨)
+                    LocalDate weekStart,
+            @RequestParam(required = false, defaultValue = "ALL")           // 재직상태 필터
+                    EmploymentFilter employmentFilter
+    ) {
+        return ResponseEntity.ok(
+                aggregateService.getWeeklyHeadline(companyId, weekStart, employmentFilter)
+        );
     }
 
     /**

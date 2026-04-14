@@ -1,3 +1,26 @@
+use peoplecore;
+
+
+SET FOREIGN_KEY_CHECKS = 0;
+TRUNCATE TABLE overtime_request;
+TRUNCATE TABLE vacation_req;
+TRUNCATE TABLE commute_record;
+TRUNCATE TABLE attendance;
+TRUNCATE TABLE employee;
+TRUNCATE TABLE work_group;
+TRUNCATE TABLE overtime_policy;
+TRUNCATE TABLE vacation_info;
+TRUNCATE TABLE department;
+TRUNCATE TABLE grade;
+TRUNCATE TABLE company;
+SET FOREIGN_KEY_CHECKS = 1;
+DELETE FROM employee WHERE company_id = UUID_TO_BIN('11111111-1111-1111-1111-111111111111');
+DELETE FROM work_group WHERE company_id = UUID_TO_BIN('11111111-1111-1111-1111-111111111111');
+DELETE FROM overtime_policy WHERE company_company_id = UUID_TO_BIN('11111111-1111-1111-1111-111111111111');
+DELETE FROM department WHERE company_id = UUID_TO_BIN('11111111-1111-1111-1111-111111111111');
+DELETE FROM grade WHERE company_id = UUID_TO_BIN('11111111-1111-1111-1111-111111111111');
+DELETE FROM company WHERE company_id = UUID_TO_BIN('11111111-1111-1111-1111-111111111111');
+SET FOREIGN_KEY_CHECKS = 1;
 /* =========================================================================
    HR 근태 현황 테스트용 시드 데이터
    - 대상 API:
@@ -22,27 +45,39 @@ SET @COMPANY_ID   = UUID_TO_BIN('11111111-1111-1111-1111-111111111111');
 SET @WORKGROUP_ID = 1;
 SET @POLICY_ID    = 1;
 
-/* 1. 회사 ------------------------------------------------------------------ */
-INSERT INTO company (company_id, company_name)
-VALUES (@COMPANY_ID, 'PeopleCore 테스트회사')
+/* 1. 회사 — Company 엔티티 NOT NULL 필드 모두 채움
+   (contract_start_at, contract_end_at, contract_type, max_employees,
+    company_status, force_password_change)                                    */
+INSERT INTO company
+  (company_id, company_name, founded_at,
+   contract_start_at, contract_end_at, contract_type,
+   max_employees, company_status, force_password_change)
+VALUES
+  (@COMPANY_ID, 'PeopleCore 테스트회사', '2015-01-01',
+   '2025-01-01', '2099-12-31', 'YEARLY',
+   500, 'ACTIVE', 0)
 ON DUPLICATE KEY UPDATE company_name = VALUES(company_name);
 
-/* 2. 부서 (5개) ------------------------------------------------------------ */
-INSERT INTO department (dept_id, company_id, dept_name) VALUES
-  (1, @COMPANY_ID, '개발팀'),
-  (2, @COMPANY_ID, '인사팀'),
-  (3, @COMPANY_ID, '마케팅팀'),
-  (4, @COMPANY_ID, '영업팀'),
-  (5, @COMPANY_ID, '기획팀')
+/* 2. 부서 (5개) — dept_code, is_use, created_at NOT NULL --------------------- */
+INSERT INTO department
+  (dept_id, company_id, dept_name, dept_code, parent_dept_id, is_use, created_at)
+VALUES
+  (1, @COMPANY_ID, '개발팀',   'DEV',   NULL, 1, NOW()),
+  (2, @COMPANY_ID, '인사팀',   'HR',    NULL, 1, NOW()),
+  (3, @COMPANY_ID, '마케팅팀', 'MKT',   NULL, 1, NOW()),
+  (4, @COMPANY_ID, '영업팀',   'SALES', NULL, 1, NOW()),
+  (5, @COMPANY_ID, '기획팀',   'PLAN',  NULL, 1, NOW())
 ON DUPLICATE KEY UPDATE dept_name = VALUES(dept_name);
 
-/* 3. 직급 (5개) ------------------------------------------------------------ */
-INSERT INTO grade (grade_id, company_id, grade_name) VALUES
-  (1, @COMPANY_ID, '사원'),
-  (2, @COMPANY_ID, '대리'),
-  (3, @COMPANY_ID, '과장'),
-  (4, @COMPANY_ID, '차장'),
-  (5, @COMPANY_ID, '부장')
+/* 3. 직급 (5개) — grade_code, grade_order NOT NULL --------------------------- */
+INSERT INTO grade
+  (grade_id, company_id, grade_name, grade_code, grade_order)
+VALUES
+  (1, @COMPANY_ID, '사원', 'G1', 1),
+  (2, @COMPANY_ID, '대리', 'G2', 2),
+  (3, @COMPANY_ID, '과장', 'G3', 3),
+  (4, @COMPANY_ID, '차장', 'G4', 4),
+  (5, @COMPANY_ID, '부장', 'G5', 5)
 ON DUPLICATE KEY UPDATE grade_name = VALUES(grade_name);
 
 /* 4. 근무그룹 — 09:00-18:00, 월~금, 12:00-13:00 브레이크 ------------------ */
@@ -61,9 +96,11 @@ VALUES
    NULL, NULL, NOW(), NOW())
 ON DUPLICATE KEY UPDATE group_name = VALUES(group_name);
 
-/* 5. 초과근무 정책 — 주 최대 52h / 경고 48h -------------------------------- */
+/* 5. 초과근무 정책 — 주 최대 52h / 경고 48h
+   ⚠ FK 컬럼명이 Hibernate 기본명 'company_company_id' (엔티티 @JoinColumn name 미지정)
+   --------------------------------------------------------------------------- */
 INSERT INTO overtime_policy
-  (ot_policy_id, company_id, ot_min_unit,
+  (ot_policy_id, company_company_id, ot_min_unit,
    ot_policy_weekly_max_hour, ot_policy_warning_hour, ot_exceed_action,
    ot_policy_manager_id, ot_policy_manager_name)
 VALUES
@@ -72,28 +109,30 @@ ON DUPLICATE KEY UPDATE
   ot_policy_weekly_max_hour = VALUES(ot_policy_weekly_max_hour),
   ot_policy_warning_hour    = VALUES(ot_policy_warning_hour);
 
-/* 6. 사원 (12명) ----------------------------------------------------------- */
-/* 실제 스키마에 맞춰 NOT NULL 컬럼(emp_phone, contract_end_at 등) 포함                */
-/* contract_end_at: 정규직은 계약만료 개념이 약해서 2099-12-31 23:59:59 로 세팅         */
+/* 6. 사원 (12명)
+   ⚠ contract_end_at 은 company 테이블 컬럼 — employee 에 없음. 잘못된 추가는 제거.
+   employee NOT NULL: company_id, dept_id, grade_id, emp_name, emp_email,
+                      emp_phone, emp_num, emp_hire_date, emp_type, emp_status,
+                      emp_role, emp_password, must_change_password,
+                      dependents_count, tax_rate_option                       */
 INSERT INTO employee
   (emp_id, company_id, dept_id, grade_id, work_group_id, work_group_assigned_at,
    emp_num, emp_name, emp_email, emp_phone, emp_hire_date,
-   emp_type, emp_status, emp_role,
-   emp_password, must_change_password, dependents_count, tax_rate_option,
-   contract_end_at)
+   emp_type, emp_status, emp_role, retirement_type,
+   emp_password, must_change_password, dependents_count, tax_rate_option)
 VALUES
-  (1,  @COMPANY_ID, 1, 3, @WORKGROUP_ID, NOW(), 'EMP001', '김민수', 'emp001@test.co', '010-1001-0001', '2020-03-01', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59'),
-  (2,  @COMPANY_ID, 1, 2, @WORKGROUP_ID, NOW(), 'EMP002', '이영희', 'emp002@test.co', '010-1001-0002', '2021-05-01', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59'),
-  (3,  @COMPANY_ID, 1, 1, @WORKGROUP_ID, NOW(), 'EMP003', '박지훈', 'emp003@test.co', '010-1001-0003', '2023-01-02', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59'),
-  (4,  @COMPANY_ID, 1, 1, @WORKGROUP_ID, NOW(), 'EMP004', '최서연', 'emp004@test.co', '010-1001-0004', '2024-06-15', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59'),
-  (5,  @COMPANY_ID, 2, 4, @WORKGROUP_ID, NOW(), 'EMP005', '정하늘', 'emp005@test.co', '010-1001-0005', '2018-09-10', 'REGULAR', 'ACTIVE', 'HR_ADMIN',     '', FALSE, 2, 100, '2099-12-31 23:59:59'),
-  (6,  @COMPANY_ID, 3, 4, @WORKGROUP_ID, NOW(), 'EMP006', '강도윤', 'emp006@test.co', '010-1001-0006', '2019-02-01', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59'),
-  (7,  @COMPANY_ID, 3, 2, @WORKGROUP_ID, NOW(), 'EMP007', '윤지아', 'emp007@test.co', '010-1001-0007', '2022-04-20', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59'),
-  (8,  @COMPANY_ID, 4, 5, @WORKGROUP_ID, NOW(), 'EMP008', '임재호', 'emp008@test.co', '010-1001-0008', '2015-07-01', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 3, 100, '2099-12-31 23:59:59'),
-  (9,  @COMPANY_ID, 4, 2, @WORKGROUP_ID, NOW(), 'EMP009', '한소영', 'emp009@test.co', '010-1001-0009', '2022-11-05', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59'),
-  (10, @COMPANY_ID, 5, 3, @WORKGROUP_ID, NOW(), 'EMP010', '오준혁', 'emp010@test.co', '010-1001-0010', '2020-08-15', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59'),
-  (11, @COMPANY_ID, 2, 2, @WORKGROUP_ID, NOW(), 'EMP011', '김지원', 'emp011@test.co', '010-1001-0011', '2023-03-02', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59'),
-  (12, @COMPANY_ID, 5, 2, @WORKGROUP_ID, NOW(), 'EMP012', '이태민', 'emp012@test.co', '010-1001-0012', '2021-09-01', 'REGULAR', 'ACTIVE', 'EMPLOYEE',     '', FALSE, 1, 100, '2099-12-31 23:59:59')
+  (1,  @COMPANY_ID, 1, 3, @WORKGROUP_ID, NOW(), 'EMP001', '김민수', 'emp001@test.co', '010-1001-0001', '2020-03-01', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100),
+  (2,  @COMPANY_ID, 1, 2, @WORKGROUP_ID, NOW(), 'EMP002', '이영희', 'emp002@test.co', '010-1001-0002', '2021-05-01', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100),
+  (3,  @COMPANY_ID, 1, 1, @WORKGROUP_ID, NOW(), 'EMP003', '박지훈', 'emp003@test.co', '010-1001-0003', '2023-01-02', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100),
+  (4,  @COMPANY_ID, 1, 1, @WORKGROUP_ID, NOW(), 'EMP004', '최서연', 'emp004@test.co', '010-1001-0004', '2024-06-15', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100),
+  (5,  @COMPANY_ID, 2, 4, @WORKGROUP_ID, NOW(), 'EMP005', '정하늘', 'emp005@test.co', '010-1001-0005', '2018-09-10', 'FULL', 'ACTIVE', 'HR_ADMIN', 0, '', 0, 2, 100),
+  (6,  @COMPANY_ID, 3, 4, @WORKGROUP_ID, NOW(), 'EMP006', '강도윤', 'emp006@test.co', '010-1001-0006', '2019-02-01', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100),
+  (7,  @COMPANY_ID, 3, 2, @WORKGROUP_ID, NOW(), 'EMP007', '윤지아', 'emp007@test.co', '010-1001-0007', '2022-04-20', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100),
+  (8,  @COMPANY_ID, 4, 5, @WORKGROUP_ID, NOW(), 'EMP008', '임재호', 'emp008@test.co', '010-1001-0008', '2015-07-01', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 3, 100),
+  (9,  @COMPANY_ID, 4, 2, @WORKGROUP_ID, NOW(), 'EMP009', '한소영', 'emp009@test.co', '010-1001-0009', '2022-11-05', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100),
+  (10, @COMPANY_ID, 5, 3, @WORKGROUP_ID, NOW(), 'EMP010', '오준혁', 'emp010@test.co', '010-1001-0010', '2020-08-15', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100),
+  (11, @COMPANY_ID, 2, 2, @WORKGROUP_ID, NOW(), 'EMP011', '김지원', 'emp011@test.co', '010-1001-0011', '2023-03-02', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100),
+  (12, @COMPANY_ID, 5, 2, @WORKGROUP_ID, NOW(), 'EMP012', '이태민', 'emp012@test.co', '010-1001-0012', '2021-09-01', 'FULL', 'ACTIVE', 'EMPLOYEE', 0, '', 0, 1, 100)
 ON DUPLICATE KEY UPDATE emp_name = VALUES(emp_name);
 
 /* 7. 출퇴근 기록 (commute_record) ------------------------------------------ */
@@ -209,11 +248,11 @@ INSERT INTO vacation_req
   (company_id, info_id, emp_id, req_emp_name, req_emp_dept_name,
    vac_req_startat, vac_req_endat, vac_req_use_day, vac_req_reason, vac_req_status,
    manager_id, req_emp_grade, req_emp_title,
-   created_at, updated_at)
+   version, created_at, updated_at)
 VALUES
   (@COMPANY_ID, 1, 5, '정하늘', '인사팀',
    '2026-04-13 00:00:00', '2026-04-13 23:59:59', 1.0, '개인사유', 'APPROVED',
-   NULL, '차장', NULL, NOW(), NOW());
+   NULL, '차장', '팀원', 0, NOW(), NOW());
 
 /* 9. 승인된 초과근무 요청 -------------------------------------------------- */
 /* EMP003 토요일 승인 OT (2026-04-18 10:00 ~ 16:00)                            */

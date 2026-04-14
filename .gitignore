@@ -26,6 +26,8 @@ out/
 !.idea/gradle.xml
 !.idea/.gitignore
 
+**/attendance-test-seed.sql
+
 payroll-ledger-code.md
 severance-estimate-code.md
 severance-ledger-code.md
