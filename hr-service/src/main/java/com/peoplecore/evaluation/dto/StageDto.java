@@ -28,8 +28,8 @@ public class StageDto {
                 .orderNo(s.getOrderNo())
                 .startDate(s.getStartDate())
                 .endDate(s.getEndDate())
-//              조회 시점 기준 실제 상태
-                .status(s.calcStatusLabel())
+//              DB status enum → 한글 라벨
+                .status(s.getStatus().getLabel())
                 .build();
     }
 }

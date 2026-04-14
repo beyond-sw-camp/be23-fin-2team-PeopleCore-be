@@ -43,7 +43,7 @@ public class SeasonDetailDto {
                 .period(s.getPeriod())
                 .startDate(s.getStartDate())
                 .endDate(s.getEndDate())
-                .status(s.calcStatusLabel())           // 오늘 날짜 기준 계산
+                .status(s.getStatus().getLabel())      // DB status enum → 한글 라벨
                 .stages(stageDtos)
                 .rules(rulesDto)
                 .build();

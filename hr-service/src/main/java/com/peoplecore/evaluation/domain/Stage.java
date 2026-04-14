@@ -36,16 +36,12 @@ public class Stage extends BaseTimeEntity {
     @Column(name = "end_date")
     private LocalDate endDate; // 종료일
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "status", length = 20)
     @Builder.Default
-    private String status = "대기"; // 상태 (대기/진행중/마감)
+    private StageStatus status = StageStatus.WAITING; // 상태 (대기/진행중/마감)
 
-    // 오늘 날짜 기준 상태 라벨 (대기/진행중/마감)
-    public String calcStatusLabel() {
-        LocalDate today = LocalDate.now();
-        if (startDate == null || endDate == null) return "대기";
-        if (today.isBefore(startDate))             return "대기";
-        if (today.isAfter(endDate))                return "마감";
-        return "진행중";
-    }
+//    스케줄러 호출 — 상태 전이
+    public void start()  { this.status = StageStatus.IN_PROGRESS; }
+    public void finish() { this.status = StageStatus.FINISHED; }
 }

@@ -1,11 +1,13 @@
 package com.peoplecore.evaluation.repository;
 
+import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.dto.SeasonDropDto;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,4 +31,10 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
             ORDER BY s.startDate DESC, s.seasonId DESC
             """)
     List<SeasonDropDto> findActiveByCompany(@Param("companyId") UUID companyId);
+
+//    상태+시작일 <= 오늘 -> open대상
+    List<Season>findByStatusAndStartDateLessThanEqual(EvalSeasonStatus status, LocalDate today);
+
+//    상태 + 종료일 < 오늘-> close대상
+    List<Season>findByStatusAndEndDateBefore(EvalSeasonStatus status, LocalDate today);
 }

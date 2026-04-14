@@ -28,10 +28,10 @@ public class EvaluationRulesController {
         return ResponseEntity.ok(rulesService.save(seasonId, request));
     }
 
-    // 시즌 OPEN 시 스냅샷 동결 (시즌 상태 전이 로직에서 호출) //TODO스케줄러로 변경 -오픈 마감 생성시
-    @PostMapping("/{seasonId}/freeze")
-    public ResponseEntity<Void> freeze(@PathVariable Long seasonId) {
-        rulesService.freezeSnapshot(seasonId);
-        return ResponseEntity.noContent().build();
-    }
+//    // 시즌 OPEN 시 스냅샷 동결 (시즌 상태 전이 로직에서 호출) //TODO스케줄러로 변경 -오픈 마감 생성시
+//    @PostMapping("/{seasonId}/freeze")
+//    public ResponseEntity<Void> freeze(@PathVariable Long seasonId) {
+//        rulesService.freezeSnapshot(seasonId);
+//        return ResponseEntity.noContent().build();
+//    }
 }

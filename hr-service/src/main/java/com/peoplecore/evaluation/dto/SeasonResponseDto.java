@@ -29,7 +29,7 @@ public class SeasonResponseDto {
                 .period(season.getPeriod())
                 .startDate(season.getStartDate())
                 .endDate(season.getEndDate())
-                .status(season.calcStatusLabel()) // 오늘 날짜 기준 계산
+                .status(season.getStatus().getLabel()) // DB status enum → 한글 라벨
                 .build();
     }
 }

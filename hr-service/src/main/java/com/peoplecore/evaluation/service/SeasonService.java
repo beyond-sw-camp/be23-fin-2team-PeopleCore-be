@@ -69,10 +69,14 @@ public class SeasonService {
 //    드롭다운, 날짜 선택형 // +입력받는 동시 5단계 생성(관리)
     public Long createSeason(UUID companyId, Long empid, SeasonCreateRequestDto requestDto) {
 
-        //기간 유효성
+        // 기간 유효성 — 시즌 기간
         if (requestDto.getEndDate().isBefore(requestDto.getStartDate())) {
             throw new IllegalArgumentException("종료일이 시작일보다 빠를 수 없습니다");
         }
+
+        // 단계 일정 유효성 — 5개 / 순서 / 시즌 기간 내 포함
+        validateStageInputs(requestDto);
+
         // 회사 확인 (FK 참조용 엔티티 로드)
         Company company = companyRepository.findById(companyId).orElseThrow(() -> new IllegalArgumentException("회사를 찾을 수 없습니다"));
 
@@ -86,22 +90,55 @@ public class SeasonService {
                 .status(EvalSeasonStatus.DRAFT)
                 .build());
 
-//        고정 5단계 자동 생성
+//        고정 이름 + 요청받은 날짜로 5단계 생성
         String[] stageNames = {"목표등록", "자기평가", "상위자평가", "등급 산정 및 보정", "결과확정"};
+        List<SeasonCreateRequestDto.StageInput> stageInputs = requestDto.getStages();
         for (int i = 0; i < stageNames.length; i++) {
+            SeasonCreateRequestDto.StageInput in = stageInputs.get(i);
             stageRepository.save(Stage.builder()
                     .season(season)
                     .name(stageNames[i])
                     .orderNo(i + 1)
-                    .status("대기")
+                    .startDate(in.getStartDate())
+                    .endDate(in.getEndDate())
                     .build());
+//            status= Builder.Default로 자동주입
         }
 
 //        규칙 row 자동 생성 — 직전 시즌 복사 or 업계 표준 기본값 (내부 분기)
         rulesService.createInitialRules(season);
 
         return season.getSeasonId();
+    }
 
+    // 단계 일정 검증 — 순서/기간 포함 여부/겹침 방지
+    private void validateStageInputs(SeasonCreateRequestDto req) {
+        List<SeasonCreateRequestDto.StageInput> stages = req.getStages();
+        if (stages == null || stages.size() != 5) {
+            throw new IllegalArgumentException("단계 일정 5개가 필요합니다");
+        }
+
+        java.time.LocalDate seasonStart = req.getStartDate();
+        java.time.LocalDate seasonEnd = req.getEndDate();
+        java.time.LocalDate prevEnd = null;
+
+        for (int i = 0; i < stages.size(); i++) {
+            SeasonCreateRequestDto.StageInput s = stages.get(i);
+
+            if (s.getStartDate() == null || s.getEndDate() == null) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계 날짜가 누락되었습니다");
+            }
+            if (s.getEndDate().isBefore(s.getStartDate())) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계: 종료일이 시작일보다 빠를 수 없습니다");
+            }
+            if (s.getStartDate().isBefore(seasonStart) || s.getEndDate().isAfter(seasonEnd)) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계는 시즌 기간 내여야 합니다");
+            }
+            if (prevEnd != null && s.getStartDate().isBefore(prevEnd)) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계는 이전 단계 이후에 시작해야 합니다");
+            }
+            prevEnd = s.getEndDate();
+        }
     }
 
     //    5.시즌 수정 -closed는 수정 불가
