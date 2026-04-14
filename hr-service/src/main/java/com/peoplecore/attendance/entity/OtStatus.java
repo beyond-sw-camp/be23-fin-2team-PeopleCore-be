@@ -1,14 +1,12 @@
 package com.peoplecore.attendance.entity;
 
 public enum OtStatus {
-    /** 임시 — hr 모달 "확인" 만 누르고 결재요청 전. 잔여 계산에서 제외. 2시간 후 스케줄러가 정리 */
-    DRAFT,
-    /** 승인 대기 — collab 결재 문서 생성됨 */
+    /** 승인 대기 — collab 결재 문서 생성 직후 hr 로 insert 되는 초기 상태 */
     PENDING,
     /** 승인 */
     APPROVED,
     /** 반려 */
     REJECTED,
-    /** 취소 */
+    /** 취소 — 기안자 회수(recall) 또는 관리자 직접 취소 */
     CANCELED
 }

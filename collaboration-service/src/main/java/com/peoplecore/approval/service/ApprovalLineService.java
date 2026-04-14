@@ -138,11 +138,8 @@ public class ApprovalLineService {
                 }
             }
 
-            /* 초과근무/휴가 최종 승인 이벤트 발행 — formName 분기는 Publisher 내부에서 */
-            approvalEventPublisher.publishResult(
-                    companyId, document.getDocId(),
-                    document.getFormId().getFormName(), document.getDocData(),
-                    "APPROVED", empId, null);
+            /* 초과근무/휴가 최종 승인 이벤트 발행 — Publisher 내부에서 formName 분기 */
+            approvalEventPublisher.publishResult(document, "APPROVED", empId, null);
         }
 
 
@@ -202,11 +199,8 @@ public class ApprovalLineService {
         myLine.markRead();
         document.reject();
 
-        /* 초과근무/휴가 반려 이벤트 발행 — formName 분기는 Publisher 내부 */
-        approvalEventPublisher.publishResult(
-                companyId, docId,
-                document.getFormId().getFormName(), document.getDocData(),
-                "REJECTED", empId, reason);
+        /* 초과근무/휴가 반려 이벤트 발행 — Publisher 내부에서 formName 분기 */
+        approvalEventPublisher.publishResult(document, "REJECTED", empId, reason);
 
         /*상태 패턴 변경 이력 저장 */
         historyRepository.save(

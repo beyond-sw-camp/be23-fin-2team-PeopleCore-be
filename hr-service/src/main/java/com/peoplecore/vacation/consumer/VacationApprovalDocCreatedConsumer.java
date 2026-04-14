@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 /**
  * 휴가 결재 문서 생성 이벤트 Consumer.
  * 토픽: vacation-approval-doc-created
- * 처리: VacationReq 의 approvalDocId bind
+ * 처리: VacationReq INSERT (PENDING)
  */
 @Component
 @Slf4j
@@ -35,10 +35,9 @@ public class VacationApprovalDocCreatedConsumer {
         try {
             VacationApprovalDocCreatedEvent event =
                     objectMapper.readValue(message, VacationApprovalDocCreatedEvent.class);
-            vacationReqService.bindApprovalDoc(
-                    event.getCompanyId(), event.getVacReqId(), event.getApprovalDocId());
-            log.info("[Kafka] Vacation docCreated 처리 완료 - vacReqId={}, docId={}",
-                    event.getVacReqId(), event.getApprovalDocId());
+            vacationReqService.createFromApproval(event);
+            log.info("[Kafka] Vacation docCreated 처리 완료 - docId={}, empId={}",
+                    event.getApprovalDocId(), event.getEmpId());
         } catch (Exception e) {
             log.error("[Kafka] Vacation docCreated 처리 실패 - message={}, err={}", message, e.getMessage());
             throw new RuntimeException(e);

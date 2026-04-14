@@ -143,9 +143,9 @@ public class ApprovalDocumentService {
                 .alarmRefId(document.getDocId())
                 .build());
 
-        /* hr-service 에 docCreated 이벤트 발행 — 초과근무/휴가 양식만 선택 발행 (Publisher 내부 formName 분기) */
-        approvalEventPublisher.publishDocCreated(
-                companyId, document.getDocId(), form.getFormName(), request.getDocData());
+        /* hr-service 에 docCreated 이벤트 발행 — 결재선 포함해 최종결재자까지 전달 */
+        List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId());
+        approvalEventPublisher.publishDocCreated(document, savedLines);
 
         return document.getDocId();
     }
@@ -438,6 +438,9 @@ public class ApprovalDocumentService {
 
         /* 상태 패턴: PENDING → CANCELED (PendingState.recall() 호출) */
         document.recall();
+
+        /* hr-service 에 회수 이벤트 발행 — 초과근무/휴가 양식에만 실제 발행 (Publisher 내부 formName 분기) */
+        approvalEventPublisher.publishResult(document, "CANCELED", empId, null);
 
         /*결재 라인 전원에게 알림 발행 */
         List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())

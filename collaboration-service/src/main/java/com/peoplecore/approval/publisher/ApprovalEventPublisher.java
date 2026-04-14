@@ -2,6 +2,9 @@ package com.peoplecore.approval.publisher;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.approval.entity.ApprovalDocument;
+import com.peoplecore.approval.entity.ApprovalLine;
+import com.peoplecore.approval.entity.ApprovalRole;
 import com.peoplecore.event.OvertimeApprovalDocCreatedEvent;
 import com.peoplecore.event.OvertimeApprovalResultEvent;
 import com.peoplecore.event.VacationApprovalDocCreatedEvent;
@@ -11,20 +14,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
-import java.util.UUID;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Comparator;
+import java.util.List;
 
 /**
  * 초과근무/휴가 결재 이벤트 Kafka 발행 통합 컴포넌트.
  *
- * 호출 위치:
+ * 발행 시점:
  *  - ApprovalDocumentService.createDocument() 직후 → publishDocCreated
- *  - ApprovalLineService.approve() 최종 승인 시 → publishResult(APPROVED)
+ *  - ApprovalLineService.approve() 최종 승인 → publishResult(APPROVED)
  *  - ApprovalLineService.rejectDocument() → publishResult(REJECTED)
+ *  - ApprovalDocumentService.recallDocument() → publishResult(CANCELED)
  *
  * formName 매핑:
  *  - "초과근로신청서" → overtime-*
  *  - "휴가원" prefix → vacation-*
- *  - 그 외 (사직서/기타) → 발행 안 함
+ *  - 그 외 → 발행 안 함
  */
 @Component
 @Slf4j
@@ -48,78 +55,144 @@ public class ApprovalEventPublisher {
         this.objectMapper = objectMapper;
     }
 
-    /** 문서 생성 직후 호출 — docData 에서 otId/vacReqId 파싱해 hr 에 전달 */
-    public void publishDocCreated(UUID companyId, Long docId, String formName, String docData) {
+    /** 문서 생성 직후 — 양식 본문(docData) + 결재선에서 정보 파싱해 이벤트 발행 */
+    public void publishDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {
+        String formName = document.getFormId().getFormName();
+        String docData = document.getDocData();
+
         try {
             if (FORM_NAME_OVERTIME.equals(formName)) {
-                Long otId = extractLong(docData, "otId");
-                if (otId == null) {
-                    log.warn("[Kafka] OT docCreated skip - docData 에 otId 없음. docId={}", docId);
-                    return;
-                }
                 OvertimeApprovalDocCreatedEvent event = OvertimeApprovalDocCreatedEvent.builder()
-                        .companyId(companyId).otId(otId).approvalDocId(docId).build();
+                        .companyId(document.getCompanyId())
+                        .approvalDocId(document.getDocId())
+                        .empId(document.getEmpId())
+                        .deptId(document.getEmpDeptId())
+                        .otDate(parseDateTime(docData, "otDate"))
+                        .otPlanStart(parseDateTime(docData, "otPlanStart"))
+                        .otPlanEnd(parseDateTime(docData, "otPlanEnd"))
+                        .otReason(parseString(docData, "otReason"))
+                        .finalApproverEmpId(findFinalApproverEmpId(lines))
+                        .build();
                 kafkaTemplate.send(TOPIC_OT_DOC_CREATED, objectMapper.writeValueAsString(event));
-                log.info("[Kafka] OT docCreated 발행 - docId={}, otId={}", docId, otId);
+                log.info("[Kafka] OT docCreated 발행 - docId={}, empId={}", document.getDocId(), document.getEmpId());
             } else if (formName != null && formName.startsWith(FORM_NAME_VACATION_PREFIX)) {
-                Long vacReqId = extractLong(docData, "vacReqId");
-                if (vacReqId == null) {
-                    log.warn("[Kafka] Vacation docCreated skip - docData 에 vacReqId 없음. docId={}", docId);
-                    return;
-                }
                 VacationApprovalDocCreatedEvent event = VacationApprovalDocCreatedEvent.builder()
-                        .companyId(companyId).vacReqId(vacReqId).approvalDocId(docId).build();
+                        .companyId(document.getCompanyId())
+                        .approvalDocId(document.getDocId())
+                        .empId(document.getEmpId())
+                        .empName(document.getEmpName())
+                        .deptId(document.getEmpDeptId())
+                        .deptName(document.getEmpDeptName())
+                        .empGrade(document.getEmpGrade())
+                        .empTitle(document.getEmpTitle())
+                        .infoId(parseLong(docData, "infoId"))
+                        .vacReqStartat(parseDateTime(docData, "vacReqStartat"))
+                        .vacReqEndat(parseDateTime(docData, "vacReqEndat"))
+                        .vacReqUseDay(parseDecimal(docData, "vacReqUseDay"))
+                        .vacReqReason(parseString(docData, "vacReqReason"))
+                        .finalApproverEmpId(findFinalApproverEmpId(lines))
+                        .build();
                 kafkaTemplate.send(TOPIC_VAC_DOC_CREATED, objectMapper.writeValueAsString(event));
-                log.info("[Kafka] Vacation docCreated 발행 - docId={}, vacReqId={}", docId, vacReqId);
+                log.info("[Kafka] Vacation docCreated 발행 - docId={}, empId={}", document.getDocId(), document.getEmpId());
             }
         } catch (Exception e) {
-            log.error("[Kafka] docCreated 발행 실패 - docId={}, err={}", docId, e.getMessage());
+            log.error("[Kafka] docCreated 발행 실패 - docId={}, err={}", document.getDocId(), e.getMessage());
         }
     }
 
-    /** 최종 승인/반려 시 호출 (APPROVED 또는 REJECTED) */
-    public void publishResult(UUID companyId, Long docId, String formName, String docData,
-                              String status, Long managerId, String rejectReason) {
+    /** 최종 승인/반려/회수 시 호출 (status: APPROVED / REJECTED / CANCELED) */
+    public void publishResult(ApprovalDocument document, String status, Long managerId, String rejectReason) {
+        String formName = document.getFormId().getFormName();
+        String docData = document.getDocData();
+
         try {
             if (FORM_NAME_OVERTIME.equals(formName)) {
-                Long otId = extractLong(docData, "otId");
-                if (otId == null) {
-                    log.warn("[Kafka] OT result skip - docData 에 otId 없음. docId={}", docId);
-                    return;
-                }
+                // hr 측에서 otId 로 찾을 수 있지만, 호환성을 위해 approvalDocId 도 전달
                 OvertimeApprovalResultEvent event = OvertimeApprovalResultEvent.builder()
-                        .companyId(companyId).otId(otId).approvalDocId(docId)
-                        .status(status).managerId(managerId).rejectReason(rejectReason)
+                        .companyId(document.getCompanyId())
+                        .otId(extractOtId(document))
+                        .approvalDocId(document.getDocId())
+                        .status(status)
+                        .managerId(managerId)
+                        .rejectReason(rejectReason)
                         .build();
                 kafkaTemplate.send(TOPIC_OT_RESULT, objectMapper.writeValueAsString(event));
-                log.info("[Kafka] OT result 발행 - docId={}, otId={}, status={}", docId, otId, status);
+                log.info("[Kafka] OT result 발행 - docId={}, status={}", document.getDocId(), status);
             } else if (formName != null && formName.startsWith(FORM_NAME_VACATION_PREFIX)) {
-                Long vacReqId = extractLong(docData, "vacReqId");
-                if (vacReqId == null) {
-                    log.warn("[Kafka] Vacation result skip - docData 에 vacReqId 없음. docId={}", docId);
-                    return;
-                }
                 VacationApprovalResultEvent event = VacationApprovalResultEvent.builder()
-                        .companyId(companyId).vacReqId(vacReqId).approvalDocId(docId)
-                        .status(status).managerId(managerId).rejectReason(rejectReason)
+                        .companyId(document.getCompanyId())
+                        .vacReqId(extractVacReqId(document))
+                        .approvalDocId(document.getDocId())
+                        .status(status)
+                        .managerId(managerId)
+                        .rejectReason(rejectReason)
                         .build();
                 kafkaTemplate.send(TOPIC_VAC_RESULT, objectMapper.writeValueAsString(event));
-                log.info("[Kafka] Vacation result 발행 - docId={}, vacReqId={}, status={}",
-                        docId, vacReqId, status);
+                log.info("[Kafka] Vacation result 발행 - docId={}, status={}", document.getDocId(), status);
             }
         } catch (Exception e) {
-            log.error("[Kafka] result 발행 실패 - docId={}, err={}", docId, e.getMessage());
+            log.error("[Kafka] result 발행 실패 - docId={}, err={}", document.getDocId(), e.getMessage());
         }
     }
 
-    /** docData JSON 문자열에서 Long 필드 안전 추출. 파싱 실패/필드 없음 → null */
-    private Long extractLong(String docData, String fieldName) {
+    /* ================== 내부 유틸 ================== */
+
+    /** 결재선 중 APPROVER 역할의 max lineStep 사원 empId. 없으면 null */
+    private Long findFinalApproverEmpId(List<ApprovalLine> lines) {
+        if (lines == null || lines.isEmpty()) return null;
+        return lines.stream()
+                .filter(l -> l.getApprovalRole() == ApprovalRole.APPROVER)
+                .max(Comparator.comparingInt(ApprovalLine::getLineStep))
+                .map(ApprovalLine::getEmpId)
+                .orElse(null);
+    }
+
+    /** result 발행 시 otId — hr 측이 docId 로 찾는 것이 주경로라 null 허용. docData 에 있으면 파싱 */
+    private Long extractOtId(ApprovalDocument document) {
+        return parseLong(document.getDocData(), "otId");
+    }
+
+    private Long extractVacReqId(ApprovalDocument document) {
+        return parseLong(document.getDocData(), "vacReqId");
+    }
+
+    private String parseString(String docData, String field) {
+        JsonNode n = readField(docData, field);
+        return (n == null || n.isNull()) ? null : n.asText();
+    }
+
+    private Long parseLong(String docData, String field) {
+        JsonNode n = readField(docData, field);
+        return (n != null && n.isNumber()) ? n.asLong() : null;
+    }
+
+    private BigDecimal parseDecimal(String docData, String field) {
+        JsonNode n = readField(docData, field);
+        if (n == null || n.isNull()) return null;
+        try {
+            return new BigDecimal(n.asText());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** ISO-8601 datetime 파싱. 문자열 or null */
+    private LocalDateTime parseDateTime(String docData, String field) {
+        JsonNode n = readField(docData, field);
+        if (n == null || n.isNull()) return null;
+        try {
+            return LocalDateTime.parse(n.asText());
+        } catch (Exception e) {
+            log.warn("[Publisher] datetime 파싱 실패 - field={}, val={}", field, n.asText());
+            return null;
+        }
+    }
+
+    private JsonNode readField(String docData, String field) {
         if (docData == null || docData.isBlank()) return null;
         try {
-            JsonNode node = objectMapper.readTree(docData).get(fieldName);
-            return (node != null && node.isNumber()) ? node.asLong() : null;
+            return objectMapper.readTree(docData).get(field);
         } catch (Exception e) {
-            log.warn("[Kafka] docData JSON 파싱 실패 - field={}, err={}", fieldName, e.getMessage());
             return null;
         }
     }

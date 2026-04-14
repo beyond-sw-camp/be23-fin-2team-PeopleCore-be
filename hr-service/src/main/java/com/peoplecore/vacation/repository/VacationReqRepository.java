@@ -11,6 +11,9 @@ import java.util.UUID;
 @Repository
 public interface VacationReqRepository extends JpaRepository<VacationReq, Long> {
 
-    /** 회사 + vacReqId 단건 조회 (Kafka 라우팅 검증) */
+    /** 회사 + vacReqId 단건 조회 */
     Optional<VacationReq> findByCompanyIdAndVacReqId(UUID companyId, Long vacReqId);
+
+    /** companyId + approvalDocId 단건 조회 — docCreated 중복 방지용 */
+    Optional<VacationReq> findByCompanyIdAndApprovalDocId(UUID companyId, Long approvalDocId);
 }

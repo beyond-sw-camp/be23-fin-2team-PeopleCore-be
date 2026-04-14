@@ -13,16 +13,16 @@ import java.util.UUID;
 
 /**
  * 근태(월별 파티션) 테이블 -- 일일 근태 집계/확정본.
- *
+
  * PK 전략 (Hibernate 6 + MySQL 파티션 호환):
  *  - JPA 매핑은 단일 PK(attenId) 만 사용. @IdClass 를 쓰면 Hibernate 가 auto_increment 컬럼을
  *    PK 뒤로 밀어 MySQL "auto_increment 는 key 첫 컬럼" 제약과 충돌함.
  *  - DB 레벨에서는 CommuteRecordPartitionInitializer 가 ALTER 로 (atten_id, atten_work_date)
  *    복합 PK 로 재정의 → 이 상태에서 RANGE COLUMNS(atten_work_date) 파티션 적용.
- *
+
  * 비즈니스 유일성:
  *  - UNIQUE(company_id, emp_id, atten_work_date) 로 DB 가 보장. CommuteRecord 와 1:1 매칭.
- *
+
  * 인덱스:
  *  - (company_id, emp_id, atten_work_date) 대시보드 집계
  *  - (emp_id, atten_work_date) 개인 근태 조회

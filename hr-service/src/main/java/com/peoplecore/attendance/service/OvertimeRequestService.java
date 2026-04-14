@@ -1,7 +1,7 @@
 package com.peoplecore.attendance.service;
 
+import com.peoplecore.alarm.publisher.HrAlarmPublisher;
 import com.peoplecore.attendance.dto.OvertimeRemainingResDto;
-import com.peoplecore.attendance.dto.OvertimeSubmitRequest;
 import com.peoplecore.attendance.dto.OvertimeWeekHistoryResDto;
 import com.peoplecore.attendance.entity.OtExceedAction;
 import com.peoplecore.attendance.entity.OtStatus;
@@ -10,8 +10,11 @@ import com.peoplecore.attendance.entity.OvertimeRequest;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import com.peoplecore.attendance.repository.OverTimePolicyRepository;
+import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.event.AlarmEvent;
+import com.peoplecore.event.OvertimeApprovalDocCreatedEvent;
 import com.peoplecore.event.OvertimeApprovalResultEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
@@ -25,6 +28,8 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -39,22 +44,24 @@ public class OvertimeRequestService {
     private final OverTimePolicyRepository overtimePolicyRepository;
     private final EmployeeRepository employeeRepository;
     private final CommuteService commuteService;
+    private final HrAlarmPublisher hrAlarmPublisher;
 
     @Autowired
     public OvertimeRequestService(OvertimeRequestRepository overtimeRequestRepository,
                                   OverTimePolicyRepository overtimePolicyRepository,
                                   EmployeeRepository employeeRepository,
-                                  CommuteService commuteService) {
+                                  CommuteService commuteService,
+                                  HrAlarmPublisher hrAlarmPublisher) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimePolicyRepository = overtimePolicyRepository;
         this.employeeRepository = employeeRepository;
         this.commuteService = commuteService;
+        this.hrAlarmPublisher = hrAlarmPublisher;
     }
 
-    /** 모달 진입 시 잔여 OT 조회 */
+    /** 모달 진입 시 잔여 시간 조회 */
     @Transactional(readOnly = true)
     public OvertimeRemainingResDto getRemaining(UUID companyId, Long empId, LocalDate weekStart) {
-
         // 정책 조회 (없으면 52h / NOTIFY)
         OvertimePolicy policy = overtimePolicyRepository.findByCompany_CompanyId(companyId).orElse(null);
         int maxHour = (policy != null) ? policy.getOtPolicyWeeklyMaxHour() : DEFAULT_WEEKLY_MAX_HOUR;
@@ -65,21 +72,16 @@ public class OvertimeRequestService {
         Employee employee = employeeRepository.findById(empId)
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         int baseWorkMinutes = calcBaseWorkMinutes(employee.getWorkGroup());
-
-        // OT 버퍼 = 주간 최대 - 기본 근로
         int maxOtBuffer = Math.max(0, weeklyMaxMinutes - baseWorkMinutes);
 
-        // weekStart 정규화 후 월~일 범위 산정
+        // weekStart 정규화 후 월~일 범위
         LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
         LocalDateTime weekStartAt = monday.atStartOfDay();
         LocalDateTime weekEndAt = monday.plusDays(6).atTime(LocalTime.MAX);
 
-        // 이미 신청된 PENDING+APPROVED 합계 (DRAFT 자동 제외)
-        Long used = overtimeRequestRepository
-                .sumPendingApprovedMinutesInWeek(empId, weekStartAt, weekEndAt);
+        // 이미 신청된 PENDING+APPROVED 합계
+        Long used = overtimeRequestRepository.sumPendingApprovedMinutesInWeek(empId, weekStartAt, weekEndAt);
         long usedMin = (used != null) ? used : 0L;
-
-        // 잔여 = 버퍼 - 이미 신청 (음수 보정)
         int remaining = (int) Math.max(0L, maxOtBuffer - usedMin);
 
         return OvertimeRemainingResDto.builder()
@@ -92,19 +94,16 @@ public class OvertimeRequestService {
                 .build();
     }
 
-    /** 주간 초과근무 이력 조회 (DRAFT 제외, otDate ASC). 모달 하단 이력 테이블용 */
+    /** 주간 초과근무 이력 조회 — 모달 하단 이력 테이블용 */
     @Transactional(readOnly = true)
     public OvertimeWeekHistoryResDto getWeekHistory(UUID companyId, Long empId, LocalDate weekStart) {
-        // 주 범위 정규화 (월~일)
         LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
         LocalDate sunday = monday.plusDays(6);
         LocalDateTime weekStartAt = monday.atStartOfDay();
         LocalDateTime weekEndAt = sunday.atTime(LocalTime.MAX);
 
-        // 사원 본인 이력 조회 — companyId 는 사원 조인으로 자연 필터, 라우팅 검증은 생략 (헤더 기반)
         var list = overtimeRequestRepository.findWeekHistoryByEmp(empId, weekStartAt, weekEndAt);
 
-        // Entity → Item 변환. otPlanMinutes 는 plan 시각 차이
         var items = list.stream()
                 .map(o -> OvertimeWeekHistoryResDto.Item.builder()
                         .otId(o.getOtId())
@@ -124,101 +123,121 @@ public class OvertimeRequestService {
                 .build();
     }
 
-    /** "확인" 클릭 → OvertimeRequest insert (DRAFT) → otId 반환. 결재요청 시 PENDING 으로 승격 */
-    public Long submit(UUID companyId, Long empId, OvertimeSubmitRequest req) {
-
-        // 시간 정합성 가드
-        if (!req.getOtPlanEnd().isAfter(req.getOtPlanStart())) {
-            throw new IllegalArgumentException(
-                    "otPlanEnd 가 otPlanStart 보다 같거나 이전 - start=" + req.getOtPlanStart()
-                            + ", end=" + req.getOtPlanEnd());
+    /**
+     * Kafka(docCreated) Consumer 진입 — 결재문서 상신 성공 시점에 OvertimeRequest insert.
+     * BLOCK/NOTIFY 정책 검증:
+     *  - BLOCK: 프론트 선제 차단 가정. 우회 시 Consumer 도 insert 통과 + 경고 알림
+     *  - NOTIFY: 초과해도 통과 + 관리자/최종결재자 알림
+     * 중복 수신 방어: (companyId, approvalDocId) 기존에 이미 있으면 no-op
+     */
+    public void createFromApproval(OvertimeApprovalDocCreatedEvent event) {
+        // 중복 insert 가드 (Kafka at-least-once 대비)
+        var existing = overtimeRequestRepository
+                .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId());
+        if (existing.isPresent()) {
+            log.info("[OvertimeRequest] docCreated 중복 수신 — 기존 otId={}, docId={}",
+                    existing.get().getOtId(), event.getApprovalDocId());
+            return;
         }
 
-        // 사원 조회
-        Employee employee = employeeRepository.findById(empId)
+        // 사원 조회 (FK)
+        Employee employee = employeeRepository.findById(event.getEmpId())
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-        // 정책 조회 + BLOCK 가드 (버퍼 기준)
-        OvertimePolicy policy = overtimePolicyRepository.findByCompany_CompanyId(companyId).orElse(null);
-        if (policy != null && policy.getOtExceedAction() == OtExceedAction.BLOCK) {
-            int weeklyMaxMinutes = policy.getOtPolicyWeeklyMaxHour() * 60;
-            int baseWorkMinutes = calcBaseWorkMinutes(employee.getWorkGroup());
-            int maxOtBuffer = Math.max(0, weeklyMaxMinutes - baseWorkMinutes);
-
-            // 신청 날짜 기준 주간 누적 (PENDING+APPROVED)
-            LocalDate monday = req.getOtDate().toLocalDate().with(DayOfWeek.MONDAY);
-            LocalDateTime weekStartAt = monday.atStartOfDay();
-            LocalDateTime weekEndAt = monday.plusDays(6).atTime(LocalTime.MAX);
-            Long used = overtimeRequestRepository
-                    .sumPendingApprovedMinutesInWeek(empId, weekStartAt, weekEndAt);
-            long usedMin = (used != null) ? used : 0L;
-            long thisMin = Duration.between(req.getOtPlanStart(), req.getOtPlanEnd()).toMinutes();
-
-            // 버퍼 초과 시 차단
-            if (usedMin + thisMin > maxOtBuffer) {
-                throw new CustomException(ErrorCode.OVERTIME_EXCEEDS_WEEKLY_MAX);
-            }
-        }
-
-        // DRAFT 로 insert — 결재요청 성공 후 Consumer 가 PENDING 으로 승격
+        // PENDING 으로 insert
         OvertimeRequest entity = OvertimeRequest.builder()
-                .companyId(companyId)
+                .companyId(event.getCompanyId())
                 .employee(employee)
-                .otDate(req.getOtDate())
-                .otPlanStart(req.getOtPlanStart())
-                .otPlanEnd(req.getOtPlanEnd())
-                .otReason(req.getOtReason())
-                .otStatus(OtStatus.DRAFT)
+                .otDate(event.getOtDate())
+                .otPlanStart(event.getOtPlanStart())
+                .otPlanEnd(event.getOtPlanEnd())
+                .otReason(event.getOtReason())
+                .otStatus(OtStatus.PENDING)
+                .approvalDocId(event.getApprovalDocId())
                 .build();
         OvertimeRequest saved = overtimeRequestRepository.save(entity);
 
-        log.info("[OvertimeRequest] DRAFT 생성 - otId={}, empId={}, plan={}~{}",
-                saved.getOtId(), empId, req.getOtPlanStart(), req.getOtPlanEnd());
-        return saved.getOtId();
+        log.info("[OvertimeRequest] docCreated → insert - otId={}, docId={}, empId={}",
+                saved.getOtId(), saved.getApprovalDocId(), employee.getEmpId());
+
+        // 정책 검증 — NOTIFY/BLOCK 시 버퍼 초과면 관리자 알림
+        checkExceedAndNotify(event, employee, saved);
     }
 
-    /** Kafka(docCreated) Consumer 진입 — docId bind + DRAFT → PENDING 승격 */
-    public void bindApprovalDoc(UUID companyId, Long otId, Long docId) {
-        OvertimeRequest req = overtimeRequestRepository
-                .findByCompanyIdAndOtId(companyId, otId)
-                .orElseThrow(() -> new CustomException(ErrorCode.OVERTIME_REQUEST_NOT_FOUND));
+    /**
+     * 잔여 초과 시 NOTIFY 알림 발송 (BLOCK 도 우회 케이스 대비 동일 처리).
+     * 대상 = HR_ADMIN/HR_SUPER_ADMIN + 최종 결재자 (중복 제거).
+     */
+    private void checkExceedAndNotify(OvertimeApprovalDocCreatedEvent event,
+                                       Employee employee,
+                                       OvertimeRequest saved) {
+        OvertimePolicy policy = overtimePolicyRepository
+                .findByCompany_CompanyId(event.getCompanyId()).orElse(null);
+        if (policy == null) return;
 
-        // docId bind
-        req.bindApprovalDoc(docId);
+        // 버퍼 계산
+        int weeklyMaxMinutes = policy.getOtPolicyWeeklyMaxHour() * 60;
+        int baseWorkMinutes = calcBaseWorkMinutes(employee.getWorkGroup());
+        int maxOtBuffer = Math.max(0, weeklyMaxMinutes - baseWorkMinutes);
 
-        // DRAFT 였으면 PENDING 으로 승격 — manager 는 아직 없으므로 null 허용 상태로 promote
-        if (req.getOtStatus() == OtStatus.DRAFT) {
-            req.promoteToPending();
+        // 이번주 PENDING+APPROVED 합계 (방금 insert 한 본 건도 포함됨 — PENDING)
+        LocalDate monday = saved.getOtDate().toLocalDate().with(DayOfWeek.MONDAY);
+        LocalDateTime weekStartAt = monday.atStartOfDay();
+        LocalDateTime weekEndAt = monday.plusDays(6).atTime(LocalTime.MAX);
+        Long used = overtimeRequestRepository
+                .sumPendingApprovedMinutesInWeek(employee.getEmpId(), weekStartAt, weekEndAt);
+        long usedMin = (used != null) ? used : 0L;
+        if (usedMin <= maxOtBuffer) return;
+
+        // 초과 확인 — 대상자 수집 (HR 관리자 + 최종 결재자, distinct)
+        List<Employee> hrAdmins = employeeRepository.findByCompany_CompanyIdAndEmpRoleIn(
+                event.getCompanyId(), List.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN));
+        List<Long> recipients = new ArrayList<>(hrAdmins.stream().map(Employee::getEmpId).toList());
+        if (event.getFinalApproverEmpId() != null && !recipients.contains(event.getFinalApproverEmpId())) {
+            recipients.add(event.getFinalApproverEmpId());
         }
-        log.info("[OvertimeRequest] docId bind + promote - otId={}, docId={}, status={}",
-                otId, docId, req.getOtStatus());
+        if (recipients.isEmpty()) return;
+
+        // 알람 페이로드 — alarmType=ATTENDANCE, refId=otId
+        AlarmEvent alarm = AlarmEvent.builder()
+                .companyId(event.getCompanyId())
+                .empIds(recipients)
+                .alarmType("ATTENDANCE")
+                .alarmTitle(employee.getEmpName() + " 사원의 주간 최대 근무시간 초과 신청")
+                .alarmContent("주간 누적 " + (usedMin / 60) + "h " + (usedMin % 60) + "m / 한도 "
+                        + (maxOtBuffer / 60) + "h " + (maxOtBuffer % 60) + "m")
+                .alarmLink("/attendance/admin")
+                .alarmRefType("OVERTIME_REQUEST")
+                .alarmRefId(saved.getOtId())
+                .build();
+        hrAlarmPublisher.publisher(alarm);
+        log.info("[OvertimeRequest] NOTIFY 알림 발행 - otId={}, recipients={}",
+                saved.getOtId(), recipients.size());
     }
 
-    /** Kafka(approvalResult) Consumer 진입 — 결재 결과 캐시 적용 */
+    /** Kafka(approvalResult) Consumer 진입 — 결재 결과 캐시 적용 + APPROVED 시 CommuteRecord 재계산 */
     public void applyApprovalResult(OvertimeApprovalResultEvent event) {
-
+        // 회사 + otId 라우팅 검증 조회 — docId 기준으로도 찾을 수 있으나 otId 우선
         OvertimeRequest req = overtimeRequestRepository
                 .findByCompanyIdAndOtId(event.getCompanyId(), event.getOtId())
                 .orElseThrow(() -> new CustomException(ErrorCode.OVERTIME_REQUEST_NOT_FOUND));
 
         OtStatus newStatus = OtStatus.valueOf(event.getStatus());
-        Employee manager = employeeRepository.findById(event.getManagerId())
-                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        // manager 는 REJECTED/APPROVED 에서만 의미 있음. CANCELED/회수에서 null 허용
+        Employee manager = (event.getManagerId() != null)
+                ? employeeRepository.findById(event.getManagerId()).orElse(null)
+                : null;
 
         req.applyApprovalResult(newStatus, manager);
 
-        if (req.getApprovalDocId() == null && event.getApprovalDocId() != null) {
-            req.bindApprovalDoc(event.getApprovalDocId());
-        }
-
-        // APPROVED 시에만 해당 날짜 CommuteRecord 찾아 recognized_* 재계산
+        // APPROVED 시 해당 날짜 CommuteRecord 재계산
         if (newStatus == OtStatus.APPROVED) {
             commuteService.recalcPayrollMinutes(
                     event.getCompanyId(),
                     req.getEmployee().getEmpId(),
                     req.getOtDate().toLocalDate());
         }
-
         log.info("[OvertimeRequest] 결재 결과 반영 - otId={}, status={}", req.getOtId(), newStatus);
     }
 
