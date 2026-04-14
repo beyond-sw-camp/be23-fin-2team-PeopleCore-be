@@ -119,8 +119,8 @@ public class ApprovalLineService {
                     .build());
 
 
-//        사직서 승인 시 hr-service로 이벤트 발행
             String formCode = document.getFormId().getFormCode();
+//        사직서 승인 시 hr-service로 이벤트 발행
             if (formCode != null && formCode.startsWith("사직서")) {
                 try {
                     ResignApprovedEvent resignApprovedEvent = ResignApprovedEvent.builder()
@@ -132,6 +132,24 @@ public class ApprovalLineService {
                     kafkaTemplate.send("resign-approved", objectMapper.writeValueAsString(resignApprovedEvent));
                 } catch (Exception e) {
                     log.error("퇴직 승인 이벤트 발행 실패: {}", e.getMessage());
+                }
+            }
+
+//            급여지급결의서 승인시 hr-service로 이벤트 발행 payroll
+            if (formCode != null && formCode.startsWith("급여지급결의서")){
+                try {
+                    // docData 에 payrollRunId 가 JSON으로 포함되어있음 ??!
+                    Map<String, Object> docDataMap = objectMapper.readValue(document.getDocData(), Map.class);
+                    Long payrollRunId = Long.valueOf(docDataMap.get("payrollRunId").toString());
+
+                    Map<String, Object> payrollEvent = Map.of(
+                            "companyId", companyId,
+                            "docId", document.getDocId(),
+                            "payrollRunId", payrollRunId
+                    );
+                    kafkaTemplate.send("payroll-approved", objectMapper.writeValueAsString(payrollEvent));
+                } catch (Exception e){
+                    log.error("급여대장 승인 이벤트 발행 실패:{}", e.getMessage());
                 }
             }
         }

@@ -1,8 +1,8 @@
 # 급여대장(작성) - 백엔드 코드
 
-> Admin 화면 — 월별 급여 산정, 확정, 지급처리
-> 흐름: **산정중(CALCULATING) → 확정(CONFIRMED) → 전자결재(APPROVED) → 지급완료(PAID)**
-> 전자결재 연동은 추후 구현, 현재는 산정중→확정→지급완료까지
+> Admin 화면 — 월별 급여 산정, 확정, 전자결재, 지급처리
+> 흐름: **산정중(CALCULATING) → 확정(CONFIRMED) → 전자결재 상신(PENDING_APPROVAL) → 전자결재 승인완료(APPROVED) → 지급완료(PAID)**
+> 전자결재: 확정 후 "전자결재" 버튼 → 급여지급결의서 작성 페이지 이동 → 결재 상신 → Kafka 이벤트로 승인 연동
 
 ---
 
@@ -15,11 +15,11 @@
 | 3 | POST | `/pay/admin/payroll/copy` | 전월 복사 |
 | 4 | GET | `/pay/admin/payroll/{payrollRunId}/employees/{empId}` | 사원별 급여 상세 |
 | 5 | PUT | `/pay/admin/payroll/{payrollRunId}/confirm` | 급여 확정 |
+| 5-1 | POST | `/pay/admin/payroll/{payrollRunId}/submit-approval` | 전자결재 상신 (급여지급결의서) |
 | 6 | PUT | `/pay/admin/payroll/{payrollRunId}/pay` | 지급 처리 |
 | 7 | GET | `/pay/admin/payroll/{payrollRunId}/employees/{empId}/wage-info` | 일당/시급 기준 |
 | 8 | GET | `/pay/admin/payroll/{payrollRunId}/employees/{empId}/approved-overtime` | 이달 승인된 전자결재 |
-| 9 | POST | `/pay/admin/payroll/{payrollRunId}/employees/{empId}/apply-overtime/{otId}` | 전자결재 건별 적용 |
-| 10 | POST | `/pay/admin/payroll/{payrollRunId}/employees/{empId}/apply-all-overtime` | 전자결재 전체 적용 |
+| 9 | POST | `/pay/admin/payroll/{payrollRunId}/employees/{empId}/apply-overtime` | 초과근무 수당 적용 (월간 집계) |
 | 10-1 | POST | `/pay/admin/payroll/calc-deductions` | 지급합계 기반 공제항목 실시간 계산 |
 | 11 | GET | `/pay/admin/leave-allowance/year-end` | 연말 미사용 연차 산정 목록 |
 | 12 | GET | `/pay/admin/leave-allowance/resigned` | 퇴직자 연차 정산 목록 |
@@ -33,7 +33,7 @@
 
 | # | 구분 | 파일명 | 위치 | 작업 |
 |---|------|--------|------|------|
-| 1 | Entity | `PayrollRuns.java` | pay/domain/ | 상태변경 메서드 + 합계 업데이트 메서드 추가 |
+| 1 | Entity | `PayrollRuns.java` | pay/domain/ | 상태변경 메서드 + 합계 업데이트 + approvalDocId 필드 추가 |
 | 2 | Entity | `PayrollDetails.java` | pay/domain/ | FK 변경 + 스냅샷 필드 추가 |
 | 3 | Repository | `PayrollRunsRepository.java` | pay/repository/ | 신규 |
 | 4 | Repository | `PayrollDetailsRepository.java` | pay/repository/ | 신규 |
@@ -43,10 +43,10 @@
 | 8 | Service | `PayrollService.java` | pay/service/ | 신규 |
 | 9 | Controller | `PayrollController.java` | pay/controller/ | 신규 |
 | 10 | ErrorCode | `ErrorCode.java` | common/ | 추가 |
-| 11 | Entity | `OvertimeRequest.java` | attendance/entity/ | otTypeFlag(Integer, 비트마스크) 필드 추가 |
-| 12 | Class | `OtTypeFlag.java` | attendance/entity/ | 신규 (비트마스크 상수 + 헬퍼) |
-| 13 | Repository | `OvertimeRequestRepository.java` | attendance/repository/ | 신규 |
-| 14 | Entity | `PayrollDetails.java` | pay/domain/ | otId 필드 추가 |
+| 11 | Entity | `CommuteRecord.java` | attendance/entity/ | 급여 참조용 컬럼 명시 (근태 담당 관리) |
+| 12 | Repository | `CommuteRecordRepository.java` | attendance/repository/ | 신규 (월별 승인 초과근무 조회) |
+| 13 | Repository | `OvertimeRequestRepository.java` | attendance/repository/ | 기존 유지 (승인 추적용) |
+| 14 | Entity | `PayrollDetails.java` | pay/domain/ | isOvertimePay 필드 추가 |
 | 15 | DTO | `WageInfoResDto.java` | pay/dtos/ | 신규 |
 | 16 | DTO | `ApprovedOvertimeResDto.java` | pay/dtos/ | 신규 |
 | 17 | Entity | `LeaveAllowance.java` | pay/domain/ | 신규 |
@@ -58,6 +58,10 @@
 | 23 | DTO | `LeaveAllowanceResDto.java` | pay/dtos/ | 신규 |
 | 24 | Service | `LeaveAllowanceService.java` | pay/service/ | 신규 |
 | 25 | Controller | `LeaveAllowanceController.java` | pay/controller/ | 신규 |
+| 26 | Enum | `PayrollStatus.java` | pay/enums/ | PENDING_APPROVAL 추가 |
+| 27 | DTO | `PayrollApprovedEvent.java` | pay/dtos/ | 신규 (Kafka 이벤트) |
+| 28 | Consumer | `PayrollApprovalConsumer.java` | pay/consumer/ | 신규 (Kafka consumer) |
+| 29 | Service | `ApprovalLineService.java` | collaboration-service | 급여지급결의서 승인 시 Kafka 발행 추가 |
 
 ---
 
@@ -114,6 +118,8 @@ public class PayrollRuns {
 
     private LocalDate payDate;          // 지급일
 
+    private Long approvalDocId;          // 전자결재 문서 ID (결재 상신 시 저장)
+
 
     // ── 합계 갱신 ──
     public void updateTotals(Integer totalEmployees, Long totalPay, Long totalDeduction, Long totalNetPay) {
@@ -131,19 +137,27 @@ public class PayrollRuns {
         this.payrollStatus = PayrollStatus.CONFIRMED;
     }
 
-    // ── 상태 변경: 승인 (전자결재 연동 후 사용) ──
-    public void approve() {
+    // ── 상태 변경: 전자결재 상신 ──
+    public void submitApproval(Long approvalDocId) {
         if (this.payrollStatus != PayrollStatus.CONFIRMED) {
-            throw new IllegalStateException("확정 상태에서만 승인 가능합니다.");
+            throw new IllegalStateException("확정 상태에서만 전자결재 상신 가능합니다.");
+        }
+        this.approvalDocId = approvalDocId;
+        this.payrollStatus = PayrollStatus.PENDING_APPROVAL;
+    }
+
+    // ── 상태 변경: 전자결재 승인완료 (Kafka consumer에서 호출) ──
+    public void approve() {
+        if (this.payrollStatus != PayrollStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException("전자결재 진행중 상태에서만 승인 가능합니다.");
         }
         this.payrollStatus = PayrollStatus.APPROVED;
     }
 
     // ── 상태 변경: 지급완료 ──
     public void markPaid(LocalDate payDate) {
-        if (this.payrollStatus != PayrollStatus.CONFIRMED
-                && this.payrollStatus != PayrollStatus.APPROVED) {
-            throw new IllegalStateException("확정 또는 승인 상태에서만 지급처리 가능합니다.");
+        if (this.payrollStatus != PayrollStatus.APPROVED) {
+            throw new IllegalStateException("승인완료 상태에서만 지급처리 가능합니다.");
         }
         this.payrollStatus = PayrollStatus.PAID;
         this.payDate = payDate;
@@ -270,7 +284,11 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
     List<PayrollDetails> findByPayrollRunsAndEmployee_EmpId(PayrollRuns payrollRuns, Long empId);
 
     // 급여항목 사용 여부 체크 (삭제 시)
-    boolean existsByPayItemId(Long payItemId);
+    boolean existsByPayItems_PayItemId(Long payItemId);
+
+    // 초과근무 수당 적용 여부 확인
+    boolean existsByPayrollRunsAndEmployee_EmpIdAndIsOvertimePayTrue(
+            PayrollRuns payrollRuns, Long empId);
 }
 ```
 
@@ -747,6 +765,27 @@ public class PayrollService {
 
 
     // ══════════════════════════════════════════════════
+    //  전자결재 상신 (급여지급결의서)
+    //  - 프론트에서 전자결재 작성 완료 후 approvalDocId를 전달받음
+    // ══════════════════════════════════════════════════
+    @Transactional
+    public void submitApproval(UUID companyId, Long payrollRunId, Long approvalDocId) {
+        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
+        run.submitApproval(approvalDocId);
+    }
+
+
+    // ══════════════════════════════════════════════════
+    //  전자결재 승인완료 처리 (Kafka consumer에서 호출)
+    // ══════════════════════════════════════════════════
+    @Transactional
+    public void approvePayroll(UUID companyId, Long payrollRunId) {
+        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
+        run.approve();
+    }
+
+
+    // ══════════════════════════════════════════════════
     //  지급 처리
     // ══════════════════════════════════════════════════
     @Transactional
@@ -844,6 +883,16 @@ public class PayrollController {
         return ResponseEntity.ok().build();
     }
 
+    //    전자결재 상신 (급여지급결의서 작성 완료 후 호출)
+    @PostMapping("/{payrollRunId}/submit-approval")
+    public ResponseEntity<Void> submitApproval(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long payrollRunId,
+            @RequestParam Long approvalDocId) {
+        payrollService.submitApproval(companyId, payrollRunId, approvalDocId);
+        return ResponseEntity.ok().build();
+    }
+
     //    지급 처리
     @PutMapping("/{payrollRunId}/pay")
     public ResponseEntity<Void> processPayment(
@@ -867,6 +916,7 @@ PAYROLL_NOT_FOUND(404, "해당 월의 급여대장을 찾을 수 없습니다.")
 PAYROLL_ALREADY_EXISTS(409, "해당 월의 급여대장이 이미 존재합니다."),
 PAYROLL_PREV_NOT_FOUND(404, "전월 급여대장을 찾을 수 없습니다."),
 PAYROLL_STATUS_INVALID(400, "현재 상태에서는 처리할 수 없습니다."),
+PAYROLL_APPROVAL_NOT_FOUND(404, "전자결재 문서를 찾을 수 없습니다."),
 ```
 
 ---
@@ -908,16 +958,132 @@ Response:
 
 ### 상태 전이
 ```
-산정중(CALCULATING) → 확정(CONFIRMED) → 승인(APPROVED, 전자결재) → 지급완료(PAID)
-                                          ↑ 추후 구현
+산정중(CALCULATING) → 확정(CONFIRMED) → 전자결재 상신(PENDING_APPROVAL) → 승인완료(APPROVED) → 지급완료(PAID)
 ```
 
 ### 버튼 활성화 조건 (프론트)
 - **전월 복사**: payrollStatus == null (해당 월 데이터 없을 때)
 - **확정**: payrollStatus == CALCULATING
-- **전자결재**: payrollStatus == CONFIRMED (추후)
-- **지급처리**: payrollStatus == CONFIRMED 또는 APPROVED
+- **전자결재**: payrollStatus == CONFIRMED → 클릭 시 급여지급결의서 작성 페이지로 이동
+- **지급처리**: payrollStatus == APPROVED (전자결재 승인완료 후에만)
 - **대량이체 파일**: payrollStatus == PAID
+
+---
+
+## 전자결재 연동 (Kafka)
+
+### 흐름
+```
+1. 프론트: 확정(CONFIRMED) 상태에서 "전자결재" 버튼 클릭
+2. 프론트: 급여지급결의서 작성 페이지로 이동 (collaboration-service 전자결재 양식)
+3. 프론트: 결의서 작성 완료 → 전자결재 상신 (collaboration-service)
+4. 프론트: 상신 성공 후 hr-service에 POST /submit-approval 호출 (approvalDocId 전달)
+5. hr-service: PayrollRuns 상태를 PENDING_APPROVAL로 변경, approvalDocId 저장
+6. collaboration-service: 모든 결재자 승인 완료 시 Kafka 토픽 "payroll-approved"로 이벤트 발행
+7. hr-service: Kafka consumer가 이벤트 수신 → PayrollRuns 상태를 APPROVED로 변경
+8. 프론트: APPROVED 상태에서 "지급처리" 버튼 활성화
+```
+
+### PayrollStatus enum (수정)
+**파일 위치**: `pay/enums/PayrollStatus.java`
+
+```java
+public enum PayrollStatus {
+    CALCULATING,        // 산정중
+    CONFIRMED,          // 확정
+    PENDING_APPROVAL,   // 전자결재 진행중 (승인전)
+    APPROVED,           // 전자결재 승인완료
+    PAID                // 지급완료
+}
+```
+
+### PayrollApprovedEvent.java (신규 — 이벤트 DTO)
+**파일 위치**: `pay/dtos/PayrollApprovedEvent.java`
+
+```java
+package com.peoplecore.pay.dtos;
+
+import lombok.*;
+import java.util.UUID;
+
+@Getter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class PayrollApprovedEvent {
+    private UUID companyId;
+    private Long docId;
+    private Long payrollRunId;
+}
+```
+
+### PayrollApprovalConsumer.java (신규 — Kafka consumer)
+**파일 위치**: `pay/consumer/PayrollApprovalConsumer.java`
+
+```java
+package com.peoplecore.pay.consumer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.pay.dtos.PayrollApprovedEvent;
+import com.peoplecore.pay.service.PayrollService;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.stereotype.Component;
+
+@Slf4j
+@Component
+public class PayrollApprovalConsumer {
+
+    @Autowired
+    private PayrollService payrollService;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @RetryableTopic(attempts = "3")
+    @KafkaListener(topics = "payroll-approved", groupId = "pay-approval")
+    public void handlePayrollApproved(String message) {
+        try {
+            PayrollApprovedEvent event = objectMapper.readValue(message, PayrollApprovedEvent.class);
+            payrollService.approvePayroll(event.getCompanyId(), event.getPayrollRunId());
+            log.info("급여대장 전자결재 승인 처리 완료: payrollRunId={}", event.getPayrollRunId());
+        } catch (Exception e) {
+            log.error("급여대장 전자결재 승인 처리 실패: {}", e.getMessage());
+            throw new RuntimeException(e);
+        }
+    }
+}
+```
+
+### collaboration-service 수정 — ApprovalLineService.java
+**파일 위치**: `collaboration-service/.../approval/service/ApprovalLineService.java`
+
+> 기존 사직서 승인 Kafka 발행 패턴과 동일하게, 급여지급결의서 승인 시 "payroll-approved" 토픽으로 이벤트 발행
+
+기존 코드 (allApproved 블록 내, 사직서 발행 다음에 추가):
+```java
+//  급여지급결의서 승인 시 hr-service로 이벤트 발행
+if (formCode != null && formCode.startsWith("급여지급결의서")) {
+    try {
+        // docData에 payrollRunId가 JSON으로 포함되어 있음
+        Map<String, Object> docDataMap = objectMapper.readValue(document.getDocData(), Map.class);
+        Long payrollRunId = Long.valueOf(docDataMap.get("payrollRunId").toString());
+
+        Map<String, Object> payrollEvent = Map.of(
+                "companyId", companyId,
+                "docId", document.getDocId(),
+                "payrollRunId", payrollRunId
+        );
+        kafkaTemplate.send("payroll-approved", objectMapper.writeValueAsString(payrollEvent));
+    } catch (Exception e) {
+        log.error("급여대장 승인 이벤트 발행 실패: {}", e.getMessage());
+    }
+}
+```
+
+> **전제조건**: 급여지급결의서 양식의 `formCode`가 "급여지급결의서"로 시작해야 하며, `docData` JSON에 `payrollRunId`가 포함되어야 합니다. 프론트에서 결의서 작성 시 payrollRunId를 docData에 넣어야 합니다.
 
 ---
 
@@ -932,6 +1098,357 @@ Response:
 
 ---
 
+## 대량이체 파일 다운로드
+
+> 지급완료(PAID) 상태에서 대량이체 파일 다운로드 가능
+> 회사 주거래은행 설정(`company_pay_settings.main_bank_code`)에 따라 해당 은행 포맷으로 생성
+
+### API
+
+| # | Method | URL | 설명 |
+|---|--------|-----|------|
+| 1 | GET | `/pay/admin/payroll/{payrollRunId}/transfer-file` | 대량이체 파일 다운로드 |
+
+### 은행별 대량이체 파일 포맷
+
+> 한국 은행 기업인터넷뱅킹 대량이체는 Excel/CSV/TXT 파일 업로드 방식
+> 은행마다 필수 컬럼은 동일하고 (입금은행, 입금계좌, 이체금액), 컬럼 순서와 선택항목만 다름
+
+**공통 필수항목**: 입금은행(코드 3자리), 입금계좌번호, 이체금액
+
+| 은행 | 코드 | 컬럼 순서 | 파일형식 | 인코딩 |
+|------|------|-----------|----------|--------|
+| KB국민 | 004 | 은행코드, 입금계좌번호, 이체금액 | xlsx/csv/txt | UTF-8 |
+| 신한 | 088 | 입금은행, 입금계좌, 고객관리성명, 입금액 | xlsx/csv/txt | UTF-8 |
+| 우리 | 020 | 입금은행, 입금계좌, 이체금액, 예금주명, 비고 | xlsx/csv/txt | UTF-8 |
+| 하나 | 081 | 입금은행코드, 입금계좌, 이체금액, 예금주명 | xlsx/csv/txt | UTF-8 |
+| NH농협 | 011 | 은행코드, 계좌번호, 이체금액, 예금주명 | xlsx/csv/txt | UTF-8 |
+| IBK기업 | 003 | 입금은행, 입금계좌, 이체금액, 예금주명, 비고 | xlsx/csv/txt | UTF-8 |
+
+> **주의**: 엑셀 파일 1행(제목행)은 제거하고 데이터만 포함해야 함. 계좌번호에 '-' 제거.
+
+### 은행코드 enum (신규)
+**파일 위치**: `pay/enums/BankCode.java`
+
+```java
+package com.peoplecore.pay.enums;
+
+import lombok.Getter;
+
+@Getter
+public enum BankCode {
+    KB("004", "KB국민은행"),
+    SHINHAN("088", "신한은행"),
+    WOORI("020", "우리은행"),
+    HANA("081", "하나은행"),
+    NH("011", "NH농협은행"),
+    IBK("003", "IBK기업은행");
+
+    private final String code;
+    private final String bankName;
+
+    BankCode(String code, String bankName) {
+        this.code = code;
+        this.bankName = bankName;
+    }
+
+    public static BankCode fromCode(String code) {
+        for (BankCode b : values()) {
+            if (b.code.equals(code)) return b;
+        }
+        throw new IllegalArgumentException("지원하지 않는 은행코드: " + code);
+    }
+}
+```
+
+### 대량이체 파일 생성 인터페이스
+**파일 위치**: `pay/transfer/BankTransferFileGenerator.java`
+
+```java
+package com.peoplecore.pay.transfer;
+
+import com.peoplecore.pay.dtos.PayrollTransferDto;
+import java.util.List;
+
+public interface BankTransferFileGenerator {
+    String getBankCode();
+    byte[] generate(List<PayrollTransferDto> transfers);
+    String getFileName(String payYearMonth);
+}
+```
+
+### 이체 데이터 DTO
+**파일 위치**: `pay/dtos/PayrollTransferDto.java`
+
+```java
+package com.peoplecore.pay.dtos;
+
+import lombok.*;
+
+@Getter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class PayrollTransferDto {
+    private String empName;         // 사원명 (예금주)
+    private String bankCode;        // 입금은행 코드 3자리
+    private String bankName;        // 입금은행명
+    private String accountNumber;   // 입금계좌번호 ('-' 제거)
+    private Long netPay;            // 실지급액 (이체금액)
+    private String memo;            // 비고
+}
+```
+
+### KB국민은행 구현 (예시)
+**파일 위치**: `pay/transfer/KbTransferGenerator.java`
+
+```java
+package com.peoplecore.pay.transfer;
+
+import com.peoplecore.pay.dtos.PayrollTransferDto;
+import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
+@Component
+public class KbTransferGenerator implements BankTransferFileGenerator {
+
+    @Override
+    public String getBankCode() { return "004"; }
+
+    @Override
+    public String getFileName(String payYearMonth) {
+        return "급여이체_KB_" + payYearMonth + ".csv";
+    }
+
+    @Override
+    public byte[] generate(List<PayrollTransferDto> transfers) {
+        StringBuilder sb = new StringBuilder();
+        // KB: 은행코드, 입금계좌번호, 이체금액 (제목행 없음)
+        for (PayrollTransferDto t : transfers) {
+            sb.append(t.getBankCode()).append(",")
+              .append(t.getAccountNumber()).append(",")
+              .append(t.getNetPay()).append("\n");
+        }
+        // UTF-8 with BOM
+        byte[] bom = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+        byte[] content = sb.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] result = new byte[bom.length + content.length];
+        System.arraycopy(bom, 0, result, 0, bom.length);
+        System.arraycopy(content, 0, result, bom.length, content.length);
+        return result;
+    }
+}
+```
+
+### 신한은행 구현 (예시)
+**파일 위치**: `pay/transfer/ShinhanTransferGenerator.java`
+
+```java
+package com.peoplecore.pay.transfer;
+
+import com.peoplecore.pay.dtos.PayrollTransferDto;
+import org.springframework.stereotype.Component;
+
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+
+@Component
+public class ShinhanTransferGenerator implements BankTransferFileGenerator {
+
+    @Override
+    public String getBankCode() { return "088"; }
+
+    @Override
+    public String getFileName(String payYearMonth) {
+        return "급여이체_신한_" + payYearMonth + ".csv";
+    }
+
+    @Override
+    public byte[] generate(List<PayrollTransferDto> transfers) {
+        StringBuilder sb = new StringBuilder();
+        // 신한: 입금은행, 입금계좌, 고객관리성명, 입금액 (제목행 없음)
+        for (PayrollTransferDto t : transfers) {
+            sb.append(t.getBankCode()).append(",")
+              .append(t.getAccountNumber()).append(",")
+              .append(t.getEmpName()).append(",")
+              .append(t.getNetPay()).append("\n");
+        }
+        byte[] bom = {(byte) 0xEF, (byte) 0xBB, (byte) 0xBF};
+        byte[] content = sb.toString().getBytes(StandardCharsets.UTF_8);
+        byte[] result = new byte[bom.length + content.length];
+        System.arraycopy(bom, 0, result, 0, bom.length);
+        System.arraycopy(content, 0, result, bom.length, content.length);
+        return result;
+    }
+}
+```
+
+### 팩토리 — 은행코드로 구현체 찾기
+**파일 위치**: `pay/transfer/BankTransferFileFactory.java`
+
+```java
+package com.peoplecore.pay.transfer;
+
+import com.peoplecore.exception.CustomException;
+import com.peoplecore.exception.ErrorCode;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+@Component
+public class BankTransferFileFactory {
+
+    private final Map<String, BankTransferFileGenerator> generators;
+
+    @Autowired
+    public BankTransferFileFactory(List<BankTransferFileGenerator> generatorList) {
+        this.generators = generatorList.stream()
+                .collect(Collectors.toMap(BankTransferFileGenerator::getBankCode, g -> g));
+    }
+
+    public BankTransferFileGenerator getGenerator(String bankCode) {
+        BankTransferFileGenerator generator = generators.get(bankCode);
+        if (generator == null) {
+            throw new CustomException(ErrorCode.UNSUPPORTED_BANK);
+        }
+        return generator;
+    }
+}
+```
+
+### Service — 대량이체 파일 생성
+**PayrollService.java에 추가**
+
+```java
+    @Autowired
+    private BankTransferFileFactory bankTransferFileFactory;
+
+    @Autowired
+    private CompanyPaySettingsRepository companyPaySettingsRepository;
+
+    // ══════════════════════════════════════════════════
+    //  대량이체 파일 생성
+    // ══════════════════════════════════════════════════
+    public TransferFileResDto generateTransferFile(UUID companyId, Long payrollRunId) {
+        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
+
+        if (run.getPayrollStatus() != PayrollStatus.PAID) {
+            throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
+        }
+
+        // 회사 주거래은행 조회
+        CompanyPaySettings settings = companyPaySettingsRepository
+                .findByCompany_CompanyId(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PAY_SETTINGS_NOT_FOUND));
+
+        String mainBankCode = settings.getMainBankCode();
+
+        // 사원별 실지급액 + 계좌정보 조회
+        List<PayrollDetails> details = payrollDetailsRepository
+                .findByPayrollRuns_PayrollRunId(payrollRunId);
+
+        // 사원별 실지급액 집계
+        Map<Long, Long> empNetPayMap = details.stream()
+                .collect(Collectors.groupingBy(
+                        d -> d.getEmployee().getEmpId(),
+                        Collectors.summingLong(d ->
+                                d.getPayItemType() == PayItemType.PAYMENT ? d.getAmount() : -d.getAmount()
+                        )
+                ));
+
+        // 이체 데이터 구성 (Employee에 bankCode, accountNumber 필드 필요)
+        List<PayrollTransferDto> transfers = empNetPayMap.entrySet().stream()
+                .map(entry -> {
+                    Employee emp = employeeRepository.findById(entry.getKey()).orElse(null);
+                    if (emp == null || entry.getValue() <= 0) return null;
+                    return PayrollTransferDto.builder()
+                            .empName(emp.getEmpName())
+                            .bankCode(emp.getBankCode() != null ? emp.getBankCode() : mainBankCode)
+                            .bankName(emp.getBankName())
+                            .accountNumber(emp.getAccountNumber() != null ?
+                                    emp.getAccountNumber().replace("-", "") : "")
+                            .netPay(entry.getValue())
+                            .memo(run.getPayYearMonth() + " 급여")
+                            .build();
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        // 은행별 파일 생성
+        BankTransferFileGenerator generator = bankTransferFileFactory.getGenerator(mainBankCode);
+        byte[] fileBytes = generator.generate(transfers);
+        String fileName = generator.getFileName(run.getPayYearMonth());
+
+        return TransferFileResDto.builder()
+                .fileName(fileName)
+                .fileBytes(fileBytes)
+                .build();
+    }
+```
+
+### 응답 DTO
+**파일 위치**: `pay/dtos/TransferFileResDto.java`
+
+```java
+package com.peoplecore.pay.dtos;
+
+import lombok.*;
+
+@Getter
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
+public class TransferFileResDto {
+    private String fileName;
+    private byte[] fileBytes;
+}
+```
+
+### Controller — 파일 다운로드 엔드포인트
+**PayrollController.java에 추가**
+
+```java
+    //    대량이체 파일 다운로드
+    @GetMapping("/{payrollRunId}/transfer-file")
+    public ResponseEntity<byte[]> downloadTransferFile(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long payrollRunId) {
+
+        TransferFileResDto result = payrollService.generateTransferFile(companyId, payrollRunId);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=" + URLEncoder.encode(result.getFileName(), StandardCharsets.UTF_8))
+                .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                .body(result.getFileBytes());
+    }
+```
+
+### ErrorCode 추가
+
+```java
+UNSUPPORTED_BANK(400, "지원하지 않는 은행입니다."),
+PAY_SETTINGS_NOT_FOUND(404, "급여 설정 정보를 찾을 수 없습니다."),
+```
+
+### 전제조건 — Employee 엔티티에 계좌정보 필드 필요
+
+```java
+// Employee 엔티티에 추가
+private String bankCode;        // 급여 입금 은행코드 3자리
+private String bankName;        // 급여 입금 은행명
+private String accountNumber;   // 급여 입금 계좌번호
+```
+
+> **은행별 구현 추가**: 우리/하나/농협/기업은행도 동일한 패턴으로 `BankTransferFileGenerator` 구현체를 만들면 됩니다. `generate()` 메서드 내 컬럼 순서만 은행별로 다르게 작성합니다.
+
+---
+
 # 보완 1: 사원별 급여 상세 — 전자결재 연동 + 일당/시급
 
 > 개인별 급여 작성 시 우측 패널에 일당/시급 기준 + 이달 승인된 전자결재(연장/야간/휴일) 표시
@@ -939,64 +1456,132 @@ Response:
 
 ---
 
-## 7. OvertimeRequest 수정 (otTypeFlag 추가)
-**파일 위치**: `attendance/entity/OvertimeRequest.java`
+## 7. CommuteRecord 참조 (급여에서 조회하는 근태 엔티티)
+**파일 위치**: `attendance/entity/CommuteRecord.java` (근태 담당 관리)
 
-> 초과근무 유형을 비트마스크로 표현 (중첩 가산 지원)
-
-```java
-// ── 기존 필드에 추가 ──
-
-/**
- * 초과 근무 유형 (비트마스크)
- * bit 0 (1) = 연장근로
- * bit 1 (2) = 야간근로
- * bit 2 (4) = 휴일근로
- * 예: 3 = 연장+야간, 7 = 연장+야간+휴일
- */
-@Column(nullable = false)
-private Integer otTypeFlag;
-```
-
----
-
-## 8. OtTypeFlag 비트마스크 상수 (신규)
-**파일 위치**: `attendance/entity/OtTypeFlag.java`
+> 근태 쪽에서 전자결재 승인 시, 근무그룹 기준으로 시간대별 자동 분리 계산 후 CommuteRecord에 저장
+> 급여에서는 CommuteRecord의 승인된 분리 시간(분 단위)을 가져다 수당 계산에 사용
+> ※ OvertimeRequest는 전자결재 신청/승인 추적용으로만 사용, 급여 계산에는 CommuteRecord 참조
 
 ```java
 package com.peoplecore.attendance.entity;
 
+import com.peoplecore.entity.BaseTimeEntity;
+import jakarta.persistence.*;
+import lombok.*;
+
+import java.time.LocalDate;
+
 /**
- * 초과근무 유형 비트마스크 상수
- * 중첩 가산을 위해 비트 OR 조합 사용
+ * 출퇴근 기록 (1인 1일 1행)
+ * 근태 담당이 관리하는 엔티티 — 급여에서 참조하는 컬럼만 아래에 명시
  */
-public final class OtTypeFlag {
+@Entity
+@Getter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+public class CommuteRecord extends BaseTimeEntity {
 
-    public static final int OVERTIME = 1;   // 연장근로 (bit 0)
-    public static final int NIGHT    = 2;   // 야간근로 (bit 1)
-    public static final int HOLIDAY  = 4;   // 휴일근로 (bit 2)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long commuteId;
 
-    private OtTypeFlag() {}
+    /** 사원 ID */
+    @Column(nullable = false)
+    private Long empId;
 
-    public static boolean hasOvertime(int flag) { return (flag & OVERTIME) != 0; }
-    public static boolean hasNight(int flag)    { return (flag & NIGHT) != 0; }
-    public static boolean hasHoliday(int flag)  { return (flag & HOLIDAY) != 0; }
+    /** 근무일 */
+    @Column(nullable = false)
+    private LocalDate workDate;
 
-    /** 비트마스크 → 한글 라벨 (예: "연장+야간") */
-    public static String toLabel(int flag) {
-        StringBuilder sb = new StringBuilder();
-        if (hasOvertime(flag)) sb.append("연장");
-        if (hasNight(flag))    { if (!sb.isEmpty()) sb.append("+"); sb.append("야간"); }
-        if (hasHoliday(flag))  { if (!sb.isEmpty()) sb.append("+"); sb.append("휴일"); }
-        return sb.isEmpty() ? "일반" : sb.toString();
-    }
+    // ... (출퇴근시간, 근무상태 등 근태 관련 필드 — 근태 담당 관리) ...
+
+    // ═══════════════════════════════════════════════
+    //  승인된 초과근무 분리 시간 (분 단위)
+    //  전자결재 승인 후, 근태에서 근무그룹 기준 자동 분리 계산하여 저장
+    //  - 연장: 근무그룹 소정근로시간(groupStartTime~groupEndTime) 밖
+    //  - 야간: 22:00~06:00 구간 (법정 고정)
+    //  - 휴일: 해당 날짜가 휴일
+    // ═══════════════════════════════════════════════
+
+    /** 승인된 총 초과근무 시간(분) */
+    @Builder.Default
+    private Integer recognizedTotalMinutes = 0;
+
+    /** 승인된 연장근로 시간(분) */
+    @Builder.Default
+    private Integer recognizedExtendedMinutes = 0;
+
+    /** 승인된 야간근로 시간(분) */
+    @Builder.Default
+    private Integer recognizedNightMinutes = 0;
+
+    /** 승인된 휴일근로 시간(분) */
+    @Builder.Default
+    private Integer recognizedHolidayMinutes = 0;
+
+    /** 실근무 시간(분) */
+    @Builder.Default
+    private Integer actualWorkMinutes = 0;
 }
 ```
 
 ---
 
-## 9. OvertimeRequestRepository (신규)
+## 8. CommuteRecordRepository (신규)
+**파일 위치**: `attendance/repository/CommuteRecordRepository.java`
+
+> 급여에서 해당 월 승인된 초과근무 기록 조회용
+
+```java
+package com.peoplecore.attendance.repository;
+
+import com.peoplecore.attendance.entity.CommuteRecord;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+
+import java.time.LocalDate;
+import java.util.List;
+
+public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Long> {
+
+    /**
+     * 특정 사원의 해당 월 승인된 초과근무 일별 기록 조회
+     * recognizedTotalMinutes > 0 인 날만 조회
+     */
+    List<CommuteRecord> findByEmpIdAndWorkDateBetweenAndRecognizedTotalMinutesGreaterThan(
+            Long empId, LocalDate startDate, LocalDate endDate, Integer minMinutes
+    );
+
+    /**
+     * 특정 사원의 해당 월 승인된 초과근무 분리 시간 합계 (월간 집계)
+     */
+    @Query("SELECT new map(" +
+            "  SUM(c.recognizedExtendedMinutes) as totalExtendedMin, " +
+            "  SUM(c.recognizedNightMinutes) as totalNightMin, " +
+            "  SUM(c.recognizedHolidayMinutes) as totalHolidayMin, " +
+            "  SUM(c.recognizedTotalMinutes) as totalRecognizedMin" +
+            ") FROM CommuteRecord c " +
+            "WHERE c.empId = :empId " +
+            "AND c.workDate BETWEEN :startDate AND :endDate " +
+            "AND c.recognizedTotalMinutes > 0")
+    java.util.Map<String, Object> sumRecognizedMinutesByMonth(
+            @Param("empId") Long empId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
+    );
+}
+```
+
+---
+
+## 9. OvertimeRequestRepository (기존 유지)
 **파일 위치**: `attendance/repository/OvertimeRequestRepository.java`
+
+> 전자결재 승인 추적용으로만 사용 — 급여 수당 계산은 CommuteRecord 기반
+> findAppliedOtIds 쿼리는 더 이상 급여 계산에 사용하지 않음 (CommuteRecord로 이관)
 
 ```java
 package com.peoplecore.attendance.repository;
@@ -1004,8 +1589,6 @@ package com.peoplecore.attendance.repository;
 import com.peoplecore.attendance.entity.OtStatus;
 import com.peoplecore.attendance.entity.OvertimeRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -1013,7 +1596,7 @@ import java.util.List;
 public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest, Long> {
 
     /**
-     * 특정 사원의 해당 월 승인된 초과근무 조회
+     * 특정 사원의 해당 월 승인된 초과근무 조회 (전자결재 이력 표시용)
      */
     List<OvertimeRequest> findByEmpIdAndOtStatusAndOtDateBetween(
             Long empId,
@@ -1021,33 +1604,22 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
             LocalDateTime startOfMonth,
             LocalDateTime endOfMonth
     );
-
-    /**
-     * 이미 급여대장에 적용된 초과근무 ID 조회 (중복 방지)
-     */
-    @Query("SELECT pd.otId FROM PayrollDetails pd " +
-            "WHERE pd.payrollRuns.payrollRunId = :payrollRunId " +
-            "AND pd.employee.empId = :empId " +
-            "AND pd.otId IS NOT NULL")
-    List<Long> findAppliedOtIds(
-            @Param("payrollRunId") Long payrollRunId,
-            @Param("empId") Long empId
-    );
 }
 ```
 
 ---
 
-## 10. PayrollDetails 수정 (otId 추가)
+## 10. PayrollDetails 수정 (초과근무 적용 표시)
 **파일 위치**: `pay/domain/PayrollDetails.java`
 
-> 전자결재 적용 추적용 필드 추가
+> 초과근무 수당 적용 여부 추적용 필드 — CommuteRecord 기반 월간 집계로 적용
 
 ```java
 // ── 기존 필드에 추가 ──
 
-/** 적용된 초과근무 ID (null이면 연봉계약 기반 항목) */
-private Long otId;
+/** 초과근무 수당 여부 (true이면 CommuteRecord 기반 자동 계산 항목) */
+@Builder.Default
+private Boolean isOvertimePay = false;
 ```
 
 ---
@@ -1073,27 +1645,24 @@ public class WageInfoResDto {
 
     private Long hourlyWage;            // 시급 (통상임금 ÷ 209)
     private Long dailyWage;             // 일당 (시급 × 8)
-    private Long overtimeHourlyWage;    // 가산 시급 (시급 × 1.5, 단일 유형 기준)
 }
 ```
 
 ---
 
-## 12. ApprovedOvertimeResDto (신규)
+## 12. ApprovedOvertimeResDto (신규 — CommuteRecord 기반)
 **파일 위치**: `pay/dtos/ApprovedOvertimeResDto.java`
 
-> 이달 승인된 전자결재 패널 응답
+> 이달 승인된 초과근무 패널 응답 — CommuteRecord에서 월간 집계
 
 ```java
 package com.peoplecore.pay.dtos;
 
-import com.peoplecore.attendance.entity.OtTypeFlag;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
@@ -1103,23 +1672,33 @@ import java.util.List;
 @AllArgsConstructor
 public class ApprovedOvertimeResDto {
 
-    private List<OvertimeItemDto> items;
-    private Long totalHours;            // 합계 시간
-    private Long totalAmount;           // 합계 금액
+    // ── 월간 합계 ──
+    private Integer totalExtendedMinutes;    // 연장근로 합계(분)
+    private Integer totalNightMinutes;       // 야간근로 합계(분)
+    private Integer totalHolidayMinutes;     // 휴일근로 합계(분)
+    private Integer totalRecognizedMinutes;  // 승인 총 합계(분)
+
+    private Long extendedPay;               // 연장수당
+    private Long nightPay;                  // 야간수당
+    private Long holidayPay;                // 휴일수당
+    private Long totalAmount;               // 수당 합계 금액
+
+    private boolean applied;                // 이미 급여대장에 적용 여부
+
+    // ── 일별 상세 (우측 패널 표시용) ──
+    private List<DailyOvertimeDto> dailyItems;
 
     @Data
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class OvertimeItemDto {
-        private Long otId;
-        private Integer otTypeFlag;     // 비트마스크 (1=연장, 2=야간, 4=휴일)
-        private String otTypeLabel;     // "연장+야간", "휴일" 등
-        private BigDecimal premiumRate; // 적용 가산율 (예: 2.0)
-        private LocalDate otDate;
-        private Long hours;             // 실 근무시간 (시간 단위)
-        private Long amount;            // 수당 금액
-        private boolean applied;        // 이미 적용 여부
+    public static class DailyOvertimeDto {
+        private LocalDate workDate;
+        private Integer recognizedTotalMinutes;     // 해당일 승인 총 시간(분)
+        private Integer recognizedExtendedMinutes;  // 연장(분)
+        private Integer recognizedNightMinutes;     // 야간(분)
+        private Integer recognizedHolidayMinutes;   // 휴일(분)
+        private Integer actualWorkMinutes;          // 실근무(분)
     }
 }
 ```
@@ -1133,7 +1712,7 @@ public class ApprovedOvertimeResDto {
 
 ```java
 // ── 의존성 추가 (생성자에 추가) ──
-@Autowired private OvertimeRequestRepository overtimeRequestRepository;
+@Autowired private CommuteRecordRepository commuteRecordRepository;
 
 
 // ══════════════════════════════════════════════════
@@ -1156,19 +1735,15 @@ public WageInfoResDto getWageInfo(UUID companyId, Long payrollRunId, Long empId)
     long hourlyWage = Math.round((double) monthlySalary / 209);
     // 일당 = 시급 × 8
     long dailyWage = hourlyWage * 8;
-    // 가산 시급 = 시급 × 1.5 (단일 유형 기준)
-    long overtimeHourlyWage = Math.round(hourlyWage * 1.5);
-
     return WageInfoResDto.builder()
             .hourlyWage(hourlyWage)
             .dailyWage(dailyWage)
-            .overtimeHourlyWage(overtimeHourlyWage)
             .build();
 }
 
 
 // ══════════════════════════════════════════════════
-//  이달 승인된 전자결재 조회
+//  이달 승인된 초과근무 조회 (CommuteRecord 기반)
 // ══════════════════════════════════════════════════
 public ApprovedOvertimeResDto getApprovedOvertime(UUID companyId, Long payrollRunId, Long empId) {
 
@@ -1176,62 +1751,67 @@ public ApprovedOvertimeResDto getApprovedOvertime(UUID companyId, Long payrollRu
 
     // 해당 월 범위 계산
     YearMonth ym = YearMonth.parse(run.getPayYearMonth(), DateTimeFormatter.ofPattern("yyyy-MM"));
-    LocalDateTime startOfMonth = ym.atDay(1).atStartOfDay();
-    LocalDateTime endOfMonth = ym.atEndOfMonth().atTime(23, 59, 59);
+    LocalDate startDate = ym.atDay(1);
+    LocalDate endDate = ym.atEndOfMonth();
 
-    // 승인된 초과근무 조회
-    List<OvertimeRequest> approvedList = overtimeRequestRepository
-            .findByEmpIdAndOtStatusAndOtDateBetween(empId, OtStatus.APPROVED, startOfMonth, endOfMonth);
+    // CommuteRecord에서 승인된 초과근무 일별 기록 조회
+    List<CommuteRecord> records = commuteRecordRepository
+            .findByEmpIdAndWorkDateBetweenAndRecognizedTotalMinutesGreaterThan(
+                    empId, startDate, endDate, 0);
 
-    // 이미 적용된 otId 목록
-    List<Long> appliedOtIds = overtimeRequestRepository.findAppliedOtIds(payrollRunId, empId);
+    // 월간 합계 집계
+    int totalExtMin = 0, totalNightMin = 0, totalHolidayMin = 0, totalRecognizedMin = 0;
+    List<ApprovedOvertimeResDto.DailyOvertimeDto> dailyItems = new ArrayList<>();
 
-    // 시급 조회
-    WageInfoResDto wageInfo = getWageInfo(companyId, payrollRunId, empId);
+    for (CommuteRecord cr : records) {
+        totalExtMin += cr.getRecognizedExtendedMinutes();
+        totalNightMin += cr.getRecognizedNightMinutes();
+        totalHolidayMin += cr.getRecognizedHolidayMinutes();
+        totalRecognizedMin += cr.getRecognizedTotalMinutes();
 
-    long totalHours = 0L;
-    long totalAmount = 0L;
-    List<ApprovedOvertimeResDto.OvertimeItemDto> items = new ArrayList<>();
-
-    for (OvertimeRequest ot : approvedList) {
-        // 실제 시간 우선, 없으면 계획 시간
-        LocalDateTime start = ot.getOtActStart() != null ? ot.getOtActStart() : ot.getOtPlanStart();
-        LocalDateTime end = ot.getOtActEnd() != null ? ot.getOtActEnd() : ot.getOtPlanEnd();
-
-        long hours = java.time.Duration.between(start, end).toHours();
-
-        // 비트마스크 기반 가산율 계산 (고정 0.5 × 유형 수)
-        double premiumRate = calcPremiumRate(ot.getOtTypeFlag());
-        long amount = Math.round(wageInfo.getHourlyWage() * premiumRate * hours);
-
-        totalHours += hours;
-        totalAmount += amount;
-
-        items.add(ApprovedOvertimeResDto.OvertimeItemDto.builder()
-                .otId(ot.getOtId())
-                .otTypeFlag(ot.getOtTypeFlag())
-                .otTypeLabel(OtTypeFlag.toLabel(ot.getOtTypeFlag()))
-                .premiumRate(BigDecimal.valueOf(premiumRate))
-                .otDate(ot.getOtDate().toLocalDate())
-                .hours(hours)
-                .amount(amount)
-                .applied(appliedOtIds.contains(ot.getOtId()))
+        dailyItems.add(ApprovedOvertimeResDto.DailyOvertimeDto.builder()
+                .workDate(cr.getWorkDate())
+                .recognizedTotalMinutes(cr.getRecognizedTotalMinutes())
+                .recognizedExtendedMinutes(cr.getRecognizedExtendedMinutes())
+                .recognizedNightMinutes(cr.getRecognizedNightMinutes())
+                .recognizedHolidayMinutes(cr.getRecognizedHolidayMinutes())
+                .actualWorkMinutes(cr.getActualWorkMinutes())
                 .build());
     }
 
+    // 시급 조회 + 수당 계산
+    WageInfoResDto wageInfo = getWageInfo(companyId, payrollRunId, empId);
+    long hourlyWage = wageInfo.getHourlyWage();
+
+    long extendedPay = Math.round(hourlyWage * 0.5 * totalExtMin / 60.0);
+    long nightPay    = Math.round(hourlyWage * 0.5 * totalNightMin / 60.0);
+    long holidayPay  = Math.round(hourlyWage * 0.5 * totalHolidayMin / 60.0);
+    long totalAmount = extendedPay + nightPay + holidayPay;
+
+    // 이미 적용 여부 확인 (해당 사원의 초과근무 수당 PayrollDetails 존재 여부)
+    boolean applied = payrollDetailsRepository
+            .existsByPayrollRunsAndEmployee_EmpIdAndIsOvertimePayTrue(run, empId);
+
     return ApprovedOvertimeResDto.builder()
-            .items(items)
-            .totalHours(totalHours)
+            .totalExtendedMinutes(totalExtMin)
+            .totalNightMinutes(totalNightMin)
+            .totalHolidayMinutes(totalHolidayMin)
+            .totalRecognizedMinutes(totalRecognizedMin)
+            .extendedPay(extendedPay)
+            .nightPay(nightPay)
+            .holidayPay(holidayPay)
             .totalAmount(totalAmount)
+            .applied(applied)
+            .dailyItems(dailyItems)
             .build();
 }
 
 
 // ══════════════════════════════════════════════════
-//  전자결재 건별 적용 → PayrollDetails 추가
+//  초과근무 수당 적용 (CommuteRecord 월간 집계 → PayrollDetails)
 // ══════════════════════════════════════════════════
 @Transactional
-public void applyOvertime(UUID companyId, Long payrollRunId, Long empId, Long otId) {
+public void applyOvertime(UUID companyId, Long payrollRunId, Long empId) {
 
     PayrollRuns run = findPayrollRun(companyId, payrollRunId);
 
@@ -1239,73 +1819,53 @@ public void applyOvertime(UUID companyId, Long payrollRunId, Long empId, Long ot
         throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
     }
 
-    // 중복 체크
-    List<Long> appliedOtIds = overtimeRequestRepository.findAppliedOtIds(payrollRunId, empId);
-    if (appliedOtIds.contains(otId)) {
+    // 중복 체크 — 이미 적용된 초과근무 수당이 있으면 예외
+    if (payrollDetailsRepository.existsByPayrollRunsAndEmployee_EmpIdAndIsOvertimePayTrue(run, empId)) {
         throw new CustomException(ErrorCode.OVERTIME_ALREADY_APPLIED);
     }
 
-    OvertimeRequest ot = overtimeRequestRepository.findById(otId)
-            .orElseThrow(() -> new CustomException(ErrorCode.OVERTIME_NOT_FOUND));
+    // 월간 승인 초과근무 조회
+    ApprovedOvertimeResDto overtime = getApprovedOvertime(companyId, payrollRunId, empId);
 
-    // 시급 + 가산율 계산
-    WageInfoResDto wageInfo = getWageInfo(companyId, payrollRunId, empId);
-    LocalDateTime start = ot.getOtActStart() != null ? ot.getOtActStart() : ot.getOtPlanStart();
-    LocalDateTime end = ot.getOtActEnd() != null ? ot.getOtActEnd() : ot.getOtPlanEnd();
-    long hours = java.time.Duration.between(start, end).toHours();
-
-    double premiumRate = calcPremiumRate(ot.getOtTypeFlag());
-    long amount = Math.round(wageInfo.getHourlyWage() * premiumRate * hours);
-
-    // 비트마스크에서 대표 법정수당 항목 결정 (우선순위: 휴일 > 야간 > 연장)
-    LegalCalcType legalType = resolvePrimaryLegalType(ot.getOtTypeFlag());
-    PayItems payItem = payItemsRepository
-            .findByCompany_CompanyIdAndIsLegalTrueAndLegalCalcType(companyId, legalType)
-            .orElseThrow(() -> new CustomException(ErrorCode.PAY_ITEM_NOT_FOUND));
+    if (overtime.getTotalRecognizedMinutes() == 0) {
+        return; // 승인된 초과근무 없음
+    }
 
     Employee emp = employeeRepository.findById(empId)
             .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-    String label = OtTypeFlag.toLabel(ot.getOtTypeFlag());
+    // 유형별 수당 → 0보다 큰 것만 PayrollDetails로 생성
+    Map<LegalCalcType, Long> payMap = new LinkedHashMap<>();
+    if (overtime.getExtendedPay() > 0) {
+        payMap.put(LegalCalcType.OVERTIME, overtime.getExtendedPay());
+    }
+    if (overtime.getNightPay() > 0) {
+        payMap.put(LegalCalcType.NIGHT, overtime.getNightPay());
+    }
+    if (overtime.getHolidayPay() > 0) {
+        payMap.put(LegalCalcType.HOLIDAY, overtime.getHolidayPay());
+    }
 
-    // PayrollDetails 생성
-    PayrollDetails detail = PayrollDetails.builder()
-            .payrollRuns(run)
-            .employee(emp)
-            .payItemId(payItem.getPayItemId())
-            .payItemName(payItem.getPayItemName())
-            .payItemType(PayItemType.PAYMENT)
-            .amount(amount)
-            .otId(otId)
-            .memo(label + " " + hours + "시간 (" + premiumRate + "배)")
-            .company(run.getCompany())
-            .build();
-    payrollDetailsRepository.save(detail);
+    for (Map.Entry<LegalCalcType, Long> entry : payMap.entrySet()) {
+        PayItems payItem = payItemsRepository
+                .findByCompany_CompanyIdAndIsLegalTrueAndLegalCalcType(companyId, entry.getKey())
+                .orElseThrow(() -> new CustomException(ErrorCode.PAY_ITEM_NOT_FOUND));
+
+        PayrollDetails detail = PayrollDetails.builder()
+                .payrollRuns(run)
+                .employee(emp)
+                .payItemId(payItem.getPayItemId())
+                .payItemName(payItem.getPayItemName())
+                .payItemType(PayItemType.PAYMENT)
+                .amount(entry.getValue())
+                .isOvertimePay(true)
+                .company(run.getCompany())
+                .build();
+        payrollDetailsRepository.save(detail);
+    }
 
     // 합계 갱신
     recalculateTotals(run);
-}
-
-
-// ══════════════════════════════════════════════════
-//  전자결재 전체 적용
-// ══════════════════════════════════════════════════
-@Transactional
-public void applyAllOvertime(UUID companyId, Long payrollRunId, Long empId) {
-
-    PayrollRuns run = findPayrollRun(companyId, payrollRunId);
-
-    if (run.getPayrollStatus() != PayrollStatus.CALCULATING) {
-        throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
-    }
-
-    ApprovedOvertimeResDto overtime = getApprovedOvertime(companyId, payrollRunId, empId);
-
-    for (ApprovedOvertimeResDto.OvertimeItemDto item : overtime.getItems()) {
-        if (!item.isApplied()) {
-            applyOvertime(companyId, payrollRunId, empId, item.getOtId());
-        }
-    }
 }
 
 
@@ -1328,25 +1888,9 @@ private void recalculateTotals(PayrollRuns run) {
 }
 
 
-// ── 헬퍼: 비트마스크 → 총 가산율 계산 (고정 0.5 × 유형 수) ──
-// 예: otTypeFlag=3(연장+야간) → 1.0 + 0.5 + 0.5 = 2.0배
-//     otTypeFlag=7(연장+야간+휴일) → 1.0 + 0.5 + 0.5 + 0.5 = 2.5배
-private double calcPremiumRate(int otTypeFlag) {
-    double rate = 1.0;
-    if (OtTypeFlag.hasOvertime(otTypeFlag)) rate += 0.5;
-    if (OtTypeFlag.hasNight(otTypeFlag))    rate += 0.5;
-    if (OtTypeFlag.hasHoliday(otTypeFlag))  rate += 0.5;
-    return rate;
-}
-
-
-// ── 헬퍼: 비트마스크 → 대표 법정수당 항목 결정 (PayItems 조회용) ──
-// 복수 유형 중첩 시 우선순위: 휴일 > 야간 > 연장
-private LegalCalcType resolvePrimaryLegalType(int otTypeFlag) {
-    if (OtTypeFlag.hasHoliday(otTypeFlag))  return LegalCalcType.HOLIDAY;
-    if (OtTypeFlag.hasNight(otTypeFlag))    return LegalCalcType.NIGHT;
-    return LegalCalcType.OVERTIME;
-}
+// ── calcPremiumRate, resolvePrimaryLegalType 헬퍼 삭제 ──
+// CommuteRecord에서 분리된 분 단위 시간을 가져오므로 비트마스크 기반 계산 불필요
+// 유형별 수당 = 시급 × 0.5 × (해당 유형 월간 합계 분 / 60) 으로 직접 계산
 ```
 
 ---
@@ -1396,29 +1940,15 @@ public ResponseEntity<ApprovedOvertimeResDto> getApprovedOvertime(
 }
 
 /**
- * 전자결재 건별 적용
- * POST /pay/admin/payroll/{payrollRunId}/employees/{empId}/apply-overtime/{otId}
+ * 초과근무 수당 적용 (월간 집계 → PayrollDetails)
+ * POST /pay/admin/payroll/{payrollRunId}/employees/{empId}/apply-overtime
  */
-@PostMapping("/{payrollRunId}/employees/{empId}/apply-overtime/{otId}")
+@PostMapping("/{payrollRunId}/employees/{empId}/apply-overtime")
 public ResponseEntity<Void> applyOvertime(
         @RequestHeader("X-User-Company") UUID companyId,
         @PathVariable Long payrollRunId,
-        @PathVariable Long empId,
-        @PathVariable Long otId) {
-    payrollService.applyOvertime(companyId, payrollRunId, empId, otId);
-    return ResponseEntity.ok().build();
-}
-
-/**
- * 전자결재 전체 적용
- * POST /pay/admin/payroll/{payrollRunId}/employees/{empId}/apply-all-overtime
- */
-@PostMapping("/{payrollRunId}/employees/{empId}/apply-all-overtime")
-public ResponseEntity<Void> applyAllOvertime(
-        @RequestHeader("X-User-Company") UUID companyId,
-        @PathVariable Long payrollRunId,
         @PathVariable Long empId) {
-    payrollService.applyAllOvertime(companyId, payrollRunId, empId);
+    payrollService.applyOvertime(companyId, payrollRunId, empId);
     return ResponseEntity.ok().build();
 }
 
@@ -2363,59 +2893,54 @@ Response:
 > - 일당 (8h): 114,832원
 > - 연장/야간/휴일(1.5배): 21,531원/h
 
-### 이달 승인된 전자결재 조회
+### 이달 승인된 초과근무 조회 (CommuteRecord 기반)
 ```
 GET /pay/admin/payroll/1/employees/1/approved-overtime
 Headers: X-User-Company: {companyId}
 
 Response:
 {
-  "items": [
+  "totalExtendedMinutes": 360,
+  "totalNightMinutes": 660,
+  "totalHolidayMinutes": 180,
+  "totalRecognizedMinutes": 1200,
+  "extendedPay": 43062,
+  "nightPay": 78947,
+  "holidayPay": 21531,
+  "totalAmount": 143540,
+  "applied": false,
+  "dailyItems": [
     {
-      "otId": 10,
-      "otTypeFlag": 1,
-      "otTypeLabel": "연장",
-      "premiumRate": 1.5,
-      "otDate": "2026-04-05",
-      "hours": 2,
-      "amount": 43062,
-      "applied": false
+      "workDate": "2026-04-01",
+      "recognizedTotalMinutes": 300,
+      "recognizedExtendedMinutes": 0,
+      "recognizedNightMinutes": 300,
+      "recognizedHolidayMinutes": 0,
+      "actualWorkMinutes": 360
     },
     {
-      "otId": 11,
-      "otTypeFlag": 3,
-      "otTypeLabel": "연장+야간",
-      "premiumRate": 2.0,
-      "otDate": "2026-04-18",
-      "hours": 2,
-      "amount": 57416,
-      "applied": false
+      "workDate": "2026-04-02",
+      "recognizedTotalMinutes": 360,
+      "recognizedExtendedMinutes": 180,
+      "recognizedNightMinutes": 180,
+      "recognizedHolidayMinutes": 0,
+      "actualWorkMinutes": 180
     },
     {
-      "otId": 12,
-      "otTypeFlag": 4,
-      "otTypeLabel": "휴일",
-      "premiumRate": 1.5,
-      "otDate": "2026-04-20",
-      "hours": 4,
-      "amount": 86124,
-      "applied": false
+      "workDate": "2026-04-05",
+      "recognizedTotalMinutes": 540,
+      "recognizedExtendedMinutes": 180,
+      "recognizedNightMinutes": 180,
+      "recognizedHolidayMinutes": 180,
+      "actualWorkMinutes": 180
     }
-  ],
-  "totalHours": 8,
-  "totalAmount": 186602
+  ]
 }
 ```
 
-### 건별 적용
+### 초과근무 수당 적용
 ```
-POST /pay/admin/payroll/1/employees/1/apply-overtime/10
-Headers: X-User-Company: {companyId}
-```
-
-### 전체 적용
-```
-POST /pay/admin/payroll/1/employees/1/apply-all-overtime
+POST /pay/admin/payroll/1/employees/1/apply-overtime
 Headers: X-User-Company: {companyId}
 ```
 
@@ -2476,18 +3001,42 @@ Body: [1, 2, 3]
 
 ## 참고: 수당 계산 공식
 
-### 비트마스크 가산율 계산
-| otTypeFlag | 유형 | 가산율 계산 | 기본값 |
-|------------|------|------------|--------|
-| 1 | 연장 | 1.0 + 연장가산율 | 1.5배 |
-| 2 | 야간 | 1.0 + 야간가산율 | 1.5배 |
-| 3 | 연장+야간 | 1.0 + 연장가산율 + 야간가산율 | 2.0배 |
-| 4 | 휴일 | 1.0 + 휴일가산율 | 1.5배 |
-| 5 | 휴일+연장 | 1.0 + 휴일가산율 + 연장가산율 | 2.0배 |
-| 6 | 휴일+야간 | 1.0 + 휴일가산율 + 야간가산율 | 2.0배 |
-| 7 | 휴일+연장+야간 | 1.0 + 전부 | 2.5배 |
+### 초과근무 수당 계산 (분 단위 기반)
 
-> 가산율 고정 0.5 (50%), 유형이 중첩될수록 0.5씩 추가
+> 근태에서 근무그룹 기준으로 시간대별 자동 분리 후 CommuteRecord에 분(minute) 단위로 저장
+> 급여에서는 CommuteRecord의 월간 합계를 가져다 유형별로 수당 계산
+
+**데이터 흐름**:
+1. 사원이 초과근무 전자결재 신청 → OvertimeRequest 생성
+2. 전자결재 승인 → 근태에서 근무그룹 기준 자동 분리 계산
+3. CommuteRecord 해당일 행에 recognizedExtendedMinutes / recognizedNightMinutes / recognizedHolidayMinutes 저장
+4. 급여 작성 시 CommuteRecord에서 해당 월 합계 조회 → 수당 계산
+
+**분리 기준** (근태에서 처리):
+- **연장**: 근무그룹 소정근로시간(groupStartTime~groupEndTime) 밖 → +0.5
+- **야간**: 22:00~06:00 구간 (법정 고정) → +0.5
+- **휴일**: 해당 날짜가 휴일 → +0.5
+
+**수당 계산 공식** (월간 합계 기준):
+| 수당 유형 | 공식 |
+|-----------|------|
+| 연장수당 | 시급 × 0.5 × (월간 recognizedExtendedMinutes 합계 / 60) |
+| 야간수당 | 시급 × 0.5 × (월간 recognizedNightMinutes 합계 / 60) |
+| 휴일수당 | 시급 × 0.5 × (월간 recognizedHolidayMinutes 합계 / 60) |
+
+**예시** (시급 14,354원, 근무그룹 21:00~03:00):
+| 일자 | 실제 근무 | extendedMin | nightMin | holidayMin |
+|------|-----------|-------------|----------|------------|
+| 4/1 | 21:00~03:00 (기본) | 0 | 300 | 0 |
+| 4/2 | 03:00~06:00 (추가) | 180 | 180 | 0 |
+| 4/5 | 휴일 03:00~06:00 | 180 | 180 | 180 |
+| **월합계** | | **360** | **660** | **180** |
+
+| 수당 | 계산 | 금액 |
+|------|------|------|
+| 연장수당 | 14,354 × 0.5 × (360/60) | 43,062 |
+| 야간수당 | 14,354 × 0.5 × (660/60) | 78,947 |
+| 휴일수당 | 14,354 × 0.5 × (180/60) | 21,531 |
 
 ### 연차수당 산정 공식
 | 항목 | 공식 |

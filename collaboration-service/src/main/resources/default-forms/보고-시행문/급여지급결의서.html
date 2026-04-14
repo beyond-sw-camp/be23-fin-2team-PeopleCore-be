@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>급여 지급결의서</title>
+<style type="text/css">
+table.tb_chit {
+  width: 800px;
+  margin-top: 1px;
+  border-collapse: collapse !important;
+  color: #000;
+  background: #fff;
+  font-size: 12px;
+  border: 0;
+  font-family: malgun gothic, dotum, arial, tahoma;
+}
+table.tb_chit table { border-collapse: collapse !important; }
+table.tb_chit tr td {
+  padding: 3px;
+  height: 20px;
+  border: 1px solid #000;
+  vertical-align: middle;
+}
+table.tb_chit table.sign_member { border: 0; }
+table.tb_chit table.sign_member tr td {
+  border: 0;
+  border-bottom: 1px solid #666;
+}
+.doc_subject {
+  height: 90px !important;
+  font-size: 24pt;
+  font-weight: bold;
+  text-align: center;
+  vertical-align: middle;
+  padding: 0;
+  border: 0 !important;
+}
+.tit { background: #ddd; text-align: center; font-weight: bold; }
+.currency { text-align: right; }
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: malgun gothic, dotum, arial, tahoma;
+}
+
+@media print {
+  th, td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+</head>
+<body>
+
+<!-- ====== 헤더: 제목 + 기안정보 + [결재선] ====== -->
+<table class="tb_chit">
+  <colgroup><col width="310px"><col width="490px"></colgroup>
+  <tbody>
+    <tr>
+      <td class="doc_subject" colspan="2">급여 지급결의서</td>
+    </tr>
+    <tr>
+      <td style="border:0; padding:0 !important; vertical-align:top;">
+        <table>
+          <colgroup><col width="90px"><col width="220px"></colgroup>
+          <tbody>
+            <tr>
+              <td class="tit">문서번호</td>
+              <td contenteditable="true"></td>
+            </tr>
+            <tr>
+              <td class="tit">작성일자</td>
+              <td contenteditable="true"></td>
+            </tr>
+            <tr>
+              <td class="tit">작성부서</td>
+              <td contenteditable="true"></td>
+            </tr>
+            <tr>
+              <td class="tit">작&nbsp;성&nbsp;자</td>
+              <td contenteditable="true"></td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+      <!-- ★ HR 시스템이 결재선 등록 시 이 [결재선] 텍스트를 결재박스로 교체 -->
+      <td style="text-align:right; padding:0 !important; border:0 !important; vertical-align:top;">[결재선]</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ====== 본문 안내 ====== -->
+<table class="tb_chit" style="margin-top:10px;">
+  <tbody>
+    <tr>
+      <td style="border-left:0; border-right:0; border-top:0; padding:8px 4px 2px 4px; font-size:10pt;">
+        ■ 급여 지급과 관련하여 아래와 같이 요청합니다.
+      </td>
+    </tr>
+    <tr>
+      <td style="border:0; text-align:center; font-size:10pt; padding:2px;">- 아 래 -</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ====== 지급 기본 정보 ====== -->
+<table class="tb_chit" style="margin-top:4px;">
+  <colgroup><col width="120px"><col width="680px"></colgroup>
+  <tbody>
+    <tr>
+      <td class="tit">근&nbsp;무&nbsp;월</td>
+      <td contenteditable="true"></td>
+    </tr>
+    <tr>
+      <td class="tit">지급예정일</td>
+      <td contenteditable="true"></td>
+    </tr>
+    <tr>
+      <td class="tit">지급인원</td>
+      <td contenteditable="true"></td>
+    </tr>
+    <tr>
+      <td class="tit">지급금액</td>
+      <td contenteditable="true"></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ====== 지급상세 ====== -->
+<table class="tb_chit" style="margin-top:10px;">
+  <colgroup><col width="200px"><col width="300px"><col width="300px"></colgroup>
+  <tbody>
+    <tr>
+      <td class="tit" colspan="3">5. 지급상세</td>
+    </tr>
+    <tr>
+      <td class="tit">항목명</td>
+      <td class="tit">과세금액</td>
+      <td class="tit">비과세금액</td>
+    </tr>
+    <tr>
+      <td class="tit">기본급</td>
+      <td class="currency" contenteditable="true">0</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">상여금</td>
+      <td class="currency" contenteditable="true">0</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">야간근로수당</td>
+      <td class="currency" contenteditable="true">0</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">연장근로수당</td>
+      <td class="currency" contenteditable="true">0</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">연차수당</td>
+      <td class="currency" contenteditable="true">0</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">휴일근로수당</td>
+      <td class="currency" contenteditable="true">0</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">교육비지원금</td>
+      <td class="currency" contenteditable="true">0</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">식대</td>
+      <td class="currency" contenteditable="true">0</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">소계</td>
+      <td class="currency" contenteditable="true">0</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit" style="background:#bbb;">합계</td>
+      <td class="currency" colspan="2" style="font-weight:bold;" contenteditable="true">0</td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ====== 공제상세 ====== -->
+<table class="tb_chit" style="margin-top:10px;">
+  <colgroup><col width="200px"><col width="600px"></colgroup>
+  <tbody>
+    <tr>
+      <td class="tit" colspan="2">6. 공제상세</td>
+    </tr>
+    <tr>
+      <td class="tit">항목명</td>
+      <td class="tit">금액</td>
+    </tr>
+    <tr>
+      <td class="tit">건강보험</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">고용보험</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">국민연금</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">근로소득세</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">근로지방소득세</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">학자금상환</td>
+      <td class="currency" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit" style="background:#bbb;">합계</td>
+      <td class="currency" style="font-weight:bold;" contenteditable="true">0</td>
+    </tr>
+  </tbody>
+</table>
+
+</body>
+</html>

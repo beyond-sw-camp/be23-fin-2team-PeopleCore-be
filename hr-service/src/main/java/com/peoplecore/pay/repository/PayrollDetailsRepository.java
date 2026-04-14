@@ -16,6 +16,7 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
 
     boolean existsByPayItems_PayItemId(Long payItemId);
 
+    //    특정 급여대장의 전체 상세 조회
     List<PayrollDetails> findByPayrollRuns(PayrollRuns payrollRuns);
 
 //    기공제액 집계 : 사원별 + 항목별 공제 합산 (정산기간내 PAID 급여대장)
@@ -35,4 +36,14 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
             @Param("itemType") PayItemType itemType,
             @Param("itemNames") List<String> itemNames);
 
+
+
+//    특정 급여대장 + 특정 사원의 상세 조회
+    List<PayrollDetails> findByPayrollRunsAndEmployee_EmpId(PayrollRuns payrollRuns, Long empId);
+
+//    급여항목 사용 여부 체크(삭제시)
+    boolean existsByPayItemId(Long payItemId);
+
+//    사원별 급여 상세
+    List<PayrollDetails> findByPayrollRuns_PayrollRunsId(Long payrollRunsId);
 }

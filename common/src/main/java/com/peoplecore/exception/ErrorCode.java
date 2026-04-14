@@ -72,13 +72,19 @@ public enum ErrorCode {
     RETIREMENT_TYPE_NOT_CHANGEABLE(400, "회사 퇴직연금 설정이 DB_DC가 아니므로 변경할 수 없습니다."),
     INVALID_RETIREMENT_TYPE(400, "유효하지 않은 퇴직연금 유형입니다. DB 또는 DC만 선택 가능합니다."),
 
+    // 급여대장
+    PAYROLL_NOT_FOUND(404, "해당 월의 급여대장을 찾을 수 없습니다."),
+    PAYROLL_ALREADY_EXISTS(409, "해당 월의 급여대장이 이미 존재합니다."),
+    PAYROLL_PREV_NOT_FOUND(404, "전월 급여대장을 찾을 수 없습니다."),
+    PAYROLL_STATUS_INVALID(400, "현재 상태에서는 처리할 수 없습니다."),
+    PAYROLL_APPROVAL_NOT_FOUND(404, "전자결재 문서를 찾을 수 없습니다."),
+    UNSUPPORTED_BANK(400, "지원하지 않는 은행입니다."),
+
     // ── 정산보험료 ──
     INSURANCE_SETTLEMENT_NOT_FOUND(404, "정산보험료 데이터가 존재하지 않습니다."),
     INSURANCE_PAY_ITEM_NOT_FOUND(404, "보험 공제항목(국민연금/건강보험/장기요양/고용보험)이 등록되지 않았습니다."),
     INSURANCE_SETTLEMENT_ALREADY_APPLIED(400, "이미 급여대장에 반영된 정산 건입니다."),
 
-    PAYROLL_NOT_FOUND(400, "급여산정 데이터가 존재하지 않습니다."),
-    PAYROLL_STATUS_INVALID(409, "확정된 급여의 보험료는 재산정 불가합니다."),
 
     // PayItems isSystem 보호
     SYSTEM_PAY_ITEM_NOT_EDITABLE(400, "시스템 급여항목은 수정할 수 없습니다"),
