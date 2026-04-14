@@ -38,14 +38,17 @@ public class OvertimeRequestService {
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final OverTimePolicyRepository overtimePolicyRepository;
     private final EmployeeRepository employeeRepository;
+    private final CommuteService commuteService;
 
     @Autowired
     public OvertimeRequestService(OvertimeRequestRepository overtimeRequestRepository,
                                   OverTimePolicyRepository overtimePolicyRepository,
-                                  EmployeeRepository employeeRepository) {
+                                  EmployeeRepository employeeRepository,
+                                  CommuteService commuteService) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimePolicyRepository = overtimePolicyRepository;
         this.employeeRepository = employeeRepository;
+        this.commuteService = commuteService;
     }
 
     /** 모달 진입 시 잔여 OT 조회 */
@@ -207,6 +210,15 @@ public class OvertimeRequestService {
         if (req.getApprovalDocId() == null && event.getApprovalDocId() != null) {
             req.bindApprovalDoc(event.getApprovalDocId());
         }
+
+        // APPROVED 시에만 해당 날짜 CommuteRecord 찾아 recognized_* 재계산
+        if (newStatus == OtStatus.APPROVED) {
+            commuteService.recalcPayrollMinutes(
+                    event.getCompanyId(),
+                    req.getEmployee().getEmpId(),
+                    req.getOtDate().toLocalDate());
+        }
+
         log.info("[OvertimeRequest] 결재 결과 반영 - otId={}, status={}", req.getOtId(), newStatus);
     }
 
