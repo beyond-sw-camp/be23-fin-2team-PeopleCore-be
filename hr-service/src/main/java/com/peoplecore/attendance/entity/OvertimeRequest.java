@@ -63,12 +63,6 @@ public class OvertimeRequest extends BaseTimeEntity {
     @Column(nullable = false)
     private LocalDateTime otPlanEnd;
 
-    /* 실제 초과근무 시작 시각 (체크아웃 로직에서 세팅) */
-    private LocalDateTime otActStart;
-
-    /* 실제 초과근무 종료 시각 */
-    private LocalDateTime otActEnd;
-
     /* 초과근무 사유 */
     @Column(nullable = false)
     private String otReason;
@@ -102,14 +96,6 @@ public class OvertimeRequest extends BaseTimeEntity {
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
-
-    /*
-     * 실제 초과근무 시작/종료 기록
-     */
-    public void recordActual(LocalDateTime start, LocalDateTime end) {
-        this.otActStart = start;
-        this.otActEnd = end;
-    }
 
     /*
      * Kafka Consumer 에서 호출 — 결재 결과 캐시 업데이트.

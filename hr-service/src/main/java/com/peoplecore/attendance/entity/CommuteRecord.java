@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.cglib.core.Local;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -170,6 +171,14 @@ public class CommuteRecord extends BaseTimeEntity {
     @Builder.Default
     private Long recognizedHolidayMinutes = 0L;
 
+    /*자동 마감 여부
+     * 배치가 강제 close한 경우에  true
+     * 근태 정정을 통해 변경될 경우 다시 false
+     * */
+    @Column(name = "is_auto_closed", nullable = false)
+    @Builder.Default
+    private Boolean isAutoClosed = false;
+
     /* 출근 체크인 처리 - 시각/IP/offsite/상태/휴일이유 일괄 세팅 */
     public void checkIn(LocalDateTime at, String ip, boolean offsite,
                         CheckInStatus status, HolidayReason reason) {
@@ -208,6 +217,36 @@ public class CommuteRecord extends BaseTimeEntity {
         this.checkOutIp = ip;
         this.checkOutStatus = status;
     }
+
+    /*배치에 의한 자동 마감 처리
+     * true일 경우에 실 근무 시간은 0분
+     * false로 리셋 시 다시 계산 */
+    public void markAutoClosed(LocalDateTime closedAt, CheckOutStatus status) {
+        if (this.comRecCheckIn == null) {
+            throw new IllegalStateException("체크인 없이 자동 마감 불가 ");
+        }
+        if (this.comRecCheckOut != null) {
+            throw new IllegalStateException("이미 체크아웃된 레코드에 자동 마감 재호출 ");
+        }
+
+        this.comRecCheckOut = closedAt;
+        this.checkOutStatus = status;
+        this.isAutoClosed = true;
+        this.actualWorkMinutes = 0L;
+        this.overtimeMinutes = 0L;
+        this.recognizedExtendedMinutes = 0L;
+        this.recognizedNightMinutes = 0L;
+        this.recognizedHolidayMinutes = 0L;
+    }
+
+    /*
+     * 근태정정 승인 시 자동 마감 플래그 해제.
+     * 실제 근무 시간은 applyPayrollMinutes() 로 재계산해 반영.
+     */
+    public void resetAutoClosed() {
+        this.isAutoClosed = false;
+    }
+
 
 
     /* 급여연동 분 컬럼 일괄 갱신 */
