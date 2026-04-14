@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDate;
 import java.util.UUID;
 
-/**
+/*
  * 근태(월별 파티션) 테이블 -- 일일 근태 집계/확정본.
 
  * PK 전략 (Hibernate 6 + MySQL 파티션 호환):
