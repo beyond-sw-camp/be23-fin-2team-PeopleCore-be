@@ -1,9 +1,14 @@
 package com.peoplecore.attendance.repository;
 
 import com.peoplecore.attendance.entity.CommuteRecord;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,4 +42,40 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
     Optional<CommuteRecord>
     findFirstByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndComRecCheckOutIsNullOrderByWorkDateDesc(
             UUID companyId, Long empId, LocalDate from, LocalDate to);
+
+    /**
+     * 사원의 [from, to] 구간 출퇴근 기록 페이지 — workDate DESC 정렬.
+     * 파티션 프루닝: WHERE work_date BETWEEN ... 로 범위 파티션만 스캔.
+     * 사용: AttendanceAdminService.getEmployeeHistory (일별 근무 현황 모달)
+     */
+    Page<CommuteRecord>
+    findByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenOrderByWorkDateDesc(
+            UUID companyId, Long empId, LocalDate from, LocalDate to, Pageable pageable);
+
+    /**
+     * 사원의 [from, to] 구간 실근무 분 합계 — check-in, check-out 모두 존재할 때만 합산.
+     * native: JPQL 은 TIMESTAMPDIFF 미지원.
+     * 사용: 주간 근무시간 헤더 카드 계산.
+     */
+    @Query(value = """
+            SELECT COALESCE(SUM(TIMESTAMPDIFF(MINUTE, c.com_rec_check_in, c.com_rec_check_out)), 0)
+              FROM commute_record c
+             WHERE c.company_id = :companyId
+               AND c.emp_id = :empId
+               AND c.work_date BETWEEN :from AND :to
+               AND c.com_rec_check_in IS NOT NULL
+               AND c.com_rec_check_out IS NOT NULL
+            """, nativeQuery = true)
+    Long sumWorkedMinutesBetween(@Param("companyId") UUID companyId,
+                                 @Param("empId") Long empId,
+                                 @Param("from") LocalDate from,
+                                 @Param("to") LocalDate to);
+
+    /**
+     * 페이지 응답 행의 workDate 집합에 대한 출퇴근 엔티티 조회용 IN 절.
+     * 페이지 단위로 프론트 스크롤 시 최소 파티션만 스캔.
+     * 현재 미사용 — 확장 여지용으로 남김.
+     */
+    List<CommuteRecord> findByCompanyIdAndEmployee_EmpIdAndWorkDateIn(
+            UUID companyId, Long empId, List<LocalDate> workDates);
 }

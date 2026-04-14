@@ -4,6 +4,7 @@ import com.peoplecore.attendance.dto.AttendanceDailyCardRowResDto;
 import com.peoplecore.attendance.dto.AttendanceDailyListRowResDto;
 import com.peoplecore.attendance.dto.AttendanceDailySummaryResDto;
 import com.peoplecore.attendance.dto.AttendanceDeptSummaryResDto;
+import com.peoplecore.attendance.dto.AttendanceEmployeeHistoryResDto;
 import com.peoplecore.attendance.dto.AttendanceOvertimeRowResDto;
 import com.peoplecore.attendance.dto.AttendancePeriodListRowResDto;
 import com.peoplecore.attendance.dto.AttendanceWeeklyDailyStatsResDto;
@@ -17,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -217,5 +219,32 @@ public class AttendanceAdminController {
     ) {
         return ResponseEntity.ok(adminService.getOvertimeList(
                 companyId, weekStart, employmentFilter, keyword, page, size));
+    }
+
+    /**
+     * 사원 일별 근무 현황 (상세 모달).
+     *
+     * GET /attendance/admin/daily/employee/{empId}/history
+     *   ?date=yyyy-MM-dd                         (필수, 주간 근무시간 계산 기준)
+     *   &cardType=MISSING_COMMUTE                 (optional, 상단 "카테고리" 에코용)
+     *   &page=0&size=10                           (default 0 / 10)
+     *
+     * - 응답 루트 = { header, history(PagedResDto) }
+     * - history: 입사일 ~ date 범위 commute_record, workDate DESC
+     * - 결근(평일인데 기록 없음)은 행에 포함되지 않음
+     */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @GetMapping("/employee/{empId}/history")
+    public ResponseEntity<AttendanceEmployeeHistoryResDto> getEmployeeHistory(
+            @RequestHeader("X-User-Company") UUID companyId,                // 회사 UUID
+            @PathVariable Long empId,                                       // 대상 사원 PK
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)    // 조회 기준일
+                    LocalDate date,
+            @RequestParam(required = false) AttendanceCardType cardType,    // 드릴다운 카드 (에코)
+            @RequestParam(required = false, defaultValue = "0") int page,   // 0-based
+            @RequestParam(required = false, defaultValue = "10") int size   // 페이지 크기
+    ) {
+        return ResponseEntity.ok(adminService.getEmployeeHistory(
+                companyId, empId, date, cardType, page, size));
     }
 }

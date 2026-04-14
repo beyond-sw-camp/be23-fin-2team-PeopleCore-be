@@ -3,6 +3,7 @@ package com.peoplecore.attendance.repository;
 import com.peoplecore.attendance.entity.OvertimeRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
@@ -53,4 +54,23 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
     List<OvertimeRequest> findWeekHistoryByEmp(Long empId,
                                                LocalDateTime weekStart,
                                                LocalDateTime weekEnd);
+
+    /**
+     * 사원의 [from, to] 구간 APPROVED OT 계획 분을 일자별로 집계.
+     * native: DATE() 함수로 otDate 에서 날짜만 꺼내 그룹핑.
+     * 반환: [ [java.sql.Date workDate, Long minutes], ... ]
+     * 사용: 사원 일별 근무 현황에서 각 행의 overtimeMinutes 채움.
+     */
+    @Query(value = """
+            SELECT DATE(o.ot_date) AS work_date,
+                   COALESCE(SUM(TIMESTAMPDIFF(MINUTE, o.ot_plan_start, o.ot_plan_end)), 0) AS minutes
+              FROM overtime_request o
+             WHERE o.emp_id = :empId
+               AND o.ot_status = 'APPROVED'
+               AND o.ot_date BETWEEN :from AND :to
+             GROUP BY DATE(o.ot_date)
+            """, nativeQuery = true)
+    List<Object[]> sumApprovedOtMinutesByDate(@Param("empId") Long empId,
+                                              @Param("from") LocalDateTime from,
+                                              @Param("to") LocalDateTime to);
 }

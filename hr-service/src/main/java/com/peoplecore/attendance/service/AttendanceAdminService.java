@@ -5,6 +5,9 @@ import com.peoplecore.attendance.dto.AttendanceDailyCardRowResDto;
 import com.peoplecore.attendance.dto.AttendanceDailyListRowResDto;
 import com.peoplecore.attendance.dto.AttendanceDailySummaryResDto;
 import com.peoplecore.attendance.dto.AttendanceDeptSummaryResDto;
+import com.peoplecore.attendance.dto.AttendanceEmployeeHistoryHeaderDto;
+import com.peoplecore.attendance.dto.AttendanceEmployeeHistoryResDto;
+import com.peoplecore.attendance.dto.AttendanceEmployeeHistoryRowResDto;
 import com.peoplecore.attendance.dto.AttendanceOvertimeRowResDto;
 import com.peoplecore.attendance.dto.AttendancePeriodListRowResDto;
 import com.peoplecore.attendance.dto.AttendanceWeeklyDailyStatsResDto;
@@ -12,18 +15,30 @@ import com.peoplecore.attendance.dto.PagedResDto;
 import com.peoplecore.attendance.entity.AttendanceCardType;
 import com.peoplecore.attendance.entity.CheckInStatus;
 import com.peoplecore.attendance.entity.CheckOutStatus;
+import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.EmploymentFilter;
 import com.peoplecore.attendance.entity.OvertimePolicy;
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.AttendanceAdminQueryRepository;
+import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import com.peoplecore.attendance.repository.OverTimePolicyRepository;
+import com.peoplecore.attendance.repository.OvertimeRequestRepository;
+import com.peoplecore.employee.domain.Employee;
+import com.peoplecore.employee.repository.EmployeeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Date;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -62,14 +77,23 @@ public class AttendanceAdminService {
     private final AttendanceAdminQueryRepository queryRepository;
     private final OverTimePolicyRepository overtimePolicyRepository;
     private final AttendanceStatusJudge judge;
+    private final EmployeeRepository employeeRepository;
+    private final CommuteRecordRepository commuteRecordRepository;
+    private final OvertimeRequestRepository overtimeRequestRepository;
 
     @Autowired
     public AttendanceAdminService(AttendanceAdminQueryRepository queryRepository,
                                   OverTimePolicyRepository overtimePolicyRepository,
-                                  AttendanceStatusJudge judge) {
+                                  AttendanceStatusJudge judge,
+                                  EmployeeRepository employeeRepository,
+                                  CommuteRecordRepository commuteRecordRepository,
+                                  OvertimeRequestRepository overtimeRequestRepository) {
         this.queryRepository = queryRepository;
         this.overtimePolicyRepository = overtimePolicyRepository;
         this.judge = judge;
+        this.employeeRepository = employeeRepository;
+        this.commuteRecordRepository = commuteRecordRepository;
+        this.overtimeRequestRepository = overtimeRequestRepository;
     }
 
     /**
@@ -882,5 +906,222 @@ public class AttendanceAdminService {
     /** double 값을 소수 1자리로 반올림. */
     private double round1(double v) {
         return Math.round(v * 10.0) / 10.0;
+    }
+
+    /* =========================================================================
+     * Employee History API — 사원 일별 근무 현황 (상세 모달)
+     *
+     * 반환 구조:
+     *  - header : 주간 근무시간 / 카드타입 에코 / 52시간 현황 (정책 기준)
+     *  - history: 입사일 ~ 조회일 사이 commute_record 페이지 (workDate DESC)
+     *
+     * 판정(attendanceStatuses):
+     *  - LATE / EARLY_LEAVE / OFFSITE / MISSING_COMMUTE(퇴근누락) / UNAPPROVED_OT / WORKING / NORMAL
+     *  - week context 가 없는 단건 판정이라 MAX_HOUR_EXCEED/UNDER_MIN_HOUR/VACATION_ATTEND 는 제외
+     * ========================================================================= */
+
+    /**
+     * 사원 일별 근무 현황 조회.
+     *
+     * @param companyId  회사 PK (Gateway 주입 헤더 값)
+     * @param empId      대상 사원 PK
+     * @param date       조회 기준일 (주간 근무시간 계산 기준)
+     * @param cardType   드릴다운 카드 타입 (에코용, nullable)
+     * @param page       0-based 페이지
+     * @param size       페이지 크기 (기본 10)
+     * @return 헤더 + 일별 근무 현황 페이지
+     * @throws IllegalArgumentException 사원이 해당 회사 소속이 아니거나 date < hireDate
+     */
+    public AttendanceEmployeeHistoryResDto getEmployeeHistory(UUID companyId, Long empId,
+                                                               LocalDate date,
+                                                               AttendanceCardType cardType,
+                                                               int page, int size) {
+        // 1. 사원 조회 — 회사 소속 검증 포함
+        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "해당 회사 소속 사원을 찾을 수 없습니다. empId=" + empId));
+
+        // 2. 조회 기준일 검증 — 미래 금지 + 입사일 이전 금지
+        LocalDate hireDate = employee.getEmpHireDate();
+        if (date == null) throw new IllegalArgumentException("date 는 필수입니다.");
+        if (hireDate != null && date.isBefore(hireDate)) {
+            throw new IllegalArgumentException(
+                    "조회일은 입사일(" + hireDate + ") 이후여야 합니다. date=" + date);
+        }
+
+        // 3. 정책값 로드 — 52시간 현황 계산용
+        int weeklyMaxMinutes = resolveWeeklyMaxMinutes(companyId);
+        int weeklyMaxHour = weeklyMaxMinutes / 60;
+        int warningHour = resolveWeeklyWarningHour(companyId);
+
+        // 4. 주간 범위 (date 가 속한 월~일)
+        LocalDate weekStart = date.with(DayOfWeek.MONDAY);
+        LocalDate weekEnd = weekStart.plusDays(6);
+
+        // 5. 주간 실근무 분 합계 — native 쿼리로 single round-trip
+        Long weeklyMinRaw = commuteRecordRepository.sumWorkedMinutesBetween(
+                companyId, empId, weekStart, weekEnd);
+        long weeklyMin = (weeklyMinRaw != null) ? weeklyMinRaw : 0L;
+        double weeklyHours = weeklyMin / 60.0;
+
+        // 6. 52시간 현황 라벨
+        String weeklyStatus;
+        if (weeklyHours > weeklyMaxHour)     weeklyStatus = "초과";
+        else if (weeklyHours >= warningHour) weeklyStatus = "경고";
+        else                                 weeklyStatus = "정상";
+
+        // 7. 헤더 DTO 조립
+        AttendanceEmployeeHistoryHeaderDto header = AttendanceEmployeeHistoryHeaderDto.builder()
+                .empId(employee.getEmpId())
+                .empNum(employee.getEmpNum())
+                .empName(employee.getEmpName())
+                .deptName(employee.getDept() != null ? employee.getDept().getDeptName() : null)
+                .gradeName(employee.getGrade() != null ? employee.getGrade().getGradeName() : null)
+                .weeklyWorkMinutes(weeklyMin)
+                .weeklyWorkText(formatHm(weeklyMin))
+                .cardType(cardType)
+                .weeklyMaxHour(weeklyMaxHour)
+                .weeklyWarningHour(warningHour)
+                .weeklyStatus(weeklyStatus)
+                .build();
+
+        // 8. 일별 근무 페이지 조회 — [hireDate, date] 범위, workDate DESC
+        LocalDate from = (hireDate != null) ? hireDate : date.minusYears(10); // 입사일 null 안전장치
+        int effectiveSize = Math.max(1, size);
+        Pageable pageable = PageRequest.of(Math.max(0, page), effectiveSize);
+        Page<CommuteRecord> crPage = commuteRecordRepository
+                .findByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenOrderByWorkDateDesc(
+                        companyId, empId, from, date, pageable);
+
+        // 9. 페이지 내 workDate 범위만 승인 OT 집계 (최소 스캔)
+        Map<LocalDate, Long> approvedOtByDate = loadApprovedOtByDate(empId, crPage.getContent());
+
+        // 10. 사원 근무그룹 스냅샷 — 판정에 사용 (현재 시점의 그룹 기준)
+        WorkGroup wg = employee.getWorkGroup();
+
+        // 11. 페이지 행 → DTO 변환
+        List<AttendanceEmployeeHistoryRowResDto> rows = new ArrayList<>(crPage.getNumberOfElements());
+        for (CommuteRecord c : crPage.getContent()) {
+            long approvedOt = approvedOtByDate.getOrDefault(c.getWorkDate(), 0L);
+            rows.add(toHistoryRow(c, wg, approvedOt));
+        }
+
+        // 12. PagedResDto 조립
+        PagedResDto<AttendanceEmployeeHistoryRowResDto> historyPaged =
+                PagedResDto.<AttendanceEmployeeHistoryRowResDto>builder()
+                        .content(rows)
+                        .page(crPage.getNumber())
+                        .size(crPage.getSize())
+                        .totalElements(crPage.getTotalElements())
+                        .totalPages(crPage.getTotalPages())
+                        .build();
+
+        log.debug("[getEmployeeHistory] companyId={}, empId={}, date={}, weeklyMin={}, weeklyStatus={}, " +
+                        "pageTotal={}", companyId, empId, date, weeklyMin, weeklyStatus, crPage.getTotalElements());
+
+        return AttendanceEmployeeHistoryResDto.builder()
+                .header(header)
+                .history(historyPaged)
+                .build();
+    }
+
+    /**
+     * 페이지 내 레코드 중 workDate 최소~최대 범위에 대해 APPROVED OT 분을 일자별 맵으로 반환.
+     * native 쿼리 DATE(ot_date) 결과를 java.time.LocalDate 로 변환.
+     */
+    private Map<LocalDate, Long> loadApprovedOtByDate(Long empId, List<CommuteRecord> records) {
+        if (records.isEmpty()) return Map.of();
+        // 페이지 내 최소/최대 workDate 계산 — 쿼리 범위 최소화
+        LocalDate minDate = records.get(0).getWorkDate();
+        LocalDate maxDate = records.get(0).getWorkDate();
+        for (CommuteRecord c : records) {
+            if (c.getWorkDate().isBefore(minDate)) minDate = c.getWorkDate();
+            if (c.getWorkDate().isAfter(maxDate))  maxDate = c.getWorkDate();
+        }
+        LocalDateTime fromDt = minDate.atStartOfDay();
+        LocalDateTime toDt = maxDate.atTime(LocalTime.MAX);
+
+        List<Object[]> raw = overtimeRequestRepository.sumApprovedOtMinutesByDate(empId, fromDt, toDt);
+        Map<LocalDate, Long> out = new HashMap<>(raw.size() * 2);
+        for (Object[] row : raw) {
+            // row[0] = java.sql.Date / row[1] = Number (BigInteger or Long)
+            LocalDate d = ((Date) row[0]).toLocalDate();
+            long minutes = ((Number) row[1]).longValue();
+            out.put(d, minutes);
+        }
+        return out;
+    }
+
+    /**
+     * CommuteRecord + 근무그룹 + 승인 OT → 일별 행 DTO.
+     */
+    private AttendanceEmployeeHistoryRowResDto toHistoryRow(CommuteRecord c, WorkGroup wg, long approvedOt) {
+        // 1. 실근무 분 — 출퇴근 둘 다 있을 때만
+        LocalDateTime checkInAt = c.getComRecCheckIn();
+        LocalDateTime checkOutAt = c.getComRecCheckOut();
+        Long workMin = (checkInAt != null && checkOutAt != null)
+                ? Duration.between(checkInAt, checkOutAt).toMinutes()
+                : null;
+        String workText = (workMin != null) ? formatHm(workMin) : null;
+
+        // 2. 초과근무 표시값 — 승인 OT 분 0 이면 null 반환 (프론트 "-" 표시)
+        Long otMin = (approvedOt > 0) ? approvedOt : null;
+        String otText = (approvedOt > 0) ? formatHm(approvedOt) : null;
+
+        // 3. 카드 리스트 계산 (주간 컨텍스트 없이 당일 단건 판정)
+        List<AttendanceCardType> cards = judgeHistoricalDay(c, wg, approvedOt);
+
+        // 4. 행 DTO
+        return AttendanceEmployeeHistoryRowResDto.builder()
+                .workDate(c.getWorkDate())
+                .dayOfWeek(c.getWorkDate().getDayOfWeek())
+                .checkInAt(checkInAt)
+                .checkOutAt(checkOutAt)
+                .workMinutes(workMin)
+                .workText(workText)
+                .overtimeMinutes(otMin)
+                .overtimeText(otText)
+                .attendanceStatuses(cards)
+                .build();
+    }
+
+    /**
+     * 일별 단건 판정 — 주간 컨텍스트가 없으므로 MAX_HOUR_EXCEED/UNDER_MIN_HOUR/VACATION_ATTEND 미적용.
+     * 순서: 체크인 있으면 WORKING → LATE/EARLY_LEAVE/OFFSITE/UNAPPROVED_OT/MISSING_COMMUTE → (이상 없으면) NORMAL
+     */
+    private List<AttendanceCardType> judgeHistoricalDay(CommuteRecord c, WorkGroup wg, long approvedOt) {
+        List<AttendanceCardType> out = new ArrayList<>(3);
+        boolean hasCheckIn = (c.getComRecCheckIn() != null);
+        boolean hasCheckOut = (c.getComRecCheckOut() != null);
+
+        // 1. 근무중(WORKING) — 체크인 있으면 항상 포함
+        if (hasCheckIn) out.add(AttendanceCardType.WORKING);
+
+        // 2. 지각
+        if (c.getCheckInStatus() == CheckInStatus.LATE) out.add(AttendanceCardType.LATE);
+
+        // 3. 조퇴
+        if (c.getCheckOutStatus() == CheckOutStatus.EARLY_LEAVE) out.add(AttendanceCardType.EARLY_LEAVE);
+
+        // 4. 근무지 외
+        if (Boolean.TRUE.equals(c.getIsOffsite())) out.add(AttendanceCardType.OFFSITE);
+
+        // 5. 퇴근 누락 — 체크인 있고 체크아웃 없음
+        if (hasCheckIn && !hasCheckOut) out.add(AttendanceCardType.MISSING_COMMUTE);
+
+        // 6. 미승인 초과근무 — 체크아웃 > groupEndTime AND 승인 OT 없음
+        if (hasCheckOut && wg != null && wg.getGroupEndTime() != null && approvedOt == 0) {
+            LocalTime endTime = wg.getGroupEndTime();
+            if (c.getComRecCheckOut().toLocalTime().isAfter(endTime)) {
+                out.add(AttendanceCardType.UNAPPROVED_OT);
+            }
+        }
+
+        // 7. 정상 — 체크인 있고 WORKING 외 이상 카드 없음
+        if (hasCheckIn && out.size() == 1 && out.get(0) == AttendanceCardType.WORKING) {
+            out.add(0, AttendanceCardType.NORMAL);
+        }
+
+        return out;
     }
 }
