@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
  * 사원 일별 근무 현황(상세 모달) 상단 4카드 영역.
  * - 주간 근무시간: 요청 date 가 속한 주(월~일) 실근무분 합
  * - 카테고리: 호출자가 쿼리로 넘긴 cardType 을 그대로 에코 (드릴다운 컨텍스트 유지)
- * - OvertimePolicy.otPolicyWeeklyMaxHour 기준 정상/경고/초과
+ * - OvertimePolicy.otPolicyWeeklyMaxMinutes 기준 정상/경고/초과
  */
 @Data
 @Builder

@@ -37,10 +37,10 @@ public class AttendanceOvertimeRowResDto {
     /** 주간 총 근무분 m (소수 1자리) */
     private double weeklyWorkMinutes;
 
-    /** 정책상 주간 최대 근무분 m (OvertimePolicy.otPolicyWeeklyMaxHour) */
+    /** 정책상 주간 최대 근무분 m (OvertimePolicy.otPolicyWeeklyMaxminute) */
     private int weeklyMaxMinutes;
 
-    /** 정책상 경고 기준 m (OvertimePolicy.otPolicyWarningHour) */
+    /** 정책상 경고 기준 m (OvertimePolicy.otPolicyWarningMinute) */
     private int weeklyWarningMinutes;
 
     /** 초과분 m = max(0, weeklyWorkMinutes - weeklyMaxMinutes), 소수 1자리 */

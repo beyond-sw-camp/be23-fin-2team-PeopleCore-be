@@ -42,7 +42,7 @@ public class AttendanceDeptSummaryResDto {
     /** 부서 1인당 평균 주간 초과근무 시간 h (초과분 합 / totalEmp) */
     private double avgOvertimeHours;
 
-    /** 주간 초과근무 발생 인원 수 (weekly > weeklyMaxHour 인 사원 수, 중복 없음) */
+    /** 주간 초과근무 발생 인원 수 (weekly > weeklyMaxMinute 인 사원 수, 중복 없음) */
     private int overtimeCount;
 
     /** 부서 주간 평균 근무시간 h (전체 사원 주간 근무시간 합 / totalEmp) */

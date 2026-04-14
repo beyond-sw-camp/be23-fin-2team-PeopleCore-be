@@ -18,6 +18,7 @@ import com.peoplecore.attendance.entity.CheckOutStatus;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.EmploymentFilter;
 import com.peoplecore.attendance.entity.OvertimePolicy;
+import com.peoplecore.attendance.entity.WeeklyWorkStatus;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.AttendanceAdminQueryRepository;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
@@ -52,12 +53,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/**
+/*
  * 근태 현황 관리자 API 서비스 (Phase 1 일자별 탭).
  *
  * 공통 로직:
- *  - OvertimePolicy.otPolicyWeeklyMaxHour 를 분 단위로 변환해 Judge 에 전달
- *  - 정책이 없는 회사는 기본값 52h 적용 (엔티티 @Builder.Default 와 동일)
+ *  - OvertimePolicy.otPolicyWeeklyMaxMinute / otPolicyWarningMinute 를 그대로 Judge 에 전달 (이미 분 단위)
+ *  - 정책이 없는 회사는 기본값 3120 분(52h) / 2700 분(45h) 적용 (엔티티 @Builder.Default 와 동일)
  *  - fetchAll 결과 각 Row 에 judge 를 적용해 카드 리스트를 계산
  */
 @Service
@@ -65,13 +66,15 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class AttendanceAdminService {
 
-    /** OvertimePolicy 미존재 회사용 기본 주간 최대 근무시간 (시간 단위) */
-    private static final int DEFAULT_WEEKLY_MAX_HOUR = 52;
+    /* OvertimePolicy 미존재 회사용 기본 주간 최대 근무 분 (52h = 3120) */
+    private static final int DEFAULT_WEEKLY_MAX_MINUTE = 3120;
 
-    /** OvertimePolicy 미존재 회사용 기본 경고 기준 (시간 단위) — 엔티티 @Builder.Default(45) 와 동일 */
-    private static final int DEFAULT_WEEKLY_WARNING_HOUR = 45;
+    /* OvertimePolicy 미존재 회사용 기본 경고 기준 분 (45h = 2700) */
+    private static final int DEFAULT_WEEKLY_WARNING_MINUTE = 2700;
 
-    /** 시각 표시용 HH:mm 포맷터 (LATE/EARLY_LEAVE detail 등에 사용) */
+    /**
+     * 시각 표시용 HH:mm 포맷터 (LATE/EARLY_LEAVE detail 등에 사용)
+     */
     private static final DateTimeFormatter HHMM = DateTimeFormatter.ofPattern("HH:mm");
 
     private final AttendanceAdminQueryRepository queryRepository;
@@ -98,15 +101,10 @@ public class AttendanceAdminService {
 
     /**
      * 일자별 상단 카드 카운트 요약.
-     *
-     * @param companyId 회사 PK (X-User-Company 헤더 값)
-     * @param date      조회 기준일
-     * @param filter    재직상태 필터 (null 이면 ALL 로 처리)
-     * @return 카드 타입별 카운트 (10개 타입 전부 포함, 없으면 0)
      */
     public AttendanceDailySummaryResDto getSummary(UUID companyId, LocalDate date, EmploymentFilter filter) {
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
-        int weeklyMaxMinutes = resolveWeeklyMaxMinutes(companyId);
+        int weeklyMaxMinutes = resolveWeeklyMaxMinute(companyId);
 
         List<AttendanceAdminRow> rows = queryRepository.fetchAll(companyId, date, effectiveFilter);
 
@@ -131,16 +129,8 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /* =========================================================================
-     * List API (A-3) — 사원 테이블. SQL 단계 필터 후 판정 + 메모리 statuses 필터 + 페이지네이션
-     * ========================================================================= */
-
     /**
      * 일자별 사원 테이블 (페이지네이션).
-     *
-     * 필터 분리:
-     *  - deptId / workGroupId / keyword / employmentFilter → SQL 단계에서 적용 (Repository)
-     *  - statuses (CardType 배열) → 판정 후 메모리에서 교집합 필터
      */
     public PagedResDto<AttendanceDailyListRowResDto> getList(UUID companyId, LocalDate date,
                                                              EmploymentFilter filter,
@@ -150,8 +140,8 @@ public class AttendanceAdminService {
                                                              int page, int size) {
         // 1. null 필터는 ALL(재직+휴직) 로 보정
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
-        // 2. 회사 정책 조회 후 주간 최대 분(minutes) 계산
-        int weeklyMaxMinutes = resolveWeeklyMaxMinutes(companyId);
+        // 2. 회사 정책 조회 후 주간 최대 분 계산
+        int weeklyMaxMinutes = resolveWeeklyMaxMinute(companyId);
 
         // 3. Repository 에 SQL 필터 위임 → Row 리스트 획득 (이미 휴가/OT/주간분 병합 상태)
         List<AttendanceAdminRow> rows = queryRepository.fetchAll(
@@ -173,8 +163,8 @@ public class AttendanceAdminService {
         List<AttendanceDailyListRowResDto> filtered = (required == null)
                 ? mapped
                 : mapped.stream()
-                    .filter(row -> row.getAttendanceStatuses().stream().anyMatch(required::contains))
-                    .toList();
+                .filter(row -> row.getAttendanceStatuses().stream().anyMatch(required::contains))
+                .toList();
 
         // 7. 공통 페이지네이션 유틸에 위임 (empId ASC 기본 정렬)
         PagedResDto<AttendanceDailyListRowResDto> result = paginate(filtered, page, size,
@@ -185,24 +175,19 @@ public class AttendanceAdminService {
         return result;
     }
 
-    /* =========================================================================
-     * Card Drilldown API (A-4) — 특정 CardType 에 해당하는 사원 목록
-     * ========================================================================= */
-
-    /**
+    /*
      * 카드 드릴다운.
      * cardType 은 필수. employmentFilter 는 생략 시 ALL.
      * List 와 달리 dept/workGroup/keyword 필터는 받지 않음 (대시보드 UX 상 불필요).
      */
     public PagedResDto<AttendanceDailyCardRowResDto> getCard(UUID companyId, LocalDate date,
-                                                              AttendanceCardType cardType,
-                                                              EmploymentFilter filter,
-                                                              int page, int size) {
+                                                             AttendanceCardType cardType,
+                                                             EmploymentFilter filter,
+                                                             int page, int size) {
         // 1. null 필터는 ALL 보정
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
-        // 2. 주간 최대 분과 시간(hour) 두 값 준비 — MAX_HOUR_EXCEED detail 에 시간 단위로 표시
-        int weeklyMaxMinutes = resolveWeeklyMaxMinutes(companyId);
-        int weeklyMaxHour = weeklyMaxMinutes / 60;
+        // 2. 주간 최대 분 준비 — formatDetail 내부에서 /60 으로 시간 표기
+        int weeklyMaxMinutes = resolveWeeklyMaxMinute(companyId);
 
         // 3. 회사 + 재직필터 기준 전체 Row 조회 (부서/검색어 필터 없음)
         List<AttendanceAdminRow> rows = queryRepository.fetchAll(companyId, date, effectiveFilter);
@@ -214,7 +199,7 @@ public class AttendanceAdminService {
             List<AttendanceCardType> cards = judge.judge(r, date, weeklyMaxMinutes);
             // 4-b. 요청 카드 타입을 가진 사원만 포함 (사원별 한 번만 등장)
             if (cards.contains(cardType)) {
-                hit.add(toCardRow(r, cardType, weeklyMaxHour));
+                hit.add(toCardRow(r, cardType, weeklyMaxMinutes));
             }
         }
 
@@ -227,11 +212,7 @@ public class AttendanceAdminService {
         return result;
     }
 
-    /* =========================================================================
-     * Row → 응답 DTO 변환
-     * ========================================================================= */
-
-    /**
+    /*
      * Row + 판정 카드 → List 응답 행.
      * totalWorkMinutes 는 퇴근 완료 전엔 null.
      */
@@ -255,12 +236,12 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /**
+    /*
      * Row + 드릴다운 대상 카드 타입 → Card 응답 행.
      * weeklyWorkedText 와 detail 은 이 메서드에서 포맷 문자열로 구성.
      */
     private AttendanceDailyCardRowResDto toCardRow(AttendanceAdminRow r, AttendanceCardType cardType,
-                                                    int weeklyMaxHour) {
+                                                   int weeklyMaxMinutes) {
         // 1. null 방어 — 주간 분 없으면 0 으로 간주
         long weekMin = (r.getWeekWorkedMinutes() != null) ? r.getWeekWorkedMinutes() : 0L;
         // 2. DTO 조립
@@ -271,20 +252,16 @@ public class AttendanceAdminService {
                 .deptName(r.getDeptName())
                 .gradeName(r.getGradeName())
                 .weeklyWorkedMinutes(weekMin)
-                .weeklyWorkedText(formatHm(weekMin))                    // "Xh Ym"
-                .detail(formatDetail(cardType, r, weeklyMaxHour))        // 카드별 상세 문구
+                .weeklyWorkedText(formatHm(weekMin))                     // "Xh Ym"
+                .detail(formatDetail(cardType, r, weeklyMaxMinutes))     // 카드별 상세 문구
                 .build();
     }
 
-    /* =========================================================================
-     * detail 포맷 — 카드 타입별 고정 문구 생성
-     * ========================================================================= */
-
-    /**
+    /*
      * 카드 타입별 detail 텍스트 생성.
      * 프론트 UI 스펙에 맞춘 고정 포맷. 결측 데이터는 안전 기본값으로 대체.
      */
-    private String formatDetail(AttendanceCardType cardType, AttendanceAdminRow r, int weeklyMaxHour) {
+    private String formatDetail(AttendanceCardType cardType, AttendanceAdminRow r, int weeklyMaxMinutes) {
         // switch expression — 각 분기 return 이 detail 문자열
         return switch (cardType) {
 
@@ -346,33 +323,25 @@ public class AttendanceAdminService {
                 yield String.format("%s 초과 (미승인)", formatHm(Math.max(0, overMin)));
             }
 
-            // 주간 최대근무시간 초과: 사원 주간(시간) / 정책(시간) 표기
+            // 주간 최대근무시간 초과: 사원 주간(h) / 정책(h) 표기 — 정책값은 분이라 /60 변환
             case MAX_HOUR_EXCEED -> {
                 long weekMin = (r.getWeekWorkedMinutes() != null) ? r.getWeekWorkedMinutes() : 0L;
-                yield String.format("%dh / %dh 정책", weekMin / 60, weeklyMaxHour);
+                yield String.format("%dh / %dh 정책", weekMin / 60, weeklyMaxMinutes / 60);
             }
         };
     }
 
-    /** 분 단위 값을 "Xh Ym" 문자열로 변환 (음수는 0 으로 간주하지 않고 그대로 표시 — 호출측에서 Math.max 처리). */
+    /*
+     * 분 단위 값을 "Xh Ym" 문자열로 변환 (음수는 0 으로 간주하지 않고 그대로 표시 — 호출측에서 Math.max 처리).
+     */
     private String formatHm(long minutes) {
         long h = minutes / 60;     // 시간 부분
         long m = minutes % 60;     // 분 부분
         return h + "h " + m + "m"; // 예: "7h 30m"
     }
 
-    /* =========================================================================
-     * 공통 유틸
-     * ========================================================================= */
-
     /**
      * 메모리 페이지네이션 공통 로직.
-     *
-     * @param items      전체 원소
-     * @param page       0-based 페이지 번호
-     * @param size       페이지 크기 (최소 1 로 보정)
-     * @param comparator 정렬 규칙
-     * @return PagedResDto
      */
     private <T> PagedResDto<T> paginate(List<T> items, int page, int size, Comparator<T> comparator) {
         // 1. 원본 변형 방지를 위해 복사 후 정렬
@@ -399,57 +368,34 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /**
-     * 회사별 주간 최대 근무시간(분) 조회. 정책 미존재 시 기본값 52h 사용.
+    /*
+     * 회사별 주간 최대 근무 분 조회. 정책 미존재 시 DEFAULT_WEEKLY_MAX_MINUTE.
      */
-    private int resolveWeeklyMaxMinutes(UUID companyId) {
-        int hours = overtimePolicyRepository.findByCompany_CompanyId(companyId)
-                .map(OvertimePolicy::getOtPolicyWeeklyMaxHour)
-                .orElse(DEFAULT_WEEKLY_MAX_HOUR);
-        return hours * 60;
-    }
-
-    /**
-     * 회사별 주간 경고 기준(시간) 조회. 정책 미존재 시 기본값 45h.
-     * OvertimePolicy.otPolicyWarningHour 를 그대로 사용.
-     */
-    private int resolveWeeklyWarningHour(UUID companyId) {
+    private int resolveWeeklyMaxMinute(UUID companyId) {
         return overtimePolicyRepository.findByCompany_CompanyId(companyId)
-                .map(OvertimePolicy::getOtPolicyWarningHour)
-                .orElse(DEFAULT_WEEKLY_WARNING_HOUR);
+                .map(OvertimePolicy::getOtPolicyWeeklyMaxMinutes)
+                .orElse(DEFAULT_WEEKLY_MAX_MINUTE);
     }
 
-    /* =========================================================================
-     * Period List API — 기간별 (사원 × 일자) 행 리스트
-     *
-     * - 일자별 Row 구조 그대로 재사용 (AttendancePeriodListRowResDto 는 workDate 만 추가)
-     * - 기존 fetchAll 을 date 마다 재사용 (단일 파티션 프루닝 유지)
-     * - statuses 는 판정 후 메모리에서 교집합 필터
-     * ========================================================================= */
+    /*
+     * 회사별 주간 경고 기준 분 조회. 정책 미존재 시 DEFAULT_WEEKLY_WARNING_MINUTE.
+     */
+    private int resolveWeeklyWarningMinute(UUID companyId) {
+        return overtimePolicyRepository.findByCompany_CompanyId(companyId)
+                .map(OvertimePolicy::getOtPolicyWarningMinutes)
+                .orElse(DEFAULT_WEEKLY_WARNING_MINUTE);
+    }
 
-    /**
+    /*
      * 기간별 사원 테이블 (페이지네이션).
-     *
-     * @param companyId      회사 PK
-     * @param start          조회 시작일 (포함)
-     * @param end            조회 종료일 (포함)
-     * @param filter         재직상태 필터 (null → ALL)
-     * @param deptId         부서 필터 (nullable)
-     * @param workGroupId    근무그룹 필터 (nullable)
-     * @param statuses       카드 타입 필터 (nullable/empty 미적용)
-     * @param keyword        사번/이름/부서명 부분일치 (nullable/blank 미적용)
-     * @param page           0-based 페이지 번호
-     * @param size           페이지 크기 (최소 1 보정)
-     * @return 기간 내 (사원×일자) 행들의 페이지. 정렬: workDate DESC, empId ASC
-     * @throws IllegalArgumentException end < start 인 경우
      */
     public PagedResDto<AttendancePeriodListRowResDto> getPeriodList(UUID companyId,
-                                                                     LocalDate start, LocalDate end,
-                                                                     EmploymentFilter filter,
-                                                                     Long deptId, Long workGroupId,
-                                                                     List<AttendanceCardType> statuses,
-                                                                     String keyword,
-                                                                     int page, int size) {
+                                                                    LocalDate start, LocalDate end,
+                                                                    EmploymentFilter filter,
+                                                                    Long deptId, Long workGroupId,
+                                                                    List<AttendanceCardType> statuses,
+                                                                    String keyword,
+                                                                    int page, int size) {
         // 1. 범위 검증 — 역순이면 예외
         if (start == null || end == null) {
             throw new IllegalArgumentException("start / end 는 필수입니다.");
@@ -458,9 +404,9 @@ public class AttendanceAdminService {
             throw new IllegalArgumentException("end 는 start 이후여야 합니다. start=" + start + ", end=" + end);
         }
 
-        // 2. 기본값 보정 및 정책 분(min)
+        // 2. 기본값 보정 및 정책 분
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
-        int weeklyMaxMinutes = resolveWeeklyMaxMinutes(companyId);
+        int weeklyMaxMinutes = resolveWeeklyMaxMinute(companyId);
 
         // 3. statuses EnumSet (빈 필터는 null)
         Set<AttendanceCardType> required =
@@ -509,7 +455,7 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /**
+    /*
      * Row + 판정 카드 → 기간별 응답 행.
      * totalWorkMinutes 는 출퇴근 둘 다 있을 때만 계산.
      */
@@ -535,34 +481,16 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /* =========================================================================
-     * Weekly Stats API — 주간현황 (월~일 일자별 전사 카운트)
-     *
-     * 카운트 정의:
-     *  - normal     : NORMAL 카드 포함
-     *  - late       : LATE 카드 포함
-     *  - earlyLeave : EARLY_LEAVE 카드 포함
-     *  - onLeave    : hasApprovedVacationToday == true
-     *  - absent     : 소정근무일 && comRecId == null && 승인 휴가 없음
-     *  - overtime   : approvedOtMinutesToday > 0 || UNAPPROVED_OT
-     *  - attendRate : (normal + late) / totalEmp * 100 (1자리 반올림)
-     * ========================================================================= */
-
-    /**
+    /*
      * 주간현황 — 해당 주 월~일 각 일자별 전사 집계.
-     *
-     * @param companyId  회사 PK
-     * @param weekStart  주 시작일 (임의 날짜 가능 → 해당 주 월요일로 자동 정렬)
-     * @param filter     재직상태 필터 (null → ALL)
-     * @return 월~일 7행 (일자 오름차순)
      */
     public List<AttendanceWeeklyDailyStatsResDto> getWeeklyStats(UUID companyId, LocalDate weekStart,
-                                                                  EmploymentFilter filter) {
+                                                                 EmploymentFilter filter) {
         // 1. 입력 검증
         if (weekStart == null) throw new IllegalArgumentException("weekStart 는 필수입니다.");
         // 2. 기본 보정
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
-        int weeklyMaxMinutes = resolveWeeklyMaxMinutes(companyId);
+        int weeklyMaxMinutes = resolveWeeklyMaxMinute(companyId);
         // 3. 해당 주 월요일로 정규화
         LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
 
@@ -611,30 +539,16 @@ public class AttendanceAdminService {
         return result;
     }
 
-    /* =========================================================================
-     * Dept Summary API — 부서별현황 (주간 단위)
-     *
-     * 집계 항목:
-     *  - totalEmp        : 주 내 한 번이라도 나타난 사원 수 (중복 제거)
-     *  - scheduledEmpDays: 부서원별 소정근무일수 총합 (분모)
-     *  - attendRate      : (출근한 소정근무일수) / scheduledEmpDays
-     *  - lateRate        : 지각건수 / scheduledEmpDays
-     *  - absentCount     : 결근 건수 (중복 포함)
-     *  - weeklyAvg       : 부서 사원 주간 근무시간 합 / totalEmp
-     *  - overtimeCount   : weekly > weeklyMaxHour 인 사원 수
-     *  - avgOvertimeHours: (초과분 합) / totalEmp
-     * ========================================================================= */
+    /*
+     * Dept Summary API — 부서별현황 (주간 단위) */
 
-    /**
-     * 부서별현황 — 주간 집계.
-     */
     public List<AttendanceDeptSummaryResDto> getDeptSummary(UUID companyId, LocalDate weekStart,
-                                                             EmploymentFilter filter) {
+                                                            EmploymentFilter filter) {
         // 1. 입력 검증
         if (weekStart == null) throw new IllegalArgumentException("weekStart 는 필수입니다.");
         // 2. 기본 보정
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
-        int weeklyMaxMinutes = resolveWeeklyMaxMinutes(companyId);
+        int weeklyMaxMinutes = resolveWeeklyMaxMinute(companyId);
         // 3. 주 범위 계산 (월~일)
         LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
         LocalDate sunday = monday.plusDays(6);
@@ -647,18 +561,15 @@ public class AttendanceAdminService {
             List<AttendanceAdminRow> rows = queryRepository.fetchAll(companyId, day, effectiveFilter);
             final LocalDate d = day;
             for (AttendanceAdminRow r : rows) {
-                // 5-a. 부서 누적자 조회/생성
                 DeptAggregator a = agg.computeIfAbsent(r.getDeptId(),
                         k -> new DeptAggregator(r.getDeptId(), r.getDeptName()));
                 a.empIds.add(r.getEmpId());
 
-                // 5-b. 판정 및 상태 플래그
                 List<AttendanceCardType> cards = judge.judge(r, d, weeklyMaxMinutes);
                 boolean hasVac = Boolean.TRUE.equals(r.getHasApprovedVacationToday());
                 boolean scheduled = isScheduledWorkDay(r, d);
                 boolean hasCheckIn = (r.getComRecId() != null);
 
-                // 5-c. 소정근무일(휴가 제외) 분모/분자 갱신
                 if (scheduled && !hasVac) {
                     a.scheduledEmpDays++;
                     if (hasCheckIn) a.attendedDays++;
@@ -666,7 +577,6 @@ public class AttendanceAdminService {
                     if (!hasCheckIn) a.absentCount++;
                 }
 
-                // 5-d. 사원별 당일 근무분 누적 (주간 합계)
                 long dayWorked = computeDayWorkedMinutes(r, d);
                 a.workedMinByEmp.merge(r.getEmpId(), dayWorked, Long::sum);
             }
@@ -677,11 +587,9 @@ public class AttendanceAdminService {
         for (DeptAggregator a : agg.values()) {
             int totalEmp = a.empIds.size();
 
-            // 6-a. 주간 평균 근무시간 (h)
             long totalMin = a.workedMinByEmp.values().stream().mapToLong(Long::longValue).sum();
             double weeklyAvgH = (totalEmp == 0) ? 0.0 : round1(totalMin / 60.0 / totalEmp);
 
-            // 6-b. 초과분 집계 (weeklyMaxMinutes 초과)
             double overtimeHSum = 0.0;
             int overtimeEmpCount = 0;
             for (long min : a.workedMinByEmp.values()) {
@@ -693,7 +601,6 @@ public class AttendanceAdminService {
             }
             double avgOtH = (totalEmp == 0) ? 0.0 : round1(overtimeHSum / totalEmp);
 
-            // 6-c. 출근률/지각률 — 분모 0 방어
             double attendRate = (a.scheduledEmpDays == 0) ? 0.0
                     : round1(a.attendedDays * 100.0 / a.scheduledEmpDays);
             double lateRate = (a.scheduledEmpDays == 0) ? 0.0
@@ -714,7 +621,9 @@ public class AttendanceAdminService {
         return out;
     }
 
-    /** 부서별현황 집계용 내부 상태 객체 (Service-private). */
+    /*
+     * 부서별현황 집계용 내부 상태 객체 (Service-private).
+     */
     private static class DeptAggregator {
         /** 부서 PK */
         final Long deptId;
@@ -739,32 +648,20 @@ public class AttendanceAdminService {
         }
     }
 
-    /* =========================================================================
-     * Overtime List API — 초과근무 탭 (주간 사원별 근무/초과)
-     *
-     * 주간근무 = Σ(소정근무분 - 지각분 - 조퇴분) + 승인 OT 분
-     *  - 휴가일/비근무요일: 승인 OT 만
-     *  - 결근일: 0
-     * 상태:
-     *  - 초과 : weekly > weeklyMaxHour
-     *  - 경고 : weekly >= weeklyWarningHour
-     *  - 정상 : 그 외
-     * ========================================================================= */
-
-    /**
+    /*
      * 초과근무 리스트 — 페이지네이션.
+     * 상태 판정: WeeklyWorkStatus.of(worked, max, warning) 분 단위 비교.
      */
     public PagedResDto<AttendanceOvertimeRowResDto> getOvertimeList(UUID companyId, LocalDate weekStart,
-                                                                     EmploymentFilter filter,
-                                                                     String keyword,
-                                                                     int page, int size) {
+                                                                    EmploymentFilter filter,
+                                                                    String keyword,
+                                                                    int page, int size) {
         // 1. 입력 검증
         if (weekStart == null) throw new IllegalArgumentException("weekStart 는 필수입니다.");
         // 2. 정책값 / 기본 보정
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
-        int weeklyMaxMinutes = resolveWeeklyMaxMinutes(companyId);
-        int weeklyMaxHour = weeklyMaxMinutes / 60;
-        int warningHour = resolveWeeklyWarningHour(companyId);
+        int weeklyMaxMinute = resolveWeeklyMaxMinute(companyId);
+        int warningMinute = resolveWeeklyWarningMinute(companyId);
         // 3. 주 범위
         LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
         LocalDate sunday = monday.plusDays(6);
@@ -788,29 +685,25 @@ public class AttendanceAdminService {
         List<AttendanceOvertimeRowResDto> all = new ArrayList<>(empSnapshot.size());
         for (Map.Entry<Long, AttendanceAdminRow> e : empSnapshot.entrySet()) {
             AttendanceAdminRow r = e.getValue();
-            long min = workedMinByEmp.getOrDefault(e.getKey(), 0L);
-            double hours = round1(min / 60.0);
-            double over = Math.max(0.0, round1(hours - weeklyMaxHour));
+            long workedMin = workedMinByEmp.getOrDefault(e.getKey(), 0L);
+            long overMin = Math.max(0L, workedMin - weeklyMaxMinute);
 
-            // 상태 분기 — 정책 초과 > 경고 > 정상
-            String status;
-            if (hours > weeklyMaxHour)      status = "초과";
-            else if (hours >= warningHour)  status = "경고";
-            else                            status = "정상";
+            // 상태 판정 — enum 정적 팩토리로 일원화
+            WeeklyWorkStatus status = WeeklyWorkStatus.of(workedMin, weeklyMaxMinute, warningMinute);
 
             all.add(AttendanceOvertimeRowResDto.builder()
                     .empId(r.getEmpId()).empNum(r.getEmpNum()).empName(r.getEmpName())
                     .deptName(r.getDeptName()).gradeName(r.getGradeName())
-                    .weeklyWorkHours(hours)
-                    .weeklyMaxHour(weeklyMaxHour)
-                    .weeklyWarningHour(warningHour)
-                    .overtimeHours(over)
+                    .weeklyWorkMinutes(workedMin)
+                    .weeklyMaxMinutes(weeklyMaxMinute)
+                    .weeklyWarningMinutes(warningMinute)
+                    .overtimeMinutes(overMin)
                     .status(status)
                     .build());
         }
 
         // 7. 주간근무 DESC 정렬 (많이 일한 사람 먼저)
-        all.sort(Comparator.comparingDouble(AttendanceOvertimeRowResDto::getWeeklyWorkHours).reversed());
+        all.sort(Comparator.comparing(AttendanceOvertimeRowResDto::getWeeklyWorkMinutes).reversed());
 
         // 8. 페이지 슬라이싱
         int effectiveSize = Math.max(1, size);
@@ -833,15 +726,11 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /* =========================================================================
-     * 공통 계산 헬퍼 (주간 근무/결근/소정 계산)
-     * ========================================================================= */
-
     /**
      * 당일 실근무 분 계산식.
-     *  - 휴가일 OR 비근무요일: 승인 OT 분만
-     *  - 결근(소정근무일이지만 출근기록 없음): 0
-     *  - 그 외: Max(0, 소정 - 지각 - 조퇴) + 승인 OT
+     * - 휴가일 OR 비근무요일: 승인 OT 분만
+     * - 결근(소정근무일이지만 출근기록 없음): 0
+     * - 그 외: Max(0, 소정 - 지각 - 조퇴) + 승인 OT
      */
     private long computeDayWorkedMinutes(AttendanceAdminRow r, LocalDate day) {
         boolean hasVac = Boolean.TRUE.equals(r.getHasApprovedVacationToday());
@@ -862,10 +751,8 @@ public class AttendanceAdminService {
         return base + approvedOt;
     }
 
-    /**
+    /*
      * 근무그룹 소정근무분 = groupEndTime - groupStartTime.
-     * Row 에 break 정보가 없으므로 소정 계산에서는 break 를 제외하지 않음
-     * (LATE/EARLY 차감 로직과 동일한 기준을 맞추기 위함).
      */
     private long scheduledMinutes(AttendanceAdminRow r) {
         if (r.getGroupStartTime() == null || r.getGroupEndTime() == null) return 0L;
@@ -873,9 +760,8 @@ public class AttendanceAdminService {
         return Math.max(0, total);
     }
 
-    /**
+    /*
      * 소정근무요일 여부. WorkGroup.groupWorkDay 비트마스크 (월=1, 화=2, 수=4, …, 일=64).
-     * workGroup 미배정(필수지만 이력 호환)이면 false.
      */
     private boolean isScheduledWorkDay(AttendanceAdminRow r, LocalDate day) {
         if (r.getGroupWorkDay() == null || r.getGroupStartTime() == null) return false;
@@ -883,7 +769,7 @@ public class AttendanceAdminService {
         return (r.getGroupWorkDay() & bit) != 0;
     }
 
-    /**
+    /*
      * 지각 분 = max(0, checkInAt.time - groupStartTime). checkInStatus == LATE 일 때만 유효.
      */
     private long extractLateMinutes(AttendanceAdminRow r) {
@@ -893,7 +779,7 @@ public class AttendanceAdminService {
         return Math.max(0, diff);
     }
 
-    /**
+    /*
      * 조퇴 분 = max(0, groupEndTime - checkOutAt.time). checkOutStatus == EARLY_LEAVE 일 때만 유효.
      */
     private long extractEarlyLeaveMinutes(AttendanceAdminRow r) {
@@ -903,39 +789,20 @@ public class AttendanceAdminService {
         return Math.max(0, diff);
     }
 
-    /** double 값을 소수 1자리로 반올림. */
+    /*
+     * double 값을 소수 1자리로 반올림 (DeptSummary 시간 계산용 — 다른 데선 거의 안 씀).
+     */
     private double round1(double v) {
         return Math.round(v * 10.0) / 10.0;
     }
 
-    /* =========================================================================
-     * Employee History API — 사원 일별 근무 현황 (상세 모달)
-     *
-     * 반환 구조:
-     *  - header : 주간 근무시간 / 카드타입 에코 / 52시간 현황 (정책 기준)
-     *  - history: 입사일 ~ 조회일 사이 commute_record 페이지 (workDate DESC)
-     *
-     * 판정(attendanceStatuses):
-     *  - LATE / EARLY_LEAVE / OFFSITE / MISSING_COMMUTE(퇴근누락) / UNAPPROVED_OT / WORKING / NORMAL
-     *  - week context 가 없는 단건 판정이라 MAX_HOUR_EXCEED/UNDER_MIN_HOUR/VACATION_ATTEND 는 제외
-     * ========================================================================= */
-
-    /**
+    /*
      * 사원 일별 근무 현황 조회.
-     *
-     * @param companyId  회사 PK (Gateway 주입 헤더 값)
-     * @param empId      대상 사원 PK
-     * @param date       조회 기준일 (주간 근무시간 계산 기준)
-     * @param cardType   드릴다운 카드 타입 (에코용, nullable)
-     * @param page       0-based 페이지
-     * @param size       페이지 크기 (기본 10)
-     * @return 헤더 + 일별 근무 현황 페이지
-     * @throws IllegalArgumentException 사원이 해당 회사 소속이 아니거나 date < hireDate
      */
     public AttendanceEmployeeHistoryResDto getEmployeeHistory(UUID companyId, Long empId,
-                                                               LocalDate date,
-                                                               AttendanceCardType cardType,
-                                                               int page, int size) {
+                                                              LocalDate date,
+                                                              AttendanceCardType cardType,
+                                                              int page, int size) {
         // 1. 사원 조회 — 회사 소속 검증 포함
         Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId)
                 .orElseThrow(() -> new IllegalArgumentException(
@@ -949,10 +816,9 @@ public class AttendanceAdminService {
                     "조회일은 입사일(" + hireDate + ") 이후여야 합니다. date=" + date);
         }
 
-        // 3. 정책값 로드 — 52시간 현황 계산용
-        int weeklyMaxMinutes = resolveWeeklyMaxMinutes(companyId);
-        int weeklyMaxHour = weeklyMaxMinutes / 60;
-        int warningHour = resolveWeeklyWarningHour(companyId);
+        // 3. 정책값 로드 — 52시간 현황 계산용 (분 단위)
+        int weeklyMaxMinute = resolveWeeklyMaxMinute(companyId);
+        int warningMinute = resolveWeeklyWarningMinute(companyId);
 
         // 4. 주간 범위 (date 가 속한 월~일)
         LocalDate weekStart = date.with(DayOfWeek.MONDAY);
@@ -962,13 +828,9 @@ public class AttendanceAdminService {
         Long weeklyMinRaw = commuteRecordRepository.sumWorkedMinutesBetween(
                 companyId, empId, weekStart, weekEnd);
         long weeklyMin = (weeklyMinRaw != null) ? weeklyMinRaw : 0L;
-        double weeklyHours = weeklyMin / 60.0;
 
-        // 6. 52시간 현황 라벨
-        String weeklyStatus;
-        if (weeklyHours > weeklyMaxHour)     weeklyStatus = "초과";
-        else if (weeklyHours >= warningHour) weeklyStatus = "경고";
-        else                                 weeklyStatus = "정상";
+        // 6. 52시간 현황 라벨 — enum 일원화
+        WeeklyWorkStatus weeklyStatus = WeeklyWorkStatus.of(weeklyMin, weeklyMaxMinute, warningMinute);
 
         // 7. 헤더 DTO 조립
         AttendanceEmployeeHistoryHeaderDto header = AttendanceEmployeeHistoryHeaderDto.builder()
@@ -980,8 +842,8 @@ public class AttendanceAdminService {
                 .weeklyWorkMinutes(weeklyMin)
                 .weeklyWorkText(formatHm(weeklyMin))
                 .cardType(cardType)
-                .weeklyMaxHour(weeklyMaxHour)
-                .weeklyWarningHour(warningHour)
+                .weeklyMaxMinutes(weeklyMaxMinute)
+                .weeklyWarningMinutes(warningMinute)
                 .weeklyStatus(weeklyStatus)
                 .build();
 
@@ -1017,7 +879,7 @@ public class AttendanceAdminService {
                         .build();
 
         log.debug("[getEmployeeHistory] companyId={}, empId={}, date={}, weeklyMin={}, weeklyStatus={}, " +
-                        "pageTotal={}", companyId, empId, date, weeklyMin, weeklyStatus, crPage.getTotalElements());
+                "pageTotal={}", companyId, empId, date, weeklyMin, weeklyStatus, crPage.getTotalElements());
 
         return AttendanceEmployeeHistoryResDto.builder()
                 .header(header)
@@ -1025,18 +887,16 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /**
+    /*
      * 페이지 내 레코드 중 workDate 최소~최대 범위에 대해 APPROVED OT 분을 일자별 맵으로 반환.
-     * native 쿼리 DATE(ot_date) 결과를 java.time.LocalDate 로 변환.
      */
     private Map<LocalDate, Long> loadApprovedOtByDate(Long empId, List<CommuteRecord> records) {
         if (records.isEmpty()) return Map.of();
-        // 페이지 내 최소/최대 workDate 계산 — 쿼리 범위 최소화
         LocalDate minDate = records.get(0).getWorkDate();
         LocalDate maxDate = records.get(0).getWorkDate();
         for (CommuteRecord c : records) {
             if (c.getWorkDate().isBefore(minDate)) minDate = c.getWorkDate();
-            if (c.getWorkDate().isAfter(maxDate))  maxDate = c.getWorkDate();
+            if (c.getWorkDate().isAfter(maxDate)) maxDate = c.getWorkDate();
         }
         LocalDateTime fromDt = minDate.atStartOfDay();
         LocalDateTime toDt = maxDate.atTime(LocalTime.MAX);
@@ -1052,11 +912,10 @@ public class AttendanceAdminService {
         return out;
     }
 
-    /**
+    /*
      * CommuteRecord + 근무그룹 + 승인 OT → 일별 행 DTO.
      */
     private AttendanceEmployeeHistoryRowResDto toHistoryRow(CommuteRecord c, WorkGroup wg, long approvedOt) {
-        // 1. 실근무 분 — 출퇴근 둘 다 있을 때만
         LocalDateTime checkInAt = c.getComRecCheckIn();
         LocalDateTime checkOutAt = c.getComRecCheckOut();
         Long workMin = (checkInAt != null && checkOutAt != null)
@@ -1064,14 +923,11 @@ public class AttendanceAdminService {
                 : null;
         String workText = (workMin != null) ? formatHm(workMin) : null;
 
-        // 2. 초과근무 표시값 — 승인 OT 분 0 이면 null 반환 (프론트 "-" 표시)
         Long otMin = (approvedOt > 0) ? approvedOt : null;
         String otText = (approvedOt > 0) ? formatHm(approvedOt) : null;
 
-        // 3. 카드 리스트 계산 (주간 컨텍스트 없이 당일 단건 판정)
         List<AttendanceCardType> cards = judgeHistoricalDay(c, wg, approvedOt);
 
-        // 4. 행 DTO
         return AttendanceEmployeeHistoryRowResDto.builder()
                 .workDate(c.getWorkDate())
                 .dayOfWeek(c.getWorkDate().getDayOfWeek())
@@ -1085,31 +941,20 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /**
+    /*
      * 일별 단건 판정 — 주간 컨텍스트가 없으므로 MAX_HOUR_EXCEED/UNDER_MIN_HOUR/VACATION_ATTEND 미적용.
-     * 순서: 체크인 있으면 WORKING → LATE/EARLY_LEAVE/OFFSITE/UNAPPROVED_OT/MISSING_COMMUTE → (이상 없으면) NORMAL
      */
     private List<AttendanceCardType> judgeHistoricalDay(CommuteRecord c, WorkGroup wg, long approvedOt) {
         List<AttendanceCardType> out = new ArrayList<>(3);
         boolean hasCheckIn = (c.getComRecCheckIn() != null);
         boolean hasCheckOut = (c.getComRecCheckOut() != null);
 
-        // 1. 근무중(WORKING) — 체크인 있으면 항상 포함
         if (hasCheckIn) out.add(AttendanceCardType.WORKING);
-
-        // 2. 지각
         if (c.getCheckInStatus() == CheckInStatus.LATE) out.add(AttendanceCardType.LATE);
-
-        // 3. 조퇴
         if (c.getCheckOutStatus() == CheckOutStatus.EARLY_LEAVE) out.add(AttendanceCardType.EARLY_LEAVE);
-
-        // 4. 근무지 외
         if (Boolean.TRUE.equals(c.getIsOffsite())) out.add(AttendanceCardType.OFFSITE);
-
-        // 5. 퇴근 누락 — 체크인 있고 체크아웃 없음
         if (hasCheckIn && !hasCheckOut) out.add(AttendanceCardType.MISSING_COMMUTE);
 
-        // 6. 미승인 초과근무 — 체크아웃 > groupEndTime AND 승인 OT 없음
         if (hasCheckOut && wg != null && wg.getGroupEndTime() != null && approvedOt == 0) {
             LocalTime endTime = wg.getGroupEndTime();
             if (c.getComRecCheckOut().toLocalTime().isAfter(endTime)) {
@@ -1117,7 +962,6 @@ public class AttendanceAdminService {
             }
         }
 
-        // 7. 정상 — 체크인 있고 WORKING 외 이상 카드 없음
         if (hasCheckIn && out.size() == 1 && out.get(0) == AttendanceCardType.WORKING) {
             out.add(0, AttendanceCardType.NORMAL);
         }

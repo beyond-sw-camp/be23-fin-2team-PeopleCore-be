@@ -37,8 +37,8 @@ import java.util.UUID;
 @Transactional
 public class OvertimeRequestService {
 
-    /** 정책 미존재 회사 fallback (시간 단위) */
-    private static final int DEFAULT_WEEKLY_MAX_HOUR = 52;
+    /** 정책 미존재 회사 fallback (분 단위, 52h = 3120) */
+    private static final int DEFAULT_WEEKLY_MAX_MINUTE = 3120;
 
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final OverTimePolicyRepository overtimePolicyRepository;
@@ -64,9 +64,8 @@ public class OvertimeRequestService {
     public OvertimeRemainingResDto getRemaining(UUID companyId, Long empId, LocalDate weekStart) {
         // 정책 조회 (없으면 52h / NOTIFY)
         OvertimePolicy policy = overtimePolicyRepository.findByCompany_CompanyId(companyId).orElse(null);
-        int maxHour = (policy != null) ? policy.getOtPolicyWeeklyMaxHour() : DEFAULT_WEEKLY_MAX_HOUR;
+        int weeklyMaxMinutes = (policy != null) ? policy.getOtPolicyWeeklyMaxMinutes() : DEFAULT_WEEKLY_MAX_MINUTE;
         OtExceedAction action = (policy != null) ? policy.getOtExceedAction() : OtExceedAction.NOTIFY;
-        int weeklyMaxMinutes = maxHour * 60;
 
         // 사원 + workGroup 기반 주간 기본 근로 분 계산
         Employee employee = employeeRepository.findById(empId)
@@ -176,7 +175,7 @@ public class OvertimeRequestService {
         if (policy == null) return;
 
         // 버퍼 계산
-        int weeklyMaxMinutes = policy.getOtPolicyWeeklyMaxHour() * 60;
+        int weeklyMaxMinutes = policy.getOtPolicyWeeklyMaxMinutes();
         int baseWorkMinutes = calcBaseWorkMinutes(employee.getWorkGroup());
         int maxOtBuffer = Math.max(0, weeklyMaxMinutes - baseWorkMinutes);
 
