@@ -4,6 +4,7 @@ import com.peoplecore.entity.Holidays;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -14,6 +15,7 @@ import java.util.UUID;
  * NATIONAL: 전역 저장 (companyId IS NULL 무관, 타입만으로 매치). 대체공휴일도 별도 row 로 포함.
  * COMPANY : 해당 회사만.
  */
+@Repository
 public interface HolidayLookupRepository extends JpaRepository<Holidays, Long> {
 
     /**

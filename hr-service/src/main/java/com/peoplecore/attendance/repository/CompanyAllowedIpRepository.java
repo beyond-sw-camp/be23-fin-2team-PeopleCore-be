@@ -2,11 +2,13 @@ package com.peoplecore.attendance.repository;
 
 import com.peoplecore.attendance.entity.CompanyAllowedIp;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+@Repository
 public interface CompanyAllowedIpRepository extends JpaRepository<CompanyAllowedIp, Long> {
     /** 회사별 전체 목록 (활성+비활성 포함, 관리 화면용) */
     List<CompanyAllowedIp> findByCompany_CompanyIdOrderByIdAsc(UUID companyId);

@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +20,7 @@ import java.util.UUID;
  * DB 레벨 복합 PK (com_rec_id, work_date) 는 파티셔닝용으로 Initializer 가 재정의.
  * 비즈니스 유일성 (company_id, emp_id, work_date) 은 UNIQUE 제약으로 DB 가 보장.
  */
+@Repository
 public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Long> {
 
     /*
@@ -42,7 +44,23 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
     findByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenOrderByWorkDateDesc(
             UUID companyId, Long empId, LocalDate from, LocalDate to, Pageable pageable);
 
-
+    /*
+     * 사원의 [from, to] 구간 실근무 분 합계 — check-in, check-out 모두 존재할 때만 합산.
+     * 사용: AttendanceAdminService.getEmployeeHistory (사원 일별 근무 현황 모달 주간 근무시간 헤더 카드)
+     */
+    @Query(value = """
+            SELECT COALESCE(SUM(TIMESTAMPDIFF(MINUTE, c.com_rec_check_in, c.com_rec_check_out)), 0)
+              FROM commute_record c
+             WHERE c.company_id = :companyId
+               AND c.emp_id = :empId
+               AND c.work_date BETWEEN :from AND :to
+               AND c.com_rec_check_in IS NOT NULL
+               AND c.com_rec_check_out IS NOT NULL
+            """, nativeQuery = true)
+    Long sumWorkedMinutesBetween(@Param("companyId") UUID companyId,
+                                 @Param("empId") Long empId,
+                                 @Param("from") LocalDate from,
+                                 @Param("to") LocalDate to);
 
 
 }

@@ -32,7 +32,7 @@ import java.util.*;
  *  2) fetchApprovedVacationMap: empId → (vacTypeName)
  *  3) fetchApprovedOtMinutesMap: empId → 분 합계
  *  4) fetchWeekWorkedMinutesMap: empId → 주간 분 합계
- *
+
  * 파티션 프루닝:
  *  - 메인 cr.workDate = :date (ON 절)
  *  - 주간 cr2.workDate BETWEEN weekStart AND weekEnd (최대 2개 파티션)

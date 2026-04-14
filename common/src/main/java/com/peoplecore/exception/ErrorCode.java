@@ -156,6 +156,7 @@ public enum ErrorCode {
     OVERTIME_REQUEST_NOT_FOUND(404, "초과근무 신청을 찾을 수 없습니다"),
     VACATION_REQ_NOT_FOUND(404, "휴가 신청을 찾을 수 없습니다"),
     OVERTIME_EXCEEDS_WEEKLY_MAX(400, "주간 최대 근무시간을 초과하여 신청할 수 없습니다"),
+    OVERTIME_POLICY_NOT_FOUND(404, "초과근무 정책이 설정되지 않은 회사입니다."),
 
     /*회사 허용 IP*/
     ALLOWED_IP_NOT_FOUND(404, "허용 IP를 찾을 수 없습니다."),

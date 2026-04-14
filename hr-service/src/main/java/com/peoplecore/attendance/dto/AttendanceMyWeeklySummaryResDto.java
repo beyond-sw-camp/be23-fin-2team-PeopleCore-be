@@ -20,6 +20,6 @@ public class AttendanceMyWeeklySummaryResDto {
     private MyWorkGroupDto workGroup;
 
     /*주간 집예 */
-    private MyWeekStatsDto weekly;
+    private MyWeeklyStatsDto weekly;
 
 }
