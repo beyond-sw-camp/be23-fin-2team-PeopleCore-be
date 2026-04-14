@@ -99,6 +99,130 @@ PeopleCore/
 ---
 
 <details>
+<summary><h2>통합 검색 (Elasticsearch + Debezium CDC) 로컬 세팅</h2></summary>
+
+MySQL의 변경 이벤트를 Debezium이 binlog 기반으로 감지하여 Kafka → search-service → Elasticsearch로 전파합니다. hr-service 코드는 MySQL에만 저장하면 되고, 검색 색인은 완전히 분리되어 있습니다.
+
+### 빠른 시작
+
+1. **팀 메신저에서 받은 2개 파일을 지정 위치에 배치** (0번 참고)
+2. **MySQL binlog 활성화** (최초 1회, 1번 참고)
+3. **`docker-compose up -d`**
+4. **IntelliJ에서 서비스 기동** — config → eureka → gateway → hr → collaboration → **search**
+
+### 0. 사전 파일 배치 (팀 메신저에서 수령)
+
+아래 두 파일은 git에 포함되지 않으므로 팀 메신저에서 받아 지정 위치에 저장하세요.
+
+| 파일 | 배치 위치 |
+|------|-----------|
+| `application-local.yml` | `search-service/src/main/resources/application-local.yml` |
+| `debezium-connector.json` | `scripts/search/debezium-connector.json` |
+
+> `debezium-connector.json`의 `database.password`가 본인 로컬 MySQL 비밀번호와 다르면 수정 필요.
+
+### 1. MySQL binlog 활성화 (최초 1회)
+
+MySQL 설정 파일의 `[mysqld]` 섹션에 추가:
+
+```ini
+log_bin = mysql-bin
+binlog_format = ROW
+binlog_row_image = FULL
+server_id = 1
+```
+
+**설정 파일 위치 & 재시작 (OS별)**
+
+| OS | 설정 파일 | 재시작 |
+|----|----------|--------|
+| Windows | `C:\ProgramData\MySQL\MySQL Server 8.0\my.ini` | 서비스 관리자 → MySQL 재시작 |
+| Mac (Homebrew) | `/opt/homebrew/etc/my.cnf` (Apple Silicon) 또는 `/usr/local/etc/my.cnf` (Intel) | `brew services restart mysql` |
+| Mac (공식 설치) | `/etc/my.cnf` 또는 `/usr/local/mysql/etc/my.cnf` | `sudo /usr/local/mysql/support-files/mysql.server restart` |
+
+DataGrip/DBeaver에서 검증:
+```sql
+SHOW VARIABLES WHERE Variable_name IN ('log_bin','binlog_format','binlog_row_image','server_id');
+```
+- `log_bin=ON`, `binlog_format=ROW`, `binlog_row_image=FULL`, `server_id≥1` 이어야 함
+
+### 2. 인프라 기동
+
+프로젝트 루트에서:
+```bash
+docker-compose up -d
+```
+
+자동으로 다음이 실행됩니다:
+- Elasticsearch (9200) + Kibana (5601)
+- Kafka (9092) + Kafka Connect + Debezium (8083)
+- `search-init` 컨테이너가 ES 인덱스 생성 + Debezium Connector 자동 등록
+
+### 3. 세팅 검증
+
+```bash
+curl http://localhost:9200/unified_search                       # 인덱스 존재 확인
+curl http://localhost:8083/connectors                           # ["peoplecore-mysql-connector"]
+curl http://localhost:8083/connectors/peoplecore-mysql-connector/status   # state: RUNNING
+```
+
+### 4. 서비스 기동 (IntelliJ)
+
+아래 순서대로 기동:
+1. `config-server`
+2. `eureka-server`
+3. `api-gateway`
+4. `hr-service`
+5. `collaboration-service`
+6. **`search-service`** — 통합검색 기능 사용을 위해 필수
+
+### 5. 사용
+
+- 통합검색 API: `GET /search-service/search?keyword=...&type=EMPLOYEE|DEPARTMENT|APPROVAL|CALENDAR`
+- MySQL INSERT/UPDATE/DELETE → Debezium이 감지 → ES 자동 색인 (1초 내)
+- 데이터는 Docker Volume(`es-data`, `kafka-data`)에 영속화되어 재시작에도 유지
+
+### 6. 트러블슈팅
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| Connector `state: FAILED` | DB 비밀번호 불일치 | `scripts/search/debezium-connector.json`의 `database.password` 수정 → `curl -X DELETE .../peoplecore-mysql-connector` → `docker-compose restart search-init` |
+| search-service 기동 실패 | `application-local.yml` 없음 | 팀 메신저에서 받아 `search-service/src/main/resources/`에 배치 |
+| 검색 결과 0건 | Debezium 초기 스냅샷 진행 중 | `curl .../status`로 상태 확인, 30초 대기 |
+| 검색 시 500 에러 | ES 인덱스 매핑 불일치 | 아래 "초기화" 절차 수행 |
+| binlog 설정 후에도 OFF | MySQL 재시작 안 됨 | 위 1번 표의 재시작 명령 재확인 |
+
+### 7. 초기화가 필요한 경우
+
+ES 인덱스를 처음부터 다시 만들고 싶을 때:
+```bash
+# 1) ES 인덱스 삭제
+curl -X DELETE http://localhost:9200/unified_search
+# 2) Debezium Connector 삭제 (재스냅샷 유도)
+curl -X DELETE http://localhost:8083/connectors/peoplecore-mysql-connector
+# 3) search-init 재실행 → 인덱스 + 커넥터 재생성
+docker-compose restart search-init
+```
+
+### 아키텍처
+
+```
+MySQL (binlog)
+  ↓ Debezium MySQL Connector
+Kafka topics (peoplecore.peoplecore.employee 등)
+  ↓ search-service CdcEventListener
+Elasticsearch (unified_search 인덱스)
+  ↓
+Search API (/search-service/search)
+```
+
+`hr-service`는 Search 로직을 전혀 알지 못하며, DB 저장만 담당합니다. MSA에서의 완전한 decoupling 달성.
+
+</details>
+
+---
+
+<details>
 <summary><h2>주요 기능</h2></summary>
 
 <details>
@@ -206,7 +330,7 @@ private Long version;
 
 `ApprovalSeqCounter`에 이중 락을 적용했습니다. 채번 시 `PESSIMISTIC_WRITE` 락으로 카운터 행을 선점하고, `@Version`으로 추가 안전장치를 두었습니다. `DataIntegrityViolationException` 발생 시 최대 3회까지 자동 재시도합니다.
 
-```java
+```
 @Lock(LockModeType.PESSIMISTIC_WRITE)
 @Query("SELECT s FROM ApprovalSeqCounter s WHERE ...")
 Optional<ApprovalSeqCounter> findWithLock(...);

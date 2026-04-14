@@ -26,9 +26,6 @@ public class Company {
 
     private LocalDate foundedAt;
 
-    @Column(unique = true)
-    private String companyIp;
-
     @Column(nullable = false)
     private LocalDate contractStartAt;
 
