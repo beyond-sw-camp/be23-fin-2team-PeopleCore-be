@@ -2,6 +2,7 @@ package com.peoplecore.attendance.controller;
 
 import com.peoplecore.attendance.dto.OvertimeRemainingResDto;
 import com.peoplecore.attendance.dto.OvertimeSubmitRequest;
+import com.peoplecore.attendance.dto.OvertimeWeekHistoryResDto;
 import com.peoplecore.attendance.service.OvertimeRequestService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -39,6 +40,17 @@ public class OvertimeRequestController {
     ) {
         return ResponseEntity.ok(
                 overtimeRequestService.getRemaining(companyId, empId, weekStart));
+    }
+
+    /** 주간 초과근무 신청 이력 — 모달 하단 이력 테이블용 (DRAFT 제외) */
+    @GetMapping("/week")
+    public ResponseEntity<OvertimeWeekHistoryResDto> getWeek(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekStart
+    ) {
+        return ResponseEntity.ok(
+                overtimeRequestService.getWeekHistory(companyId, empId, weekStart));
     }
 
     /** "확인" 클릭 → otId 반환. 프론트가 결재문서 작성 페이지로 prefill 라우팅 */

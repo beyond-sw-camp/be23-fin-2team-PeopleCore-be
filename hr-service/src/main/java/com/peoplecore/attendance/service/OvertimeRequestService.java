@@ -2,6 +2,7 @@ package com.peoplecore.attendance.service;
 
 import com.peoplecore.attendance.dto.OvertimeRemainingResDto;
 import com.peoplecore.attendance.dto.OvertimeSubmitRequest;
+import com.peoplecore.attendance.dto.OvertimeWeekHistoryResDto;
 import com.peoplecore.attendance.entity.OtExceedAction;
 import com.peoplecore.attendance.entity.OtStatus;
 import com.peoplecore.attendance.entity.OvertimePolicy;
@@ -57,7 +58,7 @@ public class OvertimeRequestService {
         OtExceedAction action = (policy != null) ? policy.getOtExceedAction() : OtExceedAction.NOTIFY;
         int weeklyMaxMinutes = maxHour * 60;
 
-        // 사원 조회 후 workGroup 기반 주간 기본 근로 분 계산
+        // 사원 + workGroup 기반 주간 기본 근로 분 계산
         Employee employee = employeeRepository.findById(empId)
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         int baseWorkMinutes = calcBaseWorkMinutes(employee.getWorkGroup());
@@ -65,12 +66,12 @@ public class OvertimeRequestService {
         // OT 버퍼 = 주간 최대 - 기본 근로
         int maxOtBuffer = Math.max(0, weeklyMaxMinutes - baseWorkMinutes);
 
-        // weekStart 가 월요일 아닐 수 있어 정규화 후 월~일 범위 산정
+        // weekStart 정규화 후 월~일 범위 산정
         LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
         LocalDateTime weekStartAt = monday.atStartOfDay();
         LocalDateTime weekEndAt = monday.plusDays(6).atTime(LocalTime.MAX);
 
-        // 이미 신청된 PENDING+APPROVED 합계
+        // 이미 신청된 PENDING+APPROVED 합계 (DRAFT 자동 제외)
         Long used = overtimeRequestRepository
                 .sumPendingApprovedMinutesInWeek(empId, weekStartAt, weekEndAt);
         long usedMin = (used != null) ? used : 0L;
@@ -88,28 +89,60 @@ public class OvertimeRequestService {
                 .build();
     }
 
-    /** "확인" 클릭 → OvertimeRequest insert (PENDING) → otId 반환 */
+    /** 주간 초과근무 이력 조회 (DRAFT 제외, otDate ASC). 모달 하단 이력 테이블용 */
+    @Transactional(readOnly = true)
+    public OvertimeWeekHistoryResDto getWeekHistory(UUID companyId, Long empId, LocalDate weekStart) {
+        // 주 범위 정규화 (월~일)
+        LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
+        LocalDate sunday = monday.plusDays(6);
+        LocalDateTime weekStartAt = monday.atStartOfDay();
+        LocalDateTime weekEndAt = sunday.atTime(LocalTime.MAX);
+
+        // 사원 본인 이력 조회 — companyId 는 사원 조인으로 자연 필터, 라우팅 검증은 생략 (헤더 기반)
+        var list = overtimeRequestRepository.findWeekHistoryByEmp(empId, weekStartAt, weekEndAt);
+
+        // Entity → Item 변환. otPlanMinutes 는 plan 시각 차이
+        var items = list.stream()
+                .map(o -> OvertimeWeekHistoryResDto.Item.builder()
+                        .otId(o.getOtId())
+                        .otStatus(o.getOtStatus())
+                        .otDate(o.getOtDate().toLocalDate())
+                        .otPlanStart(o.getOtPlanStart())
+                        .otPlanEnd(o.getOtPlanEnd())
+                        .otPlanMinutes(Duration.between(o.getOtPlanStart(), o.getOtPlanEnd()).toMinutes())
+                        .otReason(o.getOtReason())
+                        .build())
+                .toList();
+
+        return OvertimeWeekHistoryResDto.builder()
+                .weekStart(monday)
+                .weekEnd(sunday)
+                .items(items)
+                .build();
+    }
+
+    /** "확인" 클릭 → OvertimeRequest insert (DRAFT) → otId 반환. 결재요청 시 PENDING 으로 승격 */
     public Long submit(UUID companyId, Long empId, OvertimeSubmitRequest req) {
 
-        // 시간 정합성 가드 — end > start 아니면 IllegalArgumentException
+        // 시간 정합성 가드
         if (!req.getOtPlanEnd().isAfter(req.getOtPlanStart())) {
             throw new IllegalArgumentException(
                     "otPlanEnd 가 otPlanStart 보다 같거나 이전 - start=" + req.getOtPlanStart()
                             + ", end=" + req.getOtPlanEnd());
         }
 
-        // 사원 조회 (FK + 무결성 + workGroup 접근용)
+        // 사원 조회
         Employee employee = employeeRepository.findById(empId)
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-        // 정책 조회 + BLOCK 가드
+        // 정책 조회 + BLOCK 가드 (버퍼 기준)
         OvertimePolicy policy = overtimePolicyRepository.findByCompany_CompanyId(companyId).orElse(null);
         if (policy != null && policy.getOtExceedAction() == OtExceedAction.BLOCK) {
             int weeklyMaxMinutes = policy.getOtPolicyWeeklyMaxHour() * 60;
             int baseWorkMinutes = calcBaseWorkMinutes(employee.getWorkGroup());
             int maxOtBuffer = Math.max(0, weeklyMaxMinutes - baseWorkMinutes);
 
-            // 신청 날짜 기준 주간 누적 합계
+            // 신청 날짜 기준 주간 누적 (PENDING+APPROVED)
             LocalDate monday = req.getOtDate().toLocalDate().with(DayOfWeek.MONDAY);
             LocalDateTime weekStartAt = monday.atStartOfDay();
             LocalDateTime weekEndAt = monday.plusDays(6).atTime(LocalTime.MAX);
@@ -124,7 +157,7 @@ public class OvertimeRequestService {
             }
         }
 
-        // OvertimeRequest 빌드 + insert (PENDING, docId=null)
+        // DRAFT 로 insert — 결재요청 성공 후 Consumer 가 PENDING 으로 승격
         OvertimeRequest entity = OvertimeRequest.builder()
                 .companyId(companyId)
                 .employee(employee)
@@ -132,43 +165,45 @@ public class OvertimeRequestService {
                 .otPlanStart(req.getOtPlanStart())
                 .otPlanEnd(req.getOtPlanEnd())
                 .otReason(req.getOtReason())
-                .otStatus(OtStatus.PENDING)
+                .otStatus(OtStatus.DRAFT)
                 .build();
         OvertimeRequest saved = overtimeRequestRepository.save(entity);
 
-        log.info("[OvertimeRequest] 신청 생성 - otId={}, empId={}, plan={}~{}",
+        log.info("[OvertimeRequest] DRAFT 생성 - otId={}, empId={}, plan={}~{}",
                 saved.getOtId(), empId, req.getOtPlanStart(), req.getOtPlanEnd());
         return saved.getOtId();
     }
 
-    /** Kafka(docCreated) Consumer 진입 — approvalDocId bind */
+    /** Kafka(docCreated) Consumer 진입 — docId bind + DRAFT → PENDING 승격 */
     public void bindApprovalDoc(UUID companyId, Long otId, Long docId) {
         OvertimeRequest req = overtimeRequestRepository
                 .findByCompanyIdAndOtId(companyId, otId)
                 .orElseThrow(() -> new CustomException(ErrorCode.OVERTIME_REQUEST_NOT_FOUND));
+
+        // docId bind
         req.bindApprovalDoc(docId);
-        log.info("[OvertimeRequest] docId bind - otId={}, docId={}", otId, docId);
+
+        // DRAFT 였으면 PENDING 으로 승격 — manager 는 아직 없으므로 null 허용 상태로 promote
+        if (req.getOtStatus() == OtStatus.DRAFT) {
+            req.promoteToPending();
+        }
+        log.info("[OvertimeRequest] docId bind + promote - otId={}, docId={}, status={}",
+                otId, docId, req.getOtStatus());
     }
 
     /** Kafka(approvalResult) Consumer 진입 — 결재 결과 캐시 적용 */
     public void applyApprovalResult(OvertimeApprovalResultEvent event) {
 
-        // 회사 + otId 라우팅 검증 조회
         OvertimeRequest req = overtimeRequestRepository
                 .findByCompanyIdAndOtId(event.getCompanyId(), event.getOtId())
                 .orElseThrow(() -> new CustomException(ErrorCode.OVERTIME_REQUEST_NOT_FOUND));
 
-        // status enum 변환 (실패 시 IllegalArgumentException → consumer retry)
         OtStatus newStatus = OtStatus.valueOf(event.getStatus());
-
-        // 최종 승인자 사원 조회
         Employee manager = employeeRepository.findById(event.getManagerId())
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-        // 도메인 메서드로 결재 결과 적용
         req.applyApprovalResult(newStatus, manager);
 
-        // docId 보완
         if (req.getApprovalDocId() == null && event.getApprovalDocId() != null) {
             req.bindApprovalDoc(event.getApprovalDocId());
         }
@@ -176,12 +211,11 @@ public class OvertimeRequestService {
     }
 
     /**
-     * 사원 근무그룹 기반 주간 기본 근로 분 계산.
+     * 사원 근무그룹 기반 주간 기본 근로 분.
      *  daily = (groupEnd - groupStart) - (breakEnd - breakStart)
-     *  workDays = bitCount(groupWorkDay) — 월1 화2 수4 ... 일64
+     *  workDays = bitCount(groupWorkDay)
      *  return daily × workDays
-     *
-     * workGroup 미배정(null) 또는 필드 결측 시 0 반환 (버퍼 = 주간 최대 전체).
+     * workGroup 미배정/필드 결측 시 0
      */
     private int calcBaseWorkMinutes(WorkGroup wg) {
         if (wg == null
@@ -190,7 +224,6 @@ public class OvertimeRequestService {
             return 0;
         }
         long dayWork = Duration.between(wg.getGroupStartTime(), wg.getGroupEndTime()).toMinutes();
-        // 휴게시간 차감 (start/end 중 하나라도 null 이면 휴게 0)
         long breakMin = (wg.getGroupBreakStart() != null && wg.getGroupBreakEnd() != null)
                 ? Duration.between(wg.getGroupBreakStart(), wg.getGroupBreakEnd()).toMinutes()
                 : 0L;

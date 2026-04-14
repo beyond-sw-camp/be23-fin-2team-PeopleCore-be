@@ -129,4 +129,10 @@ public class OvertimeRequest extends BaseTimeEntity {
         this.approvalDocId = docId;
     }
 
+    /* DRAFT → PENDING 승격. 결재요청 성공(docCreated Kafka) 직후 Consumer 가 호출. DRAFT 가 아니면 no-op */
+    public void promoteToPending() {
+        if (this.otStatus == OtStatus.DRAFT) {
+            this.otStatus = OtStatus.PENDING;
+        }
+    }
 }

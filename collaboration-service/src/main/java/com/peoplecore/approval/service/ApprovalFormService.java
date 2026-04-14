@@ -428,7 +428,7 @@ public class ApprovalFormService {
         return forms.stream().map(FormListResponse::from).toList();
     }
 
-    private final List<String> subFolderNames = List.of("스크립트 양식", "보고-시행문", "회계-총무", "일반기안", "교육", "휴가", "출장", "인사");
+    private final List<String> subFolderNames = List.of("스크립트 양식", "보고-시행문", "회계-총무", "일반기안","휴가", "출장", "인사");
 
     @Transactional
     public void initFormFolder(UUID companyId) {
