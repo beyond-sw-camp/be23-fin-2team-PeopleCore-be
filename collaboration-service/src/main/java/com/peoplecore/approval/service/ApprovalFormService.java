@@ -42,7 +42,22 @@ public class ApprovalFormService {
     private static final java.util.Set<String> PROTECTED_FORM_KEYS = java.util.Set.of(
             "보고-시행문/급여지급결의서",
             "휴가/초과근로신청서",
+            "휴가/휴가신청서",
             "인사/사직서 #2"
+    );
+
+    /*
+     * HR / 전자결재 계약 고정 formCode.
+     *  - 키 형식: "{folderName}/{formName}" (seed 파일 경로 기준)
+     *  - 값: 프론트·HR 서비스와 합의된 영문 SCREAMING_SNAKE formCode (계약 식별자)
+     *  - 매칭되지 않는 양식은 기존 규칙(`formName + "_001"`) 으로 자동 생성
+     *  - 새 계약 양식 추가 시 이 맵에만 등록하면 됨
+     */
+    private static final java.util.Map<String, String> FIXED_FORM_CODES = java.util.Map.of(
+            "휴가/초과근로신청서", "OVERTIME_REQUEST",
+            "휴가/휴가신청서", "VACATION_REQUEST",
+            "인사/사직서 #2", "RESIGNATION",
+            "보고-시행문/급여지급결의서", "PAYROLL_RESOLUTION"
     );
 
     private static final String FORM_CODE_GROUP = "FORM_CODE";
@@ -477,12 +492,13 @@ public class ApprovalFormService {
                     String formHtml = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
 
                     /*3. formCode 생성
-                     * String.format : 숫자를 일정한 형식의 문자열로 변환
-                     * % : 서식 시작
-                     * 0 : 빈자리를 0으로 채움
-                     * 3 : 최소 3자리
-                     * d : 정수*/
-                    String formCode = formName + "_" + String.format("%03d", j + 1);
+                     *  - FIXED_FORM_CODES 에 등록된 계약 양식은 영문 고정 코드 사용 (OVERTIME_REQUEST 등)
+                     *  - 미등록 양식은 기존 규칙(formName + "_001") 유지
+                     *  String.format 서식: %03d = 최소 3자리 정수, 앞자리 0 패딩 */
+                    String fixedKey = folderName + "/" + formName;
+                    String formCode = FIXED_FORM_CODES.getOrDefault(
+                            fixedKey,
+                            formName + "_" + String.format("%03d", j + 1));
 
                     /* 보호 대상 양식은 isProtected = true 로 세팅 */
                     boolean isProtectedForm = PROTECTED_FORM_KEYS.contains(folderName + "/" + formName);

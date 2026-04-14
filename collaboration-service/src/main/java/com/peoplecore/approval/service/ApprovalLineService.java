@@ -119,9 +119,9 @@ public class ApprovalLineService {
                     .build());
 
 
-//        사직서 승인 시 hr-service로 이벤트 발행
+//        사직서 승인 시 hr-service로 이벤트 발행 (계약 formCode = "RESIGNATION")
             String formCode = document.getFormId().getFormCode();
-            if (formCode != null && formCode.startsWith("사직서")) {
+            if ("RESIGNATION".equals(formCode)) {
                 try {
                     ResignApprovedEvent resignApprovedEvent = ResignApprovedEvent.builder()
                             .companyId(companyId)

@@ -6,6 +6,7 @@ import com.peoplecore.attendance.entity.OtExceedAction;
 import com.peoplecore.attendance.entity.OtStatus;
 import com.peoplecore.attendance.entity.OvertimePolicy;
 import com.peoplecore.attendance.entity.OvertimeRequest;
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import com.peoplecore.attendance.repository.OverTimePolicyRepository;
 import com.peoplecore.employee.domain.Employee;
@@ -46,7 +47,7 @@ public class OvertimeRequestService {
         this.employeeRepository = employeeRepository;
     }
 
-    /** 모달 진입 시 잔여 시간 조회 */
+    /** 모달 진입 시 잔여 OT 조회 */
     @Transactional(readOnly = true)
     public OvertimeRemainingResDto getRemaining(UUID companyId, Long empId, LocalDate weekStart) {
 
@@ -54,23 +55,33 @@ public class OvertimeRequestService {
         OvertimePolicy policy = overtimePolicyRepository.findByCompany_CompanyId(companyId).orElse(null);
         int maxHour = (policy != null) ? policy.getOtPolicyWeeklyMaxHour() : DEFAULT_WEEKLY_MAX_HOUR;
         OtExceedAction action = (policy != null) ? policy.getOtExceedAction() : OtExceedAction.NOTIFY;
-        int maxMinutes = maxHour * 60;
+        int weeklyMaxMinutes = maxHour * 60;
+
+        // 사원 조회 후 workGroup 기반 주간 기본 근로 분 계산
+        Employee employee = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+        int baseWorkMinutes = calcBaseWorkMinutes(employee.getWorkGroup());
+
+        // OT 버퍼 = 주간 최대 - 기본 근로
+        int maxOtBuffer = Math.max(0, weeklyMaxMinutes - baseWorkMinutes);
 
         // weekStart 가 월요일 아닐 수 있어 정규화 후 월~일 범위 산정
         LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
         LocalDateTime weekStartAt = monday.atStartOfDay();
         LocalDateTime weekEndAt = monday.plusDays(6).atTime(LocalTime.MAX);
 
-        // 사원 주간 PENDING+APPROVED 합계
+        // 이미 신청된 PENDING+APPROVED 합계
         Long used = overtimeRequestRepository
                 .sumPendingApprovedMinutesInWeek(empId, weekStartAt, weekEndAt);
         long usedMin = (used != null) ? used : 0L;
 
-        // 잔여 — 음수 보정
-        int remaining = (int) Math.max(0L, maxMinutes - usedMin);
+        // 잔여 = 버퍼 - 이미 신청 (음수 보정)
+        int remaining = (int) Math.max(0L, maxOtBuffer - usedMin);
 
         return OvertimeRemainingResDto.builder()
-                .weeklyMaxMinutes(maxMinutes)
+                .weeklyMaxMinutes(weeklyMaxMinutes)
+                .baseWorkMinutes(baseWorkMinutes)
+                .maxOvertimeBufferMinutes(maxOtBuffer)
                 .weekUsedMinutes(usedMin)
                 .remainingMinutes(remaining)
                 .exceedAction(action)
@@ -87,14 +98,17 @@ public class OvertimeRequestService {
                             + ", end=" + req.getOtPlanEnd());
         }
 
-        // 사원 조회 (FK + 무결성)
+        // 사원 조회 (FK + 무결성 + workGroup 접근용)
         Employee employee = employeeRepository.findById(empId)
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
         // 정책 조회 + BLOCK 가드
         OvertimePolicy policy = overtimePolicyRepository.findByCompany_CompanyId(companyId).orElse(null);
         if (policy != null && policy.getOtExceedAction() == OtExceedAction.BLOCK) {
-            int maxMinutes = policy.getOtPolicyWeeklyMaxHour() * 60;
+            int weeklyMaxMinutes = policy.getOtPolicyWeeklyMaxHour() * 60;
+            int baseWorkMinutes = calcBaseWorkMinutes(employee.getWorkGroup());
+            int maxOtBuffer = Math.max(0, weeklyMaxMinutes - baseWorkMinutes);
+
             // 신청 날짜 기준 주간 누적 합계
             LocalDate monday = req.getOtDate().toLocalDate().with(DayOfWeek.MONDAY);
             LocalDateTime weekStartAt = monday.atStartOfDay();
@@ -103,8 +117,9 @@ public class OvertimeRequestService {
                     .sumPendingApprovedMinutesInWeek(empId, weekStartAt, weekEndAt);
             long usedMin = (used != null) ? used : 0L;
             long thisMin = Duration.between(req.getOtPlanStart(), req.getOtPlanEnd()).toMinutes();
-            // 잔여 < 신청 → 차단
-            if (usedMin + thisMin > maxMinutes) {
+
+            // 버퍼 초과 시 차단
+            if (usedMin + thisMin > maxOtBuffer) {
                 throw new CustomException(ErrorCode.OVERTIME_EXCEEDS_WEEKLY_MAX);
             }
         }
@@ -158,5 +173,29 @@ public class OvertimeRequestService {
             req.bindApprovalDoc(event.getApprovalDocId());
         }
         log.info("[OvertimeRequest] 결재 결과 반영 - otId={}, status={}", req.getOtId(), newStatus);
+    }
+
+    /**
+     * 사원 근무그룹 기반 주간 기본 근로 분 계산.
+     *  daily = (groupEnd - groupStart) - (breakEnd - breakStart)
+     *  workDays = bitCount(groupWorkDay) — 월1 화2 수4 ... 일64
+     *  return daily × workDays
+     *
+     * workGroup 미배정(null) 또는 필드 결측 시 0 반환 (버퍼 = 주간 최대 전체).
+     */
+    private int calcBaseWorkMinutes(WorkGroup wg) {
+        if (wg == null
+                || wg.getGroupStartTime() == null || wg.getGroupEndTime() == null
+                || wg.getGroupWorkDay() == null) {
+            return 0;
+        }
+        long dayWork = Duration.between(wg.getGroupStartTime(), wg.getGroupEndTime()).toMinutes();
+        // 휴게시간 차감 (start/end 중 하나라도 null 이면 휴게 0)
+        long breakMin = (wg.getGroupBreakStart() != null && wg.getGroupBreakEnd() != null)
+                ? Duration.between(wg.getGroupBreakStart(), wg.getGroupBreakEnd()).toMinutes()
+                : 0L;
+        long dailyEffective = Math.max(0L, dayWork - breakMin);
+        int workDays = Integer.bitCount(wg.getGroupWorkDay());
+        return (int) (dailyEffective * workDays);
     }
 }
