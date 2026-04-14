@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/**
+/*
  * 출퇴근 기록 Repository.
  *
  * JPA 매핑상 PK 는 단일 Long (com_rec_id).
@@ -21,61 +21,28 @@ import java.util.UUID;
  */
 public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Long> {
 
-    /**
+    /*
      * 특정 회사/사원/근무일자 기록 1건 조회.
-     *  - 체크인 중복 방지: 오늘자 있으면 409
-     *  - 체크아웃: 기존 레코드 로드 후 dirty checking
-     * (company_id, emp_id, work_date) 복합 인덱스/UNIQUE 제약 커버.
      */
     Optional<CommuteRecord> findByCompanyIdAndEmployee_EmpIdAndWorkDate(
             UUID companyId, Long empId, LocalDate workDate);
 
-    /**
+    /*
      * 자정 넘김 체크아웃 지원용 조회.
-     * workDate BETWEEN [from, to] + comRecCheckOut IS NULL (아직 퇴근 안 찍은) 레코드 중
-     * workDate 최신 1건. BETWEEN 조건으로 최대 2개 파티션만 스캔 (파티션 프루닝 보장).
-     *
-     * 사용: CommuteService.checkOut — from=today.minusDays(1), to=today
-     *  - 4/30 23:55 체크인 → 5/1 00:10 체크아웃: 4/30 레코드 매칭
-     *  - 어제 까먹고 오늘 퇴근: 어제 open 레코드 매칭 (사실 기록 보존)
      */
     Optional<CommuteRecord>
     findFirstByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndComRecCheckOutIsNullOrderByWorkDateDesc(
             UUID companyId, Long empId, LocalDate from, LocalDate to);
 
-    /**
+    /*
      * 사원의 [from, to] 구간 출퇴근 기록 페이지 — workDate DESC 정렬.
-     * 파티션 프루닝: WHERE work_date BETWEEN ... 로 범위 파티션만 스캔.
-     * 사용: AttendanceAdminService.getEmployeeHistory (일별 근무 현황 모달)
+
      */
     Page<CommuteRecord>
     findByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenOrderByWorkDateDesc(
             UUID companyId, Long empId, LocalDate from, LocalDate to, Pageable pageable);
 
-    /**
-     * 사원의 [from, to] 구간 실근무 분 합계 — check-in, check-out 모두 존재할 때만 합산.
-     * native: JPQL 은 TIMESTAMPDIFF 미지원.
-     * 사용: 주간 근무시간 헤더 카드 계산.
-     */
-    @Query(value = """
-            SELECT COALESCE(SUM(TIMESTAMPDIFF(MINUTE, c.com_rec_check_in, c.com_rec_check_out)), 0)
-              FROM commute_record c
-             WHERE c.company_id = :companyId
-               AND c.emp_id = :empId
-               AND c.work_date BETWEEN :from AND :to
-               AND c.com_rec_check_in IS NOT NULL
-               AND c.com_rec_check_out IS NOT NULL
-            """, nativeQuery = true)
-    Long sumWorkedMinutesBetween(@Param("companyId") UUID companyId,
-                                 @Param("empId") Long empId,
-                                 @Param("from") LocalDate from,
-                                 @Param("to") LocalDate to);
 
-    /**
-     * 페이지 응답 행의 workDate 집합에 대한 출퇴근 엔티티 조회용 IN 절.
-     * 페이지 단위로 프론트 스크롤 시 최소 파티션만 스캔.
-     * 현재 미사용 — 확장 여지용으로 남김.
-     */
-    List<CommuteRecord> findByCompanyIdAndEmployee_EmpIdAndWorkDateIn(
-            UUID companyId, Long empId, List<LocalDate> workDates);
+
+
 }
