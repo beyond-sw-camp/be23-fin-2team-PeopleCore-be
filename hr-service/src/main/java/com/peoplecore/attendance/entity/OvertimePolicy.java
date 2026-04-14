@@ -56,8 +56,8 @@ public class OvertimePolicy {
 
     public void update(OverTimePolicyReqDto dto, Long empId, String empName) {
         this.otMinUnit = dto.getOtMinUnit();
-        this.otPolicyWeeklyMaxMinutes = dto.getOtPolicyWeeklyMaxHour();
-        this.otPolicyWarningMinutes = dto.getOtPolicyWarningHour();
+        this.otPolicyWeeklyMaxMinutes = dto.getOtPolicyWeeklyMaxMinutes();
+        this.otPolicyWarningMinutes = dto.getOtPolicyWarningMinutes();
         this.otExceedAction = dto.getOtExceedAction();
         this.otPolicyManagerId = empId;
         this.otPolicyManagerName = empName;
