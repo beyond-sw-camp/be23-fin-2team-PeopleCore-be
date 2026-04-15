@@ -15,6 +15,12 @@ public enum ErrorCode {
     RESIGNED_EMPLOYEE(403, "퇴직한 사원입니다."),
     FORBIDDEN(403, "접근 권한이 없습니다."),
 
+    // 인사통합 PIN
+    HR_ADMIN_SCOPE_REQUIRED(403, "인사통합 PIN 인증이 필요합니다."),
+    HR_ADMIN_PIN_NOT_SET(404, "인사통합 PIN이 설정되지 않았습니다."),
+    HR_ADMIN_PIN_MISMATCH(401, "PIN이 일치하지 않습니다."),
+    HR_ADMIN_PIN_ALREADY_SET(409, "이미 PIN이 설정되어 있습니다."),
+
     // SMS 인증
     SMS_COOLDOWN(429, "1분 후 다시 요청해 주세요."),
     SMS_BLOCKED(429, "인증 시도 횟수를 초과했습니다. 10분 후 다시 시도해 주세요."),
