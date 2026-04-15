@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 // 평가시즌 - 평가 전체 기간 단위
 @Entity
@@ -40,6 +41,9 @@ public class Season extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status")
     private EvalSeasonStatus status; // 시즌 상태
+
+    @Column(name = "finalized_at")
+    private LocalDateTime finalizedAt; // 최종 등급 확정 시각 (이후 수정 불가)
 
     public void updateBasicInfo(String name, String period, LocalDate startDate, LocalDate endDate){
         this.name = name;

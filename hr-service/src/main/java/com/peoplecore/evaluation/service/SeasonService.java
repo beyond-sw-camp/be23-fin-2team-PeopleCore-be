@@ -2,11 +2,15 @@ package com.peoplecore.evaluation.service;
 
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
+import com.peoplecore.employee.domain.Employee;
+import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.domain.Stage;
 import com.peoplecore.evaluation.dto.*;
+import com.peoplecore.evaluation.repository.EvalGradeRepository;
 import com.peoplecore.evaluation.repository.EvaluationRulesRepository;
 import com.peoplecore.evaluation.repository.SeasonRepository;
 import com.peoplecore.evaluation.repository.StageRepository;
@@ -27,13 +31,17 @@ public class SeasonService {
     private final EvaluationRulesService rulesService;
     private final CompanyRepository companyRepository;
     private final EvaluationRulesRepository rulesRepository;
+    private final EmployeeRepository employeeRepository;
+    private final EvalGradeRepository evalGradeRepository;
 
-    public SeasonService(SeasonRepository seasonRepository, StageRepository stageRepository, EvaluationRulesService rulesService, CompanyRepository companyRepository, EvaluationRulesRepository rulesRepository) {
+    public SeasonService(SeasonRepository seasonRepository, StageRepository stageRepository, EvaluationRulesService rulesService, CompanyRepository companyRepository, EvaluationRulesRepository rulesRepository, EmployeeRepository employeeRepository, EvalGradeRepository evalGradeRepository) {
         this.seasonRepository = seasonRepository;
         this.stageRepository = stageRepository;
         this.rulesService = rulesService;
         this.companyRepository = companyRepository;
         this.rulesRepository = rulesRepository;
+        this.employeeRepository = employeeRepository;
+        this.evalGradeRepository = evalGradeRepository;
     }
 
     //  1. 시즌목록
@@ -165,6 +173,8 @@ public class SeasonService {
         return SeasonResponseDto.from(season);
     }
 
+
+
     //    6. 시즌삭제
     public void deleteSeason(UUID companyId, Long seasonId) {
 
@@ -187,5 +197,46 @@ public class SeasonService {
         // 시즌 본체 삭제
         seasonRepository.delete(season);
     }
+
+    //    6. 시즌 오픈 (DRAFT → OPEN)
+//     - 상태 전이 + 규칙 스냅샷 동결 + 전 사원 EvalGrade row 일괄 생성
+//     - 스케줄러 또는 수동 호출 진입점. DRAFT 가 아니면 멱등 스킵
+    public void openSeason(Long seasonId) {
+        Season season = seasonRepository.findById(seasonId)
+                .orElseThrow(() -> new IllegalArgumentException("시즌을 찾을 수 없습니다"));
+
+        // 멱등 — 이미 OPEN/CLOSED 면 아무것도 하지 않음
+        if (season.getStatus() != EvalSeasonStatus.DRAFT) {
+            return;
+        }
+
+        // 1) 상태 전이
+        season.open();
+
+        // 2) 규칙 스냅샷 동결 (formValues → formSnapshot, version++)
+        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).get();
+        rules.freezeSnapshot();
+
+        // 3) 전 사원 EvalGrade row 일괄 INSERT — 점수/등급 컬럼은 NULL 로 시작
+        //    dept/title 은 스냅샷 컬럼에 박제 (이후 조직개편/이동해도 그 시즌은 고정)
+        UUID companyId = season.getCompany().getCompanyId();
+        List<Employee> employees = employeeRepository.findActiveEmployeesWithDeptAndGrade(companyId);
+
+        List<EvalGrade> rows = new ArrayList<>();
+        for (Employee emp : employees) {
+            EvalGrade row = EvalGrade.builder()
+                    .emp(emp)
+                    .season(season) //이번에 오픈되는 fk
+                    .isCalibrated(false) //보정이력 초기화
+                    .deptIdSnapshot(emp.getDept() != null ? emp.getDept().getDeptId() : null) //시즌 오픈시 부서id 박제
+                    .deptNameSnapshot(emp.getDept() != null ? emp.getDept().getDeptName() : null) //시즌 오픈시 부서명 박제
+                    .positionSnapshot(emp.getTitle() != null ? emp.getTitle().getTitleName() : null) //직급명 박제
+                    .build();
+//            점수/등급등은 모두 null로 시작
+            rows.add(row);
+        }
+        evalGradeRepository.saveAll(rows);
+    }
+
 
 }
