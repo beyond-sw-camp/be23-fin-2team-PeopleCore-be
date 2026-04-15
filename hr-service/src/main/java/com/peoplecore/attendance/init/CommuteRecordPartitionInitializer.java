@@ -15,8 +15,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-/**
- * commute_record / attendance 테이블의 파티션 + 복합 PK + UNIQUE 제약 초기화기.
+/*
+ * commute_record 테이블의 파티션 + 복합 PK + UNIQUE 제약 초기화기.
  *
  * 배경 (리팩토링 인수인계):
  *  - 두 테이블은 월별 RANGE COLUMNS 파티션이 필요.
@@ -34,7 +34,6 @@ import java.util.stream.IntStream;
  */
 @Slf4j
 @Component
-@SuppressWarnings({"SqlSourceToSinkFlow", "SqlNoDataSourceInspection", "SpellCheckingInspection"})
 @Order(1)
 public class CommuteRecordPartitionInitializer implements ApplicationRunner {
 
@@ -56,11 +55,7 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
             new TablePartition(
                     "commute_record", "work_date", "com_rec_id",
                     "uk_commute_company_emp_date",
-                    "company_id, emp_id, work_date"),
-            new TablePartition(
-                    "attendance", "atten_work_date", "atten_id",
-                    "uk_attendance_company_emp_date",
-                    "company_id, emp_id, atten_work_date")
+                    "company_id, emp_id, work_date")
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -131,7 +126,7 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
         log.info("{} 파티션 생성 완료 ({}개월 + pmax)", t.tableName, MONTHS_TO_CREATE);
     }
 
-    /**
+    /*
      * (company_id, emp_id, date) UNIQUE 제약이 없으면 추가.
      *
      * 역할:

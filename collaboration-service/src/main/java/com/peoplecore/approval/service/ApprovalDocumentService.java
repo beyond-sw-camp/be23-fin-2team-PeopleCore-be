@@ -1,6 +1,7 @@
 package com.peoplecore.approval.service;
 
 import com.peoplecore.alarm.publisher.AlarmEventPublisher;
+import com.peoplecore.approval.publisher.ApprovalEventPublisher;
 import com.peoplecore.approval.dto.DocumentCreateRequest;
 import com.peoplecore.approval.dto.DocumentDetailResponse;
 import com.peoplecore.approval.dto.DocumentUpdateRequest;
@@ -44,9 +45,10 @@ public class ApprovalDocumentService {
     private final AutoClassifyExecutor autoClassifyExecutor;
     private final ApprovalSignatureRepository signatureRepository;
     private final MinioService minioService;
+    private final ApprovalEventPublisher approvalEventPublisher;
 
     @Autowired
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -58,6 +60,7 @@ public class ApprovalDocumentService {
         this.autoClassifyExecutor = autoClassifyExecutor;
         this.signatureRepository = signatureRepository;
         this.minioService = minioService;
+        this.approvalEventPublisher = approvalEventPublisher;
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번*/
@@ -139,6 +142,11 @@ public class ApprovalDocumentService {
                 .alarmRefType("APPROVAL_DOCUMENT")
                 .alarmRefId(document.getDocId())
                 .build());
+
+        /* hr-service 에 docCreated 이벤트 발행 — 결재선 포함해 최종결재자까지 전달 */
+        List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId());
+        approvalEventPublisher.publishDocCreated(document, savedLines);
+
         return document.getDocId();
     }
 
@@ -430,6 +438,9 @@ public class ApprovalDocumentService {
 
         /* 상태 패턴: PENDING → CANCELED (PendingState.recall() 호출) */
         document.recall();
+
+        /* hr-service 에 회수 이벤트 발행 — 초과근무/휴가 양식에만 실제 발행 (Publisher 내부 formName 분기) */
+        approvalEventPublisher.publishResult(document, "CANCELED", empId, null);
 
         /*결재 라인 전원에게 알림 발행 */
         List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())

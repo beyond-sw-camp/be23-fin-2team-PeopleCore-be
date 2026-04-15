@@ -35,12 +35,12 @@ public class OvertimePolicy {
     /* 주간 최대 근무 시간*/
     @Column(nullable = false)
     @Builder.Default
-    private Integer otPolicyWeeklyMaxHour = 52;
+    private Integer otPolicyWeeklyMaxMinutes = 3120;
 
     /* 주간 근무 경고 시간*/
     @Column(nullable = false)
     @Builder.Default
-    private Integer otPolicyWarningHour = 45;
+    private Integer otPolicyWarningMinutes = 2700;
 
     /* 주간 근로 시간 초과시 처리 방법 ( 알림, 초과근무 신청 자동 차단 */
     @Enumerated(EnumType.STRING)
@@ -56,8 +56,8 @@ public class OvertimePolicy {
 
     public void update(OverTimePolicyReqDto dto, Long empId, String empName) {
         this.otMinUnit = dto.getOtMinUnit();
-        this.otPolicyWeeklyMaxHour = dto.getOtPolicyWeeklyMaxHour();
-        this.otPolicyWarningHour = dto.getOtPolicyWarningHour();
+        this.otPolicyWeeklyMaxMinutes = dto.getOtPolicyWeeklyMaxMinutes();
+        this.otPolicyWarningMinutes = dto.getOtPolicyWarningMinutes();
         this.otExceedAction = dto.getOtExceedAction();
         this.otPolicyManagerId = empId;
         this.otPolicyManagerName = empName;

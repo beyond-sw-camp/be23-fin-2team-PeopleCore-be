@@ -44,16 +44,19 @@ public class CommuteService {
     private final EmployeeRepository employeeRepository;
     private final CompanyAllowedIpService companyAllowedIpService;
     private final HolidayLookupRepository holidayLookupRepository;
+    private final PayrollMinutesCalculator payrollMinutesCalculator;
 
     @Autowired
     public CommuteService(CommuteRecordRepository commuteRecordRepository,
                           EmployeeRepository employeeRepository,
                           CompanyAllowedIpService companyAllowedIpService,
-                          HolidayLookupRepository holidayLookupRepository) {
+                          HolidayLookupRepository holidayLookupRepository,
+                          PayrollMinutesCalculator payrollMinutesCalculator) {
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
         this.companyAllowedIpService = companyAllowedIpService;
         this.holidayLookupRepository = holidayLookupRepository;
+        this.payrollMinutesCalculator = payrollMinutesCalculator;
     }
 
     /*
@@ -153,9 +156,25 @@ public class CommuteService {
 
         /* workDate 유지, comRecCheckOut 만 세팅*/
         record.checkOut(now, clientIp, status);
+
+        /* 체크아웃 시점엔 actual/overtime 만 기록 — recognized_* 는 OT 승인 시 반영 */
+        payrollMinutesCalculator.applyCheckoutBase(record);
+
         log.info("[checkOut] empId={}, workDate={}, checkOutAt={}, ip={}, status={}", empId, record.getWorkDate(), now, clientIp, status);
         return CheckOutResDto.fromEntity(record);
 
+    }
+
+    /**
+     * 사후 OT 승인 시 재계산 진입점 — OvertimeRequestService.applyApprovalResult 에서 호출.
+     * 해당 날짜의 체크아웃 완료된 CommuteRecord 찾아서 recognized_* 재산출.
+     * 체크아웃 전/없으면 no-op (향후 체크아웃 시 자동 계산됨).
+     */
+    @Transactional
+    public void recalcPayrollMinutes(UUID companyId, Long empId, LocalDate workDate) {
+        commuteRecordRepository
+                .findByCompanyIdAndEmployee_EmpIdAndWorkDate(companyId, empId, workDate)
+                .ifPresent(payrollMinutesCalculator::applyApprovedRecognition);
     }
 
     /*

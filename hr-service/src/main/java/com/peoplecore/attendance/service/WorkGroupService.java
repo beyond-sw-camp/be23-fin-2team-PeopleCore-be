@@ -4,6 +4,7 @@ import com.peoplecore.attendance.dto.*;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.WorkGroupRepository;
 import com.peoplecore.attendance.repository.WorkGroupSearchRepository;
+import com.peoplecore.attendance.scheduler.AutoCloseSchedulerManager;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.employee.domain.Employee;
@@ -30,13 +31,15 @@ public class WorkGroupService {
     private final WorkGroupSearchRepository workGroupSearchRepository;
     private final EmployeeRepository employeeRepository;
     private final CompanyRepository companyRepository;
+    private final AutoCloseSchedulerManager autoCloseSchedulerManager;
 
     @Autowired
-    public WorkGroupService(WorkGroupRepository workGroupRepository, WorkGroupSearchRepository workGroupSearchRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository) {
+    public WorkGroupService(WorkGroupRepository workGroupRepository, WorkGroupSearchRepository workGroupSearchRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, AutoCloseSchedulerManager autoCloseSchedulerManager) {
         this.workGroupRepository = workGroupRepository;
         this.workGroupSearchRepository = workGroupSearchRepository;
         this.employeeRepository = employeeRepository;
         this.companyRepository = companyRepository;
+        this.autoCloseSchedulerManager = autoCloseSchedulerManager;
     }
 
     /*근무 그룹 목록 조회 */
@@ -90,6 +93,7 @@ public class WorkGroupService {
 
         /*저장 */
         workGroupRepository.save(workGroup);
+        autoCloseSchedulerManager.register(workGroup);
         return WorkGroupDetailResDto.from(workGroup);
     }
 
@@ -98,6 +102,7 @@ public class WorkGroupService {
     public WorkGroupDetailResDto updateWorkGroup(Long workGroupId, WorkGroupReqDto dto) {
         WorkGroup workGroup = workGroupRepository.findByWorkGroupIdAndGroupDeleteAtIsNull(workGroupId).orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
         workGroup.update(dto);
+        autoCloseSchedulerManager.register(workGroup);
         return WorkGroupDetailResDto.from(workGroup);
     }
 
@@ -111,6 +116,7 @@ public class WorkGroupService {
         }
 
         workGroup.softDelete();
+        autoCloseSchedulerManager.unregister(workGroupId);
     }
 
 
@@ -131,6 +137,7 @@ public class WorkGroupService {
                 .build();
 
         workGroupRepository.save(defaultGroup);
+        autoCloseSchedulerManager.register(defaultGroup);
     }
 
 
