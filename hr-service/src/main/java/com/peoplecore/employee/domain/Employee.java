@@ -156,6 +156,13 @@ public class Employee extends BaseTimeEntity {
     @Column(name="contract_end_date")
     private LocalDate contractEndDate;
 
+//    인사통합 PIN (HR_SUPER_ADMIN 전용, BCrypt 해시)
+    @Column(name = "hr_admin_pin_hash", length = 255)
+    private String hrAdminPinHash;
+
+    @Column(name = "hr_admin_pin_updated_at")
+    private LocalDateTime hrAdminPinUpdatedAt;
+
 
 
 
@@ -236,6 +243,17 @@ public class Employee extends BaseTimeEntity {
     }
     public void updateTitle(Title title){
         this.title = title;
+    }
+
+    /* 인사통합 PIN */
+    public void updateHrAdminPin(String pinHash) {
+        this.hrAdminPinHash = pinHash;
+        this.hrAdminPinUpdatedAt = LocalDateTime.now();
+    }
+
+    public void clearHrAdminPin() {
+        this.hrAdminPinHash = null;
+        this.hrAdminPinUpdatedAt = null;
     }
 
     /* 근무 그룹 배정 / 변경 */

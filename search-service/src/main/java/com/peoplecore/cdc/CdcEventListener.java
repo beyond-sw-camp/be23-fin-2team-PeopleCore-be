@@ -4,13 +4,19 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.document.SearchDocument;
+import com.peoplecore.repository.SearchRepository;
 import com.peoplecore.service.SearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 /**
  * Debezium MySQL CDC 토픽 소비자.
@@ -33,11 +39,13 @@ import java.util.Map;
 public class CdcEventListener {
 
     private final SearchService searchService;
+    private final SearchRepository searchRepository;
     private final CdcLookupCache cache;
     private final ObjectMapper objectMapper;
 
-    public CdcEventListener(SearchService searchService, CdcLookupCache cache) {
+    public CdcEventListener(SearchService searchService, SearchRepository searchRepository, CdcLookupCache cache) {
         this.searchService = searchService;
+        this.searchRepository = searchRepository;
         this.cache = cache;
         this.objectMapper = new ObjectMapper();
     }
@@ -65,11 +73,16 @@ public class CdcEventListener {
                 return;
             }
 
+            // is_use=false(비활성 부서)도 색인은 유지 — 관리자는 보여야 하고,
+            // 일반 사원에게는 SearchService.applyAccessFilter(isUse=true)가 쿼리 단계에서 숨김.
+            boolean isUse = row.path("is_use").asBoolean(true);
+
             cache.putDept(deptId, deptName);
 
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("deptCode", row.path("dept_code").asText(null));
             metadata.put("parentDeptId", row.hasNonNull("parent_dept_id") ? row.path("parent_dept_id").asLong() : null);
+            metadata.put("isUse", isUse);
             metadata.put("link", "/org-management/department/" + deptId);
 
             String createdAt = CdcEventParser.decodeMicroTimestampIso((Number) asNumber(row.path("created_at")));
@@ -167,7 +180,9 @@ public class CdcEventListener {
                 return;
             }
 
-            // RESIGNED 상태도 색인 제외
+            // RESIGNED(퇴사)는 ES에서 완전 제외.
+            // ON_LEAVE(휴직)는 색인은 유지 — 관리자(HR_ADMIN/HR_SUPER_ADMIN)는 보여야 하고,
+            // 일반 사원에게는 SearchService.applyAccessFilter(empStatus=ACTIVE)가 쿼리 단계에서 숨김 처리.
             String empStatus = row.path("emp_status").asText(null);
             if ("RESIGNED".equals(empStatus)) {
                 searchService.deleteDocument(sourceId, "EMPLOYEE");
@@ -244,6 +259,7 @@ public class CdcEventListener {
             String sourceId = String.valueOf(docId);
 
             if ("d".equals(op)) {
+                cache.removeDoc(docId);
                 searchService.deleteDocument(sourceId, "APPROVAL");
                 return;
             }
@@ -263,6 +279,11 @@ public class CdcEventListener {
             String empDeptName = row.path("emp_dept_name").asText(null);
             String empGrade = row.path("emp_grade").asText(null);
             String empTitle = row.path("emp_title").asText(null);
+            Long drafterId = row.hasNonNull("emp_id") ? row.path("emp_id").asLong() : null;
+
+            Set<Long> accessibleEmpIds = new HashSet<>();
+            if (drafterId != null) accessibleEmpIds.add(drafterId);
+            accessibleEmpIds.addAll(cache.getLineEmpIds(docId));
 
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("docNum", docNum);
@@ -273,6 +294,8 @@ public class CdcEventListener {
             metadata.put("gradeName", empGrade);
             metadata.put("titleName", empTitle);
             metadata.put("isEmergency", row.path("is_emergency").asBoolean(false));
+            metadata.put("drafterId", drafterId);
+            metadata.put("accessibleEmpIds", new ArrayList<>(accessibleEmpIds));
             metadata.put("link", "/approval/" + docId);
 
             String content = String.join(" ",
@@ -332,11 +355,15 @@ public class CdcEventListener {
             String description = row.path("description").asText(null);
             String location = row.path("location").asText(null);
 
+            Long ownerId = row.hasNonNull("emp_id") ? row.path("emp_id").asLong() : null;
+
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("location", location);
-            metadata.put("empId", row.hasNonNull("emp_id") ? row.path("emp_id").asLong() : null);
+            metadata.put("empId", ownerId);
+            metadata.put("ownerId", ownerId);
             metadata.put("isAllDay", row.path("is_all_day").asBoolean(false));
             metadata.put("isPublic", row.path("is_public").asBoolean(false));
+            metadata.put("isAllEmployees", row.path("is_all_employees").asBoolean(false));
             metadata.put("startAt", CdcEventParser.decodeMicroTimestampIso((Number) asNumber(row.path("start_at"))));
             metadata.put("endAt", CdcEventParser.decodeMicroTimestampIso((Number) asNumber(row.path("end_at"))));
             metadata.put("link", "/calendar/" + eventsId);
@@ -363,6 +390,57 @@ public class CdcEventListener {
 
         } catch (Exception e) {
             log.error("Failed to process events CDC event", e);
+        }
+    }
+
+    // =========================== Approval Line ===========================
+    //
+    // 결재선(approval_line)은 문서(approval_document)와 별도 토픽이라 순서 보장이 안 되므로
+    // 캐시(CdcLookupCache.lineEmpIdsByDoc)에 별도 저장 후, 문서 색인 시 합성한다.
+    // line 이벤트가 doc 이벤트보다 뒤에 도착한 경우, 기존 문서를 다시 읽어 accessibleEmpIds만 갱신하여 재색인.
+
+    @KafkaListener(topics = "peoplecore.peoplecore.approval_line", groupId = "search-service-cdc")
+    public void handleApprovalLine(String message) {
+        try {
+            JsonNode payload = extractPayload(message);
+            if (payload == null) return;
+
+            String op = payload.path("op").asText();
+            JsonNode row = "d".equals(op) ? payload.path("before") : payload.path("after");
+            if (row.isMissingNode() || row.isNull()) return;
+
+            Long lineId = row.path("line_id").asLong();
+            Long docId = row.hasNonNull("doc_id") ? row.path("doc_id").asLong() : null;
+            Long empId = row.hasNonNull("emp_id") ? row.path("emp_id").asLong() : null;
+            if (docId == null) return;
+
+            if ("d".equals(op)) {
+                cache.removeLine(docId, lineId);
+            } else {
+                if (empId != null) cache.putLine(docId, lineId, empId);
+            }
+
+            // 기존 APPROVAL 문서가 이미 색인되어 있다면 accessibleEmpIds를 갱신하여 재색인
+            Optional<SearchDocument> existing = searchRepository.findById("APPROVAL_" + docId);
+            if (existing.isEmpty()) return;
+
+            SearchDocument doc = existing.get();
+            Map<String, Object> metadata = doc.getMetadata() != null
+                    ? new HashMap<>(doc.getMetadata())
+                    : new HashMap<>();
+
+            Set<Long> accessibleEmpIds = new HashSet<>();
+            Object drafterIdObj = metadata.get("drafterId");
+            if (drafterIdObj instanceof Number n) accessibleEmpIds.add(n.longValue());
+            accessibleEmpIds.addAll(cache.getLineEmpIds(docId));
+
+            metadata.put("accessibleEmpIds", new ArrayList<>(accessibleEmpIds));
+            doc.setMetadata(metadata);
+
+            searchService.indexDocument(doc);
+
+        } catch (Exception e) {
+            log.error("Failed to process approval_line CDC event", e);
         }
     }
 

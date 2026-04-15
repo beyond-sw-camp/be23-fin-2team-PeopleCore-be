@@ -2,7 +2,10 @@ package com.peoplecore.cdc;
 
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -42,5 +45,32 @@ public class CdcLookupCache {
 
     public String getTitleName(Long id) {
         return id == null ? null : titleNames.get(id);
+    }
+
+    private final Map<Long, Map<Long, Long>> lineEmpIdsByDoc = new ConcurrentHashMap<>();
+
+    public void putLine(Long docId, Long lineId, Long empId) {
+        if (docId == null || lineId == null || empId == null) return;
+        lineEmpIdsByDoc.computeIfAbsent(docId, k -> new ConcurrentHashMap<>()).put(lineId, empId);
+    }
+
+    public void removeLine(Long docId, Long lineId) {
+        if (docId == null || lineId == null) return;
+        Map<Long, Long> lines = lineEmpIdsByDoc.get(docId);
+        if (lines != null) {
+            lines.remove(lineId);
+            if (lines.isEmpty()) lineEmpIdsByDoc.remove(docId);
+        }
+    }
+
+    public void removeDoc(Long docId) {
+        if (docId != null) lineEmpIdsByDoc.remove(docId);
+    }
+
+    public Set<Long> getLineEmpIds(Long docId) {
+        if (docId == null) return Collections.emptySet();
+        Map<Long, Long> lines = lineEmpIdsByDoc.get(docId);
+        if (lines == null) return Collections.emptySet();
+        return new HashSet<>(lines.values());
     }
 }

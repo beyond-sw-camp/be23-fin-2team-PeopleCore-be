@@ -1,15 +1,33 @@
 {
   "settings": {
+    "index.max_ngram_diff": 18,
     "analysis": {
+      "tokenizer": {
+        "nori_mixed": {
+          "type": "nori_tokenizer",
+          "decompound_mode": "mixed"
+        },
+        "ngram_tokenizer": {
+          "type": "ngram",
+          "min_gram": 2,
+          "max_gram": 10,
+          "token_chars": ["letter", "digit"]
+        }
+      },
       "analyzer": {
         "korean": {
           "type": "custom",
-          "tokenizer": "nori_tokenizer",
+          "tokenizer": "nori_mixed",
           "filter": ["lowercase", "nori_part_of_speech"]
         },
         "korean_search": {
           "type": "custom",
-          "tokenizer": "nori_tokenizer",
+          "tokenizer": "nori_mixed",
+          "filter": ["lowercase"]
+        },
+        "korean_ngram": {
+          "type": "custom",
+          "tokenizer": "ngram_tokenizer",
           "filter": ["lowercase"]
         }
       }
@@ -20,9 +38,51 @@
       "type":      { "type": "keyword" },
       "companyId": { "type": "keyword" },
       "sourceId":  { "type": "keyword" },
-      "title":     { "type": "text", "analyzer": "korean", "search_analyzer": "korean_search" },
-      "content":   { "type": "text", "analyzer": "korean", "search_analyzer": "korean_search" },
-      "metadata":  { "type": "object" },
+      "title": {
+        "type": "text",
+        "analyzer": "korean",
+        "search_analyzer": "korean_search",
+        "fields": {
+          "ngram": { "type": "text", "analyzer": "korean_ngram", "search_analyzer": "standard" }
+        }
+      },
+      "content": {
+        "type": "text",
+        "analyzer": "korean",
+        "search_analyzer": "korean_search"
+      },
+      "metadata": {
+        "properties": {
+          "empName": {
+            "type": "text",
+            "analyzer": "korean",
+            "search_analyzer": "korean_search",
+            "fields": {
+              "ngram": { "type": "text", "analyzer": "korean_ngram", "search_analyzer": "standard" }
+            }
+          },
+          "deptName": {
+            "type": "text",
+            "analyzer": "korean",
+            "search_analyzer": "korean_search",
+            "fields": {
+              "ngram": { "type": "text", "analyzer": "korean_ngram", "search_analyzer": "standard" }
+            }
+          },
+          "gradeName": { "type": "text", "analyzer": "korean", "search_analyzer": "korean_search" },
+          "titleName": { "type": "text", "analyzer": "korean", "search_analyzer": "korean_search" },
+          "docNum":    { "type": "keyword" },
+          "location":  { "type": "text", "analyzer": "korean", "search_analyzer": "korean_search" },
+
+          "empStatus":         { "type": "keyword" },
+          "isUse":             { "type": "boolean" },
+          "drafterId":         { "type": "long" },
+          "accessibleEmpIds":  { "type": "long" },
+          "ownerId":           { "type": "long" },
+          "isPublic":          { "type": "boolean" },
+          "isAllEmployees":    { "type": "boolean" }
+        }
+      },
       "createdAt": { "type": "date", "format": "date_optional_time" }
     }
   }

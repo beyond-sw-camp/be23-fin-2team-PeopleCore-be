@@ -138,6 +138,9 @@ public class ChatRoomService {
                 throw new IllegalArgumentException("1:1 채팅은 상대방 1명만 지정해야 합니다.");
             }
             Long targetEmpId = request.getMemberEmpIds().get(0);
+            if (targetEmpId.equals(creatorEmpId)) {
+                throw new IllegalArgumentException("자기 자신과의 DM은 생성할 수 없습니다.");
+            }
 
             Optional<ChatRoom> existingDm = chatRoomRepository.findDmRoom(creatorEmpId, targetEmpId);
             if (existingDm.isPresent()) {
@@ -172,6 +175,7 @@ public class ChatRoomService {
                     .isActive(true)
                     .build();
             chatParticipantRepository.save(participant);
+            chatRoom.getParticipants().add(participant);
         }
 
         return getMyRooms(creatorEmpId).stream()
@@ -210,6 +214,7 @@ public class ChatRoomService {
                     .isActive(true)
                     .build();
             chatParticipantRepository.save(participant);
+            chatRoom.getParticipants().add(participant);
             invitedNames.add(employee.getEmpName());
         }
 

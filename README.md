@@ -103,6 +103,8 @@ PeopleCore/
 
 MySQL의 변경 이벤트를 Debezium이 binlog 기반으로 감지하여 Kafka → search-service → Elasticsearch로 전파합니다. hr-service 코드는 MySQL에만 저장하면 되고, 검색 색인은 완전히 분리되어 있습니다.
 
+> 🔧 **운영 가이드**: 인덱스 재색인·트러블슈팅 절차는 [scripts/search/README.md](scripts/search/README.md) 참고.
+
 ### 빠른 시작
 
 1. **팀 메신저에서 받은 2개 파일을 지정 위치에 배치** (0번 참고)
@@ -192,17 +194,15 @@ curl http://localhost:8083/connectors/peoplecore-mysql-connector/status   # stat
 | 검색 시 500 에러 | ES 인덱스 매핑 불일치 | 아래 "초기화" 절차 수행 |
 | binlog 설정 후에도 OFF | MySQL 재시작 안 됨 | 위 1번 표의 재시작 명령 재확인 |
 
-### 7. 초기화가 필요한 경우
+### 7. 재색인이 필요한 경우
 
-ES 인덱스를 처음부터 다시 만들고 싶을 때:
+매핑 변경·데이터 누락 등으로 인덱스를 처음부터 다시 만들어야 할 때는 **Debezium offset, ES 인덱스, Kafka consumer group 3곳을 모두 리셋**해야 합니다. 하나라도 빠지면 부분 누락이 발생합니다.
+
 ```bash
-# 1) ES 인덱스 삭제
-curl -X DELETE http://localhost:9200/unified_search
-# 2) Debezium Connector 삭제 (재스냅샷 유도)
-curl -X DELETE http://localhost:8083/connectors/peoplecore-mysql-connector
-# 3) search-init 재실행 → 인덱스 + 커넥터 재생성
-docker-compose restart search-init
+./scripts/search/reindex.sh
 ```
+
+상세 절차·트러블슈팅·검증 방법은 [scripts/search/README.md](scripts/search/README.md) 참고.
 
 ### 아키텍처
 

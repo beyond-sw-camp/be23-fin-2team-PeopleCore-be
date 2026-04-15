@@ -112,6 +112,25 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             }
         }
 
+        // 인사통합 PIN 스코프 토큰 검증 (선택적)
+        String hrAdminScopeValid = "false";
+        String hrAdminToken = request.getHeaders().getFirst("X-HR-Admin-Token");
+        if (hrAdminToken != null && !hrAdminToken.isEmpty()) {
+            try {
+                Claims scopeClaims = Jwts.parserBuilder()
+                        .setSigningKey(accessKey)
+                        .build()
+                        .parseClaimsJws(hrAdminToken)
+                        .getBody();
+                if ("hr-admin".equals(scopeClaims.get("scope", String.class))
+                        && claims.getSubject().equals(scopeClaims.getSubject())) {
+                    hrAdminScopeValid = "true";
+                }
+            } catch (JwtException ignored) {
+                // 만료/위조 시 false 유지
+            }
+        }
+
         // 검증 통과 → 사용자 정보를 헤더에 실어서 하위 서비스로 전달
         ServerHttpRequest.Builder requestBuilder = request.mutate()
                 .header("X-User-Id", claims.getSubject())
@@ -120,7 +139,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 //                .header("X-User-Name", claims.get("name", String.class))
                 .header("X-User-Role", claims.get("role", String.class))
                 .header("X-User-Department", String.valueOf(claims.get("departmentId")))
-                .header("X-User-Grade", String.valueOf(claims.get("gradeId")));
+                .header("X-User-Grade", String.valueOf(claims.get("gradeId")))
+                .header("X-HR-Admin-Scope", hrAdminScopeValid);
 
         if (claims.get("titleId") != null) {
             requestBuilder.header("X-User-Title", String.valueOf(claims.get("titleId")));
