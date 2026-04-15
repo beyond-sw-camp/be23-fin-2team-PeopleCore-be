@@ -23,6 +23,22 @@ import java.util.UUID;
 @Repository
 public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Long> {
 
+    /**
+     * 사원의 [startDate, endDate] 구간에서 인정 수당(연장/야간/휴일) 이 붙은 CommuteRecord 리스트.
+     */
+    @Query("""
+            SELECT c FROM CommuteRecord c
+             WHERE c.employee.empId = :empId
+               AND c.workDate BETWEEN :startDate AND :endDate
+               AND (c.recognizedExtendedMinutes > 0
+                 OR c.recognizedNightMinutes > 0
+                 OR c.recognizedHolidayMinutes > 0)
+            """)
+    List<CommuteRecord> findRecognizedByMonth(@Param("empId") Long empId,
+                                              @Param("startDate") LocalDate startDate,
+                                              @Param("endDate") LocalDate endDate);
+
+
     /*
      * 특정 회사/사원/근무일자 기록 1건 조회.
      */
