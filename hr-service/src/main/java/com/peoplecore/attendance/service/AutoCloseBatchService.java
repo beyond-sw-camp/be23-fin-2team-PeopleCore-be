@@ -29,7 +29,7 @@ import java.util.*;
  *  2. 각 레코드에 markAutoClosed() 호출
  *     - checkOut 시각 = 근무그룹 종료시각 기준 LocalDateTime (workDate + groupEndTime)
  *     - actualWorkMinutes = 0, 모든 recognized_* = 0, isAutoClosed = true
- *  3. 대상 사원별 / 회사 HR 관리자에게 알림 발송 (TODO: 다음 단계에서 연결)
+ *  3. 대상 사원별 / 회사 HR 관리자에게 알림 발송
  *
  * 트랜잭션:
  *  - 근무그룹 단위로 @Transactional — 같은 그룹 N명은 한 트랜잭션
