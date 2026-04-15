@@ -32,7 +32,6 @@ import java.util.List;
  */
 @Slf4j
 @Component
-@SuppressWarnings({"SqlSourceToSinkFlow", "SqlNoDataSourceInspection", "SpellCheckingInspection"})
 public class PartitionScheduler {
 
     /*
@@ -40,8 +39,7 @@ public class PartitionScheduler {
      * CommuteRecordPartitionInitializer 의 TARGETS 와 일치해야 함.
      */
     private static final List<TablePartition> TARGETS = List.of(
-            new TablePartition("commute_record", "work_date"),
-            new TablePartition("attendance", "atten_work_date")
+            new TablePartition("commute_record", "work_date")
     );
 
     /* 파티션 이름 포맷: p + yyyyMM (예: p202605) */

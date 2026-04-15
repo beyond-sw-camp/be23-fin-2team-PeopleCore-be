@@ -1,7 +1,9 @@
 package com.peoplecore.attendance.repository;
 
 import com.peoplecore.attendance.dto.WeeklyCommuteAggregate;
+import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.QCommuteRecord;
+import com.peoplecore.employee.domain.QEmployee;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberExpression;
@@ -10,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /*
@@ -71,4 +74,26 @@ public class MyAttendanceQueryRepository {
                         .and(c.workDate.between(from, to)))
                 .fetchOne();
     }
+
+    /*
+     * 특정 근무그룹 + 특정 날짜의 자동마감 대상 조회.
+     * 조건: checkIn 있음 + checkOut 없음 + 자동마감 아님 + 해당 wg 소속.
+     */
+    public List<CommuteRecord> findAutoCloseTargets(UUID companyId, Long workGroupId, LocalDate targetDate) {
+        QCommuteRecord c = QCommuteRecord.commuteRecord;
+        QEmployee e = QEmployee.employee;
+
+        return queryFactory
+                .selectFrom(c)
+                .join(c.employee, e).fetchJoin()
+                .where(c.companyId.eq(companyId)
+                        .and(c.workDate.eq(targetDate))
+                        .and(c.comRecCheckIn.isNotNull())
+                        .and(c.comRecCheckOut.isNull())
+                        .and(c.isAutoClosed.isFalse())
+                        .and(e.workGroup.workGroupId.eq(workGroupId)))
+                .fetch();
+    }
+
+
 }
