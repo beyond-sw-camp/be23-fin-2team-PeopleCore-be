@@ -12,9 +12,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
+/*
  * 근태 정정 요청 테이블
- *
  */
 @Entity
 @Getter
