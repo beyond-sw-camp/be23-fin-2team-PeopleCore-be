@@ -28,8 +28,8 @@ import java.util.*;
 @Slf4j
 public class AttendanceAggregateService {
 
-    /* 주 최대 근무 시간 정책 미 적용 회사용 기본 주간 최대 근무 시간 */
-    private static final int DEFAULT_WEEKLY_MAX_HOUR = 52;
+    /* 주 최대 근무 분 정책 미적용 회사용 기본값 (52h = 3120) */
+    private static final int DEFAULT_WEEKLY_MAX_MINUTE = 3120;
 
     private final AttendanceAggregateQueryRepository aggregateQueryRepository;
     private final OverTimePolicyRepository overTimePolicyRepository;
@@ -179,9 +179,10 @@ public class AttendanceAggregateService {
 
     /*회사별 주간 최대 근무시간 조회 */
     private int resolveWeekMaxMinutes(UUID companyId) {
-        int hours = overTimePolicyRepository.findByCompany_CompanyId(companyId).map(OvertimePolicy::getOtPolicyWeeklyMaxHour).orElse(DEFAULT_WEEKLY_MAX_HOUR);
-        /*분으로 환산후 반환*/
-        return hours * 60;
+        return overTimePolicyRepository.findByCompany_CompanyId(companyId)
+                .map(OvertimePolicy::getOtPolicyWeeklyMaxMinutes)
+                .orElse(DEFAULT_WEEKLY_MAX_MINUTE);
+
     }
 
     /* 소수 한자리 반올림

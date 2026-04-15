@@ -1,5 +1,6 @@
 package com.peoplecore.employee.repository;
 
+import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.grade.domain.Grade;
@@ -20,6 +21,9 @@ import java.util.UUID;
 public interface EmployeeRepository extends JpaRepository<Employee, Long>, EmployeeRepositoryCustom {
 
     Optional<Employee> findByCompany_CompanyIdAndEmpEmail(UUID companyId, String empEmail);
+
+    /** 회사 내 특정 역할 사원 목록 — NOTIFY 알림 대상 (HR_ADMIN/HR_SUPER_ADMIN) 조회용 */
+    List<Employee> findByCompany_CompanyIdAndEmpRoleIn(UUID companyId, List<EmpRole> roles);
 
     Optional<Employee> findByEmpNum(String empNum);
 

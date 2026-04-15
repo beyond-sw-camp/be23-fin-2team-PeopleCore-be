@@ -23,12 +23,15 @@ import java.util.UUID;
 @Table(
         name = "attendence_modify",
         indexes = {
+                // 회사별 상태 필터링 (HR 관리자 목록)
                 @Index(name = "idx_atten_modify_company_status",
                         columnList = "company_id, atten_status"),
+                // 사원별 근무일 조회 (본인 이력 + CommuteRecord 매칭)
                 @Index(name = "idx_atten_modify_emp",
-                        columnList = "emp_id, atten_work_date")
+                        columnList = "emp_id, work_date")
         }
 )
+
 public class AttendanceModify extends BaseTimeEntity {
 
     /**
@@ -56,13 +59,13 @@ public class AttendanceModify extends BaseTimeEntity {
      * fk 매핑/ 제약 부적합 ㄴ
      */
     @Column(nullable = false)
-    private Long attenId;
+    private Long comRecId;
 
     /**
      * 근무 일자 - 복합키 두번째 구성 요소
      */
     @Column(nullable = false)
-    private LocalDate attenWorkDate;
+    private LocalDate workDate;
 
     /**
      * 요청 사원 이름 요청 시점 스냅샷
@@ -99,7 +102,7 @@ public class AttendanceModify extends BaseTimeEntity {
     private LocalDateTime attenReqCheckOut;
 
     /**
-     * 수정 사유
+     * 정정 사유
      */
     @Column(nullable = false)
     private String attenReason;
@@ -108,7 +111,6 @@ public class AttendanceModify extends BaseTimeEntity {
 
     /**
      * 처리 상태 - 대기/승인/반려, default 대기.
-     * TODO: 4단계에서 ModifyStatus enum 으로 전환 (상태 패턴 원칙).
      */
     @Enumerated(EnumType.STRING)
     @Column(name = "atten_status", nullable = false, length = 20)
@@ -121,7 +123,15 @@ public class AttendanceModify extends BaseTimeEntity {
     @JoinColumn(name = "atten_manager_id")
     private Employee manager;
 
-    /** 낙관적 락 - 승인/반려 동시 처리 방지 */
+    /**
+     * 반려 사유 — REJECTED 상태에서만 세팅
+     */
+    @Column(name = "atten_reject_reason", length = 500)
+    private String attenRejectReason;
+
+    /**
+     * 낙관적 락 - 승인/반려 동시 처리 방지
+     */
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -135,5 +145,33 @@ public class AttendanceModify extends BaseTimeEntity {
         this.manager = manager;
     }
 
+    /**
+     * 승인 처리.
+     * PENDING → APPROVED 전이만 허용 (ModifyStatus 가드).
+     */
+    public void approve(Employee manager) {
+        this.attenStatus.validateTransitionTo(ModifyStatus.APPROVED);
+        this.attenStatus = ModifyStatus.APPROVED;
+        this.manager = manager;
+    }
 
+    /**
+     * 반려 처리 + 반려 사유 기록.
+     * PENDING → REJECTED 전이만 허용.
+     */
+    public void reject(Employee manager, String rejectReason) {
+        this.attenStatus.validateTransitionTo(ModifyStatus.REJECTED);
+        this.attenStatus = ModifyStatus.REJECTED;
+        this.manager = manager;
+        this.attenRejectReason = rejectReason;
+    }
+
+    /**
+     * 신청자 본인 취소.
+     * PENDING → CANCELED 전이만 허용.
+     */
+    public void cancel() {
+        this.attenStatus.validateTransitionTo(ModifyStatus.CANCELED);
+        this.attenStatus = ModifyStatus.CANCELED;
+    }
 }

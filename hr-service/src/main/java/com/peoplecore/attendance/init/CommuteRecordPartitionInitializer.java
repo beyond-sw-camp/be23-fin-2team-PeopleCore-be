@@ -15,8 +15,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-/**
- * commute_record / attendance 테이블의 파티션 + 복합 PK + UNIQUE 제약 초기화기.
+/*
+ * commute_record 테이블의 파티션 + 복합 PK + UNIQUE 제약 초기화기.
  *
  * 배경 (리팩토링 인수인계):
  *  - 두 테이블은 월별 RANGE COLUMNS 파티션이 필요.
@@ -34,7 +34,6 @@ import java.util.stream.IntStream;
  */
 @Slf4j
 @Component
-@SuppressWarnings({"SqlSourceToSinkFlow", "SqlNoDataSourceInspection", "SpellCheckingInspection"})
 @Order(1)
 public class CommuteRecordPartitionInitializer implements ApplicationRunner {
 
@@ -44,7 +43,7 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
     /** 파티션 시작 기준 월 (과거 데이터 커버 범위 제한) */
     private static final YearMonth START_MONTH = YearMonth.of(2026, 1);
 
-    /**
+    /*
      * 파티션 적용 대상.
      *  - tableName    : 테이블명
      *  - partitionKey : 파티션 키 컬럼 (날짜)
@@ -56,11 +55,7 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
             new TablePartition(
                     "commute_record", "work_date", "com_rec_id",
                     "uk_commute_company_emp_date",
-                    "company_id, emp_id, work_date"),
-            new TablePartition(
-                    "attendance", "atten_work_date", "atten_id",
-                    "uk_attendance_company_emp_date",
-                    "company_id, emp_id, atten_work_date")
+                    "company_id, emp_id, work_date")
     );
 
     private final JdbcTemplate jdbcTemplate;
@@ -82,13 +77,11 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
         }
     }
 
-    /**
+    /*
      * 파티션이 없으면
      *  (a) PK 를 (idColumn, partitionKey) 복합으로 재정의 후
      *  (b) PARTITION BY RANGE COLUMNS DDL 실행.
-     * 파티션이 이미 있으면 두 스텝 모두 스킵 (idempotent).
-     *
-     * @throws org.springframework.dao.DataAccessException DDL 실행 실패 시
+     * 파티션이 이미 있으면 두 스텝 모두 스킵 (idempotent)
      */
     private void applyPartitioningIfAbsent(TablePartition t) {
         Integer partitionCount = jdbcTemplate.queryForObject(
@@ -131,17 +124,13 @@ public class CommuteRecordPartitionInitializer implements ApplicationRunner {
         log.info("{} 파티션 생성 완료 ({}개월 + pmax)", t.tableName, MONTHS_TO_CREATE);
     }
 
-    /**
+    /*
      * (company_id, emp_id, date) UNIQUE 제약이 없으면 추가.
-     *
      * 역할:
      *  - 동시 요청/중복 체크인 race condition 차단 (주 방어는 엔티티 @UniqueConstraint,
      *    본 메서드는 Hibernate 가 누락한 경우 대비 2차 방어).
-     *
      * 파티션 테이블 제약:
      *  - MySQL 은 UNIQUE 인덱스가 파티션 키를 포함해야 함 → 모든 대상 UK 는 날짜 컬럼 포함.
-     *
-     * @throws org.springframework.dao.DataAccessException DDL 실행 실패 시
      */
     private void ensureUniqueKey(TablePartition t) {
         Integer cnt = jdbcTemplate.queryForObject(

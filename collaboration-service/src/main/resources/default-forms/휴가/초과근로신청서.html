@@ -31,22 +31,23 @@
 			<tbody>
 				<tr>
 					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
-						<input type="date" name="WORK_DATE" style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit;">
+						<input type="date" name="otDate" style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit;">
 					</td>
 					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
-						<input type="time" name="WORK_START" style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit;">
+						<input type="datetime-local" name="otPlanStart" style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit;">
 					</td>
 					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
-						<input type="time" name="WORK_END" style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit;">
+						<input type="datetime-local" name="otPlanEnd" style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit;">
 					</td>
 					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
-						<input type="text" name="OVERTIME_HOURS" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+						<input type="text" name="otPlanMinutes" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
 					</td>
 					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
-						<input type="text" name="OVERTIME_REMAINING" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+						<input type="text" name="remainingMinutes" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
 					</td>
 					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
-						<input type="text" name="WORK_REASON" style="width: 100%; border: none; font-size: 12px; font-family: inherit;">
+						<textarea name="otReason" rows="3" style="width: 100%; border: none; font-size: 12px; font-family: inherit; resize: vertical;"></textarea>
+							<input type="hidden" name="otId">
 					</td>
 				</tr>
 			</tbody>
@@ -77,7 +78,7 @@
 					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">신청사유</td>
 				</tr>
 			</thead>
-			<tbody id="OVERTIME_HISTORY">
+			<tbody data-history="overtime-week">
 				<!-- API로 동적 렌더링 -->
 			</tbody>
 			</table>

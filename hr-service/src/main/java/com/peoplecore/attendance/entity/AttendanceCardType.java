@@ -33,7 +33,7 @@ public enum AttendanceCardType {
     /** 미승인 초과근무 — 정시 1분이라도 초과 퇴근 + 해당일 APPROVED OT 없음 */
     UNAPPROVED_OT("미승인 초과근무"),
 
-    /** 주간 최대근무시간 초과 — 사원 주간 누적 > OvertimePolicy.otPolicyWeeklyMaxHour */
+    /** 주간 최대근무시간 초과 — 사원 주간 누적 > OvertimePolicy.otPolicyWeeklyMaxMinutes */
     MAX_HOUR_EXCEED("최대근무시간 초과");
 
     private final String label;
