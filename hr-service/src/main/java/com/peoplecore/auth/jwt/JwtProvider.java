@@ -55,6 +55,20 @@ public class JwtProvider {
                 .compact();
     }
 
+    /** 인사통합 PIN 검증 후 발급하는 단기 스코프 토큰 (30분) */
+    public String createHrAdminScopeToken(Long empId) {
+        Date now = new Date();
+        Date expiry = new Date(now.getTime() + 30 * 60 * 1000L);
+
+        return Jwts.builder()
+                .setSubject(String.valueOf(empId))
+                .claim("scope", "hr-admin")
+                .setIssuedAt(now)
+                .setExpiration(expiry)
+                .signWith(accessKey, SignatureAlgorithm.HS256)
+                .compact();
+    }
+
     public String createRefreshToken(Employee employee) {
         Date now = new Date();
         Date expiry = new Date(now.getTime() + expirationRt);

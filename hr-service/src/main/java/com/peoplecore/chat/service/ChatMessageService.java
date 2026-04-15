@@ -2,6 +2,8 @@ package com.peoplecore.chat.service;
 
 import com.peoplecore.chat.domain.ChatMessage;
 import com.peoplecore.chat.domain.ChatParticipant;
+import com.peoplecore.chat.domain.ChatRoom;
+import com.peoplecore.chat.domain.MessageType;
 import com.peoplecore.chat.dto.ChatMessageEvent;
 import com.peoplecore.chat.dto.ChatMessageRequest;
 import com.peoplecore.chat.dto.ChatMessageResponse;
@@ -20,7 +22,6 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 
@@ -53,11 +54,13 @@ public class ChatMessageService {
         this.chatRedisTemplate = chatRedisTemplate;
     }
 
+    @Transactional
     public void sendMessage(Long senderEmpId, ChatMessageRequest request) {
         Employee sender = employeeRepository.findById(senderEmpId)
                 .orElseThrow(() -> new IllegalArgumentException("사원을 찾을 수 없습니다."));
 
-        long tempMsgId = System.currentTimeMillis();
+        ChatRoom chatRoom = chatRoomRepository.findById(request.getRoomId())
+                .orElseThrow(() -> new IllegalArgumentException("채팅방을 찾을 수 없습니다."));
 
         String msgType = request.getMsgType() != null ? request.getMsgType() : "TEXT";
         String displayContent = request.getContent();
@@ -65,9 +68,22 @@ public class ChatMessageService {
             displayContent = request.getFileName();
         }
 
-        // 1. 즉시 STOMP 브로드캐스트 (사용자 체감 속도 확보)
+        // 1. DB 저장 (동기) — 실 msgId 확보
+        ChatMessage chatMessage = ChatMessage.builder()
+                .chatRoom(chatRoom)
+                .sender(sender)
+                .msgContent(displayContent)
+                .msgType(MessageType.valueOf(msgType))
+                .fileUrl(request.getFileUrl())
+                .fileName(request.getFileName())
+                .fileSize(request.getFileSize())
+                .build();
+        chatMessageRepository.save(chatMessage);
+        chatRoom.updateLastMessageAt(chatMessage.getCreatedAt());
+
+        // 2. STOMP 브로드캐스트 (실 msgId 사용)
         ChatMessageResponse response = ChatMessageResponse.builder()
-                .msgId(tempMsgId)
+                .msgId(chatMessage.getMsgId())
                 .roomId(request.getRoomId())
                 .senderId(senderEmpId)
                 .senderName(sender.getEmpName())
@@ -77,7 +93,7 @@ public class ChatMessageService {
                 .fileUrl(request.getFileUrl())
                 .fileName(request.getFileName())
                 .fileSize(request.getFileSize())
-                .createdAt(LocalDateTime.now())
+                .createdAt(chatMessage.getCreatedAt())
                 .build();
         messagingTemplate.convertAndSend("/sub/chat/room/" + request.getRoomId(), response);
 

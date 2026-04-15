@@ -16,7 +16,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(CustomException.class)
     public ResponseEntity<ErrorResponse> handleCustomException(CustomException e) {
         ErrorCode errorCode = e.getErrorCode();
-        ErrorResponse response = new ErrorResponse(errorCode.getStatus(), errorCode.getMessage());
+        ErrorResponse response = new ErrorResponse(errorCode.getStatus(), errorCode.name(), errorCode.getMessage());
         return ResponseEntity.status(errorCode.getStatus()).body(response);
     }
     @ExceptionHandler(IllegalArgumentException.class)

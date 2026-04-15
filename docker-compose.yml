@@ -16,6 +16,7 @@ services:
   kafka:
     image: apache/kafka:3.7.0
     container_name: kafka
+    user: "0:0"
     ports:
       - "9092:9092"
     environment:
@@ -36,7 +37,7 @@ services:
       - kafka-data:/tmp/kraft-combined-logs
 
   kafka-connect:
-    image: debezium/connect:2.7.3.Final
+    image: debezium/connect:3.0.0.Final
     container_name: kafka-connect
     depends_on:
       - kafka

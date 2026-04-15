@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
 import java.util.Map;
 
 @Getter
@@ -21,4 +22,7 @@ public class SearchResultItem {
     private Map<String, Object> metadata;
     private String createdAt;
     private float score;
+
+    /** ES highlight fragments. key = field name (e.g. "title", "metadata.empName"). */
+    private Map<String, List<String>> highlights;
 }
