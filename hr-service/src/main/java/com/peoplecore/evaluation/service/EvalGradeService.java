@@ -101,9 +101,13 @@ public class EvalGradeService {
         for (EvalGrade row : rows) {
             Long empId = row.getEmp().getEmpId();
 
-//            items순회로 가중평균 누적식으로 계산 (json목록 ex.자기./팀장 등)
+//            items순회로 가중평균 누적식으로 계산
+//            - 자기평가(self), 상위자평가(manager) 점수는 별도 변수에 따로 보관
+//              → 이후 applyBiasAdjustment에서 상위자점수에만 Z-score 보정을 적용하기 위함
             BigDecimal weightedSum = BigDecimal.ZERO;
             BigDecimal weightTotal = BigDecimal.ZERO;
+            BigDecimal selfScore = null;     // 자기평가 원점수 (편향보정 제외)
+            BigDecimal managerScore = null;  // 상위자평가 원점수 (편향보정 대상)
             boolean missing = false;
 
             for (FormSnapshotDto.Item item : snapshot.getItemList()) {
@@ -116,12 +120,20 @@ public class EvalGradeService {
                     missing = true;
                     break;
                 }
+
+                // 시스템 고정 항목 ID로 원점수 분리 저장
+                if ("self".equals(item.getId())) {
+                    selfScore = score;
+                } else if ("manager".equals(item.getId())) {
+                    managerScore = score;
+                }
+
                 weightedSum = weightedSum.add(score.multiply(item.getWeight())); //점수 x가중치 누적합
                 weightTotal = weightTotal.add(item.getWeight()); //가중치 합(프론트로 정합성 100)
             }
             if (missing || weightTotal.signum() == 0) {
 //                재산정 시 미제출이면 이전 점수 전부 null 로 초기화 (유령값 방지)
-                row.applyTotalScore(null, null, null);
+                row.applyTotalScore(null, null, null, null, null);
                 continue;
             }
 //            가중평균
@@ -134,8 +146,8 @@ public class EvalGradeService {
 //            종합점수
             BigDecimal total = weighted.add(adjustment);
 
-//            update(dirty checking) - 비율/가감/종합 분리 저장, autoGrade 는 3번 강제배분에서 부여
-            row.applyTotalScore(weighted, adjustment, total);
+//            update(dirty checking) - self/manager 원점수 + 비율/가감/종합 저장
+            row.applyTotalScore(selfScore, managerScore, weighted, adjustment, total);
         }
     }
 
@@ -202,11 +214,11 @@ public class EvalGradeService {
             throw new IllegalStateException("규칙 스냅샷 파싱 실패", e);
         }
 
-//        c.점수있는 row만 랭킹 대상, 없는 건 초기화
+//        c. 상위자점수 있는 row만 보정 대상 (상위자평가 기준 Z-score)
         List<EvalGrade> rows = evalGradeRepository.findBySeason_SeasonId(seasonId);
         List<EvalGrade> scored = new ArrayList<>();
         for (EvalGrade row : rows) {
-            if (row.getTotalScore() != null) {
+            if (row.getManagerScore() != null) {
                 scored.add(row);
             }
         }
@@ -214,11 +226,18 @@ public class EvalGradeService {
             return;
         }
 
-//          d.팀별 그룹핑- 팀별 평균·표준편차 계산 -> Z-score 편향보정을 위함
+//        d. 자기/상위자 가중치 추출 (스냅샷 기반)
+//           - 상위자평가 보정 후 total 재계산 시 사용
+//           - 비활성 항목은 제외
+        BigDecimal selfWeight    = findActiveWeight(snapshot, "self");
+        BigDecimal managerWeight = findActiveWeight(snapshot, "manager");
+        BigDecimal weightSum     = selfWeight.add(managerWeight);
+
+//          e.팀별 그룹핑 (deptIdSnapshot 기준)
         Map<Long, List<EvalGrade>> byTeam = new HashMap<>();
         for (EvalGrade row : scored) {
-            Long deptId = row.getDeptIdSnapshot(); // 이 직원의소속 팀 부서Id
-            List<EvalGrade> list = byTeam.get(deptId); // 팀의 리스트가 없을 경우 새로 만들어서 map
+            Long deptId = row.getDeptIdSnapshot();
+            List<EvalGrade> list = byTeam.get(deptId);
             if (list == null) {
                 list = new ArrayList<>();
                 byTeam.put(deptId, list);
@@ -226,66 +245,94 @@ public class EvalGradeService {
             list.add(row);
         }
 
-        // e. 전사 평균/표편 (Z-score 리스케일 기준)
-        BigDecimal companyAvg = calcAvg(scored);
-        BigDecimal companyStd = calcStdDev(scored, companyAvg);
+        // f. 전사 "상위자점수" 평균/표편 (Z-score 리스케일 기준)
+        BigDecimal companyAvg = calcMgrAvg(scored);
+        BigDecimal companyStd = calcMgrStdDev(scored, companyAvg);
 
-        // f. 편향보정 off -> totalScore 그대로 복사 (감사/일관성)
+        // g. 편향보정 off -> managerScoreAdjusted = managerScore 그대로 (감사/일관성)
         if (!Boolean.TRUE.equals(rules.getUseBiasAdjustment())) {
             for (EvalGrade row : scored) {
                 int ts = byTeam.get(row.getDeptIdSnapshot()).size();
-                row.applyBiasAdjustment(row.getTotalScore(), null, null, companyAvg, companyStd, ts);
+                BigDecimal newTotal = recalcTotal(row, row.getManagerScore(), selfWeight, managerWeight, weightSum);
+                row.applyBiasAdjustment(row.getManagerScore(), newTotal, null, null, companyAvg, companyStd, ts);
             }
             return;
         }
 
-        // g. 팀별 Z-score 보정
-        //    - 이상 팀(소규모/전원 동점)은 원점수 유지
-        //    - teamStdDev/teamSize 스냅샷이 EvalGrade에 기록되므로
-        //      화면 표시용 이상 팀 수집은 별도 조회 API(getBiasAdjustAnomalies)가 담당
+        // h. 팀별 Z-score 보정 (상위자점수만)
+        //    - 이상 팀(소규모/전원 동점)은 상위자점수 원점수 유지
+        //    - 보정 후 totalScore 재계산: (self × selfW + adjustedMgr × mgrW) / weightSum + adjustment
         int minTeamSize = snapshot.getMinTeamSize() != null ? snapshot.getMinTeamSize() : 5;
 
-        // 팀별 처리
         for (Map.Entry<Long, List<EvalGrade>> entry : byTeam.entrySet()) {
-            List<EvalGrade> members = entry.getValue();   // 부서의 사원들
+            List<EvalGrade> members = entry.getValue();
             int teamSize = members.size();
 
-            // 팀 내부 통계
-            BigDecimal teamAvg = calcAvg(members);
-            BigDecimal teamStd = calcStdDev(members, teamAvg);
+            // 팀 내부 상위자점수 통계
+            BigDecimal teamAvg = calcMgrAvg(members);
+            BigDecimal teamStd = calcMgrStdDev(members, teamAvg);
 
-            // 소규모 팀 여부 체크 (팀 단위)
             boolean undersized = teamSize < minTeamSize;
 
-            // 팀원 한 명씩 처리
             for (EvalGrade row : members) {
-                BigDecimal biased;
+                BigDecimal adjustedMgr;
 
                 if (undersized || teamStd.signum() == 0) {
-                    // 보정 스킵: 소규모 팀 OR 전원 동점 → 원점수 유지
-                    biased = row.getTotalScore();
+                    // 보정 스킵 → 상위자점수 그대로
+                    adjustedMgr = row.getManagerScore();
                 } else {
-                    // 정상 보정: Z = (x - μ_team) / σ_team
-                    BigDecimal z = row.getTotalScore()
+                    // Z = (상위자점수 - 팀평균) / 팀표편
+                    BigDecimal z = row.getManagerScore()
                             .subtract(teamAvg)
                             .divide(teamStd, 6, RoundingMode.HALF_UP);
 
-                    // 역표준화: x = μ_co + Z × σ_co → 전사 분포로 리스케일
-                    biased = companyAvg.add(z.multiply(companyStd))
+                    // 역표준화 → 전사 분포로 리스케일
+                    adjustedMgr = companyAvg.add(z.multiply(companyStd))
                             .setScale(2, RoundingMode.HALF_UP);
                 }
 
-                // 보정 결과 + 통계 스냅샷을 EvalGrade에 기록
-                row.applyBiasAdjustment(biased, teamAvg, teamStd, companyAvg, companyStd, teamSize);
+                // 보정된 상위자점수로 최종 totalScore 재계산
+                BigDecimal newTotal = recalcTotal(row, adjustedMgr, selfWeight, managerWeight, weightSum);
+
+                // 결과 저장: managerScoreAdjusted + biasAdjustedScore(재계산된 total) + 통계 스냅샷
+                row.applyBiasAdjustment(adjustedMgr, newTotal, teamAvg, teamStd, companyAvg, companyStd, teamSize);
             }
         }
+    }
+
+//    보정된 상위자점수 + 기존 자기점수/조정점수로 최종 점수 재계산
+//    = (self × selfWeight + adjustedMgr × mgrWeight) / weightSum + adjustment
+    private BigDecimal recalcTotal(EvalGrade row, BigDecimal adjustedMgr,
+                                   BigDecimal selfWeight, BigDecimal mgrWeight, BigDecimal weightSum) {
+        if (weightSum.signum() == 0) return row.getTotalScore();   // 가중치 0이면 기존 total 유지
+
+        BigDecimal selfPart = row.getSelfScore() != null
+                ? row.getSelfScore().multiply(selfWeight)
+                : BigDecimal.ZERO;
+        BigDecimal mgrPart = adjustedMgr.multiply(mgrWeight);
+
+        BigDecimal weighted = selfPart.add(mgrPart).divide(weightSum, 2, RoundingMode.HALF_UP);
+        BigDecimal adjustment = row.getAdjustmentScore() != null
+                ? row.getAdjustmentScore()
+                : BigDecimal.ZERO;
+        return weighted.add(adjustment).setScale(2, RoundingMode.HALF_UP);
+    }
+
+//    스냅샷에서 특정 id의 항목 가중치 조회 (비활성이면 0 반환)
+    private BigDecimal findActiveWeight(FormSnapshotDto snapshot, String id) {
+        for (FormSnapshotDto.Item item : snapshot.getItemList()) {
+            if (!id.equals(item.getId())) continue;
+            if (isItemDisabled(item)) return BigDecimal.ZERO;
+            return item.getWeight() != null ? item.getWeight() : BigDecimal.ZERO;
+        }
+        return BigDecimal.ZERO;
     }
 
 
 
 
 
-//    4.강제배분 등급적용 - 보정전// 규칙 스냅샷+소유권 상태//점수 있는 row만 내림차순// ratio대로 위에서 배정-> 동일 점수=비율>가감
+//    5.강제배분 등급적용 - 보정전// 규칙 스냅샷+소유권 상태//점수 있는 row만 내림차순// ratio대로 위에서 배정-> 동일 점수=비율>가감
 //    없는 점수row= autoGrade/순위 null세팅
 
     public void applyDistribution(UUID companyId, Long seasonId) {
@@ -359,43 +406,114 @@ public class EvalGradeService {
 
     }
 
-//  3.zscore
-//    산술평균: 점수 합/인원수 -팀평균/전사평균
-    private BigDecimal calcAvg(List<EvalGrade>list){
-        if(list.isEmpty()){
-            return BigDecimal.ZERO;
-        }
-//        모든 totalScore합산
+
+
+//  Z-score용 통계 헬퍼 - 상위자점수(managerScore) 기준
+//  (편향보정은 상위자평가에만 적용되므로 managerScore만 대상)
+
+//    상위자점수 산술평균: Σ managerScore / n
+    private BigDecimal calcMgrAvg(List<EvalGrade> list) {
+        if (list.isEmpty()) return BigDecimal.ZERO;
         BigDecimal sum = BigDecimal.ZERO;
-        for(EvalGrade e :list){
-            sum = sum.add(e.getTotalScore());
+        for (EvalGrade e : list) {
+            BigDecimal v = e.getManagerScore();
+            if (v != null) sum = sum.add(v);
         }
-//        평균 = 합/인원수(소수 6자리 반올림)
-        return sum.divide(BigDecimal.valueOf(list.size()),6,RoundingMode.HALF_UP);
-    }
-//    모표준편차:√( Σ(x - μ)² / n )
-//    전원 동점 시 감지
-    private BigDecimal calcStdDev(List<EvalGrade>list,BigDecimal avg){
-        if(list.isEmpty()){
-            return BigDecimal.ZERO;
-        }
-//        각 점수의 편차 제곱(x - μ)² 누적
-        BigDecimal variance =BigDecimal.ZERO;
-        for(EvalGrade e : list){
-            BigDecimal diff = e.getTotalScore().subtract(avg);//(x - μ)
-            variance = variance.add(diff.multiply(diff)); // 제곱 후 누적
-
-//            분산 = Σ(x - μ)² ÷ n
-            variance = variance.divide(BigDecimal.valueOf(list.size()),6,RoundingMode.HALF_UP);
-
-//            표준편차 =√분산 (정밀도 10자리)
-            return variance.sqrt(new MathContext(10));
-        }
+        return sum.divide(BigDecimal.valueOf(list.size()), 6, RoundingMode.HALF_UP);
     }
 
+//    상위자점수 모표준편차: √( Σ(x - μ)² / n )
+//    - 편차 제곱 누적 -> 분산 -> √
+//    - 전원 동점이면 0 반환 (signum() == 0 으로 감지)
+    private BigDecimal calcMgrStdDev(List<EvalGrade> list, BigDecimal avg) {
+        if (list.isEmpty()) return BigDecimal.ZERO;
+
+        BigDecimal variance = BigDecimal.ZERO;
+        for (EvalGrade e : list) {
+            BigDecimal v = e.getManagerScore();
+            if (v == null) continue;
+            BigDecimal diff = v.subtract(avg);                  // (x - μ)
+            variance = variance.add(diff.multiply(diff));       // 제곱 누적
+        }
+        // 분산 = Σ(x - μ)² / n
+        variance = variance.divide(BigDecimal.valueOf(list.size()), 6, RoundingMode.HALF_UP);
+        // 표준편차 = √분산
+        return variance.sqrt(new MathContext(10));
+    }
 
 
-//    4. 이상보정조회 부서id집함 -> TeamAnomalyDto리스트 변환, batch조회
+
+//    4. 편향보정 이상 팀 조회 (프론트 GradeCalibration 화면 진입 시 호출)
+//       DB에 저장된 teamStdDev/teamSize 스냅샷을 읽어 이상 팀 복원 ->  단순 조회
+    @Transactional(readOnly = true)
+    public BiasAdjustResultDto getBiasAdjustAnomalies(UUID companyId, Long seasonId) {
+
+//        a. 시즌 규칙 로드 + 소유권 검증
+        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElseThrow(() -> new IllegalStateException("규칙 없음"));
+
+        Season season = rules.getSeason();                              // 시즌 추출
+        if (!season.getCompany().getCompanyId().equals(companyId)) {    // 회사 소유권 검증
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+
+//        b. 소규모 팀 기준(minTeamSize) 로드 - 보정 당시 스냅샷과 같은 기준 사용
+        int minTeamSize = 5;                                            // 기본값
+        try {
+            FormSnapshotDto snap = objectMapper.readValue(rules.getFormSnapshot(), FormSnapshotDto.class);              // JSON 파싱
+            if (snap.getMinTeamSize() != null) {
+                minTeamSize = snap.getMinTeamSize();                    // 스냅샷 값으로 덮어씀
+            }
+        } catch (JsonProcessingException ignored) {
+//            파싱 실패해도 기본값(5)으로 조회 계속 진행
+        }
+
+//        c. 해당 시즌의 모든 EvalGrade 레코드 조회
+        List<EvalGrade> rows = evalGradeRepository.findBySeason_SeasonId(seasonId);
+
+//        d. 이상 팀 수집용 변수
+        Set<Long> zeroStdDevTeams = new LinkedHashSet<>();  // 전원 동점 팀 ID (중복 방지 + 순서 유지)
+        Set<Long> undersizedTeams = new LinkedHashSet<>();  // 소규모 팀 ID
+        Set<Long> seenDepts = new HashSet<>();              // 팀당 한 번만 검사
+        int processedCount = 0;                             // 보정 처리된 인원 수 (0이면 미실행)
+
+//        e. 레코드 순회하며 이상 팀 판정
+        for (EvalGrade row : rows) {
+//            biasAdjustedScore 가 null 아니면 보정 실행된 인원 -> 카운트
+            if (row.getBiasAdjustedScore() != null) {
+                processedCount++;
+            }
+
+            Long deptId = row.getDeptIdSnapshot();                      // 당시 소속 팀 ID (박제값)
+
+//            deptId 없거나 이미 검사한 팀이면 스킵 (팀당 한 번만 판정)
+            if (deptId == null || !seenDepts.add(deptId)) {
+                continue;
+            }
+
+//            소규모 팀 판정: 팀원 수 < 기준치
+            if (row.getTeamSize() != null && row.getTeamSize() < minTeamSize) {
+                undersizedTeams.add(deptId);
+            }
+
+//            전원 동점 팀 판정: 상위자점수 팀 표편 == 0
+//              - null 체크: 편향보정 OFF 로 실행됐으면 null
+//              - signum() == 0: BigDecimal scale 영향 없이 "값이 0" 안전 판정
+            if (row.getTeamStdDev() != null && row.getTeamStdDev().signum() == 0) {
+                zeroStdDevTeams.add(deptId);
+            }
+        }
+
+//        f. DTO 조립 후 반환 (화면 배너 렌더링용)
+        return BiasAdjustResultDto.builder()
+                .seasonId(seasonId)                                     // 시즌 ID
+                .processedCount(processedCount)                         // 처리 인원수
+                .zeroStdDevTeams(buildTeamInfos(zeroStdDevTeams))       // 동점 팀 목록 (DTO)
+                .undersizedTeams(buildTeamInfos(undersizedTeams))       // 소규모 팀 목록 (DTO)
+                .build();
+    }
+
+
+//    5. 이상보정조회 부서id집합 -> TeamAnomalyDto리스트 변환, batch조회
     private List<BiasAdjustResultDto.TeamAnomalyDto>buildTeamInfos(Collection<Long>deptIds){
 //       빈 입력 시 빈 리스트 반환)
         if(deptIds.isEmpty()){

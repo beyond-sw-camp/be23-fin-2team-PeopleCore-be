@@ -30,8 +30,17 @@ public class EvalGrade extends BaseTimeEntity {
     @JoinColumn(name = "season_id")
     private Season season; // 시즌
 
+    @Column(name = "self_score", precision = 6, scale = 2)
+    private BigDecimal selfScore; // 자기평가 원점수 (편향보정 대상 아님)
+
+    @Column(name = "manager_score", precision = 6, scale = 2)
+    private BigDecimal managerScore; // 상위자평가 원점수 (편향보정 대상)
+
+    @Column(name = "manager_score_adjusted", precision = 6, scale = 2)
+    private BigDecimal managerScoreAdjusted; // 상위자평가 Z-score 보정 후 점수
+
     @Column(name = "total_score", precision = 6, scale = 2)
-    private BigDecimal totalScore; // 총점 (원점수)
+    private BigDecimal totalScore; // 총점 (원점수 기반)
 
     @Column(name = "weighted_score", precision = 6, scale = 2)
     private BigDecimal weightedScore; // 자기+팀장 가중평균 (비율)
@@ -40,7 +49,7 @@ public class EvalGrade extends BaseTimeEntity {
     private BigDecimal adjustmentScore; // 가감점수
 
     @Column(name = "bias_adjusted_score", precision = 6, scale = 2)
-    private BigDecimal biasAdjustedScore; // Z-score 편향보정 후 점수 (기본값=totalScore)
+    private BigDecimal biasAdjustedScore; // 편향보정 후 최종 점수 (랭킹/배분 기준)
 
     @Column(name = "rank_in_season")
     private Integer rankInSeason; // 시즌 전체 순위 (3번 강제배분 결과)
@@ -96,28 +105,34 @@ public class EvalGrade extends BaseTimeEntity {
         this.rankInSeason = rankInSeason;
     }
 
-//    자동산정 결과 - 비율/가감/종합 분리 저장
-    public void applyTotalScore(BigDecimal weighted, BigDecimal adjustment, BigDecimal total){
+//    자동산정 결과 - 자기/상위자 원점수 + 가중평균/가감/종합 분리 저장
+//    - selfScore, managerScore: 편향보정 시 상위자점수만 보정하기 위한 원점수 분리
+    public void applyTotalScore(BigDecimal selfScore, BigDecimal managerScore,
+                                BigDecimal weighted, BigDecimal adjustment, BigDecimal total){
+        this.selfScore = selfScore;
+        this.managerScore = managerScore;
         this.weightedScore = weighted;
         this.adjustmentScore = adjustment;
         this.totalScore = total;
     }
 
-//    zscore편향보정 결과+통계 스냅샷 저장
-    public void applyBiasAdjustment(BigDecimal biasAdjustedScore, //z-score보정 후 최종 점수
-                                    BigDecimal teamAvg,
-                                    BigDecimal teamStDev, //팀 점수의 표준편차
-                                    BigDecimal companyAvg,
-                                    BigDecimal companyStdDev,//전사 표준편차(리스케일 스타일)
+//    상위자평가 Z-score 편향보정 + 재계산된 최종점수 + 통계 스냅샷 저장
+//    - managerScoreAdjusted: 상위자점수 보정 결과
+//    - biasAdjustedScore: 자기+보정된상위자 가중평균 + 조정점수 (= 재계산된 최종)
+    public void applyBiasAdjustment(BigDecimal managerScoreAdjusted,
+                                    BigDecimal biasAdjustedScore,
+                                    BigDecimal teamAvg,          //팀 상위자점수 평균 (보정 근거)
+                                    BigDecimal teamStDev,        //팀 상위자점수 표편
+                                    BigDecimal companyAvg,       //전사 상위자점수 평균
+                                    BigDecimal companyStdDev,    //전사 상위자점수 표편
                                     Integer teamSize){
-//        보정된 점수 저장
+        this.managerScoreAdjusted = managerScoreAdjusted;
         this.biasAdjustedScore = biasAdjustedScore;
-        this.teamAvg = teamAvg; //팀평균 -> 팀내의 본인 위치
-        this.teamStdDev = teamStDev; //팀편차
-        this.companyAvg = companyAvg; //전사평균 -> 전체 기준선
-        this.companyStdDev = companyStdDev; //전사편차 -> 전체 분포 스케일
-        this.teamSize = teamSize; //팀 인원수
-
+        this.teamAvg = teamAvg;
+        this.teamStdDev = teamStDev;
+        this.companyAvg = companyAvg;
+        this.companyStdDev = companyStdDev;
+        this.teamSize = teamSize;
     }
 
 }
