@@ -1,10 +1,9 @@
 package com.peoplecore.pay.controller;
 
 import com.peoplecore.auth.RoleRequired;
-import com.peoplecore.pay.dtos.PayrollEmpDetailResDto;
-import com.peoplecore.pay.dtos.PayrollRunResDto;
-import com.peoplecore.pay.dtos.TransferFileResDto;
+import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.service.PayrollService;
+import jakarta.ws.rs.Path;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -102,6 +101,44 @@ public class PayrollController {
                         "attachment; filename=" + URLEncoder.encode(result.getFileName(), StandardCharsets.UTF_8))
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(result.getFileBytes());
+    }
 
+//    일당/시급 기준 조회
+    @GetMapping("/{payrollRunId}/employees/{empId}/wage-info")
+    public ResponseEntity<WageInfoResDto> getWageInfo(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long payrollRunId,
+            @PathVariable Long empId){
+        return ResponseEntity.ok(payrollService.getWageInfo(companyId, payrollRunId, empId));
+    }
+
+//    이달 승인된 전자결재 조회
+    @GetMapping("/{payrollRunId}/employees/{empId}/approved-overtime")
+    public ResponseEntity<ApprovedOvertimeResDto> getApprovedOvertime(
+            @RequestHeader("X-User-Company") UUID companyID,
+            @PathVariable Long payrollRunId,
+            @PathVariable Long empId){
+        return ResponseEntity.ok(
+                payrollService.getApprovedOvertime(companyID,payrollRunId, empId));
+    }
+
+//    초과근무 수당 적용
+    @PostMapping("/{payrollRunId}/employees/{empId}/apply-overtime")
+    public ResponseEntity<Void> applyOvertime(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long payrollRunId,
+            @PathVariable Long empId){
+        payrollService.applyOverTime(companyId,payrollRunId,empId);
+        return ResponseEntity.ok().build();
+        }
+
+
+//    지급합계 기반 공제항목 실시간 계산
+    @PostMapping("/calc-deductions")
+    public ResponseEntity<CalcDeductionResDto> calcDeductions(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestBody CalcDeductionReqDto reqDto) {
+        return ResponseEntity.ok(
+                payrollService.calcDeductions(companyId, reqDto));
     }
 }

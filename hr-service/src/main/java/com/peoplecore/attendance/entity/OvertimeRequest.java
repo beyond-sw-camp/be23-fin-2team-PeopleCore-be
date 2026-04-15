@@ -129,27 +129,4 @@ public class OvertimeRequest extends BaseTimeEntity {
         this.approvalDocId = docId;
     }
 
-    /** TODO :
-     * 초과 근무 유형 (비트마스크)
-     * bit 0 (1) = 연장근로
-     * bit 1 (2) = 야간근로
-     * bit 2 (4) = 휴일근로
-     * 예: 3 = 연장+야간, 7 = 연장+야간+휴일
-     */
-    @Column(nullable = false)
-    private Integer otTypeFlag;
-
-    /** TODO :
-     * 승인된 분리 시간 (분 단위)
-     * 근태에서 근무그룹 기준으로 시간대별 자동 분리 계산 후 저장
-     * - 야간: 22:00~06:00 구간 (법정 고정)
-     * - 연장: 근무그룹 소정근로시간 밖
-     * - 휴일: 해당 날짜가 휴일
-     */
-    @Builder.Default
-    private Integer overtimeMinutes = 0;   // 연장근로 시간(분)
-    @Builder.Default
-    private Integer nightMinutes = 0;      // 야간근로 시간(분)
-    @Builder.Default
-    private Integer holidayMinutes = 0;    // 휴일근로 시간(분)
 }

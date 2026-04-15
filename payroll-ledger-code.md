@@ -45,7 +45,6 @@
 | 10 | ErrorCode | `ErrorCode.java` | common/ | 추가 |
 | 11 | Entity | `CommuteRecord.java` | attendance/entity/ | 급여 참조용 컬럼 명시 (근태 담당 관리) |
 | 12 | Repository | `CommuteRecordRepository.java` | attendance/repository/ | 신규 (월별 승인 초과근무 조회) |
-| 13 | Repository | `OvertimeRequestRepository.java` | attendance/repository/ | 기존 유지 (승인 추적용) |
 | 14 | Entity | `PayrollDetails.java` | pay/domain/ | isOvertimePay 필드 추가 |
 | 15 | DTO | `WageInfoResDto.java` | pay/dtos/ | 신규 |
 | 16 | DTO | `ApprovedOvertimeResDto.java` | pay/dtos/ | 신규 |
@@ -59,8 +58,8 @@
 | 24 | Service | `LeaveAllowanceService.java` | pay/service/ | 신규 |
 | 25 | Controller | `LeaveAllowanceController.java` | pay/controller/ | 신규 |
 | 26 | Enum | `PayrollStatus.java` | pay/enums/ | PENDING_APPROVAL 추가 |
-| 27 | DTO | `PayrollApprovedEvent.java` | pay/dtos/ | 신규 (Kafka 이벤트) |
-| 28 | Consumer | `PayrollApprovalConsumer.java` | pay/consumer/ | 신규 (Kafka consumer) |
+| 27 | Event | `PayrollApprovalResultEvent.java` | common/.../event/ | 신규 (Kafka 이벤트 — OvertimeApprovalResultEvent 패턴) |
+| 28 | Consumer | `PayrollApprovalResultConsumer.java` | pay/consumer/ | 신규 (Kafka consumer — OvertimeApprovalResultConsumer 패턴) |
 | 29 | Service | `ApprovalLineService.java` | collaboration-service | 급여지급결의서 승인 시 Kafka 발행 추가 |
 
 ---
@@ -152,6 +151,20 @@ public class PayrollRuns {
             throw new IllegalStateException("전자결재 진행중 상태에서만 승인 가능합니다.");
         }
         this.payrollStatus = PayrollStatus.APPROVED;
+    }
+
+    // ── 상태 변경: 전자결재 반려 → CONFIRMED로 되돌림 ──
+    public void rejectApproval() {
+        if (this.payrollStatus != PayrollStatus.PENDING_APPROVAL) {
+            throw new IllegalStateException("전자결재 진행중 상태에서만 반려 가능합니다.");
+        }
+        this.payrollStatus = PayrollStatus.CONFIRMED;
+        this.approvalDocId = null;
+    }
+
+    // ── approvalDocId 바인딩 (OvertimeRequest.bindApprovalDoc 패턴) ──
+    public void bindApprovalDoc(Long docId) {
+        this.approvalDocId = docId;
     }
 
     // ── 상태 변경: 지급완료 ──
@@ -776,12 +789,30 @@ public class PayrollService {
 
 
     // ══════════════════════════════════════════════════
-    //  전자결재 승인완료 처리 (Kafka consumer에서 호출)
+    //  전자결재 결과 처리 (Kafka consumer에서 호출)
+    //  OvertimeRequestService.applyApprovalResult 패턴과 동일
     // ══════════════════════════════════════════════════
     @Transactional
-    public void approvePayroll(UUID companyId, Long payrollRunId) {
-        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
-        run.approve();
+    public void applyApprovalResult(PayrollApprovalResultEvent event) {
+
+        PayrollRuns run = findPayrollRun(event.getCompanyId(), event.getPayrollRunId());
+
+        // approvalDocId 보완
+        if (run.getApprovalDocId() == null && event.getApprovalDocId() != null) {
+            run.bindApprovalDoc(event.getApprovalDocId());
+        }
+
+        String status = event.getStatus();
+        if ("APPROVED".equals(status)) {
+            run.approve();
+            log.info("[PayrollService] 전자결재 승인 처리 완료 - payrollRunId={}",
+                    event.getPayrollRunId());
+        } else if ("REJECTED".equals(status)) {
+            // 반려 시 CONFIRMED 상태로 되돌림
+            run.rejectApproval();
+            log.info("[PayrollService] 전자결재 반려 처리 - payrollRunId={}, reason={}",
+                    event.getPayrollRunId(), event.getRejectReason());
+        }
     }
 
 
@@ -979,8 +1010,9 @@ Response:
 3. 프론트: 결의서 작성 완료 → 전자결재 상신 (collaboration-service)
 4. 프론트: 상신 성공 후 hr-service에 POST /submit-approval 호출 (approvalDocId 전달)
 5. hr-service: PayrollRuns 상태를 PENDING_APPROVAL로 변경, approvalDocId 저장
-6. collaboration-service: 모든 결재자 승인 완료 시 Kafka 토픽 "payroll-approved"로 이벤트 발행
-7. hr-service: Kafka consumer가 이벤트 수신 → PayrollRuns 상태를 APPROVED로 변경
+6. collaboration-service: 모든 결재자 승인 완료 시 Kafka 토픽 "payroll-approval-result"로 PayrollApprovalResultEvent 발행
+7. hr-service: PayrollApprovalResultConsumer가 이벤트 수신 → applyApprovalResult()로 승인/반려 처리
+8. 반려 시: PENDING_APPROVAL → CONFIRMED로 되돌림 (재상신 가능)
 8. 프론트: APPROVED 상태에서 "지급처리" 버튼 활성화
 ```
 
@@ -997,60 +1029,91 @@ public enum PayrollStatus {
 }
 ```
 
-### PayrollApprovedEvent.java (신규 — 이벤트 DTO)
-**파일 위치**: `pay/dtos/PayrollApprovedEvent.java`
+### PayrollApprovalResultEvent.java (신규 — Kafka 이벤트 DTO)
+**파일 위치**: `common/src/main/java/com/peoplecore/event/PayrollApprovalResultEvent.java`
+
+> OvertimeApprovalResultEvent 패턴과 동일 — common 모듈에 위치
 
 ```java
-package com.peoplecore.pay.dtos;
+package com.peoplecore.event;
 
 import lombok.*;
 import java.util.UUID;
 
-@Getter
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
 @Builder
-public class PayrollApprovedEvent {
+@Data
+/* 급여지급결의서 결재 결과 이벤트 collabo -> hr */
+public class PayrollApprovalResultEvent {
+    /** 회사 ID */
     private UUID companyId;
-    private Long docId;
+
+    /** PayrollRuns PK */
     private Long payrollRunId;
+
+    /** collabo 에 approvalDoc PK */
+    private Long approvalDocId;
+
+    /** 결재 결과 → 승인, 반려 문자열로 전달 ("APPROVED" / "REJECTED") */
+    private String status;
+
+    /** 최종 승인자 ID */
+    private Long managerId;
+
+    /** 반려 사유 */
+    private String rejectReason;
 }
 ```
 
-### PayrollApprovalConsumer.java (신규 — Kafka consumer)
-**파일 위치**: `pay/consumer/PayrollApprovalConsumer.java`
+### PayrollApprovalResultConsumer.java (신규 — Kafka consumer)
+**파일 위치**: `pay/consumer/PayrollApprovalResultConsumer.java`
+
+> OvertimeApprovalResultConsumer 패턴과 동일 — 생성자 주입 + @RetryableTopic backoff
 
 ```java
 package com.peoplecore.pay.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.peoplecore.pay.dtos.PayrollApprovedEvent;
+import com.peoplecore.event.PayrollApprovalResultEvent;
 import com.peoplecore.pay.service.PayrollService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Component;
 
-@Slf4j
+/* 급여지급결의서 결재 결과 Kafka Consumer
+ * 토픽: payroll-approval-result
+ * 그룹: hr-payroll-approval-consumer
+ */
 @Component
-public class PayrollApprovalConsumer {
+@Slf4j
+public class PayrollApprovalResultConsumer {
 
-    @Autowired
-    private PayrollService payrollService;
+    private final PayrollService payrollService;
+    private final ObjectMapper objectMapper;
 
-    @Autowired
-    private ObjectMapper objectMapper;
+    public PayrollApprovalResultConsumer(PayrollService payrollService,
+                                         ObjectMapper objectMapper) {
+        this.payrollService = payrollService;
+        this.objectMapper = objectMapper;
+    }
 
-    @RetryableTopic(attempts = "3")
-    @KafkaListener(topics = "payroll-approved", groupId = "pay-approval")
-    public void handlePayrollApproved(String message) {
+    /* 메시지 수신 -> 역직렬화 -> 서비스 위임 */
+    @RetryableTopic(attempts = "3", backoff = @Backoff(delay = 10000, multiplier = 2))
+    @KafkaListener(topics = "payroll-approval-result",
+                   groupId = "hr-payroll-approval-consumer")
+    public void consume(String message) {
         try {
-            PayrollApprovedEvent event = objectMapper.readValue(message, PayrollApprovedEvent.class);
-            payrollService.approvePayroll(event.getCompanyId(), event.getPayrollRunId());
-            log.info("급여대장 전자결재 승인 처리 완료: payrollRunId={}", event.getPayrollRunId());
+            PayrollApprovalResultEvent event =
+                    objectMapper.readValue(message, PayrollApprovalResultEvent.class);
+            payrollService.applyApprovalResult(event);
+            log.info("[Kafka] PayrollApprovalResult 처리 완료 - payrollRunId={}, status={}",
+                    event.getPayrollRunId(), event.getStatus());
         } catch (Exception e) {
-            log.error("급여대장 전자결재 승인 처리 실패: {}", e.getMessage());
+            log.error("[Kafka] PayrollApprovalResult 처리 실패 - message={}, error={}",
+                    message, e.getMessage());
             throw new RuntimeException(e);
         }
     }
@@ -1060,9 +1123,10 @@ public class PayrollApprovalConsumer {
 ### collaboration-service 수정 — ApprovalLineService.java
 **파일 위치**: `collaboration-service/.../approval/service/ApprovalLineService.java`
 
-> 기존 사직서 승인 Kafka 발행 패턴과 동일하게, 급여지급결의서 승인 시 "payroll-approved" 토픽으로 이벤트 발행
+> OvertimeApprovalResultEvent 발행 패턴과 동일 — 급여지급결의서 승인 시 "payroll-approval-result" 토픽으로 이벤트 발행
+> 양식 식별: `PROTECTED_FORM_KEYS`에 "보고-시행문/급여지급결의서" 등록됨 (ApprovalFormService 참고)
 
-기존 코드 (allApproved 블록 내, 사직서 발행 다음에 추가):
+기존 코드 (allApproved 블록 내, 초과근로신청서 발행 다음에 추가):
 ```java
 //  급여지급결의서 승인 시 hr-service로 이벤트 발행
 if (formCode != null && formCode.startsWith("급여지급결의서")) {
@@ -1071,12 +1135,15 @@ if (formCode != null && formCode.startsWith("급여지급결의서")) {
         Map<String, Object> docDataMap = objectMapper.readValue(document.getDocData(), Map.class);
         Long payrollRunId = Long.valueOf(docDataMap.get("payrollRunId").toString());
 
-        Map<String, Object> payrollEvent = Map.of(
-                "companyId", companyId,
-                "docId", document.getDocId(),
-                "payrollRunId", payrollRunId
-        );
-        kafkaTemplate.send("payroll-approved", objectMapper.writeValueAsString(payrollEvent));
+        PayrollApprovalResultEvent payrollEvent = PayrollApprovalResultEvent.builder()
+                .companyId(companyId)
+                .payrollRunId(payrollRunId)
+                .approvalDocId(document.getDocId())
+                .status("APPROVED")
+                .managerId(lastApprover.getEmpId())
+                .build();
+        kafkaTemplate.send("payroll-approval-result",
+                objectMapper.writeValueAsString(payrollEvent));
     } catch (Exception e) {
         log.error("급여대장 승인 이벤트 발행 실패: {}", e.getMessage());
     }
@@ -1461,69 +1528,93 @@ private String accountNumber;   // 급여 입금 계좌번호
 
 > 근태 쪽에서 전자결재 승인 시, 근무그룹 기준으로 시간대별 자동 분리 계산 후 CommuteRecord에 저장
 > 급여에서는 CommuteRecord의 승인된 분리 시간(분 단위)을 가져다 수당 계산에 사용
-> ※ OvertimeRequest는 전자결재 신청/승인 추적용으로만 사용, 급여 계산에는 CommuteRecord 참조
+> 급여 계산은 CommuteRecord의 인정된 분리 시간만 참조
 
 ```java
 package com.peoplecore.attendance.entity;
 
+import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDate;
+import java.util.UUID;
 
 /**
- * 출퇴근 기록 (1인 1일 1행)
+ * 출퇴근 기록 (1인 1일 1행, 월별 파티션)
  * 근태 담당이 관리하는 엔티티 — 급여에서 참조하는 컬럼만 아래에 명시
+ *
+ * PK: comRecId (JPA) → DB레벨 (comRecId, workDate) 복합PK (파티셔닝용)
+ * UNIQUE: (companyId, empId, workDate)
  */
 @Entity
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(name = "commute_record")
 public class CommuteRecord extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long commuteId;
+    @Column(name = "com_rec_id")
+    private Long comRecId;
 
-    /** 사원 ID */
-    @Column(nullable = false)
-    private Long empId;
-
-    /** 근무일 */
-    @Column(nullable = false)
+    /** 근무일 (월별 파티션 키) */
+    @Column(name = "work_date", nullable = false)
     private LocalDate workDate;
 
-    // ... (출퇴근시간, 근무상태 등 근태 관련 필드 — 근태 담당 관리) ...
+    /** 회사 ID */
+    @Column(name = "company_id", nullable = false)
+    private UUID companyId;
+
+    /** 사원 (ManyToOne — FK 제약 없음, MySQL 파티션 호환) */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "emp_id", nullable = false,
+            foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+    private Employee employee;
+
+    // ... (출퇴근시간, IP, 상태 등 근태 관련 필드 — 근태 담당 관리) ...
 
     // ═══════════════════════════════════════════════
-    //  승인된 초과근무 분리 시간 (분 단위)
-    //  전자결재 승인 후, 근태에서 근무그룹 기준 자동 분리 계산하여 저장
+    //  급여 연동 컬럼 (분 단위, Long 타입)
+    //  전자결재 승인 후, 근태에서 근무그룹 기준 자동 분리 계산 → applyPayrollMinutes() 로 저장
     //  - 연장: 근무그룹 소정근로시간(groupStartTime~groupEndTime) 밖
     //  - 야간: 22:00~06:00 구간 (법정 고정)
-    //  - 휴일: 해당 날짜가 휴일
+    //  - 휴일: 휴일(groupWorkDay 비트 OFF or HolidayLookup 매칭) 근무
     // ═══════════════════════════════════════════════
 
-    /** 승인된 총 초과근무 시간(분) */
+    /** 실 근무 분 (휴게시간 차감 완료) */
     @Builder.Default
-    private Integer recognizedTotalMinutes = 0;
+    @Column(name = "actual_work_minutes", nullable = false)
+    private Long actualWorkMinutes = 0L;
 
-    /** 승인된 연장근로 시간(분) */
+    /** 총 초과근무 분 (인정 전 — 관리자 지표용) */
     @Builder.Default
-    private Integer recognizedExtendedMinutes = 0;
+    @Column(name = "overtime_minutes", nullable = false)
+    private Long overtimeMinutes = 0L;
 
-    /** 승인된 야간근로 시간(분) */
+    /** 인정된 연장수당 대상 분 (APPROVED 전자결재 교집합) */
     @Builder.Default
-    private Integer recognizedNightMinutes = 0;
+    @Column(name = "recognized_extended_minutes", nullable = false)
+    private Long recognizedExtendedMinutes = 0L;
 
-    /** 승인된 휴일근로 시간(분) */
+    /** 인정된 야간수당 대상 분 (인정 구간 ∩ 22:00~06:00) */
     @Builder.Default
-    private Integer recognizedHolidayMinutes = 0;
+    @Column(name = "recognized_night_minutes", nullable = false)
+    private Long recognizedNightMinutes = 0L;
 
-    /** 실근무 시간(분) */
+    /** 인정된 휴일수당 대상 분 */
     @Builder.Default
-    private Integer actualWorkMinutes = 0;
+    @Column(name = "recognized_holiday_minutes", nullable = false)
+    private Long recognizedHolidayMinutes = 0L;
+
+    /** 급여연동 분 컬럼 일괄 갱신 (불변식 검증 포함) */
+    public void applyPayrollMinutes(Long actualWork, Long overtime,
+                                     Long extended, Long night, Long holiday) {
+        // ... 불변식 검증 후 저장 (근태 담당 관리) ...
+    }
 }
 ```
 
@@ -1548,25 +1639,35 @@ import java.util.List;
 public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Long> {
 
     /**
-     * 특정 사원의 해당 월 승인된 초과근무 일별 기록 조회
-     * recognizedTotalMinutes > 0 인 날만 조회
+     * 특정 사원의 해당 월 인정된 초과근무 일별 기록 조회
+     * recognized 3개 컬럼 중 하나라도 > 0 인 날만 조회
      */
-    List<CommuteRecord> findByEmpIdAndWorkDateBetweenAndRecognizedTotalMinutesGreaterThan(
-            Long empId, LocalDate startDate, LocalDate endDate, Integer minMinutes
+    @Query("SELECT c FROM CommuteRecord c " +
+            "WHERE c.employee.empId = :empId " +
+            "AND c.workDate BETWEEN :startDate AND :endDate " +
+            "AND (c.recognizedExtendedMinutes > 0 " +
+            "  OR c.recognizedNightMinutes > 0 " +
+            "  OR c.recognizedHolidayMinutes > 0) " +
+            "ORDER BY c.workDate")
+    List<CommuteRecord> findRecognizedByMonth(
+            @Param("empId") Long empId,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
     );
 
     /**
-     * 특정 사원의 해당 월 승인된 초과근무 분리 시간 합계 (월간 집계)
+     * 특정 사원의 해당 월 인정된 초과근무 분리 시간 합계 (월간 집계)
      */
     @Query("SELECT new map(" +
             "  SUM(c.recognizedExtendedMinutes) as totalExtendedMin, " +
             "  SUM(c.recognizedNightMinutes) as totalNightMin, " +
-            "  SUM(c.recognizedHolidayMinutes) as totalHolidayMin, " +
-            "  SUM(c.recognizedTotalMinutes) as totalRecognizedMin" +
+            "  SUM(c.recognizedHolidayMinutes) as totalHolidayMin" +
             ") FROM CommuteRecord c " +
-            "WHERE c.empId = :empId " +
+            "WHERE c.employee.empId = :empId " +
             "AND c.workDate BETWEEN :startDate AND :endDate " +
-            "AND c.recognizedTotalMinutes > 0")
+            "AND (c.recognizedExtendedMinutes > 0 " +
+            "  OR c.recognizedNightMinutes > 0 " +
+            "  OR c.recognizedHolidayMinutes > 0)")
     java.util.Map<String, Object> sumRecognizedMinutesByMonth(
             @Param("empId") Long empId,
             @Param("startDate") LocalDate startDate,
@@ -1576,36 +1677,6 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
 ```
 
 ---
-
-## 9. OvertimeRequestRepository (기존 유지)
-**파일 위치**: `attendance/repository/OvertimeRequestRepository.java`
-
-> 전자결재 승인 추적용으로만 사용 — 급여 수당 계산은 CommuteRecord 기반
-> findAppliedOtIds 쿼리는 더 이상 급여 계산에 사용하지 않음 (CommuteRecord로 이관)
-
-```java
-package com.peoplecore.attendance.repository;
-
-import com.peoplecore.attendance.entity.OtStatus;
-import com.peoplecore.attendance.entity.OvertimeRequest;
-import org.springframework.data.jpa.repository.JpaRepository;
-
-import java.time.LocalDateTime;
-import java.util.List;
-
-public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest, Long> {
-
-    /**
-     * 특정 사원의 해당 월 승인된 초과근무 조회 (전자결재 이력 표시용)
-     */
-    List<OvertimeRequest> findByEmpIdAndOtStatusAndOtDateBetween(
-            Long empId,
-            OtStatus otStatus,
-            LocalDateTime startOfMonth,
-            LocalDateTime endOfMonth
-    );
-}
-```
 
 ---
 
@@ -1672,11 +1743,10 @@ import java.util.List;
 @AllArgsConstructor
 public class ApprovedOvertimeResDto {
 
-    // ── 월간 합계 ──
-    private Integer totalExtendedMinutes;    // 연장근로 합계(분)
-    private Integer totalNightMinutes;       // 야간근로 합계(분)
-    private Integer totalHolidayMinutes;     // 휴일근로 합계(분)
-    private Integer totalRecognizedMinutes;  // 승인 총 합계(분)
+    // ── 월간 합계 (Long — CommuteRecord 타입 일치) ──
+    private Long totalExtendedMinutes;      // 연장근로 합계(분)
+    private Long totalNightMinutes;         // 야간근로 합계(분)
+    private Long totalHolidayMinutes;       // 휴일근로 합계(분)
 
     private Long extendedPay;               // 연장수당
     private Long nightPay;                  // 야간수당
@@ -1694,11 +1764,10 @@ public class ApprovedOvertimeResDto {
     @AllArgsConstructor
     public static class DailyOvertimeDto {
         private LocalDate workDate;
-        private Integer recognizedTotalMinutes;     // 해당일 승인 총 시간(분)
-        private Integer recognizedExtendedMinutes;  // 연장(분)
-        private Integer recognizedNightMinutes;     // 야간(분)
-        private Integer recognizedHolidayMinutes;   // 휴일(분)
-        private Integer actualWorkMinutes;          // 실근무(분)
+        private Long recognizedExtendedMinutes;  // 연장(분)
+        private Long recognizedNightMinutes;     // 야간(분)
+        private Long recognizedHolidayMinutes;   // 휴일(분)
+        private Long actualWorkMinutes;          // 실근무(분)
     }
 }
 ```
@@ -1754,24 +1823,21 @@ public ApprovedOvertimeResDto getApprovedOvertime(UUID companyId, Long payrollRu
     LocalDate startDate = ym.atDay(1);
     LocalDate endDate = ym.atEndOfMonth();
 
-    // CommuteRecord에서 승인된 초과근무 일별 기록 조회
+    // CommuteRecord에서 인정된 초과근무 일별 기록 조회
     List<CommuteRecord> records = commuteRecordRepository
-            .findByEmpIdAndWorkDateBetweenAndRecognizedTotalMinutesGreaterThan(
-                    empId, startDate, endDate, 0);
+            .findRecognizedByMonth(empId, startDate, endDate);
 
     // 월간 합계 집계
-    int totalExtMin = 0, totalNightMin = 0, totalHolidayMin = 0, totalRecognizedMin = 0;
+    long totalExtMin = 0L, totalNightMin = 0L, totalHolidayMin = 0L;
     List<ApprovedOvertimeResDto.DailyOvertimeDto> dailyItems = new ArrayList<>();
 
     for (CommuteRecord cr : records) {
         totalExtMin += cr.getRecognizedExtendedMinutes();
         totalNightMin += cr.getRecognizedNightMinutes();
         totalHolidayMin += cr.getRecognizedHolidayMinutes();
-        totalRecognizedMin += cr.getRecognizedTotalMinutes();
 
         dailyItems.add(ApprovedOvertimeResDto.DailyOvertimeDto.builder()
                 .workDate(cr.getWorkDate())
-                .recognizedTotalMinutes(cr.getRecognizedTotalMinutes())
                 .recognizedExtendedMinutes(cr.getRecognizedExtendedMinutes())
                 .recognizedNightMinutes(cr.getRecognizedNightMinutes())
                 .recognizedHolidayMinutes(cr.getRecognizedHolidayMinutes())
@@ -1796,7 +1862,6 @@ public ApprovedOvertimeResDto getApprovedOvertime(UUID companyId, Long payrollRu
             .totalExtendedMinutes(totalExtMin)
             .totalNightMinutes(totalNightMin)
             .totalHolidayMinutes(totalHolidayMin)
-            .totalRecognizedMinutes(totalRecognizedMin)
             .extendedPay(extendedPay)
             .nightPay(nightPay)
             .holidayPay(holidayPay)
@@ -1827,8 +1892,10 @@ public void applyOvertime(UUID companyId, Long payrollRunId, Long empId) {
     // 월간 승인 초과근무 조회
     ApprovedOvertimeResDto overtime = getApprovedOvertime(companyId, payrollRunId, empId);
 
-    if (overtime.getTotalRecognizedMinutes() == 0) {
-        return; // 승인된 초과근무 없음
+    if (overtime.getTotalExtendedMinutes() == 0
+            && overtime.getTotalNightMinutes() == 0
+            && overtime.getTotalHolidayMinutes() == 0) {
+        return; // 인정된 초과근무 없음
     }
 
     Employee emp = employeeRepository.findById(empId)
@@ -2903,7 +2970,6 @@ Response:
   "totalExtendedMinutes": 360,
   "totalNightMinutes": 660,
   "totalHolidayMinutes": 180,
-  "totalRecognizedMinutes": 1200,
   "extendedPay": 43062,
   "nightPay": 78947,
   "holidayPay": 21531,
@@ -2912,7 +2978,6 @@ Response:
   "dailyItems": [
     {
       "workDate": "2026-04-01",
-      "recognizedTotalMinutes": 300,
       "recognizedExtendedMinutes": 0,
       "recognizedNightMinutes": 300,
       "recognizedHolidayMinutes": 0,
@@ -2920,7 +2985,6 @@ Response:
     },
     {
       "workDate": "2026-04-02",
-      "recognizedTotalMinutes": 360,
       "recognizedExtendedMinutes": 180,
       "recognizedNightMinutes": 180,
       "recognizedHolidayMinutes": 0,
@@ -2928,7 +2992,6 @@ Response:
     },
     {
       "workDate": "2026-04-05",
-      "recognizedTotalMinutes": 540,
       "recognizedExtendedMinutes": 180,
       "recognizedNightMinutes": 180,
       "recognizedHolidayMinutes": 180,
@@ -3007,9 +3070,9 @@ Body: [1, 2, 3]
 > 급여에서는 CommuteRecord의 월간 합계를 가져다 유형별로 수당 계산
 
 **데이터 흐름**:
-1. 사원이 초과근무 전자결재 신청 → OvertimeRequest 생성
+1. 사원이 초과근무 전자결재 신청
 2. 전자결재 승인 → 근태에서 근무그룹 기준 자동 분리 계산
-3. CommuteRecord 해당일 행에 recognizedExtendedMinutes / recognizedNightMinutes / recognizedHolidayMinutes 저장
+3. CommuteRecord 해당일 행에 recognizedExtendedMinutes / recognizedNightMinutes / recognizedHolidayMinutes 저장 (applyPayrollMinutes)
 4. 급여 작성 시 CommuteRecord에서 해당 월 합계 조회 → 수당 계산
 
 **분리 기준** (근태에서 처리):

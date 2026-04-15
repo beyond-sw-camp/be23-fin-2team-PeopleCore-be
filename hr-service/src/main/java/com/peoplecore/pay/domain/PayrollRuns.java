@@ -56,6 +56,7 @@ public class PayrollRuns {
         this.totalNetPay = netPay;
     }
 
+    // CALCULATING -> CONFIRMED -> PENDING_APPROVAL -> APPROVED -> PAID
 //    상태변경: 확정
     public void confirm(){
         if(this.payrollStatus != PayrollStatus.CALCULATING){
@@ -88,5 +89,18 @@ public class PayrollRuns {
         }
         this.payrollStatus = PayrollStatus.PAID;
         this.payDate = payDate;
+    }
+
+//    상태변경: 전자결재 반려
+    public void rejectApproval(){
+        if (this.payrollStatus != PayrollStatus.PENDING_APPROVAL){
+            throw new IllegalStateException("전자결재 진행중 상태에서만 반려 가능합니다.");
+        }
+        this.payrollStatus = PayrollStatus.CONFIRMED;
+    }
+
+//    approvalDocId 보완 (kafka 이벤트 늦게 수신 시)
+    public  void bindApprovalDoc(Long approvalDocId){
+        this.approvalDocId = approvalDocId;
     }
 }

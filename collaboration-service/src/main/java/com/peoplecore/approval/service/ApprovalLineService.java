@@ -9,6 +9,7 @@ import com.peoplecore.approval.repository.ApprovalSignatureRepository;
 import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
 import com.peoplecore.common.service.MinioService;
 import com.peoplecore.event.AlarmEvent;
+import com.peoplecore.event.PayrollApprovalResultEvent;
 import com.peoplecore.event.ResignApprovedEvent;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
@@ -138,16 +139,19 @@ public class ApprovalLineService {
 //            급여지급결의서 승인시 hr-service로 이벤트 발행 payroll
             if (formCode != null && formCode.startsWith("급여지급결의서")){
                 try {
-                    // docData 에 payrollRunId 가 JSON으로 포함되어있음 ??!
+                    // docData 에 payrollRunId 가 JSON으로 포함되어있음
                     Map<String, Object> docDataMap = objectMapper.readValue(document.getDocData(), Map.class);
                     Long payrollRunId = Long.valueOf(docDataMap.get("payrollRunId").toString());
 
-                    Map<String, Object> payrollEvent = Map.of(
-                            "companyId", companyId,
-                            "docId", document.getDocId(),
-                            "payrollRunId", payrollRunId
-                    );
-                    kafkaTemplate.send("payroll-approved", objectMapper.writeValueAsString(payrollEvent));
+                    PayrollApprovalResultEvent payrollEvent = PayrollApprovalResultEvent.builder()
+                            .companyId(companyId)
+                            .payrollRunId(payrollRunId)
+                            .approvalDocId(document.getDocId())
+                            .status("APPROVED")
+                            .managerId(myLine.getEmpId())
+                            .build();
+
+                    kafkaTemplate.send("payroll-approval-result", objectMapper.writeValueAsString(payrollEvent));
                 } catch (Exception e){
                     log.error("급여대장 승인 이벤트 발행 실패:{}", e.getMessage());
                 }
@@ -272,7 +276,7 @@ public class ApprovalLineService {
         ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId).orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
 
         if (document.getApprovalStatus() != ApprovalStatus.PENDING) {
-            throw new BusinessException("결재 진행 중인 문서만 처리할 수 있스빈다, ");
+            throw new BusinessException("결재 진행 중인 문서만 처리할 수 있습니다. ");
         }
         return document;
     }

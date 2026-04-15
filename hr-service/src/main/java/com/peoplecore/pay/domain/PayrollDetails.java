@@ -52,7 +52,8 @@ public class PayrollDetails {
     @Column(nullable = false)
     private PayItemType payItemType;    // 스냅샷용
 
-    /** 적용된 초과근무 ID (null이면 연봉계약 기반 항목) */
-    private Long otId;
+    /** 초과근무 수당여부 (true이면 CommuteRecord 기반 가종 계산 항목 **/
+    @Builder.Default
+    private Boolean isOvertimePay = false;
 
 }

@@ -13,23 +13,31 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class ApprovedOvertimeResDto {
-//    승인된 전자결재 응답
 
-    private List<OvertimeItemDto> items;
-    private Long totalAmount;   //합계금액
+//        월간 합계
+        private Long totalExtendedMinutes;  //연장근로 합계
+        private Long totalNightMinutes;     //야간근로 합계
+        private Long totalHolidayMinutes;   //휴일근로 합계
 
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class OvertimeItemDto{
-        private Long otId;
-        private Integer otTypeFlag;
-        private String otTypeLabel;
-        private LocalDate otDate;
+        private Long extendedPay;       //연장수당
+        private Long nightPay;          //야간수당
+        private Long holidayPay;        //휴일수당
+        private Long totalAmount;       //수당 합계 금액
 
+        private boolean applied;        //이미 급여대장에 적용됐는지 여부
 
+//        일별 상세
+         private List<DailyOvertimeDto> dailyItems;
 
+        @Data
+        @AllArgsConstructor
+        @Builder
+        @NoArgsConstructor
+        public static class DailyOvertimeDto{
+             private LocalDate workDate;
+             private Long recognizedExtendedMinutes; //연장
+             private Long recognizedNightMinutes;    //야간
+             private Long recognizedHolidayMinutes;  //휴일
+             private Long actualWorkMinutes;         //실근무
     }
-
 }

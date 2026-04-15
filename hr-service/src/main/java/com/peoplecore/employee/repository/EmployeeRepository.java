@@ -44,7 +44,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
     boolean existsByTitle(Title title);
 
+//    재직 + 휴직 사원 조회 (연차수당 - 회계년도 기준시 조회)
     List<Employee> findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(UUID companyId, List<EmpStatus> empStatuses);
+
+//    퇴직 사원 조회 (퇴직자용 - 연차수당)
+    List<Employee> findByCompany_CompanyIdAndEmpStatusAndDeleteAtIsNull(UUID companyId, EmpStatus empStatus);
 
 
     /// ////////rim 사원관리

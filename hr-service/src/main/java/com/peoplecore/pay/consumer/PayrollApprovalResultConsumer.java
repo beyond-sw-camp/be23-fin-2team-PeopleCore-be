@@ -1,7 +1,7 @@
 package com.peoplecore.pay.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.peoplecore.pay.dtos.PayrollApprovedEvent;
+import com.peoplecore.event.PayrollApprovalResultEvent;
 import com.peoplecore.pay.service.PayrollService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -12,27 +12,30 @@ import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
-public class PayrollApprovalConsumer {
+public class PayrollApprovalResultConsumer {
+//      전자결재 - 급여지급결의서 결과 kafka consumer
+//    토픽: payroll-approval-result
+//    그룹: hr-payroll-approval-consumer
 
     private final PayrollService payrollService;
     private final ObjectMapper objectMapper;
 
     @Autowired
-    public PayrollApprovalConsumer(PayrollService payrollService, ObjectMapper objectMapper) {
+    public PayrollApprovalResultConsumer(PayrollService payrollService, ObjectMapper objectMapper) {
         this.payrollService = payrollService;
         this.objectMapper = objectMapper;
     }
 
     /* attempts: 총시도 횟수, backoff: 재시도 간격(1초), multiplier: 시도 때마다 대기시간은 이전의 2배 (1초->2초->4초...) */
     @RetryableTopic(attempts = "3", backoff = @Backoff(delay = 1000, multiplier = 2))
-    @KafkaListener(topics = "payroll-approved", groupId = "pay-approval")
-    public void handlerPayrollApproved(String message){
+    @KafkaListener(topics = "payroll-approval-result", groupId = "hr-payroll-approval-consumer")
+    public void consume(String message){
         try {
-            PayrollApprovedEvent event = objectMapper.readValue(message, PayrollApprovedEvent.class);
-            payrollService.approvePayroll(event.getCompanyId(), event.getPayrollRunId());
-            log.info("급여대장 전자결재 승인 처리 완료: payrollRunId={}", event.getPayrollRunId());
+            PayrollApprovalResultEvent event = objectMapper.readValue(message, PayrollApprovalResultEvent.class);
+            payrollService.applyApprovalResult(event);
+            log.info("[kafka] 급여대장 전자결재 결과 처리 완료: payrollRunId={}, status={}",  event.getPayrollRunId(), event.getStatus());
         } catch (Exception e ){
-            log.error("급여대장 전자결재 승인 처리 실패: {}", e.getMessage());
+            log.error("[kafka] 급여대장 전자결재 결과 처리 실패: - message={}, error={}", message, e.getMessage());
             throw new RuntimeException(e);
         }
     }

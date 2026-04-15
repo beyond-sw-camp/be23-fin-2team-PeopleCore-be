@@ -9,6 +9,6 @@ public interface SalaryContractDetailRepository extends JpaRepository<SalaryCont
 
     boolean existsByPayItemId(Long payItemId);
 
-    List<SalaryContractDetail> findByContractId(Long contractId);
+    List<SalaryContractDetail> findByContract_ContractId(Long contractId);
 
 }
