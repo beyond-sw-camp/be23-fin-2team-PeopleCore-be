@@ -152,7 +152,8 @@ public class EmpSalaryService {
             empAccount.get().update(
                     reqDto.getBankName(),
                     reqDto.getAccountNumber(),
-                    reqDto.getAccountHolder()
+                    reqDto.getAccountHolder(),
+                    reqDto.getBankCode()
             );
         } else {
 //            신규 등록

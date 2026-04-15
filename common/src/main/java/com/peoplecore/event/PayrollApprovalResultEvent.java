@@ -7,18 +7,14 @@ import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
-
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
 @Data
-/*초과 근무 결재 결과 이벤트 collabo -> hr */
-public class OvertimeApprovalResultEvent {
-    /*회사 iD */
-    private UUID companyId;
+public class PayrollApprovalResultEvent {
 
-    /*overTimeReq pk*/
-    private Long otId;
+    private UUID companyId;
+    private Long payrollRunId;
 
     /*collabo 에 approvalDoc Pk */
     private Long approvalDocId;

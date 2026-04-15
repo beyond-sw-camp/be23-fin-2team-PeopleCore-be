@@ -14,7 +14,11 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @Getter
 @Builder
-@Table(name = "payroll_details") //급여산정상세
+@Table(name = "payroll_details",        //급여산정상세
+        indexes = {
+                @Index(name = "idx_payroll_detail_run", columnList = "payroll_run_id"),
+                @Index(name = "idx_payroll_detail_emp", columnList = "payroll_run_id, emp_id")
+        })
 public class PayrollDetails {
 
     @Id
@@ -41,11 +45,15 @@ public class PayrollDetails {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
-    @Column(length = 100)   //스냅샷용 항목명
+    @Column(length = 100, nullable = false)   //스냅샷용 항목명
     private String payItemName;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private PayItemType payItemType;    // 스냅샷용
+
+    /** 초과근무 수당여부 (true이면 CommuteRecord 기반 가종 계산 항목 **/
+    @Builder.Default
+    private Boolean isOvertimePay = false;
 
 }

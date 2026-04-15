@@ -114,4 +114,5 @@ public class OvertimeRequest extends BaseTimeEntity {
     public void bindApprovalDoc(Long docId) {
         this.approvalDocId = docId;
     }
+
 }

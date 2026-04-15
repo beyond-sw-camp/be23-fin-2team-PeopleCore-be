@@ -31,6 +31,9 @@ public class EmpAccounts extends BaseTimeEntity {
     @Column(length = 50, nullable = false)
     private String accountNumber;
 
+    @Column(length = 10)
+    private String bankCode;    // 은행코드 3자리 (예: "088")
+
 //    예금주
     @Column(length = 50, nullable = false)
     private String accountHolder;
@@ -40,9 +43,10 @@ public class EmpAccounts extends BaseTimeEntity {
     private Company company;
 
 
-    public void update(String bankName, String accountNumber, String accountHolder){
+    public void update(String bankName, String accountNumber, String accountHolder, String bankCode){
         this.bankName = bankName;
         this.accountNumber = accountNumber;
         this.accountHolder = accountHolder;
+        this.bankCode = bankCode;
     }
 }

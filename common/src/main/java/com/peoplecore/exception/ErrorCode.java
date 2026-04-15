@@ -60,6 +60,7 @@ public enum ErrorCode {
     //    급여항목
     PAY_ITEM_IN_USE(409, "사용 중인 급여항목은 삭제할 수 없습니다."),
     INSURANCE_JOB_TYPE_IN_USE(409, "사원에 배정된 업종은 삭제할 수 없습니다."),
+    PAY_ITEM_NOT_FOUND(404,"급여항목을 찾을 수 없습니다."),
 
     // 간이세액표
     TAX_TABLE_NOT_FOUND(404, "해당 연도의 간이세액표를 찾을 수 없습니다."),
@@ -77,17 +78,38 @@ public enum ErrorCode {
     RETIREMENT_TYPE_NOT_CHANGEABLE(400, "회사 퇴직연금 설정이 DB_DC가 아니므로 변경할 수 없습니다."),
     INVALID_RETIREMENT_TYPE(400, "유효하지 않은 퇴직연금 유형입니다. DB 또는 DC만 선택 가능합니다."),
 
+    // 급여대장
+    PAYROLL_NOT_FOUND(404, "해당 월의 급여대장을 찾을 수 없습니다."),
+    PAYROLL_ALREADY_EXISTS(409, "해당 월의 급여대장이 이미 존재합니다."),
+    PAYROLL_PREV_NOT_FOUND(404, "전월 급여대장을 찾을 수 없습니다."),
+    PAYROLL_STATUS_INVALID(400, "현재 상태에서는 처리할 수 없습니다."),
+    PAYROLL_APPROVAL_NOT_FOUND(404, "전자결재 문서를 찾을 수 없습니다."),
+    UNSUPPORTED_BANK(400, "지원하지 않는 은행입니다."),
+
+    OVERTIME_ALREADY_APPLIED(400, "이미 초과근무 수당이 적용되어있는 건입니다."),
+
+
     // ── 정산보험료 ──
     INSURANCE_SETTLEMENT_NOT_FOUND(404, "정산보험료 데이터가 존재하지 않습니다."),
     INSURANCE_PAY_ITEM_NOT_FOUND(404, "보험 공제항목(국민연금/건강보험/장기요양/고용보험)이 등록되지 않았습니다."),
     INSURANCE_SETTLEMENT_ALREADY_APPLIED(400, "이미 급여대장에 반영된 정산 건입니다."),
 
-    PAYROLL_NOT_FOUND(400, "급여산정 데이터가 존재하지 않습니다."),
-    PAYROLL_STATUS_INVALID(409, "확정된 급여의 보험료는 재산정 불가합니다."),
+//    전자결재 연동
+    OVERTIME_NOT_FOUND(404, "해당 초과근무 신청을 찾을 수 없습니다."),
 
     // PayItems isSystem 보호
     SYSTEM_PAY_ITEM_NOT_EDITABLE(400, "시스템 급여항목은 수정할 수 없습니다"),
     SYSTEM_PAY_ITEM_NOT_DELETABLE(400, "시스템 급여항목은 삭제할 수 없습니다"),
+
+    // 연차수당
+    LEAVE_ALLOWANCE_NOT_ENABLED(404, "연차수당 법정수당 항목이 설정되어 있지 않습니다."),
+    LEAVE_ALLOWANCE_NOT_FOUND(404, "해당 연차수당 산정 건을 찾을 수 없습니다."),
+    LEAVE_ALLOWANCE_NOT_CALCULATED(404, "산정이 완료되지 않은 건은 급여대장에 반영할 수 없습니다."),
+    LEAVE_ALLOWANCE_ALREADY_APPLIED(400, "이미 급여대장에 반영된 건입니다."),
+    LEAVE_ALLOWANCE_NO_RESIGN_DATE(404, "퇴직일이 설정되지 않은 사원입니다."),
+
+    // ── 연차수당 (입사일 기준) ──
+    EMPLOYEE_HIRE_DATE_NOT_FOUND(404, "사원의 입사일 정보가 없습니다."),
 
     // 캘린더
     CALENDAR_NOT_FOUND(404, "캘린더를 찾을 수 없습니다."),

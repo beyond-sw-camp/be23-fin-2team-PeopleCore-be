@@ -11,6 +11,6 @@ import org.springframework.data.domain.Pageable;
 import java.util.UUID;
 
 public interface EmployeeRepositoryCustom {
-    Page<Employee>findAllWithFilter(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField sortField, Pageable pageable);
+    Page<Employee> findAllWithFilter(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField sortField, Pageable pageable);
 
 }
