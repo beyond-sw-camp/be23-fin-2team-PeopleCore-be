@@ -25,8 +25,8 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
                AND o.otDate BETWEEN :dayStart AND :dayEnd
             """)
     List<OvertimeRequest> findApprovedByEmpAndDateRange(Long empId,
-                                                       LocalDateTime dayStart,
-                                                       LocalDateTime dayEnd);
+                                                        LocalDateTime dayStart,
+                                                        LocalDateTime dayEnd);
 
     /** 사원 + 주 범위 PENDING/APPROVED 분 합계. JPQL TIMESTAMPDIFF 미지원 → native */
     @Query(value = """

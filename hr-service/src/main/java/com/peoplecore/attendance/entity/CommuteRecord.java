@@ -129,7 +129,7 @@ public class CommuteRecord extends BaseTimeEntity {
     private HolidayReason holidayReason;
 
     /*
-     * 실 근무 분 (휴게시간 차감 완료).
+     * 실 근무 분 (휴게시간 차감 완료)   -- 급여 연동 컬럼
      *  - 체크아웃 시점에 서비스가 계산해서 저장
      *  - 계산: (checkOut - checkIn) - (WorkGroup 휴게구간 ∩ 재사구간)
      */
