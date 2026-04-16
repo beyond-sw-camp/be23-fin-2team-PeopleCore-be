@@ -339,53 +339,52 @@ public class PayrollService {
     }
 
 
-///    대량이체 파일생성
-    public TransferFileResDto generateTransferFile(UUID companyId, Long payrollRunId) {
+///    선택 사원 대량이체 파일생성
+    public TransferFileResDto generateTransferFile(UUID companyId, Long payrollRunId, List<Long> empIds) {
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
 
         if (run.getPayrollStatus() != PayrollStatus.PAID){
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
 
-//        회사 주거래은행 조회
-        CompanyPaySettings settings = paySettingsRepository.findByCompany_CompanyId(companyId).orElseThrow(()-> new CustomException(ErrorCode.PAY_SETTINGS_NOT_FOUND));
+        CompanyPaySettings settings = paySettingsRepository.findByCompany_CompanyId(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PAY_SETTINGS_NOT_FOUND));
 
         String mainBankCode = settings.getMainBankCode();
 
-//        사원별 실지급액 + 계좌정보 조회
-        List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRuns_PayrollRunId(payrollRunId);
+        // 선택된 사원의 급여상세만 조회
+        List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRuns_PayrollRunId(payrollRunId)
+                .stream()
+                .filter(d -> empIds.contains(d.getEmployee().getEmpId()))
+                .toList();
 
-//        사원별 실지급액 집계 (지급합계 - 공제합계)
         Map<Long, Long> empNetPayMap = details.stream()
                 .collect(Collectors.groupingBy(
                         d -> d.getEmployee().getEmpId(),
-                        Collectors.summingLong(d-> d.getPayItemType() == PayItemType.PAYMENT ? d.getAmount() : -d.getAmount())
+                        Collectors.summingLong(d -> d.getPayItemType() == PayItemType.PAYMENT ? d.getAmount() : -d.getAmount())
                 ));
 
-//        사원 계좌정보 배치 조회
-        List<Long> empIds = new ArrayList<>(empNetPayMap.keySet());
-        Map<Long, EmpAccounts> empAccountMap = empAccountsRepository.findByEmployee_EmpIdInAndCompany_CompanyId(empIds, companyId)
+        Map<Long, EmpAccounts> empAccountMap = empAccountsRepository
+                .findByEmployee_EmpIdInAndCompany_CompanyId(new ArrayList<>(empNetPayMap.keySet()), companyId)
                 .stream()
-                .collect(Collectors.toMap(a-> a.getEmployee().getEmpId(), a-> a));
+                .collect(Collectors.toMap(a -> a.getEmployee().getEmpId(), a -> a));
 
-//        이체데이터 구성
         List<PayrollTransferDto> transfer = empNetPayMap.entrySet().stream()
                 .map(entry -> {
-                    if(entry.getValue() <= 0) return null;
+                    if (entry.getValue() <= 0) return null;
                     EmpAccounts account = empAccountMap.get(entry.getKey());
-                return PayrollTransferDto.builder()
-                        .empName(account.getAccountHolder())
-                        .bankCode(account.getBankCode())
-                        .bankName(account.getBankName())
-                        .accountNumber(account.getAccountNumber().replace("-", ""))
-                        .netPay(entry.getValue())
-                        .memo(run.getPayYearMonth() +" 급여")
-                        .build();
+                    return PayrollTransferDto.builder()
+                            .empName(account.getAccountHolder())
+                            .bankCode(account.getBankCode())
+                            .bankName(account.getBankName())
+                            .accountNumber(account.getAccountNumber().replace("-", ""))
+                            .netPay(entry.getValue())
+                            .memo(run.getPayYearMonth() + " 급여")
+                            .build();
                 })
                 .filter(Objects::nonNull)
                 .toList();
 
-//        은행별 파일 생성
         BankTransferFileGenerator generator = bankTransferFileFactory.getGenerator(mainBankCode);
         byte[] fileBytes = generator.generate(transfer);
         String fileName = generator.getFileName(run.getPayYearMonth());
@@ -410,8 +409,8 @@ public class PayrollService {
 
 //        시급 = 통상임금(월) % 209
         long hourlyWage = Math.round((double) monthlySalary / 209);
-//        일당 = 시급 * 일근무시간(사원별 근무그룹)
 
+//        일당 = 시급 * 일근무시간(사원별 근무그룹)
         Employee emp = employeeRepository.findById(empId).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         WorkGroup empWorkHour = emp.getWorkGroup();
         Duration workTime = Duration.between(empWorkHour.getGroupStartTime(), empWorkHour.getGroupEndTime()).minus(Duration.between(empWorkHour.getGroupBreakStart(), empWorkHour.getGroupBreakEnd()));

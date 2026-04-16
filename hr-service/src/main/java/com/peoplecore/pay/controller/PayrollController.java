@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -88,13 +89,14 @@ public class PayrollController {
         return ResponseEntity.ok().build();
     }
 
-//    대량이체 파일 다운로드
-    @GetMapping("/{payrollRunId}/transfer-file")
+//    선택 사원 대량이체 파일 다운로드
+    @PostMapping("/{payrollRunId}/transfer-file")
     public ResponseEntity<byte[]> downloadTransferFile(
             @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long payrollRunId){
+            @PathVariable Long payrollRunId,
+            @RequestBody List<Long> empIds){
 
-        TransferFileResDto result =payrollService.generateTransferFile(companyId, payrollRunId);
+        TransferFileResDto result = payrollService.generateTransferFile(companyId, payrollRunId, empIds);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,

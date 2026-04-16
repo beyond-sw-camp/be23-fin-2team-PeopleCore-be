@@ -47,7 +47,7 @@ public class ResignController {
         return ResponseEntity.ok(resignService.getResignDetail(companyId,resignId));
 
     }
-//
+
 //    4. 퇴직처리(결재완료건 중 재직->퇴직)
     @PutMapping("/{resignId}")
     public ResponseEntity<Void>processResign(@RequestHeader("X-User-CompanyId")UUID companyId,

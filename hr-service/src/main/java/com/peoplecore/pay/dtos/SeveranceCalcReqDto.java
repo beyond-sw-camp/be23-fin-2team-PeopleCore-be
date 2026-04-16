@@ -1,5 +1,6 @@
 package com.peoplecore.pay.dtos;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -7,10 +8,10 @@ import lombok.NoArgsConstructor;
 
 @Data
 @Builder
-@AllArgsConstructor
 @NoArgsConstructor
-public class TransferFileResDto {
+@AllArgsConstructor
+public class SeveranceCalcReqDto {
 
-    private String fileName;
-    private byte[] fileBytes;
+    @NotNull(message = "사원 ID는 필수입니다")
+    private Long empId;
 }
