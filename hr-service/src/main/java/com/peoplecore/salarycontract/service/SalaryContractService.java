@@ -162,7 +162,7 @@ public class SalaryContractService {
         return toDetailRes(contract);
     }
 
-    //    entity -> dto
+    //    domain -> dto
     private SalaryContractDetailResDto toDetailRes(SalaryContract contract) {
         Employee emp = contract.getEmployee();
 
@@ -253,7 +253,7 @@ public class SalaryContractService {
         return result;
     }
 
-//    entity
+//    domain
 
 
     //    자바객체 json문자열 변환(수동변환 컨버터x)
@@ -274,7 +274,7 @@ public class SalaryContractService {
             return null;
         }
     }
-//    List<FieldValue> → Map으로 변환 → JSON 문자열로 변환 → entity 저장, 조회는 entity의 JSON 문자열 → Map으로 복원 → FieldDetail 리스트로 변환 → 응답 DTO
+//    List<FieldValue> → Map으로 변환 → JSON 문자열로 변환 → domain 저장, 조회는 entity의 JSON 문자열 → Map으로 복원 → FieldDetail 리스트로 변환 → 응답 DTO
 
 
 //    5. 계약서 삭제(soft delete)

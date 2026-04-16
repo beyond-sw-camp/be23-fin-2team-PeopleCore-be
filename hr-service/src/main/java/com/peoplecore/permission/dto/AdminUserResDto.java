@@ -7,6 +7,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
@@ -20,6 +22,20 @@ public class AdminUserResDto {
     private String gradeName;
     private EmpRole empRole;     // 현재 권한
     private String empEmail;
+    private LocalDateTime grantedAt;  // SUPER_ADMIN 부여일
+
+    // QueryDSL Projections.constructor용 (grantedAt 없는 버전)
+    public AdminUserResDto(Long empId, String empName, String empNum,
+                           String deptName, String gradeName,
+                           EmpRole empRole, String empEmail) {
+        this.empId = empId;
+        this.empName = empName;
+        this.empNum = empNum;
+        this.deptName = deptName;
+        this.gradeName = gradeName;
+        this.empRole = empRole;
+        this.empEmail = empEmail;
+    }
 
     // Employee 엔티티 -> 응답 DTO 변환
     public static AdminUserResDto fromEntity(Employee emp) {

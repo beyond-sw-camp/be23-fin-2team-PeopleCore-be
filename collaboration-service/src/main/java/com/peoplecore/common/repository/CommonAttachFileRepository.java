@@ -10,10 +10,10 @@ import java.util.UUID;
 
 @Repository
 public interface CommonAttachFileRepository extends JpaRepository<CommonAttachFile, Long> {
-    /*entity 타입 +  entityId로 단건 조회 */
+    /*domain 타입 +  entityId로 단건 조회 */
     Optional<CommonAttachFile> findByCompanyIdAndEntityTypeAndEntityId(UUID companyId, String entityType, Long entityId);
 
-    /*entity 타입 + entityId로 삭제 */
+    /*domain 타입 + entityId로 삭제 */
     @Modifying(clearAutomatically = true)
     void deleteByCompanyIdAndEntityTypeAndEntityId(UUID companyId, String entityType, Long entityId);
 }
