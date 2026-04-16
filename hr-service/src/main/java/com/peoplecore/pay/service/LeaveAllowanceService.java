@@ -52,6 +52,7 @@ public class LeaveAllowanceService {
     private final PayrollRunsRepository payrollRunsRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
 
+    @Autowired
     public LeaveAllowanceService(CompanyRepository companyRepository, PayItemsRepository payItemsRepository, EmployeeRepository employeeRepository, LeaveAllowanceRepository leaveAllowanceRepository, SalaryContractRepository salaryContractRepository, VacationBalanceRepository vacationBalanceRepository, VacationTypeRepository vacationTypeRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, VacationPolicyRepository vacationPolicyRepository) {
         this.companyRepository = companyRepository;
         this.payItemsRepository = payItemsRepository;
