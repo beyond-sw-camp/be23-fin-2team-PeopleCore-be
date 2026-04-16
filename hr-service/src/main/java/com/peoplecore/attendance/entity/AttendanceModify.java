@@ -12,8 +12,8 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-/**
- * 근태수정요청
+/*
+ * 근태 정정 요청 테이블
  */
 @Entity
 @Getter
@@ -23,19 +23,21 @@ import java.util.UUID;
 @Table(
         name = "attendence_modify",
         indexes = {
-                // 회사별 상태 필터링 (HR 관리자 목록)
+                // HR 관리자 목록 — 회사 내 상태 필터링
                 @Index(name = "idx_atten_modify_company_status",
                         columnList = "company_id, atten_status"),
-                // 사원별 근무일 조회 (본인 이력 + CommuteRecord 매칭)
+                // 사원 본인 이력 + comRecId 기준 중복 체크
                 @Index(name = "idx_atten_modify_emp",
-                        columnList = "emp_id, work_date")
+                        columnList = "emp_id, work_date"),
+                // result 이벤트 수신 시 docId 로 단건 조회
+                @Index(name = "idx_atten_modify_doc_id",
+                        columnList = "approval_doc_id")
         }
 )
-
 public class AttendanceModify extends BaseTimeEntity {
 
     /**
-     * 근태수정요청 ID
+     * 근태 정정 요청 ID
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -62,7 +64,7 @@ public class AttendanceModify extends BaseTimeEntity {
     private Long comRecId;
 
     /**
-     * 근무 일자 - 복합키 두번째 구성 요소
+     * 대상 근무 일자 - 복합키 두번째 구성 요소
      */
     @Column(nullable = false)
     private LocalDate workDate;
@@ -107,9 +109,8 @@ public class AttendanceModify extends BaseTimeEntity {
     @Column(nullable = false)
     private String attenReason;
 
-    /** 수정 처리 상태 - 인사과 등록/대기,승인,반려 default==대기 */
-
-    /**
+    /* 수정 처리 상태 - 인사과 등록/대기,승인,반려 default==대기 */
+    /*
      * 처리 상태 - 대기/승인/반려, default 대기.
      */
     @Enumerated(EnumType.STRING)
@@ -129,6 +130,14 @@ public class AttendanceModify extends BaseTimeEntity {
     @Column(name = "atten_reject_reason", length = 500)
     private String attenRejectReason;
 
+    /*
+     * collaboration-service 결재 문서 ID.
+     * docCreated 이벤트 수신 시점에 함께 세팅 → result 이벤트에서 docId 로 역조회.
+     */
+    @Column(name = "approval_doc_id", nullable = false)
+    private Long approvalDocId;
+
+
     /**
      * 낙관적 락 - 승인/반려 동시 처리 방지
      */
@@ -136,18 +145,9 @@ public class AttendanceModify extends BaseTimeEntity {
     @Column(name = "version", nullable = false)
     private Long version;
 
-    /**
-     * 상태 전이 + 처리자 기록 (승인/반려 시 호출)
-     */
-    public void process(ModifyStatus newStatus, Employee manager) {
-        this.attenStatus.validateTransitionTo(newStatus);
-        this.attenStatus = newStatus;
-        this.manager = manager;
-    }
-
-    /**
-     * 승인 처리.
-     * PENDING → APPROVED 전이만 허용 (ModifyStatus 가드).
+    /*
+     * 승인 처리 — Kafka result Consumer 에서 호출.
+     * PENDING → APPROVED 전이만 허용.
      */
     public void approve(Employee manager) {
         this.attenStatus.validateTransitionTo(ModifyStatus.APPROVED);
@@ -155,10 +155,10 @@ public class AttendanceModify extends BaseTimeEntity {
         this.manager = manager;
     }
 
-    /**
-     * 반려 처리 + 반려 사유 기록.
+    /*
+     * 반려 처리 — Kafka result Consumer 에서 호출.
      * PENDING → REJECTED 전이만 허용.
-     */
+     *      */
     public void reject(Employee manager, String rejectReason) {
         this.attenStatus.validateTransitionTo(ModifyStatus.REJECTED);
         this.attenStatus = ModifyStatus.REJECTED;
@@ -166,8 +166,8 @@ public class AttendanceModify extends BaseTimeEntity {
         this.attenRejectReason = rejectReason;
     }
 
-    /**
-     * 신청자 본인 취소.
+    /*
+     * 취소 처리 — 기안자 회수 이벤트 수신 시 Kafka Consumer 에서 호출.
      * PENDING → CANCELED 전이만 허용.
      */
     public void cancel() {
