@@ -409,8 +409,8 @@ public class PayrollService {
 
 //        시급 = 통상임금(월) % 209
         long hourlyWage = Math.round((double) monthlySalary / 209);
-//        일당 = 시급 * 일근무시간(사원별 근무그룹)
 
+//        일당 = 시급 * 일근무시간(사원별 근무그룹)
         Employee emp = employeeRepository.findById(empId).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         WorkGroup empWorkHour = emp.getWorkGroup();
         Duration workTime = Duration.between(empWorkHour.getGroupStartTime(), empWorkHour.getGroupEndTime()).minus(Duration.between(empWorkHour.getGroupBreakStart(), empWorkHour.getGroupBreakEnd()));

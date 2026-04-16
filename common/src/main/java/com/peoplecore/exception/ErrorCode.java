@@ -111,6 +111,14 @@ public enum ErrorCode {
     // ── 연차수당 (입사일 기준) ──
     EMPLOYEE_HIRE_DATE_NOT_FOUND(404, "사원의 입사일 정보가 없습니다."),
 
+    // -- 퇴직금
+    SEVERANCE_NOT_FOUND(404,"퇴직금 대장을 찾을 수 없습니다."),
+    SEVERANCE_STATUS_INVALID(400,"퇴직금 상태가 유효하지 않습니다."),
+    RESIGN_DATE_NOT_SET(404,"퇴직일이 설정되지 않았습니다."),
+    SERVICE_PERIOD_TOO_SHORT(404,"근속기간이 1년 미만입니다."),
+    LEAVE_ALLOWANCE_TYPE_INVALID(400,"연차수당 유형이 유효하지 않습니다."),
+    EMPLOYEE_RETIREMENT_TYPE_NOT_SET(400, "퇴직금 설정이 되어있지 않습니다."),
+
     // 캘린더
     CALENDAR_NOT_FOUND(404, "캘린더를 찾을 수 없습니다."),
     CALENDAR_NAME_DUPLICATE(409, "이미 같은 이름의 캘린더가 존재합니다."),

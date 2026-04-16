@@ -20,7 +20,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "severance_pays",     //DB형 퇴직금
+@Table(name = "severance_pays",     //퇴직금 지급
         indexes = {
                 @Index(name = "idx_severance_company", columnList = "company_id, sev_status"),
                 @Index(name = "idx_severance_emp", columnList = "emp_id, resign_date")

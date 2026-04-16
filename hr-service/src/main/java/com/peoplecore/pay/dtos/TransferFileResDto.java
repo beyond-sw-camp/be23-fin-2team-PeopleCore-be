@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class TransferFileResDto {
+
     private String fileName;
     private byte[] fileBytes;
 }
