@@ -27,7 +27,9 @@ import com.peoplecore.vacation.entity.VacationPolicy;
 import com.peoplecore.vacation.entity.VacationType;
 import com.peoplecore.vacation.repository.VacationBalanceRepository;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
+import com.peoplecore.vacation.repository.VacationPromotionNoticeRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,6 +39,7 @@ import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class LeaveAllowanceService {
@@ -51,9 +54,10 @@ public class LeaveAllowanceService {
     private final PayrollDetailsRepository payrollDetailsRepository;
     private final PayrollRunsRepository payrollRunsRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
+    private final VacationPromotionNoticeRepository vacationPromotionNoticeRepository;  // 촉진 통지 이력 (면제 판정용)
 
     @Autowired
-    public LeaveAllowanceService(CompanyRepository companyRepository, PayItemsRepository payItemsRepository, EmployeeRepository employeeRepository, LeaveAllowanceRepository leaveAllowanceRepository, SalaryContractRepository salaryContractRepository, VacationBalanceRepository vacationBalanceRepository, VacationTypeRepository vacationTypeRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, VacationPolicyRepository vacationPolicyRepository) {
+    public LeaveAllowanceService(CompanyRepository companyRepository, PayItemsRepository payItemsRepository, EmployeeRepository employeeRepository, LeaveAllowanceRepository leaveAllowanceRepository, SalaryContractRepository salaryContractRepository, VacationBalanceRepository vacationBalanceRepository, VacationTypeRepository vacationTypeRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, VacationPolicyRepository vacationPolicyRepository, VacationPromotionNoticeRepository vacationPromotionNoticeRepository) {
         this.companyRepository = companyRepository;
         this.payItemsRepository = payItemsRepository;
         this.employeeRepository = employeeRepository;
@@ -64,6 +68,7 @@ public class LeaveAllowanceService {
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.payrollRunsRepository = payrollRunsRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
+        this.vacationPromotionNoticeRepository = vacationPromotionNoticeRepository;
     }
 
 
@@ -137,6 +142,23 @@ public class LeaveAllowanceService {
 
 //            미사용인 0이하면 스킵
             if (unusedDays.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            //근기법 제61조 - 촉진 통지 1차+2차 모두 완료 시 미사용 수당 면제
+            long noticeCnt = vacationPromotionNoticeRepository.countNoticeStages(companyId, empId, year);
+            if (noticeCnt >= 2) {
+                log.info("[LeaveAllowance] 촉진 통지 완료 - 수당 면제. empId={}, year={}", empId, year);
+                LeaveAllowance exempted = LeaveAllowance.builder()
+                        .company(company)
+                        .employee(emp)
+                        .year(year)
+                        .allowanceType(type)
+                        .resignDate(type == AllowanceType.RESIGNED ? emp.getEmpResignDate() : null)
+                        .status(AllowanceStatus.EXEMPTED)
+                        .build();
+                exempted.calculate(monthlySalary, dailyWage, totalDays, usedDays, unusedDays, 0L);
+                leaveAllowanceRepository.save(exempted);
+                continue;
+            }
 
 //            산정금액 = 미사용일수 * 일 통상임금
             long amount = unusedDays.multiply(BigDecimal.valueOf(dailyWage)).longValue();

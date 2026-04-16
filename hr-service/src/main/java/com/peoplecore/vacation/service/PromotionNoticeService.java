@@ -7,6 +7,9 @@ import com.peoplecore.vacation.entity.VacationPromotionNotice;
 import com.peoplecore.vacation.repository.VacationPromotionNoticeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +36,7 @@ public class PromotionNoticeService {
     }
 
     /* 1차 통지 - 잔여 무관 (인수인계 기준). 사용 계획 제출 요구 */
+    @Retryable(/*알림 발행 일시 장애 대비재시도 */ maxAttempts = 3, backoff = @Backoff(delay = 2000, multiplier = 2), recover = "recoverNotice")
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendFirstNotice(VacationBalance balance) {
         sendIfAbsent(balance, VacationPromotionNotice.STAGE_FIRST,
@@ -42,12 +46,25 @@ public class PromotionNoticeService {
     }
 
     /* 2차 통지 - 잔여 > 0 전제 (Scheduler 가 이미 필터링). 회사 지정 사용일자 통보 */
+    @Retryable(
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 2000, multiplier = 2),
+            recover = "recoverNotice"
+    )
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendSecondNotice(VacationBalance balance) {
         sendIfAbsent(balance, VacationPromotionNotice.STAGE_SECOND,
                 "연차 사용 촉진 안내 (2차)",
                 "%s 만료 예정 연차 %s일에 대해 사용일자 지정 안내 드립니다.",
                 "PROMOTION_NOTICE_SECOND");
+    }
+
+
+    /* 재시도 소진 시 로그 남기고 스케줄러 루프는 계속 진행 */
+    @Recover
+    public void recoverNotice(Exception e, VacationBalance balance) {
+        log.error("[PromotionNotice] 재시도 소진 - empId={}, balanceId={}, cause={}",
+                balance.getEmployee().getEmpId(), balance.getBalanceId(), e.getMessage(), e);
     }
 
     /* 공통 - 멱등 체크 → 알림 발송 → 이력 INSERT */
