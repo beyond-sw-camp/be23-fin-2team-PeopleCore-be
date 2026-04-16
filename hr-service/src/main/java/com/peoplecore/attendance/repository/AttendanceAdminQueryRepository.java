@@ -6,8 +6,6 @@ import com.peoplecore.department.domain.QDepartment;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.QEmployee;
 import com.peoplecore.grade.domain.QGrade;
-import com.peoplecore.vacation.entity.QVacationInfo;
-import com.peoplecore.vacation.entity.QVacationReq;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Projections;
@@ -16,16 +14,17 @@ import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
-
+import com.peoplecore.vacation.entity.QVacationRequest;
+import com.peoplecore.vacation.entity.QVacationType;
+import com.peoplecore.vacation.entity.RequestStatus;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
 
-/**
+/*
  * 근태 현황 관리자 API 전용 QueryDSL Repository.
- *
  * 쿼리 구성 (4쿼리 — empId IN 절로 N+1 없이 일괄 조회):
  *  1) fetchBaseRows: Employee + Dept + Grade + WorkGroup + 오늘 CommuteRecord
  *  2) fetchApprovedVacationMap: empId → (vacTypeName)
@@ -139,27 +138,29 @@ public class AttendanceAdminQueryRepository {
                 .fetch();
     }
 
+    /* 사원별 오늘 승인 휴가 유형명 맵 - empId IN 절로 일괄 조회 */
     private Map<Long, String> fetchApprovedVacationMap(List<Long> empIds, LocalDate date) {
-        QVacationReq vr = QVacationReq.vacationReq;
-        QVacationInfo vi = QVacationInfo.vacationInfo;
+        QVacationRequest vr = QVacationRequest.vacationRequest;
+        QVacationType vt = QVacationType.vacationType;
         LocalDateTime startOfDay = date.atStartOfDay();
         LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
 
+        /* @ManyToOne 매핑이라 ON 절 없이 직접 join */
         List<Tuple> list = queryFactory
-                .select(vr.employee.empId, vi.vacTypeName)
+                .select(vr.employee.empId, vt.typeName)
                 .from(vr)
-                .leftJoin(vi).on(vi.infoId.eq(vr.infoId))
+                .leftJoin(vr.vacationType, vt)
                 .where(
                         vr.employee.empId.in(empIds),
-                        vr.vacReqStatus.eq(VacationStatus.APPROVED),
-                        vr.vacReqStartat.loe(endOfDay),
-                        vr.vacReqEndat.goe(startOfDay)
+                        vr.requestStatus.eq(RequestStatus.APPROVED),
+                        vr.requestStartAt.loe(endOfDay),
+                        vr.requestEndAt.goe(startOfDay)
                 )
                 .fetch();
 
         Map<Long, String> result = new HashMap<>();
         for (Tuple t : list) {
-            result.put(t.get(vr.employee.empId), t.get(vi.vacTypeName));
+            result.put(t.get(vr.employee.empId), t.get(vt.typeName));
         }
         return result;
     }

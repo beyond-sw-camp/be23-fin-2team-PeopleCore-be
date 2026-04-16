@@ -227,4 +227,32 @@ AND e.empResignDate >= :fromDate
            """)
     List<Employee> findByWorkGroupIdAndEmpIdsFetchJoin(@Param("workGroupId") Long workGroupId,
                                                        @Param("empIds") List<Long> empIds);
+
+    /*
+     * 회사 + 특정 입사일 + 재직/휴직 사원 조회 (퇴사자 제외).
+     * 용도: 월차 적립 스케줄러 - today.minusMonths(N) == empHireDate 인 사원 필터.
+     * 인덱스: (company_id, emp_hire_date) 있으면 이상적. 없으면 company_id 스캔 후 필터.
+     */
+    List<Employee> findByCompany_CompanyIdAndEmpHireDateAndEmpStatusInAndDeleteAtIsNull(
+            UUID companyId, LocalDate empHireDate, List<EmpStatus> empStatuses);
+
+    /*
+     * 회사 + 입사일 기념일 (월/일 매칭) + 재직/휴직 사원 조회.
+     * 용도: AnnualGrant HIRE 정책 - 오늘이 입사기념일인 사원 필터.
+     * 윤년 방어: FUNCTION('DAY') 는 raw day 매칭이라 2/29 입사자는 평년엔 매치 안 됨 → Scheduler 가 2/28 에 한 번 더 처리 필요 시 별도 보강.
+     */
+    @Query("""
+            SELECT e FROM Employee e
+             WHERE e.company.companyId = :companyId
+               AND FUNCTION('MONTH', e.empHireDate) = :month
+               AND FUNCTION('DAY', e.empHireDate) = :day
+               AND e.empStatus IN :statuses
+               AND e.deleteAt IS NULL
+            """)
+    List<Employee> findByCompanyIdAndHireMonthDayAndEmpStatusIn(
+            @Param("companyId") UUID companyId,
+            @Param("month") int month,
+            @Param("day") int day,
+            @Param("statuses") List<EmpStatus> statuses);
+
 }

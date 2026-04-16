@@ -9,6 +9,7 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.UUID;
 
 /* 휴가 신청 - 전자결재 연동. 신청 시점 사원 정보는 스냅샷 보존 */
@@ -111,15 +112,19 @@ public class VacationRequest extends BaseTimeEntity {
 
 
     /* 신청 생성 - Kafka docCreated 수신 시 PENDING 으로 INSERT */
-    public static VacationRequest createPending(UUID companyId, VacationType vacationType, Employee employee, EmployeeSnapshot snapshot, LocalDateTime startAt, LocalDateTime endAt, BigDecimal useDays, String reason, Long approvalDocId) {
+    /* 스냅샷 4개 필드는 EmployeeSnapshot record 의 compact constructor 에서 null 검증 - 호출부가 책임지고 채워야 함 */
+    public static VacationRequest createPending(UUID companyId, VacationType vacationType, Employee employee,
+                                                EmployeeSnapshot snapshot,
+                                                LocalDateTime startAt, LocalDateTime endAt,
+                                                BigDecimal useDays, String reason, Long approvalDocId) {
         return VacationRequest.builder()
                 .companyId(companyId)
                 .vacationType(vacationType)
                 .employee(employee)
-                .requestEmpName(nullToEmpty(snapshot.empName()))
-                .requestEmpDeptName(nullToEmpty(snapshot.deptName()))
-                .requestEmpGrade(nullToEmpty(snapshot.grade()))
-                .requestEmpTitle(nullToEmpty(snapshot.title()))
+                .requestEmpName(snapshot.empName())
+                .requestEmpDeptName(snapshot.deptName())
+                .requestEmpGrade(snapshot.grade())
+                .requestEmpTitle(snapshot.title())
                 .requestStartAt(startAt)
                 .requestEndAt(endAt)
                 .requestUseDays(useDays)
@@ -129,7 +134,7 @@ public class VacationRequest extends BaseTimeEntity {
                 .build();
     }
 
-    /* 상태 전이 - 사원 셀프 처리 (정상 전이만 허용) */
+    /* 상태 전이 - 사원 셀프 처리 (정상 전이만 허용). 허용되지 않은 전이는 INVALID_REQUEST_STATUS_TRANSITION */
     public void apply(RequestStatus next, Employee processedBy, String rejectReason) {
         if (!this.requestStatus.canTransitionTo(next)) {
             throw new CustomException(ErrorCode.INVALID_REQUEST_STATUS_TRANSITION);
@@ -161,13 +166,16 @@ public class VacationRequest extends BaseTimeEntity {
         }
     }
 
-    /* NOT NULL 컬럼 안전 저장용 - null → 빈 문자열 */
-    private static String nullToEmpty(String s) {
-        return s != null ? s : "";
-    }
 
-
-    /* 사원 스냅샷 record - createPending 파라미터 묶음용 */
+    /* 사원 스냅샷 record - createPending 파라미터 묶음. */
+    /* compact constructor 에서 Objects.requireNonNull 로 4개 필드 null 차단 → 호출부(Consumer)가 책임지고 채움 */
+    /* NOT NULL 컬럼을 빈 문자열로 우회하지 않고, 누락 시 즉시 예외로 가시화 (DLQ/재시도) */
     public record EmployeeSnapshot(String empName, String deptName, String grade, String title) {
+        public EmployeeSnapshot {
+            Objects.requireNonNull(empName, "empName null 불가");
+            Objects.requireNonNull(deptName, "deptName null 불가");
+            Objects.requireNonNull(grade, "grade null 불가");
+            Objects.requireNonNull(title, "title null 불가");
+        }
     }
 }

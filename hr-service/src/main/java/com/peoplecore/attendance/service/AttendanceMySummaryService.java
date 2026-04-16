@@ -11,7 +11,8 @@ import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
-import com.peoplecore.vacation.repository.VacationReqRepository;
+import com.peoplecore.vacation.entity.RequestStatus;
+import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -38,15 +39,15 @@ public class AttendanceMySummaryService {
     private final EmployeeRepository employeeRepository;
     private final OverTimePolicyRepository overTimePolicyRepository;
     private final MyAttendanceQueryRepository myAttendanceQueryRepository;
-    private final VacationReqRepository vacationReqRepository;
+    private final VacationRequestQueryRepository vacationRequestQueryRepository;   /* QueryDSL 로 이동됨 */
     private final CommuteRecordRepository commuteRecordRepository;
 
     @Autowired
-    public AttendanceMySummaryService(EmployeeRepository employeeRepository, OverTimePolicyRepository overTimePolicyRepository, MyAttendanceQueryRepository myAttendanceQueryRepository, VacationReqRepository vacationReqRepository, CommuteRecordRepository commuteRecordRepository) {
+    public AttendanceMySummaryService(EmployeeRepository employeeRepository, OverTimePolicyRepository overTimePolicyRepository, MyAttendanceQueryRepository myAttendanceQueryRepository, VacationRequestQueryRepository vacationRequestQueryRepository, CommuteRecordRepository commuteRecordRepository) {
         this.employeeRepository = employeeRepository;
         this.overTimePolicyRepository = overTimePolicyRepository;
         this.myAttendanceQueryRepository = myAttendanceQueryRepository;
-        this.vacationReqRepository = vacationReqRepository;
+        this.vacationRequestQueryRepository = vacationRequestQueryRepository;
         this.commuteRecordRepository = commuteRecordRepository;
     }
 
@@ -163,7 +164,9 @@ public class AttendanceMySummaryService {
         LocalDateTime weekEndDt = weekEnd.atTime(LocalTime.MAX);
 
 
-        List<VacationSlice> slices = vacationReqRepository.findApprovedSlicesInWeek(companyId, empId, VacationStatus.APPROVED, weekStartDt, weekEndDt);
+        List<VacationSlice> slices = vacationRequestQueryRepository.findApprovedSlicesInWeek(
+                companyId, empId, RequestStatus.APPROVED, weekStartDt, weekEndDt);
+
         if (slices.isEmpty()) return 0L;
 
         long total = 0L;
