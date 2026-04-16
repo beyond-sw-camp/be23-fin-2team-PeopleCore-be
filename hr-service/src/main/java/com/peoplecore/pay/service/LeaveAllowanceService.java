@@ -321,7 +321,7 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
 
 //    대상 사원 PENDING 레코드 자동 생성(최초 시)
     @Transactional
-    private void createPendingRecords(UUID companyId, Integer year, AllowanceType type){
+    public void createPendingRecords(UUID companyId, Integer year, AllowanceType type){
 
         Company company = companyRepository.findById(companyId).orElseThrow(()-> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
@@ -356,7 +356,7 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
 
 //    입사일기준 대상사원 PENDING 레코드 생성
     @Transactional
-    private void createAnniversaryPendingRecords(UUID companyId, int year, int month){
+    public void createAnniversaryPendingRecords(UUID companyId, int year, int month){
         Company company = companyRepository.findById(companyId).orElseThrow(()-> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
 //        재직/휴직 사원중 입사월이 대상 월인 사원
