@@ -339,7 +339,7 @@ public class AttendanceModifyService {
                         .checkOut(cr.getComRecCheckOut())
                         .actualWorkMinutes(cr.getActualWorkMinutes() != null
                                 ? cr.getActualWorkMinutes() : 0L)
-                        .overtimeMinutes(overtime)
+                        .recognizedOvertimeMinutes(recognized)
                         .unrecognizedOvertimeMinutes(unrecognized)
                         .isAutoClosed(cr.getIsAutoClosed())
                         .build());
@@ -354,7 +354,7 @@ public class AttendanceModifyService {
                         .checkIn(null)
                         .checkOut(null)
                         .actualWorkMinutes(0L)
-                        .overtimeMinutes(0L)
+                        .recognizedOvertimeMinutes(0L)
                         .unrecognizedOvertimeMinutes(0L)
                         .isAutoClosed(false)
                         .build());

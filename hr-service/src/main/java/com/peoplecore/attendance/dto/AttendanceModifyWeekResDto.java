@@ -33,7 +33,8 @@ public class AttendanceModifyWeekResDto {
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
-    @Builder    public static class Day {
+    @Builder
+    public static class Day {
         /* 근무 일자 */
         private LocalDate workDate;
 
@@ -58,8 +59,8 @@ public class AttendanceModifyWeekResDto {
         /* 실근무 분 (휴게 차감 완료) */
         private Long actualWorkMinutes;
 
-        /* 중복 제거 총 초과 분 */
-        private Long overtimeMinutes;
+        /* 인정된 추가 근무분 */
+        private Long recognizedOvertimeMinutes;
 
         /*
          * 미인증 초과 근무 분 = max(0, overtimeMinutes - recognizedExtendedMinutes).
@@ -67,7 +68,9 @@ public class AttendanceModifyWeekResDto {
          */
         private Long unrecognizedOvertimeMinutes;
 
-        /** 자동 마감 여부 */
+        /**
+         * 자동 마감 여부
+         */
         private Boolean isAutoClosed;
     }
 }

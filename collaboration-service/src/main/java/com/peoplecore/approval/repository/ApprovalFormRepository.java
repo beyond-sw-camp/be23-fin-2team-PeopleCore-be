@@ -66,4 +66,7 @@ public interface ApprovalFormRepository extends JpaRepository<ApprovalForm, Long
 
 
     boolean existsByCompanyIdAndFormNameAndIsCurrent(UUID companyId, String formName,Boolean isCurrent);
+
+    /* formCode 로 활성+현재 양식 단건 조회 — hr-service REST 연동용 */
+    Optional<ApprovalForm> findByCompanyIdAndFormCodeAndIsActiveTrueAndIsCurrentTrue(UUID companyId, String formCode);
 }

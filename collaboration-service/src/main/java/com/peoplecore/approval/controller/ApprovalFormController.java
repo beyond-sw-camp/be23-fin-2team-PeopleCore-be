@@ -177,4 +177,16 @@ public class ApprovalFormController {
         approvalFormService.initFormFolder(companyId);
         return ResponseEntity.status(HttpStatus.CREATED).build();
     }
+
+    /* formCode 로 formId 조회 — hr-service ApprovalFormIdCache 가 호출하는 내부 API */
+    @GetMapping("/forms/by-code")
+    public ResponseEntity<Long> getFormIdByCode(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam String formCode) {
+        Long formId = approvalFormService.getFormIdByCode(companyId, formCode);
+        if (formId == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(formId);
+    }
 }
