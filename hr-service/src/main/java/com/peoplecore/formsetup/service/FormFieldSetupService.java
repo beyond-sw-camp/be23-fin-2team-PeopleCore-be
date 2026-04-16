@@ -70,7 +70,7 @@ public class FormFieldSetupService {
                         .visible(true)
                         .required(false)
                         .sortOrder(order++)
-                        .locked(true)
+                        .locked(false)
                         .build());
             }
 

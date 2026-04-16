@@ -2,12 +2,14 @@ package com.peoplecore.permission.controller;
 
 import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.permission.dto.AdminUserResDto;
+import com.peoplecore.permission.dto.PermissionHistoryResDto;
 import com.peoplecore.permission.service.PermissionService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -43,11 +45,12 @@ public class PermissionController {
     public ResponseEntity<Void> grantSuperAdmin(
             @PathVariable Long empId,
             @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Role") String role) {
+            @RequestHeader("X-User-Role") String role,
+            @RequestHeader("X-User-Emp") Long grantorEmpId) {
         if (!"HR_SUPER_ADMIN".equals(role)) {
             return ResponseEntity.status(403).build();
         }
-        permissionService.grantSuperAdmin(empId, companyId);
+        permissionService.grantSuperAdmin(empId, companyId, grantorEmpId);
         return ResponseEntity.ok().build();
     }
 
@@ -56,11 +59,23 @@ public class PermissionController {
     public ResponseEntity<Void> revokeSuperAdmin(
             @PathVariable Long empId,
             @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Role") String role,
+            @RequestHeader("X-User-Emp") Long grantorEmpId) {
+        if (!"HR_SUPER_ADMIN".equals(role)) {
+            return ResponseEntity.status(403).build();
+        }
+        permissionService.revokeSuperAdmin(empId, companyId, grantorEmpId);
+        return ResponseEntity.ok().build();
+    }
+
+    // 권한 변경 이력 조회 (최신순)
+    @GetMapping("/history")
+    public ResponseEntity<List<PermissionHistoryResDto>> getHistory(
+            @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Role") String role) {
         if (!"HR_SUPER_ADMIN".equals(role)) {
             return ResponseEntity.status(403).build();
         }
-        permissionService.revokeSuperAdmin(empId, companyId);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(permissionService.getHistory(companyId));
     }
 }
