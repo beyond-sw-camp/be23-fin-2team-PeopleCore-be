@@ -135,4 +135,10 @@ public class EvalGrade extends BaseTimeEntity {
         this.teamSize = teamSize;
     }
 
+
+//    9번 보정등급 적용 + 이전 등급 Calibration fromGrade에 저장
+    public void applyCalibration(String newGrade){
+        this.autoGrade = newGrade;
+        this. isCalibrated = true;
+    }
 }

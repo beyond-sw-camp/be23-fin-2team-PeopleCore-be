@@ -100,8 +100,7 @@ public class EvalGradeController {
     // ─── 등급 보정 페이지 ─────────────────────────
 
     // 6. 실제 vs 목표 분포 + 보정 건수
-    //  - 응답: 등급별 target/actual/diff/status, mismatchCount, calibrationCount, isAllMatch
-    //  - 페이지 상단 카드 5개 + "N개 등급 불일치" 배지 + "현재 보정 건수 N건" 한 번에
+    //  - 페이지 상단 카드 5개 + "N개 등급 불일치" 배지 + "현재 보정 건수 N건"
     @GetMapping("/{seasonId}/distribution-diff")
     public ResponseEntity<DistributionDiffDto> getDistributionDiff(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -111,8 +110,6 @@ public class EvalGradeController {
 
 
     // 7. 보정 페이지 사원 목록
-    //  - 응답: 사번/이름/부서/직급/총점/자동등급/보정등급/사유/보정수행자
-    //  - 페이징/필터/검색/정렬
     @GetMapping("/{seasonId}/list/calibration")
     public ResponseEntity<Page<CalibrationListItemDto>> getCalibrationList(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -128,7 +125,7 @@ public class EvalGradeController {
 
 
     // 8. 보정 이력
-    //  - 응답: 보정된 사원 목록 (이름, autoGrade→adjustedGrade, 사유, 작성자, 일자)
+    //  autoGrade -> adjustedGrade
     @GetMapping("/{seasonId}/calibrations")
     public ResponseEntity<List<CalibrationHistoryDto>> getCalibrations(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -153,71 +150,71 @@ public class EvalGradeController {
     }
 
 
-    // ─── 최종 등급 확정 및 잠금 페이지 ─────────────────
-
-    // 10. 확정 전 검증
-    //  - 응답: 미산정 직원 / 종합점수 누락 / 강제배분 비율 불일치 + 체크리스트 3종 + canFinalize
-    //  - 상단 배너 3종 + 우측 체크리스트를 한 번에 반환
-    @GetMapping("/{seasonId}/finalize/validation")
-    public ResponseEntity<FinalizeValidationDto> getFinalizeValidation(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long seasonId) {
-        return ResponseEntity.ok(gradeService.getFinalizeValidation(companyId, seasonId));
-    }
-
-
-    // 11. 강제배분 목표 vs 실제 비율 (확정 화면용)
-    //  - 등급별 목표%/실제%/실제인원/편차(+/-p) 반환
-    @GetMapping("/{seasonId}/finalize/distribution-compare")
-    public ResponseEntity<DistributionCompareDto> getFinalizeDistributionCompare(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long seasonId) {
-        return ResponseEntity.ok(gradeService.getFinalizeDistributionCompare(companyId, seasonId));
-    }
-
-
-    // 12. 최종 확정 및 잠금
-    //  - 검증 통과 시에만 실행. draftGrade → finalGrade 복사 + finalizedAt 기록
-    //  - 이후 수정 불가
-    @PostMapping("/{seasonId}/finalize")
-    public ResponseEntity<FinalizeResultDto> finalize(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Emp") Long adjusterEmpId,
-            @PathVariable Long seasonId) {
-        return ResponseEntity.ok(gradeService.finalize(companyId, adjusterEmpId, seasonId));
-    }
-
-
-    // ─── 평가 결과 조회 페이지 ─────────────────────────
-
-    // 13. 최종 결과 목록 (시즌별)
-    //  - 응답: 사번/이름/부서/직급/종합점수/예정등급(autoGrade)/확정등급(finalGrade)/보정여부(calibrated)
-    //  - 필터: deptId, keyword(이름/사번)
-    //  - 정렬: Pageable sort
-    //  - 확정된 시즌(finalizedAt != null)만 조회 허용
-    @GetMapping("/{seasonId}/list/final")
-    public ResponseEntity<Page<FinalGradeListItemDto>> getFinalList(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long seasonId,
-            @RequestParam(required = false) Long deptId,
-            @RequestParam(required = false) String keyword,
-            @PageableDefault(size = 20) Pageable pageable) {
-        return ResponseEntity.ok(
-                gradeService.getFinalList(companyId, seasonId, deptId, keyword, pageable)
-        );
-    }
-
-
-    // 14. 평가 결과 상세 (HR 전용)
-    //  - 단계별 타임라인: 평가입력 -> 종합점수 -> Z-score보정 -> 등급산정 -> 보정 -> 최종확정
-    //  - 각 단계 status: DONE | PENDING | SKIPPED
-    //  - 시즌 확정 전에도 조회 가능 (미완료 단계는 data=null, PENDING)
-    //  - 보정 없이 확정된 경우 5단계 SKIPPED
-    @GetMapping("/{evalGradeId}/detail")
-    public ResponseEntity<EvalGradeDetailDto> getDetail(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long evalGradeId) {
-        return ResponseEntity.ok(gradeService.getDetail(companyId, evalGradeId));
-    }
+//    // ─── 최종 등급 확정 및 잠금 페이지 ─────────────────
+//
+//    // 10. 확정 전 검증
+//    //  - 응답: 미산정 직원 / 종합점수 누락 / 강제배분 비율 불일치 + 체크리스트 3종 + canFinalize
+//    //  - 상단 배너 3종 + 우측 체크리스트를 한 번에 반환
+//    @GetMapping("/{seasonId}/finalize/validation")
+//    public ResponseEntity<FinalizeValidationDto> getFinalizeValidation(
+//            @RequestHeader("X-User-Company") UUID companyId,
+//            @PathVariable Long seasonId) {
+//        return ResponseEntity.ok(gradeService.getFinalizeValidation(companyId, seasonId));
+//    }
+//
+//
+//    // 11. 강제배분 목표 vs 실제 비율 (확정 화면용)
+//    //  - 등급별 목표%/실제%/실제인원/편차(+/-p) 반환
+//    @GetMapping("/{seasonId}/finalize/distribution-compare")
+//    public ResponseEntity<DistributionCompareDto> getFinalizeDistributionCompare(
+//            @RequestHeader("X-User-Company") UUID companyId,
+//            @PathVariable Long seasonId) {
+//        return ResponseEntity.ok(gradeService.getFinalizeDistributionCompare(companyId, seasonId));
+//    }
+//
+//
+//    // 12. 최종 확정 및 잠금
+//    //  - 검증 통과 시에만 실행. draftGrade → finalGrade 복사 + finalizedAt 기록
+//    //  - 이후 수정 불가
+//    @PostMapping("/{seasonId}/finalize")
+//    public ResponseEntity<FinalizeResultDto> finalize(
+//            @RequestHeader("X-User-Company") UUID companyId,
+//            @RequestHeader("X-User-Emp") Long adjusterEmpId,
+//            @PathVariable Long seasonId) {
+//        return ResponseEntity.ok(gradeService.finalize(companyId, adjusterEmpId, seasonId));
+//    }
+//
+//
+//    // ─── 평가 결과 조회 페이지 ─────────────────────────
+//
+//    // 13. 최종 결과 목록 (시즌별)
+//    //  - 응답: 사번/이름/부서/직급/종합점수/예정등급(autoGrade)/확정등급(finalGrade)/보정여부(calibrated)
+//    //  - 필터: deptId, keyword(이름/사번)
+//    //  - 정렬: Pageable sort
+//    //  - 확정된 시즌(finalizedAt != null)만 조회 허용
+//    @GetMapping("/{seasonId}/list/final")
+//    public ResponseEntity<Page<FinalGradeListItemDto>> getFinalList(
+//            @RequestHeader("X-User-Company") UUID companyId,
+//            @PathVariable Long seasonId,
+//            @RequestParam(required = false) Long deptId,
+//            @RequestParam(required = false) String keyword,
+//            @PageableDefault(size = 20) Pageable pageable) {
+//        return ResponseEntity.ok(
+//                gradeService.getFinalList(companyId, seasonId, deptId, keyword, pageable)
+//        );
+//    }
+//
+//
+//    // 14. 평가 결과 상세 (HR 전용)
+//    //  - 단계별 타임라인: 평가입력 -> 종합점수 -> Z-score보정 -> 등급산정 -> 보정 -> 최종확정
+//    //  - 각 단계 status: DONE | PENDING | SKIPPED
+//    //  - 시즌 확정 전에도 조회 가능 (미완료 단계는 data=null, PENDING)
+//    //  - 보정 없이 확정된 경우 5단계 SKIPPED
+//    @GetMapping("/{evalGradeId}/detail")
+//    public ResponseEntity<EvalGradeDetailDto> getDetail(
+//            @RequestHeader("X-User-Company") UUID companyId,
+//            @PathVariable Long evalGradeId) {
+//        return ResponseEntity.ok(gradeService.getDetail(companyId, evalGradeId));
+//    }
 
 }

@@ -16,7 +16,7 @@ public interface EvalGradeRepository extends JpaRepository<EvalGrade, Long>, Eva
 
 
 //    시즌의 autoGrade 별 인원수 집계 (null 은 미산정 -> 제외)
-//    - 6번 분포 계산용
+//    - 6번 분포 계산용 (+9번 재사용)
     @Query("""
            SELECT new com.peoplecore.evaluation.dto.AutoGradeCountDto(g.autoGrade, COUNT(g))
            FROM EvalGrade g
