@@ -1,6 +1,5 @@
 package com.peoplecore.exception;
 
-import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.connector.ClientAbortException;
 import org.springframework.http.ResponseEntity;

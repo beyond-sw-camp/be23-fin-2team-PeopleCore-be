@@ -115,7 +115,6 @@ public class ApprovalEventPublisher {
     public void publishResult(ApprovalDocument document, String status, Long managerId, String rejectReason) {
         String formName = document.getFormId().getFormName();
         String formCode = document.getFormId().getFormCode();
-        String docData = document.getDocData();
 
         try {
             if (FORM_NAME_OVERTIME.equals(formName)) {

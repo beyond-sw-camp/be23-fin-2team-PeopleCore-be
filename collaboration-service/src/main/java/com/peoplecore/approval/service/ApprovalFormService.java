@@ -22,7 +22,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StreamUtils;
-import org.springframework.web.servlet.resource.ResourceResolver;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
