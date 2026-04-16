@@ -16,5 +16,4 @@ public class CollaborationServiceApplication {
 	public static void main(String[] args) {
 		SpringApplication.run(CollaborationServiceApplication.class, args);
 	}
-
 }

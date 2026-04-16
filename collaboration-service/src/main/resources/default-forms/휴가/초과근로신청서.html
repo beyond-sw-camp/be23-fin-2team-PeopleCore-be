@@ -1,0 +1,88 @@
+<table style="border: 0px solid rgb(0, 0, 0); width: 800px; font-family: malgun gothic, dotum, arial, tahoma; margin-top: 1px; border-collapse: collapse;">
+<colgroup><col width="800"></colgroup>
+<tbody>
+	<tr>
+		<td style="background: white; padding: 0px !important; border: 0px currentColor; height: 90px; text-align: center; color: black; font-size: 36px; font-weight: bold; vertical-align: top;">
+			초과근로 신청서
+		</td>
+	</tr>
+	<tr>
+		<td style="padding: 20px 0px;">
+			<!-- 신청 내역 테이블 -->
+			<table style="border: 1px solid rgb(0, 0, 0); width: 100%; font-family: malgun gothic, dotum, arial, tahoma; border-collapse: collapse;">
+			<colgroup>
+				<col width="130">
+				<col width="120">
+				<col width="120">
+				<col width="120">
+				<col width="140">
+				<col width="*">
+			</colgroup>
+			<thead>
+				<tr>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">신청일</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">시작시간</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">종료시간</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">초과근로시간</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">잔여 초과근로시간</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">신청사유</td>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="date" name="otDate" style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit;">
+					</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="datetime-local" name="otPlanStart" style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit;">
+					</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="datetime-local" name="otPlanEnd" style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit;">
+					</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="text" name="otPlanMinutes" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+					</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="text" name="remainingMinutes" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+					</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<textarea name="otReason" rows="3" style="width: 100%; border: none; font-size: 12px; font-family: inherit; resize: vertical;"></textarea>
+							<input type="hidden" name="otId">
+					</td>
+				</tr>
+			</tbody>
+			</table>
+		</td>
+	</tr>
+	<tr>
+		<td style="padding: 20px 0px;">
+			<!-- 신청이력 테이블 -->
+			<table style="border: 1px solid rgb(0, 0, 0); width: 100%; font-family: malgun gothic, dotum, arial, tahoma; border-collapse: collapse;">
+			<colgroup>
+				<col width="80">
+				<col width="80">
+				<col width="130">
+				<col width="120">
+				<col width="120">
+				<col width="120">
+				<col width="*">
+			</colgroup>
+			<thead>
+				<tr>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">신청이력</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">상태</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">신청일</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">시작시간</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">종료시간</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">초과근로시간</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">신청사유</td>
+				</tr>
+			</thead>
+			<tbody data-history="overtime-week">
+				<!-- API로 동적 렌더링 -->
+			</tbody>
+			</table>
+		</td>
+	</tr>
+</tbody>
+</table>

@@ -2,6 +2,7 @@ package com.peoplecore.company.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.attendance.service.WorkGroupService;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.domain.CompanyStatus;
 import com.peoplecore.company.domain.ContractType;
@@ -18,6 +19,7 @@ import com.peoplecore.pay.service.InsuranceRatesService;
 import com.peoplecore.pay.service.PayItemsService;
 import com.peoplecore.pay.service.PaySettingsService;
 import com.peoplecore.title.service.TitleService;
+import com.peoplecore.vacation.service.VacationPolicyService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -46,9 +48,11 @@ public class CompanyService {
     private final CollaborationClient collaborationClient;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private final WorkGroupService workGroupService;
+    private final VacationPolicyService vacationPolicyService;
 
     @Autowired
-    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
+    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, VacationPolicyService vacationPolicyService) {
         this.companyRepository = companyRepository;
         this.departmentService = departmentService;
         this.gradeService = gradeService;
@@ -61,16 +65,13 @@ public class CompanyService {
         this.collaborationClient = collaborationClient;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
+        this.workGroupService = workGroupService;
+        this.vacationPolicyService = vacationPolicyService;
     }
 
     //    1. 회사 등록 + 기본데이터 세팅 + superAdmin 생성
     @Transactional
     public CompanyResDto createCompany(CompanyCreateReqDto reqDto) {
-
-        if (companyRepository.existsByCompanyIp(reqDto.getCompanyIp())) {
-            throw new CustomException(ErrorCode.COMPANY_IP_DUPLICATE);
-        }
-
         if (!reqDto.getContractEndAt().isAfter(reqDto.getContractStartAt())) {
             throw new CustomException(ErrorCode.INVALID_CONTRACT_DATE);
         }
@@ -80,7 +81,6 @@ public class CompanyService {
         Company company = Company.builder()
                 .companyName(reqDto.getCompanyName())
                 .foundedAt(reqDto.getFoundedAt())
-                .companyIp(reqDto.getCompanyIp())
                 .contractStartAt(reqDto.getContractStartAt())
                 .contractEndAt(reqDto.getContractEndAt())
                 .contractType(reqDto.getContractType())
@@ -97,6 +97,8 @@ public class CompanyService {
         payItemsService.initDefault(company);
         insuranceRatesService.initDefault(company);
         paySettingsService.initDefault(company);
+        workGroupService.initDefault(company);
+        vacationPolicyService.initDefault(company);
 
 
         // superAdmin 계정 생성

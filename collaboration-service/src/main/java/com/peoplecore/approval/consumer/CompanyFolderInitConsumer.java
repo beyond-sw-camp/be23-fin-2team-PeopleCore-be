@@ -27,7 +27,7 @@ public class CompanyFolderInitConsumer {
         this.objectMapper = objectMapper;
     }
 
-    /* attempts 총시도 횟수, backoff: 재시도 간격(1초), multiplier => 2 시도 떄마다 * 2초*/
+    /* attempts 총시도 횟수, backoff: 재시도 간격(1초), multiplier => 2 시도 때마다 * 2초*/
     @RetryableTopic(attempts = "3", backoff = @Backoff(delay = 1000, multiplier = 2))
     @KafkaListener(topics = "company-folder-init", groupId = "collaboration-folder-init")
     public void folderInitConsume(String message) {

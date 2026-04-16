@@ -1,6 +1,7 @@
 package com.peoplecore.pay.domain;
 
 import com.peoplecore.company.domain.Company;
+import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.pay.enums.RetirementType;
 import jakarta.persistence.*;
@@ -28,14 +29,21 @@ public class EmpRetirementAccount extends BaseTimeEntity {
     @Column(nullable = false, length = 100)
     private String pensionProvider;
 
-    @Column(length = 50)
+    @Column(length = 50, nullable = false)
     private String accountNumber;
 
-    @Column(nullable = false)
-    private Long empId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name="emp_id", nullable = false)
+    private Employee employee;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
+
+    public void update(RetirementType retirementType, String pensionProvider, String accountNumber){
+        this.retirementType = retirementType;
+        this.pensionProvider = pensionProvider;
+        this.accountNumber = accountNumber;
+    }
 }

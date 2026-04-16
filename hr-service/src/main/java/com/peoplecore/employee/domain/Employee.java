@@ -1,10 +1,12 @@
 package com.peoplecore.employee.domain;
 
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.pay.domain.InsuranceJobTypes;
+import com.peoplecore.pay.enums.RetirementType;
 import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
 import lombok.*;
@@ -95,7 +97,13 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "simple_password")
     private String simplePassword;
 
-    private Long workGroupId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "work_group_id")
+    private WorkGroup workGroup;
+
+    /*근무 그룹 배정 일시*/
+    private LocalDateTime workGroupAssignedAt;
+
 
     @Column(nullable = false)
     @Builder.Default
@@ -130,6 +138,7 @@ public class Employee extends BaseTimeEntity {
     private String empAddressDetail;
 
 
+    //하드코딩 커스텀 고려
     @Column(name = "emp_mailbox_size")
     @Builder.Default
     private String empMailboxSize= "5GB";
@@ -146,6 +155,13 @@ public class Employee extends BaseTimeEntity {
 //    계약 만료일
     @Column(name="contract_end_date")
     private LocalDate contractEndDate;
+
+//    인사통합 PIN (HR_SUPER_ADMIN 전용, BCrypt 해시)
+    @Column(name = "hr_admin_pin_hash", length = 255)
+    private String hrAdminPinHash;
+
+    @Column(name = "hr_admin_pin_updated_at")
+    private LocalDateTime hrAdminPinUpdatedAt;
 
 
 
@@ -205,6 +221,10 @@ public class Employee extends BaseTimeEntity {
         return this.deleteAt !=null;
     }
 
+//    퇴직연금 유형 변경
+    public void updateRetirementType(RetirementType retirementType) {
+        this.retirementType = retirementType;
+}
 //    재직상태 변경
     public void updateStatus(EmpStatus status){
         this.empStatus = status;
@@ -223,6 +243,23 @@ public class Employee extends BaseTimeEntity {
     }
     public void updateTitle(Title title){
         this.title = title;
+    }
+
+    /* 인사통합 PIN */
+    public void updateHrAdminPin(String pinHash) {
+        this.hrAdminPinHash = pinHash;
+        this.hrAdminPinUpdatedAt = LocalDateTime.now();
+    }
+
+    public void clearHrAdminPin() {
+        this.hrAdminPinHash = null;
+        this.hrAdminPinUpdatedAt = null;
+    }
+
+    /* 근무 그룹 배정 / 변경 */
+    public void assignWorkGroup(WorkGroup workGroup) {
+        this.workGroup = workGroup;
+        this.workGroupAssignedAt = (workGroup != null) ? LocalDateTime.now() : null;
     }
 
 }

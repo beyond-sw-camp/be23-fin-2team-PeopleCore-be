@@ -1,6 +1,7 @@
 package com.peoplecore.pay.repository;
 
 import com.peoplecore.pay.domain.PayItems;
+import com.peoplecore.pay.enums.LegalCalcType;
 import com.peoplecore.pay.enums.PayItemType;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,4 +19,12 @@ public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
 
     List<PayItems>findByCompany_CompanyIdAndPayItemTypeAndIsActiveTrueOrderBySortOrderAsc(UUID companyId, PayItemType payItemType);
 
+    List<PayItems> findByCompany_CompanyIdAndPayItemTypeAndPayItemNameIn(UUID companyId, PayItemType payItemType, List<String> payItemNames);
+
+
+//    정산전용 PayItems 조회 (isSystem=true인 항목만)
+    List<PayItems> findByCompany_CompanyIdAndPayItemNameInAndIsSystemTrue(UUID companyId, List<String> payItemNames);
+
+//    법정 항목 조회
+     Optional<PayItems> findByCompany_CompanyIdAndIsLegalTrueAndLegalCalcType(UUID companyId, LegalCalcType legalCalcType);
 }

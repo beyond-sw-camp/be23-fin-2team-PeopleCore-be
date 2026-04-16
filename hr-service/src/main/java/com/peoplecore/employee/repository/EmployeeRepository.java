@@ -1,9 +1,12 @@
 package com.peoplecore.employee.repository;
 
+import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.title.domain.Title;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -18,6 +21,9 @@ import java.util.UUID;
 public interface EmployeeRepository extends JpaRepository<Employee, Long>, EmployeeRepositoryCustom {
 
     Optional<Employee> findByCompany_CompanyIdAndEmpEmail(UUID companyId, String empEmail);
+
+    /** 회사 내 특정 역할 사원 목록 — NOTIFY 알림 대상 (HR_ADMIN/HR_SUPER_ADMIN) 조회용 */
+    List<Employee> findByCompany_CompanyIdAndEmpRoleIn(UUID companyId, List<EmpRole> roles);
 
     Optional<Employee> findByEmpNum(String empNum);
 
@@ -42,7 +48,11 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
     boolean existsByTitle(Title title);
 
+//    재직 + 휴직 사원 조회 (연차수당 - 회계년도 기준시 조회)
+    List<Employee> findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(UUID companyId, List<EmpStatus> empStatuses);
 
+//    퇴직 사원 조회 (퇴직자용 - 연차수당)
+    List<Employee> findByCompany_CompanyIdAndEmpStatusAndDeleteAtIsNull(UUID companyId, EmpStatus empStatus);
 
 
     /// ////////rim 사원관리
@@ -89,6 +99,7 @@ AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
     List<Employee>findExpiringContracts(@Param("companyId")UUID companyId, @Param("now")LocalDate now, @Param("deadline")LocalDate deadline);
 
 
+    //    사번 채번
 //    계약 만료 예정자 건수만 조회
     @Query("""
 SELECT COUNT(e) FROM Employee e
@@ -105,7 +116,7 @@ AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
 //    동일 사번 여부 체크
     boolean existsByCompany_CompanyIdAndEmpNum(UUID companyId, String empNum);
 
-//    특정 prefix로 시작하는 사번 개수 조회
+    //    특정 prefix로 시작하는 사번 개수 조회
     @Query("""
 SELECT COUNT(e) FROM Employee e
 WHERE e.company.companyId = :companyId
@@ -170,7 +181,7 @@ AND e.empHireDate >= :fromDate
 """)
     List<Employee>findHiredAfter(@Param("companyId")UUID companyId, @Param("fromDate")LocalDate fromDate);
 
-//    최근 6개월 퇴사자 조회
+    //    최근 6개월 퇴사자 조회
     @Query("""
 SELECT e FROM Employee e
 WHERE e.company.companyId = :companyId
@@ -187,4 +198,33 @@ AND e.empResignDate >= :fromDate
 //    캘린더 목록 조회시 여러 사원 한번에 조회(dept,grade,title LAZY조회로 N+1 발행하므로 query문으로 해결
     @Query("SELECT e FROM Employee e JOIN FETCH e.dept JOIN FETCH e.grade LEFT JOIN FETCH e.title WHERE e.empId IN :empIds AND e.deleteAt IS NULL")
     List<Employee> findByEmpIdsWithDeptAndGrade(@Param("empIds") List<Long> empIds);
+
+
+    /* 근무 그룹별 소속 사원 수 조회*/
+    Long countByWorkGroup_WorkGroupId(Long workGroupId);
+
+    /* 근무 그룹 별 소속 사원 (페이지네이션)*/
+    Page<Employee> findByWorkGroup_WorkGroupId(Long workGroupId, Pageable pageable);
+
+/* 근무 그룹 전체 소속 사원 조회*/
+    @Query("""
+           SELECT e FROM Employee e
+           LEFT JOIN FETCH e.dept
+           LEFT JOIN FETCH e.grade
+           LEFT JOIN FETCH e.title
+           WHERE e.workGroup.workGroupId = :workGroupId
+           """)
+    List<Employee> findAllByWorkGroupIdFetchJoin(@Param("workGroupId") Long workGroupId);
+
+    /* 특정 근무 그룹 소속 사원중 지정된 ID 목록에 해당하는 사원 조회*/
+    @Query("""
+           SELECT e FROM Employee e
+           LEFT JOIN FETCH e.dept
+           LEFT JOIN FETCH e.grade
+           LEFT JOIN FETCH e.title
+           WHERE e.workGroup.workGroupId = :workGroupId
+             AND e.empId IN :empIds
+           """)
+    List<Employee> findByWorkGroupIdAndEmpIdsFetchJoin(@Param("workGroupId") Long workGroupId,
+                                                       @Param("empIds") List<Long> empIds);
 }

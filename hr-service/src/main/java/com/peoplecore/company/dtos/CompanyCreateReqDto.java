@@ -22,8 +22,6 @@ public class CompanyCreateReqDto {
 
     private LocalDate foundedAt;
 
-    private String companyIp;
-
     @NotNull(message = "계약 시작일은 필수입니다")
     private LocalDate contractStartAt;
 

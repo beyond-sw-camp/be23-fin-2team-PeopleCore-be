@@ -1,0 +1,82 @@
+<table style="border: 0px solid rgb(0, 0, 0); width: 800px; font-family: malgun gothic, dotum, arial, tahoma; margin-top: 1px; border-collapse: collapse;">
+<colgroup><col width="800"></colgroup>
+<tbody>
+	<tr>
+		<td style="background: white; padding: 0px !important; border: 0px currentColor; height: 90px; text-align: center; color: black; font-size: 36px; font-weight: bold; vertical-align: top;">
+			근태 정정 신청서
+		</td>
+	</tr>
+	<tr>
+		<td style="padding: 20px 0px;">
+			<!-- 대상 근무일 + 기존 출퇴근 기록 -->
+			<table style="border: 1px solid rgb(0, 0, 0); width: 100%; font-family: malgun gothic, dotum, arial, tahoma; border-collapse: collapse;">
+			<colgroup>
+				<col width="130">
+				<col width="*">
+				<col width="130">
+				<col width="*">
+			</colgroup>
+			<tbody>
+				<tr>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">대상 근무일</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="date" name="workDate" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+					</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">신청자</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="text" name="empName" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+					</td>
+				</tr>
+				<tr>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">기존 출근</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="text" name="currentCheckIn" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+					</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">기존 퇴근</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="text" name="currentCheckOut" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+					</td>
+				</tr>
+			</tbody>
+			</table>
+		</td>
+	</tr>
+	<tr>
+		<td style="padding: 0px 0px 20px 0px;">
+			<!-- 정정 신청 내역 -->
+			<table style="border: 1px solid rgb(0, 0, 0); width: 100%; font-family: malgun gothic, dotum, arial, tahoma; border-collapse: collapse;">
+			<colgroup>
+				<col width="130">
+				<col width="*">
+				<col width="130">
+				<col width="*">
+			</colgroup>
+			<thead>
+				<tr>
+					<td colspan="4" style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 13px; font-weight: bold; vertical-align: middle;">정정 신청 내역</td>
+				</tr>
+			</thead>
+			<tbody>
+				<tr>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">정정 출근</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="datetime-local" name="reqCheckIn" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+					</td>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">정정 퇴근</td>
+					<td style="padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; vertical-align: middle;">
+						<input type="datetime-local" name="reqCheckOut" readonly style="width: 100%; border: none; text-align: center; font-size: 12px; font-family: inherit; background: transparent;">
+					</td>
+				</tr>
+				<tr>
+					<td style="background: rgb(221, 221, 221); padding: 8px; border: 1px solid black; text-align: center; font-size: 12px; font-weight: bold; vertical-align: middle;">사유</td>
+					<td colspan="3" style="padding: 8px; border: 1px solid black; font-size: 12px; vertical-align: middle;">
+						<textarea name="attenReason" rows="3" readonly style="width: 100%; border: none; font-size: 12px; font-family: inherit; resize: none; background: transparent;"></textarea>
+						<input type="hidden" name="comRecId">
+					</td>
+				</tr>
+			</tbody>
+			</table>
+		</td>
+	</tr>
+</tbody>
+</table>

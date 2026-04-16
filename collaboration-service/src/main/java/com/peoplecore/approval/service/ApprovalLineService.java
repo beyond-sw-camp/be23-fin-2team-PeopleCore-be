@@ -3,6 +3,7 @@ package com.peoplecore.approval.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.approval.entity.*;
+import com.peoplecore.approval.publisher.ApprovalEventPublisher;
 import com.peoplecore.approval.repository.ApprovalDocumentRepository;
 import com.peoplecore.approval.repository.ApprovalLineRepository;
 import com.peoplecore.approval.repository.ApprovalSignatureRepository;
@@ -36,10 +37,11 @@ public class ApprovalLineService {
     private final MinioService minioService;
     private final KafkaTemplate<String, String>kafkaTemplate;
     private final ObjectMapper objectMapper;
+    private final ApprovalEventPublisher approvalEventPublisher;
 
 
     @Autowired
-    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
+    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, ApprovalEventPublisher approvalEventPublisher) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.historyRepository = historyRepository;
@@ -48,6 +50,7 @@ public class ApprovalLineService {
         this.minioService = minioService;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
+        this.approvalEventPublisher = approvalEventPublisher;
     }
 
     /* 승인 처리 / 순차 처리(이전 단계가 approved여야만 승인 가능) / 마지막 결재자가 승인 해야만 문서상태 approved*/
@@ -119,9 +122,9 @@ public class ApprovalLineService {
                     .build());
 
 
-//        사직서 승인 시 hr-service로 이벤트 발행
+//        사직서 승인 시 hr-service로 이벤트 발행 (계약 formCode = "RESIGNATION")
             String formCode = document.getFormId().getFormCode();
-            if (formCode != null && formCode.startsWith("사직서")) {
+            if ("RESIGNATION".equals(formCode)) {
                 try {
                     ResignApprovedEvent resignApprovedEvent = ResignApprovedEvent.builder()
                             .companyId(companyId)
@@ -134,6 +137,9 @@ public class ApprovalLineService {
                     log.error("퇴직 승인 이벤트 발행 실패: {}", e.getMessage());
                 }
             }
+
+            /* 초과근무/휴가 최종 승인 이벤트 발행 — Publisher 내부에서 formName 분기 */
+            approvalEventPublisher.publishResult(document, "APPROVED", empId, null);
         }
 
 
@@ -192,6 +198,9 @@ public class ApprovalLineService {
         myLine.reject(reason);
         myLine.markRead();
         document.reject();
+
+        /* 초과근무/휴가 반려 이벤트 발행 — Publisher 내부에서 formName 분기 */
+        approvalEventPublisher.publishResult(document, "REJECTED", empId, reason);
 
         /*상태 패턴 변경 이력 저장 */
         historyRepository.save(

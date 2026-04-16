@@ -76,13 +76,8 @@ def extract_face_vector(base64_image: str) -> list[float]:
     if len(face_locations) == 0:
         raise HTTPException(status_code=400, detail="얼굴을 찾을 수 없습니다. 카메라를 정면으로 바라봐 주세요.")
 
-    if len(face_locations) > 1:
-        raise HTTPException(
-            status_code=400,
-            detail="2개 이상의 얼굴이 감지되었습니다. 1명만 촬영해주세요.",
-        )
+    face_locations.sort(key=lambda loc: (loc[2] - loc[0]) * (loc[1] - loc[3]), reverse=True)
 
-    # 얼굴 크기 기반 거리 판단 (top, right, bottom, left)
     top, right, bottom, left = face_locations[0]
     face_height = bottom - top
 
@@ -98,7 +93,7 @@ def extract_face_vector(base64_image: str) -> list[float]:
             detail="얼굴이 너무 가까이 있습니다. 카메라에서 조금 떨어져 주세요.",
         )
 
-    encodings = face_recognition.face_encodings(image_array, face_locations)
+    encodings = face_recognition.face_encodings(image_array, face_locations[:1])
     return encodings[0].tolist()
 
 

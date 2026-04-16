@@ -26,6 +26,12 @@ out/
 !.idea/gradle.xml
 !.idea/.gitignore
 
+**/attendance-test-seed.sql
+
+payroll-ledger-code.md
+severance-estimate-code.md
+severance-ledger-code.md
+
 # ============================
 # Spring Boot
 # ============================
@@ -54,6 +60,7 @@ replay_pid*
 .env.*
 *.secret
 secrets/
+scripts/search/debezium-connector.json
 
 # ============================
 # OS 생성 파일
@@ -112,6 +119,16 @@ logs/**/gradle/wrapper/gradle-wrapper.jar
 node_modules/
 package-lock.json
 package.json
+
+# ============================
+# 프로젝트 전용 제외
+# ============================
+/docs/
+.claude/
+**/.claude/
+/be23-fin-PeopleCore/
+캘린더_요구사항명세서_수정본.xlsx
+**/캘린더_요구사항명세서_수정본.xlsx
 
 # ============================
 # Python (face-module)
