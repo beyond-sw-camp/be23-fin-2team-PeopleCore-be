@@ -1,8 +1,6 @@
 package com.peoplecore.attendance.controller;
 
-import com.peoplecore.attendance.dto.AttendanceModifyListResDto;
-import com.peoplecore.attendance.dto.AttendanceModifyPrefillResDto;
-import com.peoplecore.attendance.dto.AttendanceModifyResDto;
+import com.peoplecore.attendance.dto.*;
 import com.peoplecore.attendance.entity.ModifyStatus;
 import com.peoplecore.attendance.service.AttendanceModifyService;
 import com.peoplecore.auth.RoleRequired;
@@ -77,5 +75,29 @@ public class AttendanceModifyController {
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         return ResponseEntity.ok(attendanceModifyService.getMyHistory(empId, pageable));
+    }
+
+    /*
+     * 주간 근태 그리드 — 날짜 선택 UI 렌더용.
+     * weekStart 는 해당 주 월요일로 정규화 (어느 요일이 들어와도 OK).
+     */
+    @GetMapping("/week")
+    public ResponseEntity<AttendanceModifyWeekResDto> getWeek(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate weekStart
+    ) {
+        return ResponseEntity.ok(attendanceModifyService.getWeek(companyId, empId, weekStart));
+    }
+
+    /*
+     * HR 사원 목록 — 결재선 선택 UI + collab 상신 검증 훅 공용.
+     * 권한 제한 없음 (공개) — 결재선 선택 시 모든 사원이 참고 가능해야 함.
+     */
+    @GetMapping("/hr-members")
+    public ResponseEntity<AttendanceModifyHrMemberResDto> getHrMembers(
+            @RequestHeader("X-User-Company") UUID companyId
+    ) {
+        return ResponseEntity.ok(attendanceModifyService.getHrMembers(companyId));
     }
 }

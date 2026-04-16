@@ -2,11 +2,10 @@ package com.peoplecore.attendance.service;
 
 import com.peoplecore.alarm.publisher.HrAlarmPublisher;
 import com.peoplecore.attendance.cache.ApprovalFormIdCache;
-import com.peoplecore.attendance.dto.AttendanceModifyListResDto;
-import com.peoplecore.attendance.dto.AttendanceModifyPrefillResDto;
-import com.peoplecore.attendance.dto.AttendanceModifyResDto;
+import com.peoplecore.attendance.dto.*;
 import com.peoplecore.attendance.entity.AttendanceModify;
 import com.peoplecore.attendance.entity.CommuteRecord;
+import com.peoplecore.attendance.entity.HolidayReason;
 import com.peoplecore.attendance.entity.ModifyStatus;
 import com.peoplecore.attendance.publisher.AttendanceModifyRejectedByHrPublisher;
 import com.peoplecore.attendance.repository.AttendanceModifyRepository;
@@ -27,9 +26,9 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 /*
  * 근태 정정 Service.
@@ -100,8 +99,6 @@ public class AttendanceModifyService {
                 .build();
     }
 
-    /* ===================== 2) Kafka docCreated ===================== */
-
     /*
      * collab 상신 이벤트 수신 → AttendanceModify INSERT.
      * 중복 PENDING 감지 시 역방향 이벤트 발행으로 collab 측 자동 반려 트리거.
@@ -159,7 +156,6 @@ public class AttendanceModifyService {
                 "신청이 접수되었습니다. 결재 진행을 확인해 주세요.");
     }
 
-    /* ===================== 3) Kafka result ===================== */
     /*
      * collab 결재 결과 이벤트 수신 → 상태 반영.
      * 승인 시 CommuteRecord native UPDATE (파티션 프루닝 보장).
@@ -205,7 +201,6 @@ public class AttendanceModifyService {
                 am.getAttenModiId(), event.getStatus());
     }
 
-    /* ===================== 4) 조회 ===================== */
 
     @Transactional(readOnly = true)
     public AttendanceModifyResDto getDetail(UUID companyId, Long attenModiId) {
@@ -299,6 +294,104 @@ public class AttendanceModifyService {
                 .attenReason(am.getAttenReason())
                 .attenStatus(am.getAttenStatus())
                 .createdAt(am.getCreatedAt())
+                .build();
+    }
+
+    /*
+     * 사원의 주간 근태 + 미인증 초과근무 조회.
+     * weekStart 는 어느 요일이 들어와도 해당 주 월요일로 정규화.
+     * CommuteRecord 없는 날도 빈 Day 로 포함 (토/일은 기본 WEEKLY_OFF).
+     */
+    @Transactional(readOnly = true)
+    public AttendanceModifyWeekResDto getWeek(UUID companyId, Long empId, LocalDate weekStartParam) {
+        LocalDate monday = weekStartParam.with(DayOfWeek.MONDAY);
+        LocalDate sunday = monday.plusDays(6);
+
+        // CommuteRecord 주간 조회 — (company_id, emp_id, work_date) 인덱스 히트 + 파티션 프루닝
+        List<CommuteRecord> records = commuteRecordRepository
+                .findByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenOrderByWorkDateDesc(
+                        companyId, empId, monday, sunday,
+                        org.springframework.data.domain.Pageable.unpaged())
+                .getContent();
+        Map<LocalDate, CommuteRecord> recordMap = new HashMap<>();
+        for (CommuteRecord cr : records) recordMap.put(cr.getWorkDate(), cr);
+
+        // 7일 슬롯 빌드
+        List<AttendanceModifyWeekResDto.Day> days = new ArrayList<>(7);
+        for (int i = 0; i < 7; i++) {
+            LocalDate date = monday.plusDays(i);
+            DayOfWeek dow = date.getDayOfWeek();
+            CommuteRecord cr = recordMap.get(date);
+
+            if (cr != null) {
+                long overtime = cr.getOvertimeMinutes() != null ? cr.getOvertimeMinutes() : 0L;
+                long recognized = cr.getRecognizedExtendedMinutes() != null
+                        ? cr.getRecognizedExtendedMinutes() : 0L;
+                long unrecognized = Math.max(0L, overtime - recognized);
+
+                days.add(AttendanceModifyWeekResDto.Day.builder()
+                        .workDate(date)
+                        .dayOfWeek(dow)
+                        .isHoliday(cr.getHolidayReason() != null)
+                        .holidayReason(cr.getHolidayReason())
+                        .comRecId(cr.getComRecId())
+                        .checkIn(cr.getComRecCheckIn())
+                        .checkOut(cr.getComRecCheckOut())
+                        .actualWorkMinutes(cr.getActualWorkMinutes() != null
+                                ? cr.getActualWorkMinutes() : 0L)
+                        .overtimeMinutes(overtime)
+                        .unrecognizedOvertimeMinutes(unrecognized)
+                        .isAutoClosed(cr.getIsAutoClosed())
+                        .build());
+            } else {
+                boolean isWeekend = (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY);
+                days.add(AttendanceModifyWeekResDto.Day.builder()
+                        .workDate(date)
+                        .dayOfWeek(dow)
+                        .isHoliday(isWeekend)
+                        .holidayReason(isWeekend ? HolidayReason.WEEKLY_OFF : null)
+                        .comRecId(null)
+                        .checkIn(null)
+                        .checkOut(null)
+                        .actualWorkMinutes(0L)
+                        .overtimeMinutes(0L)
+                        .unrecognizedOvertimeMinutes(0L)
+                        .isAutoClosed(false)
+                        .build());
+            }
+        }
+
+        return AttendanceModifyWeekResDto.builder()
+                .weekStart(monday)
+                .weekEnd(sunday)
+                .days(days)
+                .build();
+    }
+
+    /**
+     * 회사의 HR_ADMIN + HR_SUPER_ADMIN 사원 목록.
+     * 용도: 결재선 선택 UI / 상신 검증 훅.
+     * 정렬: empId ASC (안정 정렬, 프론트 추가 정렬 자유).
+     */
+    @Transactional(readOnly = true)
+    public AttendanceModifyHrMemberResDto getHrMembers(UUID companyId) {
+        List<Employee> hrs = employeeRepository.findByCompany_CompanyIdAndEmpRoleIn(
+                companyId, List.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN));
+
+        List<AttendanceModifyHrMemberResDto.HrMember> mapped = hrs.stream()
+                .sorted((a, b) -> Long.compare(a.getEmpId(), b.getEmpId()))
+                .map(e -> AttendanceModifyHrMemberResDto.HrMember.builder()
+                        .empId(e.getEmpId())
+                        .empName(e.getEmpName())
+                        .deptName(e.getDept() != null ? e.getDept().getDeptName() : null)
+                        .gradeName(e.getGrade() != null ? e.getGrade().getGradeName() : null)
+                        .titleName(e.getTitle() != null ? e.getTitle().getTitleName() : null)
+                        .empRole(e.getEmpRole() != null ? e.getEmpRole().name() : null)
+                        .build())
+                .toList();
+
+        return AttendanceModifyHrMemberResDto.builder()
+                .hrMembers(mapped)
                 .build();
     }
 }
