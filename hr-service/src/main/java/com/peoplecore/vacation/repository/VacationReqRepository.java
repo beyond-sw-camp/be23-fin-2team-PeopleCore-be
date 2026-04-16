@@ -2,7 +2,6 @@ package com.peoplecore.vacation.repository;
 
 import com.peoplecore.attendance.dto.VacationSlice;
 import com.peoplecore.vacation.entity.VacationReq;
-import com.peoplecore.vacation.entity.VacationStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

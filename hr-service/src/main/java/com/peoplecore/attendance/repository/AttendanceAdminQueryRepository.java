@@ -8,7 +8,6 @@ import com.peoplecore.employee.domain.QEmployee;
 import com.peoplecore.grade.domain.QGrade;
 import com.peoplecore.vacation.entity.QVacationInfo;
 import com.peoplecore.vacation.entity.QVacationReq;
-import com.peoplecore.vacation.entity.VacationStatus;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Projections;

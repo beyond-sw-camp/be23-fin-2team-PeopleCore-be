@@ -2,7 +2,6 @@ package com.peoplecore.exception;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 
 @Getter
 @RequiredArgsConstructor
@@ -60,7 +59,7 @@ public enum ErrorCode {
     //    급여항목
     PAY_ITEM_IN_USE(409, "사용 중인 급여항목은 삭제할 수 없습니다."),
     INSURANCE_JOB_TYPE_IN_USE(409, "사원에 배정된 업종은 삭제할 수 없습니다."),
-    PAY_ITEM_NOT_FOUND(404,"급여항목을 찾을 수 없습니다."),
+    PAY_ITEM_NOT_FOUND(404, "급여항목을 찾을 수 없습니다."),
 
     // 간이세액표
     TAX_TABLE_NOT_FOUND(404, "해당 연도의 간이세액표를 찾을 수 없습니다."),
@@ -94,7 +93,7 @@ public enum ErrorCode {
     INSURANCE_PAY_ITEM_NOT_FOUND(404, "보험 공제항목(국민연금/건강보험/장기요양/고용보험)이 등록되지 않았습니다."),
     INSURANCE_SETTLEMENT_ALREADY_APPLIED(400, "이미 급여대장에 반영된 정산 건입니다."),
 
-//    전자결재 연동
+    //    전자결재 연동
     OVERTIME_NOT_FOUND(404, "해당 초과근무 신청을 찾을 수 없습니다."),
 
     // PayItems isSystem 보호
@@ -202,8 +201,16 @@ public enum ErrorCode {
     ATTENDANCE_MODIFY_PENDING_EXISTS(409, "진행 중인 정정 신청이 있습니다."),
     ATTENDANCE_RECORD_NOT_FOUND(404, "해당 날짜 출근 기록이 없습니다."),
     ATTENDANCE_MODIFY_FORM_NOT_FOUND(404, "근태 정정 양식이 존재하지 않습니다."),
-    ATTENDANCE_MODIFY_APPLY_FAILED(500, "근태 정정 적용 중 오류가 발생했습니다.");
+    ATTENDANCE_MODIFY_APPLY_FAILED(500, "근태 정정 적용 중 오류가 발생했습니다."),
 
+    /*휴가 */
+    INVALID_REQUEST_STATUS_TRANSITION(400, "허용되지 않은 휴가 신청 상태 전이입니다."),
+    VACATION_POLICY_FIRST_NOTICE_REQUIRED(400, "연차 촉진 사용 시 1차 통지 시기는 필수입니다."),
+    VACATION_BALANCE_CAP_EXCEEDED(409, "연 최대 적립 일수를 초과했습니다."),
+    VACATION_BALANCE_INSUFFICIENT(409, "휴가 잔여가 부족합니다."),
+    VACATION_BALANCE_PENDING_INSUFFICIENT(500, "잔여 대기 일수 정합성 오류 — 관리자 문의 필요."),
+    VACATION_BALANCE_USED_INSUFFICIENT(500, "잔여 사용 일수 정합성 오류 — 관리자 문의 필요."),
+    VACATION_TYPE_SYSTEM_RESERVED(400, "시스템 예약 휴가 유형은 변경/삭제할 수 없습니다.");
     private final int status;
     private final String message;
 }

@@ -7,7 +7,6 @@ import com.peoplecore.event.VacationApprovalResultEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.entity.VacationReq;
-import com.peoplecore.vacation.entity.VacationStatus;
 import com.peoplecore.vacation.repository.VacationReqRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

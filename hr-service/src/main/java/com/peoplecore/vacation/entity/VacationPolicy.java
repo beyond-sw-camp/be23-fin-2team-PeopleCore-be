@@ -4,46 +4,41 @@ import com.peoplecore.entity.BaseTimeEntity;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import jakarta.persistence.*;
+import lombok.*;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
-import lombok.*;
-
-/**
- * 연차 정책
- */
+/* 연차 전용 정책 - 회사당 1건. 발생 기준(HIRE/FISCAL) + 연차 촉진 통지 정책 */
 @Entity
-@Getter
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
 @Table(
+        name = "vacation_policy",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_vacation_policy_company",
                 columnNames = "company_id"
         )
 )
+@Getter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class VacationPolicy extends BaseTimeEntity {
-    /** 회계연도 시작일 포맷 (mm-dd, 01-01 ~ 12-31) */
+
+    /* 회계연도 시작일 포맷 (mm-dd) */
     private static final Pattern FISCAL_DATE_PATTERN =
             Pattern.compile("^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$");
 
-    /*연차 지급 기준 타입 */
+    /* 연차 발생 기준 타입 - 상태 패턴으로 fiscalYearStart 검증 분기 */
     public enum PolicyBaseType {
-        HIRE { //입사일 기준 타입
-
-            @Override
-            public String resolveFiscalStart(String input) {
-                return null;
-            }
+        HIRE {
+            /* 입사일 기준 - fiscalYearStart 무시 (null 저장) */
+            @Override public String resolveFiscalStart(String input) { return null; }
         },
-        FISCAL { //회계연도 기준
-
-            @Override
-            public String resolveFiscalStart(String input) {
+        FISCAL {
+            /* 회계연도 기준 - fiscalYearStart 필수 (mm-dd 형식 검증) */
+            @Override public String resolveFiscalStart(String input) {
                 if (input == null || input.isBlank()) {
                     throw new CustomException(ErrorCode.VACATION_POLICY_FISCAL_START_REQUIRED);
                 }
@@ -53,78 +48,108 @@ public class VacationPolicy extends BaseTimeEntity {
                 return input;
             }
         };
-
-        /**
-         * 상태별 fiscalYearStart 검증/정규화
-         */
         public abstract String resolveFiscalStart(String input);
     }
 
-    /**
-     * 연차 정책 Id
-     */
+    /* 연차 정책 ID (PK) */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "policy_id")
     private Long policyId;
 
-    /**
-     * 회사 ID
-     */
-    @Column(nullable = false, name = "company_id")
+    /* 회사 ID - UNIQUE (회사당 1건) */
+    @Column(name = "company_id", nullable = false)
     private UUID companyId;
 
-    /**
-     * 권한 정책 생성 사원 id
-     */
-    @Column(nullable = false)
+    /* 정책 생성/수정자 사원 ID. 시스템 자동 생성 시 0L */
+    @Column(name = "policy_emp_id", nullable = false)
     private Long policyEmpId;
 
-
-    /**
-     * 연차 지급 기준
-     */
+    /* 연차 발생 기준 - HIRE(입사일) / FISCAL(회계연도) */
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(name = "policy_base_type", nullable = false, length = 20)
     private PolicyBaseType policyBaseType;
 
-    /**
-     * 회계연도 시작일 - mm-dd
-     */
+    /* 회계연도 시작일 (mm-dd) - FISCAL 일 때만 값. HIRE 면 null */
+    @Column(name = "policy_fiscal_year_start", length = 5)
     private String policyFiscalYearStart;
 
-    /**
-     * 연차 촉진 알람 잔여일
-     */
-    @Column(nullable = false)
-    private String policyAlarmDay;
+    /* 연차 촉진 전체 사용 여부 - 화면 상단 토글. false 면 1차/2차 무시하고 미사용=수당 */
+    @Column(name = "is_promotion_active", nullable = false)
+    @Builder.Default
+    private Boolean isPromotionActive = false;
 
-    /**
-     * 낙관적 락 버전
-     * - 관리자 2명 동시 수정 시 마지막 커밋자가 OptimisticLockException 받고 재조회 강제
-     */
+    /* 1차 촉진 통지 시기 - 만료 N개월 전. NULL = 1차 비활성. 화면 셀렉트 (3/4/5/6/7개월) */
+    @Column(name = "first_notice_months_before")
+    private Integer firstNoticeMonthsBefore;
+
+    /* 2차 촉진 통지 시기 - 만료 N개월 전. NULL = 2차 비활성. 화면 셀렉트 (1/2/3개월) */
+    @Column(name = "second_notice_months_before")
+    private Integer secondNoticeMonthsBefore;
+
+    /* 낙관적 락 - 관리자 동시 수정 방지 */
     @Version
+    @Column(name = "version", nullable = false)
     private Long version;
 
-
-    /**
-     * 연차 발생 규칙 목록 (양방향)
-     */
-    @OneToMany(mappedBy = "vacationPolicy", cascade = CascadeType.ALL)
+    /* 연차 발생 규칙 목록 - cascade ALL 로 함께 INSERT */
+    @OneToMany(mappedBy = "vacationPolicy", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<VacationCreateRule> createRules = new ArrayList<>();
+    private List<VacationGrantRule> grantRules = new ArrayList<>();
 
+
+    /* 발생 기준 변경 (상태 패턴) - HIRE/FISCAL 별 검증 위임 */
     public void changeGrantBasis(PolicyBaseType newBasis, String fiscalYearStartInput) {
         this.policyBaseType = newBasis;
         this.policyFiscalYearStart = newBasis.resolveFiscalStart(fiscalYearStartInput);
     }
+
+    /* 연차 촉진 정책 변경 - 화면 저장 시 호출 */
+    /* isActive=false 면 1차/2차 모두 NULL 처리 */
+    /* isActive=true 면 1차 필수(NULL 불가), 2차 선택 */
+    public void updatePromotionPolicy(boolean isActive,
+                                      Integer firstMonthsBefore,
+                                      Integer secondMonthsBefore) {
+        if (!isActive) {
+            this.isPromotionActive = false;
+            this.firstNoticeMonthsBefore = null;
+            this.secondNoticeMonthsBefore = null;
+            return;
+        }
+        if (firstMonthsBefore == null) {
+            throw new CustomException(ErrorCode.VACATION_POLICY_FIRST_NOTICE_REQUIRED);
+        }
+        this.isPromotionActive = true;
+        this.firstNoticeMonthsBefore = firstMonthsBefore;
+        this.secondNoticeMonthsBefore = secondMonthsBefore;
+    }
+
+    /* 1차 촉진 활성 여부 - 컬럼이 NULL 이 아니고 전체 토글이 ON 일 때만 */
+    public boolean isFirstNoticeActive() {
+        return Boolean.TRUE.equals(isPromotionActive) && firstNoticeMonthsBefore != null;
+    }
+
+    /* 2차 촉진 활성 여부 - 1차 활성 전제 + 2차 컬럼 NULL 아님 */
+    public boolean isSecondNoticeActive() {
+        return isFirstNoticeActive() && secondNoticeMonthsBefore != null;
+    }
+
+    /* 미사용 연차 수당 면제 조건 - LeaveAllowanceService 참조용 */
+    /* 1차+2차 모두 활성 + 실제 통지 이력 존재 시 면제 (이력 검증은 호출부) */
+    public boolean isBuyoutExempted() {
+        return isFirstNoticeActive() && isSecondNoticeActive();
+    }
+
+    /* 회사 생성 시 기본 정책 - HIRE 기준, 촉진 비활성, 규칙 11건 부착은 호출부에서 */
     public static VacationPolicy createDefault(UUID companyId, Long creatorEmpId) {
         return VacationPolicy.builder()
                 .companyId(companyId)
                 .policyEmpId(creatorEmpId)
                 .policyBaseType(PolicyBaseType.HIRE)
                 .policyFiscalYearStart(null)
-                .policyAlarmDay("30")
+                .isPromotionActive(false)
+                .firstNoticeMonthsBefore(null)
+                .secondNoticeMonthsBefore(null)
                 .build();
     }
-
 }

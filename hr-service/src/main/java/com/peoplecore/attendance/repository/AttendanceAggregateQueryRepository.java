@@ -9,14 +9,12 @@ import com.peoplecore.attendance.entity.QWorkGroup;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.QEmployee;
 import com.peoplecore.vacation.entity.QVacationReq;
-import com.peoplecore.vacation.entity.VacationStatus;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.expression.spel.ast.Projection;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
