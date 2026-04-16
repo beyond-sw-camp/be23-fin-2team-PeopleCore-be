@@ -31,8 +31,6 @@ public class EvalGradeController {
     // 1. 사원 목록 (페이징/필터/검색/정렬)
     //  - 응답: 사번/이름/부서/직급/종합점수(totalScore)/자동등급(autoGrade)
     //  - DB의 EvalGrade.totalScore + autoGrade 그대로 반환 (재계산 X)
-    //  - 필터: deptId, keyword(이름/사번)
-    //  - 정렬: Pageable sort (totalScore, autoGrade 등)
     @GetMapping("/{seasonId}/list/draft")
     public ResponseEntity<Page<DraftListItemDto>> getDraftList(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -60,7 +58,7 @@ public class EvalGradeController {
     }
 
 
-    // 3. 2,5 Z-score 편향보정 적용 (수동 버튼 / 스케줄러 / AI 시뮬레이션용)
+    // 3. 2,5 Z-score 편향보정 적용 (수동 버튼 / 스케줄러)
     //  - rules.useBiasAdjustment=false 면 biasAdjustedScore = totalScore 복사만
     //  - true 면 팀별 평균/표편 기반 Z-score 보정 점수 저장
     //  - 3번 applyDistribution 은 biasAdjustedScore 기준 랭킹
@@ -75,9 +73,9 @@ public class EvalGradeController {
 
     // 4. 편향보정 이상 팀 조회 (GradeCalibration 화면 진입 시 호출)
     //  - DB에 저장된 EvalGrade.teamStdDev / teamSize 스냅샷을 읽어 이상 팀 복원
-    //  - 재계산 아님 — 단순 조회
+    //  -  단순 조회
     //  - 응답: processedCount(보정 처리 인원수) + zeroStdDevTeams(전원 동점 팀) + undersizedTeams(소규모 팀)
-    //  - 미실행 시 processedCount=0, 리스트 빈 배열 → 프론트에서 배너 숨김
+    //  - 미실행 시 processedCount=0, 리스트 빈 배열
     @GetMapping("/{seasonId}/bias-adjust/anomalies")
     public ResponseEntity<BiasAdjustResultDto> getBiasAdjustAnomalies(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -113,7 +111,7 @@ public class EvalGradeController {
 
 
     // 7. 보정 페이지 사원 목록
-    //  - 응답: 사번/이름/부서/직급/총점/자동등급/보정등급/사유
+    //  - 응답: 사번/이름/부서/직급/총점/자동등급/보정등급/사유/보정수행자
     //  - 페이징/필터/검색/정렬
     @GetMapping("/{seasonId}/list/calibration")
     public ResponseEntity<Page<CalibrationListItemDto>> getCalibrationList(
@@ -121,9 +119,10 @@ public class EvalGradeController {
             @PathVariable Long seasonId,
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) EvalGradeSortField sortField,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(
-                gradeService.getCalibrationList(companyId, seasonId, deptId, keyword, pageable)
+                gradeService.getCalibrationList(companyId, seasonId, deptId, keyword, sortField, pageable)
         );
     }
 
@@ -139,9 +138,9 @@ public class EvalGradeController {
 
 
     // 9. 일괄 보정 저장
-    //  - 사용자가 누적한 변경 N건 한 번에 전송 → 서버에서 비율 검증 → 통과 시 저장
+    //  - 사용자가 누적한 변경 N건 한 번에 전송 -> 서버에서 비율 검증 -> 통과 시 저장
     //  - Calibration 이력도 함께 INSERT
-    //  - 비율 불일치 시 400 + currentDiff 반환 (저장 안 됨)
+    //  - 비율 불일치 시 400 + currentDiff 반환 (저장 X)
     @PostMapping("/{seasonId}/calibration/batch")
     public ResponseEntity<CalibrationBatchResultDto> batchSaveCalibration(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -209,8 +208,8 @@ public class EvalGradeController {
     }
 
 
-    // 12. 평가 결과 상세 (HR 전용)
-    //  - 단계별 타임라인: 평가입력 → 종합점수 → Z-score보정 → 등급산정 → 보정 → 최종확정
+    // 14. 평가 결과 상세 (HR 전용)
+    //  - 단계별 타임라인: 평가입력 -> 종합점수 -> Z-score보정 -> 등급산정 -> 보정 -> 최종확정
     //  - 각 단계 status: DONE | PENDING | SKIPPED
     //  - 시즌 확정 전에도 조회 가능 (미완료 단계는 data=null, PENDING)
     //  - 보정 없이 확정된 경우 5단계 SKIPPED

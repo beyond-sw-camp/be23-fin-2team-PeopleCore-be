@@ -4,17 +4,25 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.department.repository.DepartmentRepository;
+import com.peoplecore.evaluation.domain.DiffStatus;
 import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.domain.EvalGradeSortField;
 import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.Season;
+import com.peoplecore.evaluation.domain.Calibration;
+import com.peoplecore.evaluation.dto.AutoGradeCountDto;
 import com.peoplecore.evaluation.dto.BiasAdjustResultDto;
+import com.peoplecore.evaluation.dto.CalibrationHistoryDto;
+import com.peoplecore.evaluation.dto.CalibrationListItemDto;
+import com.peoplecore.evaluation.dto.DistributionDiffDto;
 import com.peoplecore.evaluation.dto.DraftListItemDto;
 import com.peoplecore.evaluation.dto.FormSnapshotDto;
+import com.peoplecore.evaluation.repository.CalibrationRepository;
 import com.peoplecore.evaluation.repository.EvalGradeRepository;
 import com.peoplecore.evaluation.repository.EvaluationRulesRepository;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,15 +42,18 @@ public class EvalGradeService {
     private final EvalGradeRepository evalGradeRepository;
     private final EvaluationRulesRepository rulesRepository;
     private final DepartmentRepository departmentRepository;
+    private final CalibrationRepository calibrationRepository;
     private final ObjectMapper objectMapper;
 
     public EvalGradeService(EvalGradeRepository evalGradeRepository,
                             EvaluationRulesRepository rulesRepository,
                             DepartmentRepository departmentRepository,
+                            CalibrationRepository calibrationRepository,
                             ObjectMapper objectMapper) {
         this.evalGradeRepository = evalGradeRepository;
         this.rulesRepository = rulesRepository;
         this.departmentRepository = departmentRepository;
+        this.calibrationRepository = calibrationRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -513,6 +524,7 @@ public class EvalGradeService {
     }
 
 
+
 //    5. 이상보정조회 부서id집합 -> TeamAnomalyDto리스트 변환, batch조회
     private List<BiasAdjustResultDto.TeamAnomalyDto>buildTeamInfos(Collection<Long>deptIds){
 //       빈 입력 시 빈 리스트 반환)
@@ -543,5 +555,226 @@ public class EvalGradeService {
         return result;
     }
 
+
+
+    //    6. 실제 vs 목표 분포 + 보정 건수 조회 (GradeCalibration 화면 초기 진입)
+//       - 실제: DB autoGrade 집계 + 실시간 변동은 프론트
+    @Transactional(readOnly = true)
+    public DistributionDiffDto getDistributionDiff(UUID companyId, Long seasonId) {
+
+//        a. 규칙 로드 + 회사 소유권 검증 (멀티테넌시)
+        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElseThrow(() -> new IllegalStateException("규칙 없음"));
+        Season season = rules.getSeason();
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+
+//        b. 스냅샷 파싱 -> gradeRules (라벨/비율/색상) 추출
+        FormSnapshotDto snapshot;
+        try {
+            snapshot = objectMapper.readValue(rules.getFormSnapshot(), FormSnapshotDto.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("규칙 스냅샷 파싱 실패", e);
+        }
+        List<FormSnapshotDto.GradeRule> gradeRules = snapshot.getGradeRules();
+
+//        c. autoGrade 별 실제 인원 집계 (null 은 미산정 -> 쿼리에서 제외됨)
+//           DTO 리스트 -> Map<등급라벨, 실제인원> + 총 인원 누적
+        Map<String, Integer> actualMap = new HashMap<>();
+        int totalCount = 0;
+        List<AutoGradeCountDto> grouped = evalGradeRepository.countByAutoGradeGroup(seasonId);
+        for (AutoGradeCountDto dto : grouped) {
+            int cnt = (int) dto.getCount();
+            actualMap.put(dto.getLabel(), cnt);
+            totalCount += cnt;
+        }
+
+//        d. 등급별 목표/실제 계산 (스냅샷 순서 유지)
+//           - targetCount = total × ratio/100 반올림
+//           - 마지막 등급은 잔여 인원 전부 (5번 applyDistribution 과 동일 규칙, 인원수 정합성)
+        List<DistributionDiffDto.GradeDiff> diffList = new ArrayList<>();
+        int assigned = 0;             // 지금까지 누적 할당된 목표 인원
+        int mismatchCount = 0;        // 목표 != 실제 등급 수
+
+        for (int gi = 0; gi < gradeRules.size(); gi++) {
+            FormSnapshotDto.GradeRule g = gradeRules.get(gi);
+
+//          목표 인원 (마지막 등급은 잔여 몰기)
+            int targetCount;
+            if (gi == gradeRules.size() - 1) {
+                targetCount = totalCount - assigned;
+            } else {
+                targetCount = (int) Math.round(totalCount * g.getRatio().doubleValue() / 100.0);
+                assigned += targetCount;
+            }
+
+//          실제 인원 (map 에 없으면 0 - 해당 등급 미배정 상태)
+            Integer found = actualMap.get(g.getLabel());
+            int actualCount = (found == null) ? 0 : found;
+
+//           편차 + 상태 판정 (enum)
+            int diff = actualCount - targetCount;
+            DiffStatus status;
+            if (diff == 0) {
+                status = DiffStatus.MATCH;
+            } else if (diff > 0) {
+                status = DiffStatus.OVER;
+                mismatchCount++;
+            } else {
+                status = DiffStatus.UNDER;
+                mismatchCount++;
+            }
+
+//            d-4. 카드 1건 조립
+            diffList.add(DistributionDiffDto.GradeDiff.builder()
+                    .label(g.getLabel())
+                    .color(g.getColor())
+                    .targetRatio(g.getRatio())
+                    .targetCount(targetCount)
+                    .actualCount(actualCount)
+                    .diff(diff)
+                    .status(status)
+                    .build());
+        }
+
+//        e. 현재 보정 건수 (isCalibrated=true row 수)
+        int calibrationCount = (int) evalGradeRepository.countBySeason_SeasonIdAndIsCalibratedTrue(seasonId);
+
+//        f. 최종 DTO 조립 후 반환
+        return DistributionDiffDto.builder()
+                .grades(diffList)
+                .totalCount(totalCount)
+                .mismatchCount(mismatchCount)
+                .calibrationCount(calibrationCount)
+                .isAllMatch(mismatchCount == 0)
+                .build();
+    }
+
+
+//    7. 보정 페이지 사원 목록 (페이징/필터/검색/정렬)
+//       - 보정된 사원 자동등급= Calibration 이력에서 원본 fromGrade + 최신 reason/actor 복원
+//         - 원본 자동등급 = 이력 첫 row 의 fromGrade (강제배분이 부여한 최초 등급) //보정등급 = 현재 autoGrade (= 마지막 toGrade, 덮어쓰기 구조) //여러 번 보정해도 원본은 첫 fromGrade에서 항상 복원
+//       - 사유는 최신 1건 (전체 이력은 8번 API)
+    @Transactional(readOnly = true)
+    public Page<CalibrationListItemDto> getCalibrationList(UUID companyId, Long seasonId,
+                                                            Long deptId, String keyword,
+                                                            EvalGradeSortField sortField, Pageable pageable) {
+
+//        a. 보정 대상 사원 페이지 조회 (autoGrade != null 만)
+        Page<EvalGrade> gradePage = evalGradeRepository.searchCalibrationGrades(
+                companyId, seasonId, deptId, keyword, sortField, pageable);
+
+//        b. 보정된 row 의 gradeId 수집 -> Calibration 이력 batch 조회
+        List<Long> calibratedIds = new ArrayList<>();
+        for (EvalGrade g : gradePage.getContent()) {
+            if (Boolean.TRUE.equals(g.getIsCalibrated())) {
+                calibratedIds.add(g.getGradeId());
+            }
+        }
+
+//        원본 자동등급 Map + 최신 사유/수행자 Map 구성
+//          첫 row.fromGrade = 원본 자동등급 (강제배분 최초 부여값)
+//          마지막 row.reason = 최신 보정 사유 (7번에서는 이것만 표시)
+//          마지막 row.actor.empName = 최신 보정 수행자
+        Map<Long, String> originalGradeMap = new HashMap<>();  // gradeId -> 원본 fromGrade
+        Map<Long, String> latestReasonMap = new HashMap<>();   // gradeId -> 최신 reason
+        Map<Long, String> latestAdjusterMap = new HashMap<>(); // gradeId -> 최신 수행자 이름
+
+        if (!calibratedIds.isEmpty()) {
+            List<Calibration> histories =
+                    calibrationRepository.findByGrade_GradeIdInOrderByCreatedAtAsc(calibratedIds);
+
+            for (Calibration cal : histories) {
+                Long gid = cal.getGrade().getGradeId();
+
+//                첫 등장만 원본으로 저장 (이미 있으면 스킵 -> 원본 불변)
+                if (!originalGradeMap.containsKey(gid)) {
+                    originalGradeMap.put(gid, cal.getFromGrade());
+                }
+//                매번 덮어쓰기 -> 루프 끝나면 마지막(최신) 값만 남음
+                latestReasonMap.put(gid, cal.getReason());
+                if (cal.getActor() != null) {
+                    latestAdjusterMap.put(gid, cal.getActor().getEmpName());
+                }
+            }
+        }
+
+//        c. Entity -> DTO 변환
+        List<CalibrationListItemDto> dtos = new ArrayList<>();
+        for (EvalGrade g : gradePage.getContent()) {
+            Long gid = g.getGradeId();
+            boolean calibrated = Boolean.TRUE.equals(g.getIsCalibrated());
+
+//            원본 등급: 보정됐으면 이력의 첫 fromGrade, 아니면 현재 autoGrade
+            String originalGrade = calibrated
+                    ? originalGradeMap.getOrDefault(gid, g.getAutoGrade())
+                    : g.getAutoGrade();
+
+//            보정등급: 보정됐으면 현재 autoGrade (= 마지막 toGrade), 아니면 null
+            String adjustedGrade = calibrated ? g.getAutoGrade() : null;
+
+//            사유: 보정됐으면 최신 reason 1건만, 아니면 null
+            String reason = calibrated ? latestReasonMap.get(gid) : null;
+
+//            보정 수행자: 보정됐으면 최신 actor 이름, 아니면 null
+            String adjusterName = calibrated ? latestAdjusterMap.get(gid) : null;
+
+            dtos.add(CalibrationListItemDto.builder()
+                    .gradeId(gid)
+                    .empNum(g.getEmp().getEmpNum())
+                    .name(g.getEmp().getEmpName())
+                    .deptName(g.getDeptNameSnapshot())
+                    .position(g.getPositionSnapshot())
+                    .totalScore(g.getTotalScore())
+                    .autoGrade(originalGrade)
+                    .adjustedGrade(adjustedGrade)
+                    .reason(reason)
+                    .adjusterName(adjusterName)
+                    .isCalibrated(calibrated)
+                    .build());
+        }
+
+        return new PageImpl<>(dtos, pageable, gradePage.getTotalElements());
+    }
+
+
+//    8. 보정 이력 조회 (시즌 전체, 건별 시간순)
+//       - 같은 사원이라도 보정할 때마다 별도 row (A→B, B→S 각각 표시)
+//       - createdAt 오름차순 → 프론트에서 index+1 로 순번 렌더
+//       - 소유권 검증 후 Calibration 테이블에서 시즌 범위 조회
+    @Transactional(readOnly = true)
+    public List<CalibrationHistoryDto> getCalibrations(UUID companyId, Long seasonId) {
+
+//        a. 소유권 검증 (규칙 기반 — 시즌 직접 조회 대신 기존 패턴 재사용)
+        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElseThrow(() -> new IllegalStateException("규칙 없음"));
+        Season season = rules.getSeason();
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+
+//        b. 시즌 전체 보정 이력 조회 (createdAt 오름차순)
+        List<Calibration> histories = calibrationRepository.findByGrade_Season_SeasonIdOrderByCreatedAtAsc(seasonId);
+
+//        c. Entity -> DTO 변환
+        List<CalibrationHistoryDto> dtos = new ArrayList<>();
+        for (Calibration cal : histories) {
+            EvalGrade grade = cal.getGrade();
+
+            dtos.add(CalibrationHistoryDto.builder()
+                    .calibrationId(cal.getCalibrationId())
+                    .gradeId(grade.getGradeId())
+                    .empNum(grade.getEmp().getEmpNum())
+                    .empName(grade.getEmp().getEmpName())
+                    .deptName(grade.getDeptNameSnapshot())
+                    .fromGrade(cal.getFromGrade())
+                    .toGrade(cal.getToGrade())
+                    .reason(cal.getReason())
+                    .adjusterName(cal.getActor() != null ? cal.getActor().getEmpName() : null)
+                    .createdAt(cal.getCreatedAt())
+                    .build());
+        }
+
+        return dtos;
+    }
 
 }

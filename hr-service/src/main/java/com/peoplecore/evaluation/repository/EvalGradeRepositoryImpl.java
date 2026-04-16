@@ -84,6 +84,50 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
     }
 
 
+
+
+    // 7. 보정 페이지 사원 목록
+    //  - 엔티티 반환 -> 서비스에서 Calibration 이력 합성 후 DTO 변환
+    @Override
+    public Page<EvalGrade> searchCalibrationGrades(UUID companyId, Long seasonId,
+                                                    Long deptId, String keyword,
+                                                    EvalGradeSortField sortField, Pageable pageable) {
+
+//        데이터 조회 (사원정보 fetch join)
+        List<EvalGrade> content = queryFactory
+                .selectFrom(qGrade)
+                .join(qGrade.emp, qEmployee).fetchJoin()
+                .where(
+                        companyEq(companyId),
+                        seasonEq(seasonId),
+                        deptEq(deptId),
+                        searchContains(keyword),
+                        qGrade.autoGrade.isNotNull()       // 미산정 제외
+                )
+                .orderBy(getOrderSpecifier(sortField))
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+//        전체건수 (페이징용)
+        Long total = queryFactory
+                .select(qGrade.count())
+                .from(qGrade)
+                .join(qGrade.emp, qEmployee)
+                .where(
+                        companyEq(companyId),
+                        seasonEq(seasonId),
+                        deptEq(deptId),
+                        searchContains(keyword),
+                        qGrade.autoGrade.isNotNull()
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+
+
+
 //  정렬 기준 매핑 Enum사용
     private OrderSpecifier<?> getOrderSpecifier(EvalGradeSortField sortField) {
         if (sortField == null) {
