@@ -8,8 +8,11 @@ import com.peoplecore.approval.dto.DocumentUpdateRequest;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.repository.*;
 import com.peoplecore.approval.entity.SourceBoxType;
+import com.peoplecore.client.component.HrServiceClient;
+import com.peoplecore.client.dto.AttendanceModifyHrMemberResDto;
 import com.peoplecore.common.service.MinioService;
-import java.util.Map;
+
+import java.util.*;
 import java.util.stream.Collectors;
 import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
 import com.peoplecore.approval.slot.SlotContextDto;
@@ -25,9 +28,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
-import java.util.Objects;
-import java.util.UUID;
 
 @Service
 @Transactional(readOnly = true)
@@ -46,9 +46,10 @@ public class ApprovalDocumentService {
     private final ApprovalSignatureRepository signatureRepository;
     private final MinioService minioService;
     private final ApprovalEventPublisher approvalEventPublisher;
+    private final HrServiceClient hrServiceClient;
 
     @Autowired
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -61,12 +62,17 @@ public class ApprovalDocumentService {
         this.signatureRepository = signatureRepository;
         this.minioService = minioService;
         this.approvalEventPublisher = approvalEventPublisher;
+        this.hrServiceClient = hrServiceClient;
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번*/
     @Transactional
     public Long createDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request) {
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        /* 근태 정정 양식이면 결재선에 HR 사원 포함 여부 검증 */
+        if ("ATTENDANCE_MODIFY".equals(form.getFormCode())) {
+            validateHrApproverIncluded(companyId, request.getApprovalLines());
+        }
         CompanyInfoResponse companyInfoResponse = hrCacheService.getCompany(companyId);
         DeptInfoResponse deptInfoResponse = hrCacheService.getDept(deptId);
         /*slotCOntext 조립*/
@@ -495,5 +501,18 @@ public class ApprovalDocumentService {
 
         lineRepository.saveAll(lines);
     }
+    /* 근태 정정 상신 시 결재선에 HR_ADMIN 또는 HR_SUPER_ADMIN 사원이 1명 이상 포함되었는지 검증 */
+    private void validateHrApproverIncluded(UUID companyId, List<DocumentCreateRequest.ApprovalLineRequest> approvalLines) {
+        AttendanceModifyHrMemberResDto hrMembersDto = hrServiceClient.getHrMembers(companyId);
+        Set<Long> hrEmpIds = hrMembersDto.getHrMembers().stream()
+                .map(AttendanceModifyHrMemberResDto.HrMember::getEmpId)
+                .collect(java.util.stream.Collectors.toSet());
 
+        boolean hasHr = approvalLines.stream()
+                .anyMatch(line -> hrEmpIds.contains(line.getEmpId()));
+
+        if (!hasHr) {
+            throw new BusinessException("결재선에 인사팀 사원이 1명 이상 포함되어야 합니다.");
+        }
+    }
 }

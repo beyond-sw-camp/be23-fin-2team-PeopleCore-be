@@ -22,7 +22,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StreamUtils;
-import org.springframework.web.servlet.resource.ResourceResolver;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
@@ -43,7 +42,8 @@ public class ApprovalFormService {
             "보고-시행문/급여지급결의서",
             "휴가/초과근로신청서",
             "휴가/휴가신청서",
-            "인사/사직서 #2"
+            "인사/사직서 #2",
+            "일반기안/근태정정신청서"
     );
 
     /*
@@ -57,7 +57,8 @@ public class ApprovalFormService {
             "휴가/초과근로신청서", "OVERTIME_REQUEST",
             "휴가/휴가신청서", "VACATION_REQUEST",
             "인사/사직서 #2", "RESIGNATION",
-            "보고-시행문/급여지급결의서", "PAYROLL_RESOLUTION"
+            "보고-시행문/급여지급결의서", "PAYROLL_RESOLUTION",
+            "일반기안/근태정정신청서", "ATTENDANCE_MODIFY"
     );
 
     private static final String FORM_CODE_GROUP = "FORM_CODE";
@@ -543,5 +544,13 @@ public class ApprovalFormService {
         } catch (Exception e) {
             log.error("오류가 발생했습니다. e = {}", e.getMessage());
         }
+    }
+
+    /* formCode + companyId 로 활성 양식 ID 조회 — hr-service 의 ApprovalFormIdCache 가 REST 로 호출 */
+    public Long getFormIdByCode(UUID companyId, String formCode) {
+        return approvalFormRepository
+                .findByCompanyIdAndFormCodeAndIsActiveTrueAndIsCurrentTrue(companyId, formCode)
+                .map(ApprovalForm::getFormId)
+                .orElse(null);
     }
 }

@@ -4,11 +4,13 @@ import com.peoplecore.attendance.entity.CommuteRecord;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -78,5 +80,25 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
                                  @Param("from") LocalDate from,
                                  @Param("to") LocalDate to);
 
+    /* 근태 정정 승인 native UPDATE — check-in/out 교체 + is_auto_closed 해제 일괄.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            UPDATE commute_record
+               SET com_rec_check_in  = :newCheckIn,
+                   com_rec_check_out = :newCheckOut,
+                   is_auto_closed    = false
+             WHERE com_rec_id = :comRecId
+               AND work_date  = :workDate
+            """, nativeQuery = true)
+    int applyAttendanceModify(@Param("comRecId") Long comRecId,
+                              @Param("workDate") LocalDate workDate,
+                              @Param("newCheckIn") LocalDateTime newCheckIn,
+                              @Param("newCheckOut") LocalDateTime newCheckOut);
 
+    /*
+     * 특정 (comRecId, workDate) CommuteRecord 단건 조회 — 파티션 프루닝 보장.
+     * 용도: AttendanceModifyService 가 승인 처리 전에 현재값/역전 검증용으로 load.
+     */
+    Optional<CommuteRecord> findByComRecIdAndWorkDate(Long comRecId, LocalDate workDate);
 }

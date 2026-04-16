@@ -72,8 +72,8 @@ public class AttendanceMySummaryService {
         /*통합 집계 */
         WeeklyCommuteAggregate agg = myAttendanceQueryRepository.aggregateWeeklyStats(companyId, empId, weekStart, weekEnd);
 
-        /*오늘자 출퇴근 1건 */
-        TodayCommuteDto today = loadTodayCommute(companyId, empId, baseDate);
+        /* 오늘자 출퇴근 1건 — date 파라미터와 무관하게 항상 "오늘" 기준으로 조회 */
+        TodayCommuteDto today = loadTodayCommute(companyId, empId, LocalDate.now());
 
         /* 근무 그룹 블록에 넣을 것 + 1일 근무 분 . 주 적정분 계산 */
         int dailyWorkMinutes = calcDailyWorkMinutes(wg);
