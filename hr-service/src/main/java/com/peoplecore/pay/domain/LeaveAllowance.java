@@ -19,7 +19,7 @@ import java.time.LocalDate;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "leave_allowance",
+@Table(name = "leave_allowance",    //연차수당
     indexes = {
         @Index(name = "idx_leave_allowance_company_year", columnList = "company_id, year, allowance_type"),
             @Index(name = "idx_leave_allowance_emp", columnList = "emp_id, year")
@@ -81,9 +81,28 @@ public class LeaveAllowance extends BaseTimeEntity {
     }
 
 //    급여대장 반영 완료
-    public void  markApplied(Long payrollRunId, String appliedMonth){
+    public void markApplied(Long payrollRunId, String appliedMonth){
         this.appliedPayrollRunId = payrollRunId;
         this.appliedMonth = appliedMonth;
         this.status = AllowanceStatus.APPLIED;
+    }
+
+//    연차 소멸/수당발생 일자 계산
+    public LocalDate resolveExpiredDate(String fiscalYearStart){
+        return this.allowanceType.resolveExpiredDate(this, fiscalYearStart);
+    }
+
+//    퇴직금 평균임금 산정 대상 여부 판정
+//    소멸일이 resignedDate -1 년~resignDate 범위 내에 있으면 true
+//    산정완료(CALCULATED)/급여반영(APPLIED) 상태에서만
+    public boolean isInSeverancePeriod(LocalDate resignDate, String fiscalYearStart){
+        if (this.status != AllowanceStatus.CALCULATED && this.status != AllowanceStatus.APPLIED){
+            return false;
+        }
+        LocalDate expired = resolveExpiredDate(fiscalYearStart);
+        if (expired == null) return false;
+
+        LocalDate periodStart = resignDate.minusYears(1);
+        return !expired.isBefore(periodStart) && !expired.isAfter(resignDate);
     }
 }
