@@ -13,6 +13,7 @@ import com.peoplecore.vacation.repository.VacationGrantRuleRepository;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +29,7 @@ public class VacationPolicyService {
 
     private final VacationPolicyRepository vacationPolicyRepository;
     private final VacationGrantRuleRepository vacationGrantRuleRepository;
+    private final StringRedisTemplate redisTemplate;
 
     /* initDefault 동시 호출 방지용 분산 락 - 회사 생성 Kafka 이벤트 중복 수신 대비 */
     private static final String INIT_LOCK_PREFIX = "vacation-policy-init";
@@ -36,24 +38,37 @@ public class VacationPolicyService {
 
     @Autowired
     public VacationPolicyService(VacationPolicyRepository vacationPolicyRepository,
-                                 VacationGrantRuleRepository vacationGrantRuleRepository) {
+                                 VacationGrantRuleRepository vacationGrantRuleRepository, StringRedisTemplate redisTemplate) {
         this.vacationPolicyRepository = vacationPolicyRepository;
         this.vacationGrantRuleRepository = vacationGrantRuleRepository;
+        this.redisTemplate = redisTemplate;
     }
 
     /* 회사 생성 시 기본 정책 + 발생 규칙 11건 자동 INSERT (멱등) */
     @Transactional
     public void initDefault(Company company) {
         UUID companyId = company.getCompanyId();
-        if (vacationPolicyRepository.existsByCompanyId(companyId)) {
-            log.info("VacationPolicy 이미 존재 - companyId={}, 초기화 스킵", companyId);
+        String lockKey = INIT_LOCK_PREFIX + ":" + companyId;
+        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", INIT_LOCK_TTL);
+        if (!Boolean.TRUE.equals(acquired)) {
+            log.info("VacationPolicy 초기화 진행 중 - 다른 인스턴스 담당. companyId={}", companyId);
             return;
         }
-        VacationPolicy policy = VacationPolicy.createDefault(companyId, 0L);
-        policy.getGrantRules().addAll(VacationGrantRule.createCompanyDefaults(policy, 0L));
-        vacationPolicyRepository.save(policy);
-        log.info("VacationPolicy 기본 정책 + 규칙 {}건 생성 완료 - companyId={}",
-                policy.getGrantRules().size(), companyId);
+
+        try {
+            if (vacationPolicyRepository.existsByCompanyId(companyId)) {
+                log.info("VacationPolicy 이미 존재 - companyId={}, 초기화 스킵", companyId);
+                return;
+            }
+            VacationPolicy policy = VacationPolicy.createDefault(companyId, VacationPolicy.SYSTEM_EMP_ID);
+            policy.getGrantRules().addAll(
+                    VacationGrantRule.createCompanyDefaults(policy, VacationPolicy.SYSTEM_EMP_ID));
+            vacationPolicyRepository.save(policy);
+            log.info("VacationPolicy 기본 정책 + 규칙 {}건 생성 완료 - companyId={}",
+                    policy.getGrantRules().size(), companyId);
+        } finally {
+            redisTemplate.delete(lockKey);
+        }
     }
 
     /* 연차 지급 기준 조회 */
