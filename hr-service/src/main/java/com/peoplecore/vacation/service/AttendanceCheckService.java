@@ -50,9 +50,17 @@ public class AttendanceCheckService {
     }
 
     /* 덮은 영업일 수 - (출근일 ∪ 승인휴가일) ∩ 영업일 */
-    /* 주말/공휴일은 출근/휴가라도 카운트 제외 (영업일만 집계) */
+    /* null 입력은 호출 버그 → IllegalArgumentException (감추지 않음) */
+    /* start > end 는 호출부 계산 오류 가능성 높음 → WARN 후 0 반환 (방어) */
     public int countCoveredBusinessDays(UUID companyId, Long empId, LocalDate periodStart, LocalDate periodEnd) {
-        if (periodStart == null || periodEnd == null || periodStart.isAfter(periodEnd)) return 0;
+        if (periodStart == null || periodEnd == null) {
+            throw new IllegalArgumentException("periodStart/periodEnd null - empId=" + empId);
+        }
+        if (periodStart.isAfter(periodEnd)) {
+            log.warn("[AttendanceCheck] periodStart > periodEnd - empId={}, start={}, end={}",
+                    empId, periodStart, periodEnd);
+            return 0;
+        }
         Set<LocalDate> covered = collectCoveredDates(companyId, empId, periodStart, periodEnd);
         return (int) covered.stream()
                 .filter(d -> businessDayCalculator.isBusinessDay(companyId, d))

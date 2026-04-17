@@ -56,18 +56,21 @@ public class BalanceExpiryScheduler {
             return;
         }
         log.info("[BalanceExpiry] 시작 - date={}", today);
-
-        List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
-        int totalExpired = 0;
-        for (Company company : activeCompanies) {
-            try {
-                totalExpired += processCompany(company, today);
-            } catch (Exception e) {
-                log.error("[BalanceExpiry] 회사 처리 실패 - companyId={}, err={}",
-                        company.getCompanyId(), e.getMessage(), e);
+        try {
+            List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
+            int totalExpired = 0;
+            for (Company company : activeCompanies) {
+                try {
+                    totalExpired += processCompany(company, today);
+                } catch (Exception e) {
+                    log.error("[BalanceExpiry] 회사 처리 실패 - companyId={}, err={}",
+                            company.getCompanyId(), e.getMessage(), e);
+                }
             }
+            log.info("[BalanceExpiry] 완료 - date={}, totalExpired={}건", today, totalExpired);
+        } finally {
+            redisTemplate.delete(lockKey);
         }
-        log.info("[BalanceExpiry] 완료 - date={}, totalExpired={}건", today, totalExpired);
     }
 
     /* 회사 단위 - 만료 대상 balance 조회 후 단건씩 위임. 처리 건수 반환 */

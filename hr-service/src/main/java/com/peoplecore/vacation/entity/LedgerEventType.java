@@ -29,6 +29,13 @@ public enum LedgerEventType {
 
     LedgerEventType(boolean credit) { this.credit = credit; }
 
-    public boolean isCredit() { return credit; }
-    public boolean isDebit()  { return !credit; }
+    /* 증가 이벤트 - change_days 양수 */
+    public boolean isCredit() {
+        return this == ACCRUAL || this == INITIAL_GRANT || this == MANUAL_GRANT || this == RESTORED;
+    }
+
+    /* 감소 이벤트 - change_days 음수 */
+    public boolean isDebit() {
+        return this == USED || this == EXPIRED || this == ANNUAL_TRANSITION;
+    }
 }

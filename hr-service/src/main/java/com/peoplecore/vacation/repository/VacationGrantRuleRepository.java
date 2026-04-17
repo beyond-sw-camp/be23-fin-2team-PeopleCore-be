@@ -35,4 +35,17 @@ public interface VacationGrantRuleRepository extends JpaRepository<VacationGrant
             """)
     Optional<VacationGrantRule> findMatchingRule(@Param("policyId") Long policyId,
                                                  @Param("years") int yearsOfService);
+
+    /*
+     * 정책 내 근속 구간 중첩 검사용 - 기존 규칙 전체 조회 (excludeRuleId 제외)
+     * 용도: 규칙 생성/수정 시 (minYear, maxYear) 범위 중첩 방지
+     * excludeRuleId null 이면 자기 자신 제외 없음 (create 용)
+     */
+    @Query("""
+            SELECT r FROM VacationGrantRule r
+             WHERE r.vacationPolicy.policyId = :policyId
+               AND (:excludeRuleId IS NULL OR r.ruleId <> :excludeRuleId)
+            """)
+    List<VacationGrantRule> findAllForOverlapCheck(@Param("policyId") Long policyId,
+                                                   @Param("excludeRuleId") Long excludeRuleId);
 }

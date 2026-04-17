@@ -67,17 +67,20 @@ public class PromotionNoticeScheduler {
             return;
         }
         log.info("[PromotionNotice] 시작 - date={}", today);
-
-        List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
-        for (Company company : activeCompanies) {
-            try {
-                processCompany(company, today);
-            } catch (Exception e) {
-                log.error("[PromotionNotice] 회사 처리 실패 - companyId={}, err={}",
-                        company.getCompanyId(), e.getMessage(), e);
+        try {
+            List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
+            for (Company company : activeCompanies) {
+                try {
+                    processCompany(company, today);
+                } catch (Exception e) {
+                    log.error("[PromotionNotice] 회사 처리 실패 - companyId={}, err={}",
+                            company.getCompanyId(), e.getMessage(), e);
+                }
             }
+            log.info("[PromotionNotice] 완료 - date={}", today);
+        } finally {
+            redisTemplate.delete(lockKey);
         }
-        log.info("[PromotionNotice] 완료 - date={}", today);
     }
 
     /* 회사 단위 - 정책/유형 조회 후 1차/2차 분기 */

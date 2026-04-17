@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -70,18 +71,17 @@ public class AnnualTransitionService {
     }
 
     /* 월차 balance 전체 year 순회하며 expireRemaining + ofExpired. 소멸 총량 반환 */
-    private BigDecimal expireMonthlyBalances(UUID companyId, Employee emp, VacationType monthlyType,
-                                              LocalDate hireDate, LocalDate today) {
-        BigDecimal totalExpired = BigDecimal.ZERO;
+    private BigDecimal expireMonthlyBalances(UUID companyId, Employee emp, VacationType monthlyType, LocalDate hireDate, LocalDate today) {
         int startYear = hireDate.getYear();
         int endYear = today.getYear();
 
-        for (int y = startYear; y <= endYear; y++) {
-            Optional<VacationBalance> opt = vacationBalanceRepository
-                    .findOne(companyId, emp.getEmpId(), monthlyType.getTypeId(), y);
-            if (opt.isEmpty()) continue;
+        List<VacationBalance> balances = vacationBalanceRepository
+                .findAllByYearRange(companyId, emp.getEmpId(), monthlyType.getTypeId(), startYear, endYear);
+        if (balances.isEmpty()) return BigDecimal.ZERO;
 
-            VacationBalance mb = opt.get();
+        BigDecimal totalExpired = BigDecimal.ZERO;
+
+        for (VacationBalance mb : balances) {
             BigDecimal before = mb.getTotalDays();
             BigDecimal expired = mb.expireRemaining();
             if (expired.compareTo(BigDecimal.ZERO) <= 0) continue;
@@ -92,14 +92,14 @@ public class AnnualTransitionService {
             totalExpired = totalExpired.add(expired);
 
             log.info("[AnnualTransition] 월차 소멸 - empId={}, year={}, expired={}",
-                    emp.getEmpId(), y, expired);
+                    emp.getEmpId(), mb.getBalanceYear(), expired);
         }
         return totalExpired;
     }
 
     /* HIRE 정책 1년차 연차 발생 - 1년차 규칙 grantDays 전액 + InitialGrant + AnnualTransition 표식 */
     private void grantFirstYearAnnual(UUID companyId, Employee emp, VacationPolicy policy,
-                                       VacationType annualType, LocalDate today, BigDecimal expiredMonthlyDays) {
+                                      VacationType annualType, LocalDate today, BigDecimal expiredMonthlyDays) {
         VacationGrantRule rule = vacationGrantRuleRepository
                 .findMatchingRule(policy.getPolicyId(), FIRST_YEAR_RULE_YEARS)
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_RULE_NOT_FOUND));
@@ -116,7 +116,8 @@ public class AnnualTransitionService {
                                 companyId, annualType, emp, balanceYear, today, expiresAt)));
 
         BigDecimal before = annualBalance.getTotalDays();
-        annualBalance.accrue(grantDays);
+        /*1년차 연차 규칙 */
+        annualBalance.accrue(grantDays,grantDays);
         BigDecimal after = annualBalance.getTotalDays();
 
         /* InitialGrant - 연차 신규 발생 기록 */

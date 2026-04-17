@@ -99,7 +99,7 @@ public class VacationBalanceService {
                         VacationBalance.createNew(companyId, type, emp, year, grantedAt, expiresAt)));
 
         BigDecimal before = balance.getTotalDays();
-        balance.accrue(days);
+        balance.accrue(days,null);
         BigDecimal after = balance.getTotalDays();
 
         vacationLedgerRepository.save(VacationLedger.ofManualGrant(
