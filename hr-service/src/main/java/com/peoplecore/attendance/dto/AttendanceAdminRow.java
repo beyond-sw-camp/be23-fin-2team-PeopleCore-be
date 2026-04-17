@@ -87,7 +87,7 @@ public class AttendanceAdminRow {
 
     /** 오늘 APPROVED 휴가 존재 여부 */
     private Boolean hasApprovedVacationToday;
-    /** 오늘 APPROVED 휴가 유형명 (VacationInfo.vacTypeName). 없으면 null */
+    /** 오늘 APPROVED 휴가 유형명 (VacationType.typeName). 없으면 null */
     private String vacationTypeName;
     /** 오늘 APPROVED 초과근무 분 (otPlanStart~otPlanEnd 합산). 없으면 0 */
     private Long approvedOtMinutesToday;

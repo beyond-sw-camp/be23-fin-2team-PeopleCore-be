@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class DeptInfoResponse {
     private Long deptId;
+    private Long parentDeptId;
     private String deptName;
     private String deptCode;
 }

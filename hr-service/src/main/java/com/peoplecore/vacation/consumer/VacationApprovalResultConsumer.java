@@ -2,46 +2,46 @@ package com.peoplecore.vacation.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.event.VacationApprovalResultEvent;
-import com.peoplecore.vacation.service.VacationReqService;
+import com.peoplecore.vacation.service.VacationRequestService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.annotation.RetryableTopic;
+import org.springframework.kafka.retrytopic.TopicSuffixingStrategy;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.stereotype.Component;
 
-/*휴가 결재 결과 Kafka Consumer*/
+/* 휴가 결재 결과 이벤트 수신 - VacationRequest 상태 갱신 */
 @Component
 @Slf4j
 public class VacationApprovalResultConsumer {
 
-    private final VacationReqService vacationReqService;
+    private final VacationRequestService vacationRequestService;
     private final ObjectMapper objectMapper;
 
     @Autowired
-    public VacationApprovalResultConsumer(VacationReqService vacationReqService,
+    public VacationApprovalResultConsumer(VacationRequestService vacationRequestService,
                                           ObjectMapper objectMapper) {
-        this.vacationReqService = vacationReqService;
+        this.vacationRequestService = vacationRequestService;
         this.objectMapper = objectMapper;
     }
 
-    /**
-     * 메시지 수신 → 역직렬화 → 서비스 위임.
-     */
-    @RetryableTopic(attempts = "3", backoff = @Backoff(delay = 10000, multiplier = 2))
-    @KafkaListener(topics = "vacation-approval-result", groupId = "hr-vacation-approval-consumer")
-    public void consume(String message) {
+    @RetryableTopic(
+            attempts = "3",
+            backoff = @Backoff(delay = 10_000, multiplier = 2.0),
+            topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE
+    )
+    @KafkaListener(
+            topics = "vacation-approval-result",
+            groupId = "hr-vacation-approval-consumer"
+    )
+    public void onMessage(String payload) {
         try {
-            VacationApprovalResultEvent event =
-                    objectMapper.readValue(message, VacationApprovalResultEvent.class);
-            vacationReqService.applyApprovalResult(event);
-            log.info("[Kafka] VacationApprovalResult 처리 완료 - vacReqId={}, status={}",
-                    event.getVacReqId(), event.getStatus());
+            VacationApprovalResultEvent event = objectMapper.readValue(payload, VacationApprovalResultEvent.class);
+            vacationRequestService.applyApprovalResult(event);
         } catch (Exception e) {
-            log.error("[Kafka] VacationApprovalResult 처리 실패 - message={}, error={}",
-                    message, e.getMessage());
+            log.error("[VacationApprovalResult] 처리 실패 - payload={}, err={}", payload, e.getMessage(), e);
             throw new RuntimeException(e);
         }
     }
-
 }

@@ -101,4 +101,22 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
      * 용도: AttendanceModifyService 가 승인 처리 전에 현재값/역전 검증용으로 load.
      */
     Optional<CommuteRecord> findByComRecIdAndWorkDate(Long comRecId, LocalDate workDate);
+
+
+    /*
+     * 사원의 [from, to] 구간 출근일 LocalDate 리스트 - check_in 존재 row 만.
+     * 용도: AttendanceCheckService 만근 판정 (영업일 vs 출근일+휴가일 비교).
+     * 파티션 프루닝: workDate BETWEEN 조건으로 해당 파티션만 스캔.
+     */
+    @Query("""
+            SELECT c.workDate FROM CommuteRecord c
+             WHERE c.companyId = :companyId
+               AND c.employee.empId = :empId
+               AND c.workDate BETWEEN :from AND :to
+               AND c.comRecCheckIn IS NOT NULL
+            """)
+    List<LocalDate> findAttendedDatesByEmpAndPeriod(@Param("companyId") UUID companyId,
+                                                    @Param("empId") Long empId,
+                                                    @Param("from") LocalDate from,
+                                                    @Param("to") LocalDate to);
 }

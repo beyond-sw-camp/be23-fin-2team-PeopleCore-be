@@ -22,10 +22,14 @@ import com.peoplecore.pay.repository.PayrollRunsRepository;
 import com.peoplecore.salarycontract.domain.ContractStatus;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
+import com.peoplecore.vacation.entity.VacationBalance;
 import com.peoplecore.vacation.entity.VacationPolicy;
-import com.peoplecore.vacation.entity.VacationRemainder;
+import com.peoplecore.vacation.entity.VacationType;
+import com.peoplecore.vacation.repository.VacationBalanceRepository;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
-import com.peoplecore.vacation.repository.VacationRemainderRepository;
+import com.peoplecore.vacation.repository.VacationPromotionNoticeRepository;
+import com.peoplecore.vacation.repository.VacationTypeRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +39,7 @@ import java.math.RoundingMode;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class LeaveAllowanceService {
@@ -44,23 +49,28 @@ public class LeaveAllowanceService {
     private final EmployeeRepository employeeRepository;
     private final LeaveAllowanceRepository leaveAllowanceRepository;
     private final SalaryContractRepository salaryContractRepository;
-    private final VacationRemainderRepository vacationRemainderRepository;
+    private final VacationBalanceRepository vacationBalanceRepository;     /* ← Remainder → Balance */
+    private final VacationTypeRepository vacationTypeRepository;           /* ← 신규 (연차 typeId 조회용) */
     private final PayrollDetailsRepository payrollDetailsRepository;
     private final PayrollRunsRepository payrollRunsRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
+    private final VacationPromotionNoticeRepository vacationPromotionNoticeRepository;  // 촉진 통지 이력 (면제 판정용)
 
     @Autowired
-    public LeaveAllowanceService(CompanyRepository companyRepository, PayItemsRepository payItemsRepository, EmployeeRepository employeeRepository, LeaveAllowanceRepository leaveAllowanceRepository, SalaryContractRepository salaryContractRepository, VacationRemainderRepository vacationRemainderRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, VacationPolicyRepository vacationPolicyRepository) {
+    public LeaveAllowanceService(CompanyRepository companyRepository, PayItemsRepository payItemsRepository, EmployeeRepository employeeRepository, LeaveAllowanceRepository leaveAllowanceRepository, SalaryContractRepository salaryContractRepository, VacationBalanceRepository vacationBalanceRepository, VacationTypeRepository vacationTypeRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, VacationPolicyRepository vacationPolicyRepository, VacationPromotionNoticeRepository vacationPromotionNoticeRepository) {
         this.companyRepository = companyRepository;
         this.payItemsRepository = payItemsRepository;
         this.employeeRepository = employeeRepository;
         this.leaveAllowanceRepository = leaveAllowanceRepository;
         this.salaryContractRepository = salaryContractRepository;
-        this.vacationRemainderRepository = vacationRemainderRepository;
+        this.vacationBalanceRepository = vacationBalanceRepository;
+        this.vacationTypeRepository = vacationTypeRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.payrollRunsRepository = payrollRunsRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
+        this.vacationPromotionNoticeRepository = vacationPromotionNoticeRepository;
     }
+
 
     //    연말 미사용 연차 산정 목록
     public LeaveAllowanceSummaryResDto getFiscalYearList(UUID companyId, Integer year) {
@@ -103,27 +113,52 @@ public class LeaveAllowanceService {
             BigDecimal usedDays;
             BigDecimal unusedDays;
 
-            if(type == AllowanceType.ANNIVERSARY){
-//                입사일 기준
-//                입사 기준일 도래시 만료되는 기간 = year-1년
-                int lookupYear = year -1;
-                VacationRemainder remainder = vacationRemainderRepository.findByCompanyIdAndEmpIdAndVacRemYear(companyId, empId, lookupYear)
+            /* ANNUAL 유형 ID 1회 조회 — 회사당 1건 보장 (회사 생성 시 자동 INSERT) */
+            VacationType annualType = vacationTypeRepository
+                    .findByCompanyIdAndTypeCode(companyId, VacationType.CODE_ANNUAL)
+                    .orElseThrow(() -> new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND));
+
+
+            if (type == AllowanceType.ANNIVERSARY) {
+                /* 입사일 기준 - 입사 기준일 도래시 만료되는 기간 = year-1 */
+                int lookupYear = year - 1;
+                VacationBalance balance = vacationBalanceRepository
+                        .findForAllowance(companyId, empId, annualType.getTypeId(), lookupYear)
                         .orElse(null);
 
-                totalDays = remainder != null ? remainder.getVacRemTotalDay() : BigDecimal.ZERO;
-                usedDays = remainder != null ? remainder.getVacRemUsedDay() : BigDecimal.ZERO;
+                totalDays = balance != null ? balance.getTotalDays() : BigDecimal.ZERO;
+                usedDays = balance != null ? balance.getUsedDays() : BigDecimal.ZERO;
                 unusedDays = totalDays.subtract(usedDays);
             } else {
-//                회계년도 기준 / 퇴직자 : 해당 연도 잔여
-                VacationRemainder remainder = vacationRemainderRepository.findByCompanyIdAndEmpIdAndVacRemYear(companyId, empId, year).orElse(null);
+                /* 회계년도 기준 / 퇴직자 - 해당 연도 잔여 */
+                VacationBalance balance = vacationBalanceRepository
+                        .findForAllowance(companyId, empId, annualType.getTypeId(), year)
+                        .orElse(null);
 
-                totalDays = remainder != null ? remainder.getVacRemTotalDay() : BigDecimal.ZERO;
-                usedDays = remainder != null ? remainder.getVacRemUsedDay() : BigDecimal.ZERO;
+                totalDays = balance != null ? balance.getTotalDays() : BigDecimal.ZERO;
+                usedDays = balance != null ? balance.getUsedDays() : BigDecimal.ZERO;
                 unusedDays = totalDays.subtract(usedDays);
             }
 
 //            미사용인 0이하면 스킵
             if (unusedDays.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            //근기법 제61조 - 촉진 통지 1차+2차 모두 완료 시 미사용 수당 면제
+            long noticeCnt = vacationPromotionNoticeRepository.countNoticeStages(companyId, empId, year);
+            if (noticeCnt >= 2) {
+                log.info("[LeaveAllowance] 촉진 통지 완료 - 수당 면제. empId={}, year={}", empId, year);
+                LeaveAllowance exempted = LeaveAllowance.builder()
+                        .company(company)
+                        .employee(emp)
+                        .year(year)
+                        .allowanceType(type)
+                        .resignDate(type == AllowanceType.RESIGNED ? emp.getEmpResignDate() : null)
+                        .status(AllowanceStatus.EXEMPTED)
+                        .build();
+                exempted.calculate(monthlySalary, dailyWage, totalDays, usedDays, unusedDays, 0L);
+                leaveAllowanceRepository.save(exempted);
+                continue;
+            }
 
 //            산정금액 = 미사용일수 * 일 통상임금
             long amount = unusedDays.multiply(BigDecimal.valueOf(dailyWage)).longValue();
@@ -178,6 +213,7 @@ public class LeaveAllowanceService {
                     .memo("연차수당 (" + la.getUnusedLeaveDays() + " 일)")
                     .company(la.getCompany())
                     .build();
+            payrollDetailsRepository.save(details);
 
             recalculateTotals(run);
 
@@ -309,7 +345,7 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
 
 //    대상 사원 PENDING 레코드 자동 생성(최초 시)
     @Transactional
-    private void createPendingRecords(UUID companyId, Integer year, AllowanceType type){
+    public void createPendingRecords(UUID companyId, Integer year, AllowanceType type){
 
         Company company = companyRepository.findById(companyId).orElseThrow(()-> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
@@ -344,7 +380,7 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
 
 //    입사일기준 대상사원 PENDING 레코드 생성
     @Transactional
-    private void createAnniversaryPendingRecords(UUID companyId, int year, int month){
+    public void createAnniversaryPendingRecords(UUID companyId, int year, int month){
         Company company = companyRepository.findById(companyId).orElseThrow(()-> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
 //        재직/휴직 사원중 입사월이 대상 월인 사원
