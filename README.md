@@ -11,7 +11,7 @@ Spring Boot 기반 마이크로서비스 아키텍처로 구현한 전자결재 
 - [기획서](https://docs.google.com/document/d/1LhBwkw5gadTXXApqSiI7-_ngIhpgbRAm/edit?usp=sharing&ouid=113011859077434472718&rtpof=true&sd=true)
 - [ERD (ERDCloud)](https://www.erdcloud.com/d/zu3piDR4rivmATs4d)
 - [화면 설계 (Figma)](https://www.figma.com/design/GRt4wS7G4Gc4oMM8hzOZSi/PeopleCore-%ED%99%94%EB%A9%B4-%EC%84%A4%EA%B3%84?node-id=15-71&t=PgQIPCy8W7eyuK2v-1)
-- [api 명세서](https://documenter.getpostman.com/view/51059727/2sBXqDrhar)
+- [프로그램 사양서 및 단위테스트결과서](https://documenter.getpostman.com/view/51059727/2sBXqDrhar)
 
 ---
 
