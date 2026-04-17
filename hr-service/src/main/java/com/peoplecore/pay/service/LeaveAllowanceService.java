@@ -213,6 +213,7 @@ public class LeaveAllowanceService {
                     .memo("연차수당 (" + la.getUnusedLeaveDays() + " 일)")
                     .company(la.getCompany())
                     .build();
+            payrollDetailsRepository.save(details);
 
             recalculateTotals(run);
 

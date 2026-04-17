@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 /* 연차 발생 서비스 - HIRE / FISCAL 정책별 분기 */
@@ -58,7 +59,7 @@ public class AnnualGrantService {
     /* 근속연수 매칭 규칙의 grantDays 전액 부여 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void grantForHire(UUID companyId, Employee emp, VacationType annualType,
-                              VacationPolicy policy, int yearsOfService, LocalDate today) {
+                             VacationPolicy policy, int yearsOfService, LocalDate today) {
         VacationGrantRule rule = vacationGrantRuleRepository
                 .findMatchingRule(policy.getPolicyId(), yearsOfService)
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_RULE_NOT_FOUND));
@@ -72,7 +73,7 @@ public class AnnualGrantService {
     /* 그 외는 근속 N년 매칭 규칙 grantDays 전액 */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void grantForFiscal(UUID companyId, Employee emp, VacationType annualType,
-                                VacationPolicy policy, LocalDate today) {
+                               VacationPolicy policy, LocalDate today) {
         LocalDate hireDate = emp.getEmpHireDate();
         if (hireDate == null) {
             log.warn("[AnnualGrant-FISCAL] empHireDate null - empId={}", emp.getEmpId());
@@ -93,7 +94,7 @@ public class AnnualGrantService {
         if (isFirstFiscalYear) {
             grantForFiscalFirstYear(companyId, emp, annualType, policy, today, hireDate, previousFiscalStart);
         } else {
-            int yearsOfService = today.getYear() - hireDate.getYear();
+            int yearsOfService = (int) ChronoUnit.YEARS.between(hireDate, today);
             if (yearsOfService < 1) return;
             grantForFiscalNormal(companyId, emp, annualType, policy, yearsOfService, today);
         }
@@ -101,8 +102,8 @@ public class AnnualGrantService {
 
     /* FISCAL 첫 회계연도 입사자 비례 부여 - (덮은 영업일 / 이전 회계연도 전체 영업일) × 1년차 grantDays */
     private void grantForFiscalFirstYear(UUID companyId, Employee emp, VacationType annualType,
-                                          VacationPolicy policy, LocalDate today,
-                                          LocalDate hireDate, LocalDate previousFiscalStart) {
+                                         VacationPolicy policy, LocalDate today,
+                                         LocalDate hireDate, LocalDate previousFiscalStart) {
         LocalDate periodEnd = today.minusDays(1);
 
         int coveredDays = attendanceCheckService.countCoveredBusinessDays(
@@ -141,7 +142,7 @@ public class AnnualGrantService {
 
     /* FISCAL 정상 회계연도 - 근속 N년 매칭 grantDays 전액 */
     private void grantForFiscalNormal(UUID companyId, Employee emp, VacationType annualType,
-                                       VacationPolicy policy, int yearsOfService, LocalDate today) {
+                                      VacationPolicy policy, int yearsOfService, LocalDate today) {
         VacationGrantRule rule = vacationGrantRuleRepository
                 .findMatchingRule(policy.getPolicyId(), yearsOfService)
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_RULE_NOT_FOUND));
@@ -154,7 +155,7 @@ public class AnnualGrantService {
     /* 공통 - Balance createNew 또는 기존 + accrue + INITIAL_GRANT Ledger */
     /* balance_year = today.getYear(), expires_at = today + 1년 - 1일 (만료 잡이 사용) */
     private void grantAndRecord(UUID companyId, Employee emp, VacationType annualType,
-                                 LocalDate today, BigDecimal grantDays, String reason) {
+                                LocalDate today, BigDecimal grantDays, String reason) {
         Integer balanceYear = today.getYear();
         LocalDate expiresAt = today.plusYears(1).minusDays(1);
 

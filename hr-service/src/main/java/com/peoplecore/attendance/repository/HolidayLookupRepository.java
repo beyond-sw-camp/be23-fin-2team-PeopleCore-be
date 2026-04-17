@@ -10,7 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/**
+/*
  * 출퇴근 판정용 Holidays 조회.
  * NATIONAL: 전역 저장 (companyId IS NULL 무관, 타입만으로 매치). 대체공휴일도 별도 row 로 포함.
  * COMPANY : 해당 회사만.
@@ -18,12 +18,15 @@ import java.util.UUID;
 @Repository
 public interface HolidayLookupRepository extends JpaRepository<Holidays, Long> {
 
-    /**
+    /*
      * 주어진 날짜가 공휴일/사내일정인지 조회.
      * - isRepeating=true  : MONTH/DAY 만 매칭 (매년 반복)
      * - isRepeating=false : date 정확 일치
      * - NATIONAL 전역, COMPANY 는 companyId 일치 필요
      * 반환: 매치 목록. 0~2건 예상. NATIONAL/COMPANY 동시 매치 시 NATIONAL 우선 결정은 호출부.
+     */
+    /*
+     * 주어진 날짜가 공휴일/사내일정인지 조회 (단건).
      */
     @Query("""
             SELECT h FROM Holidays h
@@ -43,4 +46,29 @@ public interface HolidayLookupRepository extends JpaRepository<Holidays, Long> {
                                 @Param("target") LocalDate target,
                                 @Param("month") int month,
                                 @Param("day") int day);
+
+
+    /*
+     * 월 범위 공휴일 벌크 조회 - 일자별 30회 호출 → 1회로 최적화.
+     * isRepeating=true: 해당 월의 MONTH 매치 (매년 반복 공휴일)
+     * isRepeating=false: [start, end] 범위 내 date 매치 (비반복 공휴일/대체공휴일)
+     */
+    @Query("""
+            SELECT h FROM Holidays h
+             WHERE (
+                   (h.holidayType = com.peoplecore.entity.HolidayType.NATIONAL)
+                OR (h.holidayType = com.peoplecore.entity.HolidayType.COMPANY
+                    AND h.companyId = :companyId)
+             )
+               AND (
+                   (h.isRepeating = true
+                    AND FUNCTION('MONTH', h.date) = :month)
+                OR (h.isRepeating = false
+                    AND h.date BETWEEN :rangeStart AND :rangeEnd)
+             )
+            """)
+    List<Holidays> findMatchingForMonth(@Param("companyId") UUID companyId,
+                                        @Param("month") int month,
+                                        @Param("rangeStart") LocalDate rangeStart,
+                                        @Param("rangeEnd") LocalDate rangeEnd);
 }

@@ -20,8 +20,12 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /* 연차 발생 스케줄러 - 매일 자정 실행. 회사별 정책(HIRE/FISCAL) 따라 분기 */
 /* HIRE: 입사기념일(MONTH+DAY) 매치 사원 처리 */
@@ -111,7 +115,7 @@ public class AnnualGrantScheduler {
         }
 
         switch (policy.getPolicyBaseType()) {
-            case HIRE   -> processHire(company, policy, annualType, today);
+            case HIRE -> processHire(company, policy, annualType, today);
             case FISCAL -> processFiscal(company, policy, annualType, today);
         }
     }
@@ -120,17 +124,32 @@ public class AnnualGrantScheduler {
     /* 근속 2년 이상만 처리 (1년차는 AnnualTransition 담당) */
     private void processHire(Company company, VacationPolicy policy, VacationType annualType, LocalDate today) {
         UUID companyId = company.getCompanyId();
-        List<Employee> emps = employeeRepository.findByCompanyIdAndHireMonthDayAndEmpStatusIn(
+
+        /*2/29일 입사자 보정 - 비윤년 3/1에 2/29입사자도 기념일 도래로 판정 오늘이 3/1일이면서 윤년이 아니어야 함  */
+        boolean includeFeb29 = today.getMonthValue() == 3 && today.getDayOfMonth() == 1 && !today.isLeapYear();
+
+        List<Employee> emps = new ArrayList<>(employeeRepository.findByCompanyIdAndHireMonthDayAndEmpStatusIn(
                 companyId,
                 today.getMonthValue(),
                 today.getDayOfMonth(),
-                List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE));
+                List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE)));
+
+        if (includeFeb29) {
+            List<Employee> feb29Emps = employeeRepository.findByCompanyIdAndHireMonthDayAndEmpStatusIn(companyId, 2, 29, List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE));
+            /*중복 방지 후 병합 */
+            Set<Long> existing = emps.stream().map(Employee::getEmpId).collect(Collectors.toSet());
+            for (Employee e : feb29Emps) {
+                if (!existing.contains(e.getEmpId())) emps.add(e);
+            }
+        }
+
         if (emps.isEmpty()) return;
 
         log.info("[AnnualGrant-HIRE] companyId={}, 대상={}명", companyId, emps.size());
 
         for (Employee emp : emps) {
-            int yearsOfService = today.getYear() - emp.getEmpHireDate().getYear();
+            /*chronoUnit으로 만 연수 계산 - 월/일까지 고려 입사일 기준으로 정확히 1년이상이어야 함  today>= 기념일  */
+            int yearsOfService = (int) ChronoUnit.YEARS.between(emp.getEmpHireDate(), today);
             if (yearsOfService < MIN_HIRE_YEARS_OF_SERVICE) {
                 log.debug("[AnnualGrant-HIRE] 1년차 - AnnualTransition 담당. empId={}", emp.getEmpId());
                 continue;

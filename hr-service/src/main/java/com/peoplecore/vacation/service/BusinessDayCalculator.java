@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
 /* 영업일 계산기 - 주말(토/일) + 공휴일 제외 일수 산출 */
 /* 캐시: (companyId, yearMonth) → 공휴일 LocalDate Set (JSON). TTL 6시간 */
 /* 스케줄러(만근 판정, 월차 적립, 연차 발생)에서 반복 호출 → 캐시 히트율 높음 */
-/* TODO: HolidayLookupRepository 에 월 단위 range 쿼리 추가해 DB 30회 → 1회로 최적화 가능 */
 @Component
 @Slf4j
 public class BusinessDayCalculator {
@@ -111,13 +110,22 @@ public class BusinessDayCalculator {
     /* 해당 월의 일자별로 findMatching 호출 - isRepeating/비반복 모두 포함 */
     /* ~30회 호출이지만 캐시 miss 때만 발생 (스케줄러 하루 1~2회 실행 → 무시 가능) */
     private Set<LocalDate> queryHolidaysForMonth(UUID companyId, YearMonth ym) {
-        Set<LocalDate> result = new HashSet<>();
         LocalDate start = ym.atDay(1);
         LocalDate end = ym.atEndOfMonth();
-        for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
-            List<Holidays> matched = holidayLookupRepository.findMatching(
-                    companyId, d, d.getMonthValue(), d.getDayOfMonth());
-            if (!matched.isEmpty()) result.add(d);
+        List<Holidays> matched = holidayLookupRepository.findMatchingForMonth(companyId, ym.getMonthValue(), start, end);
+
+        /* isRepeating = true 인 경우 date 가 기준 연도가 아닐 수 있어 해당 월의 실제 날짜로 변환 */
+        Set<LocalDate> result = new HashSet<>();
+        for (Holidays h : matched) {
+            if (h.getIsRepeating()) {
+                /*매년 반복 - 저장된 date의 월/일을 현재 연도 월에 매핑*/
+                int day = h.getDate().getDayOfMonth();
+                if (day <= end.getDayOfMonth()) {
+                    result.add(LocalDate.of(ym.getYear(), ym.getMonth(), day));
+                }
+            } else {
+                result.add(h.getDate());
+            }
         }
         return result;
     }
