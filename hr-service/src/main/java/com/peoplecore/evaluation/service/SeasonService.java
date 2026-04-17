@@ -128,7 +128,7 @@ public class SeasonService {
 
         java.time.LocalDate seasonStart = req.getStartDate();
         java.time.LocalDate seasonEnd = req.getEndDate();
-        java.time.LocalDate prevEnd = null;
+        java.time.LocalDate prevStart = null;
 
         for (int i = 0; i < stages.size(); i++) {
             SeasonCreateRequestDto.StageInput s = stages.get(i);
@@ -142,10 +142,11 @@ public class SeasonService {
             if (s.getStartDate().isBefore(seasonStart) || s.getEndDate().isAfter(seasonEnd)) {
                 throw new IllegalArgumentException((i + 1) + "번째 단계는 시즌 기간 내여야 합니다");
             }
-            if (prevEnd != null && s.getStartDate().isBefore(prevEnd)) {
-                throw new IllegalArgumentException((i + 1) + "번째 단계는 이전 단계 이후에 시작해야 합니다");
+            // 시작일 순서만 보장 (이전 단계 종료일과 겹침 허용)
+            if (prevStart != null && !s.getStartDate().isAfter(prevStart)) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계 시작일은 이전 단계 시작일보다 늦어야 합니다");
             }
-            prevEnd = s.getEndDate();
+            prevStart = s.getStartDate();
         }
     }
 

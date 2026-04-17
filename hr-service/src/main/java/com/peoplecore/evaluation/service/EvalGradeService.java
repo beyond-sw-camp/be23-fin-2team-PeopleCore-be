@@ -14,9 +14,12 @@ import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.domain.Calibration;
 import com.peoplecore.evaluation.dto.*;
+import com.peoplecore.evaluation.domain.Stage;
+import com.peoplecore.evaluation.domain.StageStatus;
 import com.peoplecore.evaluation.repository.CalibrationRepository;
 import com.peoplecore.evaluation.repository.EvalGradeRepository;
 import com.peoplecore.evaluation.repository.EvaluationRulesRepository;
+import com.peoplecore.evaluation.repository.StageRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -39,6 +42,7 @@ public class EvalGradeService {
     private final EvaluationRulesRepository rulesRepository;
     private final DepartmentRepository departmentRepository;
     private final CalibrationRepository calibrationRepository;
+    private final StageRepository stageRepository;
     private final ObjectMapper objectMapper;
     private final EmployeeRepository employeeRepository;
 
@@ -46,11 +50,13 @@ public class EvalGradeService {
                             EvaluationRulesRepository rulesRepository,
                             DepartmentRepository departmentRepository,
                             CalibrationRepository calibrationRepository,
+                            StageRepository stageRepository,
                             ObjectMapper objectMapper, EmployeeRepository employeeRepository) {
         this.evalGradeRepository = evalGradeRepository;
         this.rulesRepository = rulesRepository;
         this.departmentRepository = departmentRepository;
         this.calibrationRepository = calibrationRepository;
+        this.stageRepository = stageRepository;
         this.objectMapper = objectMapper;
         this.employeeRepository = employeeRepository;
     }
@@ -84,6 +90,8 @@ public class EvalGradeService {
         if (season.getStatus() != EvalSeasonStatus.OPEN) {
             throw new IllegalStateException("진행중 시즌만 산정 가능");
         }
+//        단계 검증 (4단계 또는 5단계가 진행중이어야 수동 산정 가능)
+        requireGradingStageOpen(seasonId);
 
 //        스냅샷 파싱
         FormSnapshotDto snapshot;
@@ -162,6 +170,22 @@ public class EvalGradeService {
 
     // 헬퍼
 
+    // "등급 산정 및 보정"(4단계) 또는 "결과확정"(5단계)가 IN_PROGRESS인지 검증
+    private void requireGradingStageOpen(Long seasonId) {
+        List<Stage> stages = stageRepository.findBySeason_SeasonId(seasonId);
+        boolean open = false;
+        for (Stage stage : stages) {
+            if ((stage.getOrderNo() == 4 || stage.getOrderNo() == 5)
+                    && stage.getStatus() == StageStatus.IN_PROGRESS) {
+                open = true;
+                break;
+            }
+        }
+        if (!open) {
+            throw new IllegalStateException("등급 산정 또는 결과확정 단계가 진행중이 아닙니다");
+        }
+    }
+
     // 잠금 항목(자기평가/상위자평가)의 체크박스 off 여부 판정
     //   - locked=true AND enabled=false 인 경우에만 비활성으로 간주
     //   - 일반 항목이나 enabled 미지정(null)/true 는 사용 중
@@ -214,6 +238,8 @@ public class EvalGradeService {
         if (season.getStatus() != EvalSeasonStatus.OPEN) {
             throw new IllegalStateException("진행중 시즌만 산정 가능");
         }
+//        단계 검증
+        requireGradingStageOpen(seasonId);
 
         // b.스냅샷 파싱
         FormSnapshotDto snapshot;
@@ -356,6 +382,8 @@ public class EvalGradeService {
         if (season.getStatus() != EvalSeasonStatus.OPEN) {
             throw new IllegalStateException("진행중인 시즌만 재분배가 가능합니다");
         }
+//        단계 검증
+        requireGradingStageOpen(seasonId);
 
 //        스냅샷 파싱
         FormSnapshotDto snapshot;
