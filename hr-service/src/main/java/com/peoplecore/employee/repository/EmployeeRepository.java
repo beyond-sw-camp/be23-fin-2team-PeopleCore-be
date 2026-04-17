@@ -104,7 +104,7 @@ AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
     @Query("""
 SELECT COUNT(e) FROM Employee e
 WHERE e.company.companyId = :companyId
-AND e.contractEndDate BETWEEN : now AND : deadline
+AND e.contractEndDate BETWEEN :now AND :deadline
 AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
 """)
     int countExpiringContracts(@Param("companyId")UUID companyId,

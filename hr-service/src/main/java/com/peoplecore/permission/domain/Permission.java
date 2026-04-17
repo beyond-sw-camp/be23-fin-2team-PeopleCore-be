@@ -39,6 +39,10 @@ public class Permission {
     @Column(name = "status")
     private PermissionStatus status;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grantor_id")
+    private Employee grantor;        // 권한 부여/회수 수행자
+
     @Column(name = "reason")
     private String reason;
 

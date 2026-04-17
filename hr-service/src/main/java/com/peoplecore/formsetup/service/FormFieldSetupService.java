@@ -41,6 +41,13 @@ public class FormFieldSetupService {
     // 1. 폼 설정 조회 (회사 등록 시 들어간 sql)
     public List<FormFieldSetupResponse> getSetup(UUID companyId, FormType formType) {
         List<FormFieldSetup> entities = repository.findAllByCompany_CompanyIdAndFormTypeOrderBySectionAscSortOrderAsc(companyId, formType);
+
+        // 첫 조회 시 기본값 자동 생성 (회사 생성 시 누락된 경우 대비)
+        if (entities.isEmpty()) {
+            initDefault(companyId, formType);
+            entities = repository.findAllByCompany_CompanyIdAndFormTypeOrderBySectionAscSortOrderAsc(companyId, formType);
+        }
+
         List<FormFieldSetupResponse> result = new ArrayList<>();
         for (FormFieldSetup entity : entities) {
 //            연봉 form 조회 시 급여부분 skip
@@ -63,7 +70,7 @@ public class FormFieldSetupService {
                         .visible(true)
                         .required(false)
                         .sortOrder(order++)
-                        .locked(true)
+                        .locked(false)
                         .build());
             }
 
