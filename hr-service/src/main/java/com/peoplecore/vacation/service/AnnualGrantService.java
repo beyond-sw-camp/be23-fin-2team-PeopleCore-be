@@ -166,7 +166,7 @@ public class AnnualGrantService {
                                 companyId, annualType, emp, balanceYear, today, expiresAt)));
 
         BigDecimal before = balance.getTotalDays();
-        balance.accrue(grantDays);
+        balance.accrue(grantDays,grantDays);
         BigDecimal after = balance.getTotalDays();
         vacationLedgerRepository.save(VacationLedger.ofInitialGrant(balance, grantDays, before, after));
 

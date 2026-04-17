@@ -166,4 +166,22 @@ public class VacationLedger extends BaseTimeEntity {
                 .beforeTotalDays(beforeTotal)
                 .afterTotalDays(afterTotal);
     }
+
+    /* INSERT 직전 부호 검증 - 팩토리 우회 직접 builder 사용 시에도 마지막 방어선 */
+    /* credit 이벤트는 changeDays > 0, debit 이벤트는 changeDays < 0 여야 함 */
+    @PrePersist
+    private void validateSignContract() {
+        if (eventType == null || changeDays == null) {
+            throw new IllegalStateException("VacationLedger eventType/changeDays null - ledgerId=" + ledgerId);
+        }
+        int sign = changeDays.signum();
+        if (eventType.isCredit() && sign < 0) {
+            throw new IllegalStateException("credit event 는 changeDays >= 0 이어야 함 - eventType="
+                    + eventType + ", changeDays=" + changeDays);
+        }
+        if (eventType.isDebit() && sign > 0) {
+            throw new IllegalStateException("debit event 는 changeDays <= 0 이어야 함 - eventType="
+                    + eventType + ", changeDays=" + changeDays);
+        }
+    }
 }

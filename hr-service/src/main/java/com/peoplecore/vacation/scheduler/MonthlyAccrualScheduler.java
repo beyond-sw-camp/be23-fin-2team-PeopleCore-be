@@ -71,19 +71,23 @@ public class MonthlyAccrualScheduler {
             return;
         }
         log.info("[MonthlyAccrual] 시작 - date={}", today);
-
-        List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
-        int processedCompanies = 0;
-        for (Company company : activeCompanies) {
-            try {
-                processCompany(company, today);
-                processedCompanies++;
-            } catch (Exception e) {
-                log.error("[MonthlyAccrual] 회사 처리 실패 - companyId={}, err={}",
-                        company.getCompanyId(), e.getMessage(), e);
+        try {
+            List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
+            int processedCompanies = 0;
+            for (Company company : activeCompanies) {
+                try {
+                    processCompany(company, today);
+                    processedCompanies++;
+                } catch (Exception e) {
+                    log.error("[MonthlyAccrual] 회사 처리 실패 - companyId={}, err={}",
+                            company.getCompanyId(), e.getMessage(), e);
+                }
             }
+            log.info("[MonthlyAccrual] 완료 - date={}, companies={}/{}", today, processedCompanies, activeCompanies.size());
+        } finally {
+            /* 스케줄러 종료시 즉시 해제 -> schedular가 얼마만에 끝날지 모르기 때문에 */
+            redisTemplate.delete(lockKey);
         }
-        log.info("[MonthlyAccrual] 완료 - date={}, companies={}/{}", today, processedCompanies, activeCompanies.size());
     }
 
     /* 회사 단위 처리 - MONTHLY 유형 조회 + N=1~11 루프 */

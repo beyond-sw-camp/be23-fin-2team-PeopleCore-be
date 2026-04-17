@@ -109,9 +109,14 @@ public class VacationBalance extends BaseTimeEntity {
 
 
     /* 잔여 적립 - ACCRUAL/INITIAL_GRANT/MANUAL_GRANT 시 호출. total += days */
-    /* 캡 검증(월차 11일 등)은 호출부 책임 (MonthlyAccrualScheduler 가 코드 상수로 처리) */
-    public void accrue(BigDecimal days) {
+    /* 캡 검증(월차 11일 등)은 호출부 책임 (MonthlyAccrualScheduler 가 코드 상수로 처리)
+     * days 추가 시 total이 cap 초과면 VACAtion_balance_cap_EXCEEDED*/
+    public void accrue(BigDecimal days, BigDecimal cap) {
         validatePositive(days);
+        BigDecimal next = this.totalDays.add(days);
+        if (cap != null && next.compareTo(cap) > 0) {
+            throw new CustomException(ErrorCode.VACATION_BALANCE_CAP_EXCEEDED);
+        }
         this.totalDays = this.totalDays.add(days);
     }
 
