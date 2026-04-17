@@ -4,11 +4,12 @@ import com.peoplecore.company.domain.Company;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.dto.VacationGrantBasisDto;
+import com.peoplecore.vacation.dto.VacationPromotionPolicyDto;
 import com.peoplecore.vacation.dto.VacationRuleCreateRequest;
 import com.peoplecore.vacation.dto.VacationRuleResponse;
-import com.peoplecore.vacation.entity.VacationCreateRule;
+import com.peoplecore.vacation.entity.VacationGrantRule;
 import com.peoplecore.vacation.entity.VacationPolicy;
-import com.peoplecore.vacation.repository.VacationCreateRuleRepository;
+import com.peoplecore.vacation.repository.VacationGrantRuleRepository;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,137 +19,116 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * 연차 정책 / 발생 규칙 서비스
-
- */
+/* 연차 정책 / 발생 규칙 / 촉진 정책 서비스 */
 @Service
 @Slf4j
 @Transactional(readOnly = true)
 public class VacationPolicyService {
 
     private final VacationPolicyRepository vacationPolicyRepository;
-    private final VacationCreateRuleRepository vacationCreateRuleRepository;
+    private final VacationGrantRuleRepository vacationGrantRuleRepository;
 
     @Autowired
     public VacationPolicyService(VacationPolicyRepository vacationPolicyRepository,
-                                 VacationCreateRuleRepository vacationCreateRuleRepository) {
+                                 VacationGrantRuleRepository vacationGrantRuleRepository) {
         this.vacationPolicyRepository = vacationPolicyRepository;
-        this.vacationCreateRuleRepository = vacationCreateRuleRepository;
+        this.vacationGrantRuleRepository = vacationGrantRuleRepository;
     }
 
-    /* ========== 회사 생성 시 기본 정책 초기화 ========== */
-
-    /**
-     * 회사 생성 시 기본 연차 정책 1건 자동 생성 (멱등)
-     */
+    /* 회사 생성 시 기본 정책 + 발생 규칙 11건 자동 INSERT (멱등) */
     @Transactional
     public void initDefault(Company company) {
-        if (vacationPolicyRepository.existsByCompanyId(company.getCompanyId())) {
-            log.info("VacationPolicy 이미 존재 - companyId={}, 초기화 스킵", company.getCompanyId());
+        UUID companyId = company.getCompanyId();
+        if (vacationPolicyRepository.existsByCompanyId(companyId)) {
+            log.info("VacationPolicy 이미 존재 - companyId={}, 초기화 스킵", companyId);
             return;
         }
-        vacationPolicyRepository.save(VacationPolicy.createDefault(company.getCompanyId(), 0L));
-        log.info("VacationPolicy 기본 정책 생성 완료 - companyId={}", company.getCompanyId());
+        VacationPolicy policy = VacationPolicy.createDefault(companyId, 0L);
+        policy.getGrantRules().addAll(VacationGrantRule.createCompanyDefaults(policy, 0L));
+        vacationPolicyRepository.save(policy);
+        log.info("VacationPolicy 기본 정책 + 규칙 {}건 생성 완료 - companyId={}",
+                policy.getGrantRules().size(), companyId);
     }
 
-    /* ========== 연차 지급 기준 ========== */
-
-    /**
-     * 연차 지급 기준 조회
-     */
+    /* 연차 지급 기준 조회 */
     public VacationGrantBasisDto getVacationGrantBasis(UUID companyId) {
-        return VacationGrantBasisDto.from(findSingleOrThrow(companyId));
+        return VacationGrantBasisDto.from(findOrThrow(companyId));
     }
 
-    /**
-     * 연차 지급 기준 변경 (상태 패턴)
-     */
+    /* 연차 지급 기준 변경 (HIRE/FISCAL 전환) - 상태 패턴 위임 */
     @Transactional
     public VacationGrantBasisDto updateVacationGrantBasis(UUID companyId, VacationGrantBasisDto dto) {
-        VacationPolicy policy = findSingleOrThrow(companyId);
+        VacationPolicy policy = findOrThrow(companyId);
         VacationPolicy.PolicyBaseType newBasis = VacationPolicy.PolicyBaseType.valueOf(dto.getGrantBasis());
         policy.changeGrantBasis(newBasis, dto.getFiscalYearStart());
         return VacationGrantBasisDto.from(policy);
     }
 
-    /* ========== 연차 발생 규칙 ========== */
-
-    /**
-     * 연차 발생 규칙 전체 조회
-     */
+    /* 연차 발생 규칙 전체 조회 (정책 + 규칙 fetch join) */
     public List<VacationRuleResponse> getVacationRules(UUID companyId) {
-        VacationPolicy policy = findSingleOrThrowWithRules(companyId);
-        return policy.getCreateRules().stream()
+        VacationPolicy policy = findOrThrowFetchRules(companyId);
+        return policy.getGrantRules().stream()
                 .map(VacationRuleResponse::from)
                 .toList();
     }
 
-    /**
-     * 연차 발생 규칙 추가
-
-     */
+    /* 연차 발생 규칙 추가 - cascade ALL 로 자식 INSERT */
     @Transactional
-    public VacationRuleResponse createVacationRule(UUID companyId, Long empId, VacationRuleCreateRequest request) {
-        VacationPolicy policy = findSingleOrThrow(companyId);
-        VacationCreateRule rule = VacationCreateRule.create(policy,
+    public VacationRuleResponse createVacationRule(UUID companyId, Long empId,
+                                                   VacationRuleCreateRequest request) {
+        VacationPolicy policy = findOrThrow(companyId);
+        VacationGrantRule rule = VacationGrantRule.create(policy,
                 request.getMinYears(), request.getMaxYears(),
                 request.getDays(), request.getDesc(), empId);
-        policy.getCreateRules().add(rule);
+        policy.getGrantRules().add(rule);
         return VacationRuleResponse.from(rule);
     }
 
-    /**
-     * 연차 발생 규칙 수정
-     */
+    /* 연차 발생 규칙 수정 */
     @Transactional
     public VacationRuleResponse updateLeaveRule(Long ruleId, VacationRuleCreateRequest request) {
-        VacationCreateRule rule = vacationCreateRuleRepository.findById(ruleId)
+        VacationGrantRule rule = vacationGrantRuleRepository.findById(ruleId)
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_RULE_NOT_FOUND));
-        rule.update(request.getMinYears(), request.getMaxYears(), request.getDays(), request.getDesc());
+        rule.update(request.getMinYears(), request.getMaxYears(),
+                request.getDays(), request.getDesc());
         return VacationRuleResponse.from(rule);
     }
 
-    /**
-     * 연차 발생 규칙 삭제
-
-     */
+    /* 연차 발생 규칙 삭제 */
     @Transactional
     public void deleteVacationRule(Long ruleId) {
-        if (!vacationCreateRuleRepository.existsById(ruleId)) {
+        if (!vacationGrantRuleRepository.existsById(ruleId)) {
             throw new CustomException(ErrorCode.VACATION_RULE_NOT_FOUND);
         }
-        vacationCreateRuleRepository.deleteById(ruleId);
+        vacationGrantRuleRepository.deleteById(ruleId);
     }
 
-    /* ========== 내부 유틸 ========== */
-
-    /**
-     * 정책 단건 조회 (규칙 미포함)
-     * - 규칙이 필요 없는 지급 기준 조회/수정용
-     */
-    private VacationPolicy findSingleOrThrow(UUID companyId) {
-        return reduceToSingle(vacationPolicyRepository.findAllByCompanyId(companyId), companyId);
+    /* 연차 촉진 정책 조회 */
+    public VacationPromotionPolicyDto getPromotionPolicy(UUID companyId) {
+        return VacationPromotionPolicyDto.from(findOrThrow(companyId));
     }
 
-    /**
-     * 정책 단건 조회
-     */
-    private VacationPolicy findSingleOrThrowWithRules(UUID companyId) {
-        return reduceToSingle(vacationPolicyRepository.findAllByCompanyIdFetchRules(companyId), companyId);
+    /* 연차 촉진 정책 변경 - DTO 받아 엔티티에 위임 */
+    /* isActive=true 인데 firstMonthsBefore null 이면 엔티티 updatePromotionPolicy 가 VACATION_POLICY_FIRST_NOTICE_REQUIRED 예외 */
+    @Transactional
+    public void updatePromotionPolicy(UUID companyId, VacationPromotionPolicyDto dto) {
+        VacationPolicy policy = findOrThrow(companyId);
+        policy.updatePromotionPolicy(
+                Boolean.TRUE.equals(dto.getIsActive()),
+                dto.getFirstMonthsBefore(),
+                dto.getSecondMonthsBefore()
+        );
     }
 
-    /**
-     * 정책 리스트 → 단건 검증/반환 공통 로직
-     */
-    private VacationPolicy reduceToSingle(List<VacationPolicy> policies, UUID companyId) {
-        if (policies.isEmpty()) {
-            throw new CustomException(ErrorCode.VACATION_POLICY_NOT_FOUND);
-        }
-        if (policies.size() > 1) {
-            log.error("VacationPolicy 중복 탐지 - companyId={}, count={}", companyId, policies.size());
-            throw new CustomException(ErrorCode.VACATION_POLICY_DUPLICATED);
-        }
-        return policies.get(0);
+    /* 정책 단건 조회 (규칙 미포함) */
+    private VacationPolicy findOrThrow(UUID companyId) {
+        return vacationPolicyRepository.findByCompanyId(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_POLICY_NOT_FOUND));
+    }
+
+    /* 정책 + 규칙 fetch join */
+    private VacationPolicy findOrThrowFetchRules(UUID companyId) {
+        return vacationPolicyRepository.findByCompanyIdFetchRules(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_POLICY_NOT_FOUND));
     }
 }

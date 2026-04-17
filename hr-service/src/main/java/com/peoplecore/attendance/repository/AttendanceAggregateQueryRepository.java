@@ -8,15 +8,14 @@ import com.peoplecore.attendance.entity.QCommuteRecord;
 import com.peoplecore.attendance.entity.QWorkGroup;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.QEmployee;
-import com.peoplecore.vacation.entity.QVacationReq;
-import com.peoplecore.vacation.entity.VacationStatus;
+import com.peoplecore.vacation.entity.QVacationRequest;
+import com.peoplecore.vacation.entity.RequestStatus;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.expression.spel.ast.Projection;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
@@ -72,14 +71,13 @@ public class AttendanceAggregateQueryRepository {
     public List<WeekVacationRow> fetApprovedVacationInWeek(UUID companyId, List<Long> empIds, LocalDate weekStart, LocalDate weekEnd) {
         if (empIds == null || empIds.isEmpty()) return List.of();
 
-        QVacationReq vr = QVacationReq.vacationReq;
+        QVacationRequest vr = QVacationRequest.vacationRequest;
 
         LocalDateTime weekStartAt = weekStart.atStartOfDay();
         LocalDateTime weekEndAt = weekEnd.atTime(LocalTime.MAX);
 
-        return queryFactory.select(Projections.fields(WeekVacationRow.class, vr.employee.empId.as("empId"), vr.vacReqStartat.as("startAt"), vr.vacReqEndat.as("endAt"))).from(vr).where(vr.companyId.eq(companyId), vr.employee.empId.in(empIds), vr.vacReqStatus.eq(VacationStatus.APPROVED), vr.vacReqStartat.loe(weekEndAt), vr.vacReqEndat.goe(weekStartAt)).fetch();
+        return queryFactory.select(Projections.fields(WeekVacationRow.class, vr.employee.empId.as("empId"), vr.requestStartAt.as("startAt"), vr.requestEndAt.as("endAt"))).from(vr).where(vr.companyId.eq(companyId), vr.employee.empId.in(empIds), vr.requestStatus.eq(RequestStatus.APPROVED), vr.requestStartAt.loe(weekEndAt), vr.requestEndAt.goe(weekStartAt)).fetch();
 
     }
-
 
 }

@@ -20,6 +20,7 @@ import com.peoplecore.pay.service.PayItemsService;
 import com.peoplecore.pay.service.PaySettingsService;
 import com.peoplecore.title.service.TitleService;
 import com.peoplecore.vacation.service.VacationPolicyService;
+import com.peoplecore.vacation.service.VacationTypeService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -50,9 +51,11 @@ public class CompanyService {
     private final ObjectMapper objectMapper;
     private final WorkGroupService workGroupService;
     private final VacationPolicyService vacationPolicyService;
+    private final VacationTypeService vacationTypeService;
+
 
     @Autowired
-    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, VacationPolicyService vacationPolicyService) {
+    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, VacationPolicyService vacationPolicyService, VacationTypeService vacationTypeService) {
         this.companyRepository = companyRepository;
         this.departmentService = departmentService;
         this.gradeService = gradeService;
@@ -67,6 +70,7 @@ public class CompanyService {
         this.objectMapper = objectMapper;
         this.workGroupService = workGroupService;
         this.vacationPolicyService = vacationPolicyService;
+        this.vacationTypeService = vacationTypeService;
     }
 
     //    1. 회사 등록 + 기본데이터 세팅 + superAdmin 생성
@@ -98,6 +102,7 @@ public class CompanyService {
         insuranceRatesService.initDefault(company);
         paySettingsService.initDefault(company);
         workGroupService.initDefault(company);
+        vacationTypeService.initDefault(company);     /* ← 신규 추가 (시스템 예약 유형 2건) */
         vacationPolicyService.initDefault(company);
 
 
