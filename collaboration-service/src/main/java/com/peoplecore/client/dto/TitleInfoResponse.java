@@ -4,13 +4,15 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.UUID;
 
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class DeptInfoResponse {
+public class TitleInfoResponse {
+    private Long titleId;
+    private UUID companyId;
     private Long deptId;
-    private Long parentDeptId;
-    private String deptName;
-    private String deptCode;
+    private String titleName;
+    private String titleCode;
 }
