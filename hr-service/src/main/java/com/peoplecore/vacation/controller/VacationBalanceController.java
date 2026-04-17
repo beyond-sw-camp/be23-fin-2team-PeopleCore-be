@@ -4,6 +4,7 @@ import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.vacation.dto.VacationBalanceResponse;
 import com.peoplecore.vacation.dto.VacationGrantRequest;
 import com.peoplecore.vacation.service.VacationBalanceService;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,13 +33,16 @@ public class VacationBalanceController {
         return ResponseEntity.ok(vacationBalanceService.listMine(companyId, empId, year));
     }
 
-    /* 관리자 일괄 부여 - 다수 사원 선택. managerId 는 X-User-Id 에서 추출 */
+    /* 관리자 일괄 부여 */
+    /* @Valid: VacationGrantRequest 검증 (@NotNull/@NotEmpty/@Positive). 실패 시 400 BAD_REQUEST */
+    /* @RoleRequired: HR_SUPER_ADMIN / HR_ADMIN 만 허용. 미일치 시 403 */
+    /* managerId 는 X-User-Id 헤더에서 추출 → VacationLedger.managerId 에 저장되어 감사 추적 */
     @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
     @PostMapping("/grant")
     public ResponseEntity<Void> grant(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long managerId,
-            @RequestBody VacationGrantRequest request) {
+            @Valid @RequestBody VacationGrantRequest request) {
         vacationBalanceService.grantBulk(companyId, managerId, request);
         return ResponseEntity.ok().build();
     }

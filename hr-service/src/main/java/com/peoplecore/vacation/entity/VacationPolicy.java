@@ -141,10 +141,13 @@ public class VacationPolicy extends BaseTimeEntity {
     }
 
     /* 회사 생성 시 기본 정책 - HIRE 기준, 촉진 비활성, 규칙 11건 부착은 호출부에서 */
+    /* HIRE 기준, 촉진 비활성, 규칙 부착은 호출부가 별도 처리 */
+    /* creatorEmpId null 이면 SYSTEM_EMP_ID 로 대체 - 레거시 0L 도 허용 */
     public static VacationPolicy createDefault(UUID companyId, Long creatorEmpId) {
+        Long effectiveCreator = (creatorEmpId != null) ? creatorEmpId : SYSTEM_EMP_ID;
         return VacationPolicy.builder()
                 .companyId(companyId)
-                .policyEmpId(creatorEmpId)
+                .policyEmpId(effectiveCreator)
                 .policyBaseType(PolicyBaseType.HIRE)
                 .policyFiscalYearStart(null)
                 .isPromotionActive(false)
@@ -152,4 +155,10 @@ public class VacationPolicy extends BaseTimeEntity {
                 .secondNoticeMonthsBefore(null)
                 .build();
     }
+
+    /* 시스템 자동 생성 유저 ID - initDefault / createCompanyDefaults 등에서 사용 */
+    /* 실제 사원 ID(양수) 와 충돌 방지를 위해 음수 예약 */
+    public static final Long SYSTEM_EMP_ID = -1L;
+
+
 }
