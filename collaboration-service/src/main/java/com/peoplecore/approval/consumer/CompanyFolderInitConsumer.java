@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.approval.service.ApprovalFormService;
 import com.peoplecore.event.CompanyCreateEvent;
 import com.peoplecore.exception.BusinessException;
+import com.peoplecore.filevault.entity.FolderType;
+import com.peoplecore.filevault.service.FileFolderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.DltHandler;
@@ -19,11 +21,15 @@ import java.util.UUID;
 public class CompanyFolderInitConsumer {
 
     private final ApprovalFormService formService;
+    private final FileFolderService folderService;
     private final ObjectMapper objectMapper;
 
     @Autowired
-    public CompanyFolderInitConsumer(ApprovalFormService formService, ObjectMapper objectMapper) {
+    public CompanyFolderInitConsumer(ApprovalFormService formService,
+                                     FileFolderService folderService,
+                                     ObjectMapper objectMapper) {
         this.formService = formService;
+        this.folderService = folderService;
         this.objectMapper = objectMapper;
     }
 
@@ -34,8 +40,11 @@ public class CompanyFolderInitConsumer {
         try {
             CompanyCreateEvent event = objectMapper.readValue(message, CompanyCreateEvent.class);
             formService.initFormFolder(event.getCompanyId());
+            folderService.createSystemDefaultFolder(
+                event.getCompanyId(), "전사 파일함", FolderType.COMPANY, null, null, 0L);
+            log.info("[FileVault] 전사 기본 파일함 생성 완료 companyId={}", event.getCompanyId());
         } catch (Exception e) {
-            log.error("양식 폴더 초기화 이벤트 처리 실패: {}", e.getMessage());
+            log.error("폴더 초기화 이벤트 처리 실패: {}", e.getMessage());
             throw new BusinessException("오류 발생");
         }
     }

@@ -12,12 +12,14 @@ import lombok.NoArgsConstructor;
 @Builder
 public class InternalDeptResponseDto {
     private Long deptId;
+    private Long parentDeptId;
     private String deptName;
     private String deptCode;
 
     public static InternalDeptResponseDto from(Department dept) {
         return InternalDeptResponseDto.builder()
                 .deptId(dept.getDeptId())
+                .parentDeptId(dept.getParentDeptId())
                 .deptName(dept.getDeptName())
                 .deptCode(dept.getDeptCode())
                 .build();

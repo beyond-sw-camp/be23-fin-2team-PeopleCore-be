@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.netflix.discovery.converters.Auto;
 import com.peoplecore.client.component.HrCacheService;
 import com.peoplecore.event.DeptUpdatedEvent;
+import com.peoplecore.event.TitleUpdatedEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -31,6 +32,17 @@ public class HrEventConsumer {
             log.info("부서 캐시 무효화 완료 deptId = {}", event.getDeptId());
         } catch (Exception e) {
             log.error("부서 변경 이벤트 처리 싪패 error = {}", e.getMessage());
+        }
+    }
+
+    @KafkaListener(topics = "hr-title-updated", groupId = "collaboration-service")
+    public void handleTitleUpdated(String message) {
+        try {
+            TitleUpdatedEvent event = objectMapper.readValue(message, TitleUpdatedEvent.class);
+            hrCacheService.evictTitle(event.getTitleId());
+            log.info("직책 캐시 무효화 완료 titleId = {}", event.getTitleId());
+        } catch (Exception e) {
+            log.error("직책 변경 이벤트 처리 실패 error = {}", e.getMessage());
         }
     }
 }

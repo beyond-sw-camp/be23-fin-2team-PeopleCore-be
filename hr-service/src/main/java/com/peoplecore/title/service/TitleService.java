@@ -1,9 +1,12 @@
 package com.peoplecore.title.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.department.domain.UseStatus;
 import com.peoplecore.department.repository.DepartmentRepository;
+import com.peoplecore.event.TitleUpdatedEvent;
 import com.peoplecore.title.domain.Title;
 import com.peoplecore.title.dto.DepartmentSimpleResponse;
 import com.peoplecore.title.dto.TitleCreateRequest;
@@ -11,6 +14,8 @@ import com.peoplecore.title.dto.TitleResponse;
 import com.peoplecore.title.dto.TitleUpdateRequest;
 import com.peoplecore.title.repository.TitleRepository;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,16 +26,24 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 @Transactional
 public class TitleService {
     private final TitleRepository titleRepository;
     private final DepartmentRepository departmentRepository;
     private final EmployeeRepository employeeRepository;
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ObjectMapper objectMapper;
+    private static final String TOPIC_TITLE_UPDATED = "hr-title-updated";
 
-    public TitleService(TitleRepository titleRepository, DepartmentRepository departmentRepository, EmployeeRepository employeeRepository) {
+    public TitleService(TitleRepository titleRepository, DepartmentRepository departmentRepository,
+                        EmployeeRepository employeeRepository,
+                        KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
         this.titleRepository = titleRepository;
         this.departmentRepository = departmentRepository;
         this.employeeRepository = employeeRepository;
+        this.kafkaTemplate = kafkaTemplate;
+        this.objectMapper = objectMapper;
     }
 
     public List<TitleResponse> getTitles(UUID companyId) {
@@ -105,6 +118,8 @@ public class TitleService {
 
         title.update(request.getTitleName(), request.getDeptId());
 
+        publishTitleUpdatedEvent(titleId);
+
         String deptName = title.getDeptId() == null
                 ? "전사 공통"
                 : departmentRepository.findById(title.getDeptId())
@@ -127,6 +142,21 @@ public class TitleService {
         }
 
         titleRepository.delete(title);
+
+        publishTitleUpdatedEvent(titleId);
+    }
+
+    /* 직책 변경 이벤트 kafka로 발행 (실패해도 메인 로직에 영향 없음) */
+    private void publishTitleUpdatedEvent(Long titleId) {
+        try {
+            String message = objectMapper.writeValueAsString(new TitleUpdatedEvent(titleId));
+            kafkaTemplate.send(TOPIC_TITLE_UPDATED, String.valueOf(titleId), message);
+            log.info("직책 변경 이벤트 발행 완료 topic = {}, titleId = {}", TOPIC_TITLE_UPDATED, titleId);
+        } catch (JsonProcessingException e) {
+            log.error("직책 변경 이벤트 직렬화 실패 titleId = {}, error = {}", titleId, e.getMessage());
+        } catch (Exception e) {
+            log.error("직책 변경 이벤트 발행 실패 titleId = {}, error = {}", titleId, e.getMessage());
+        }
     }
 
 

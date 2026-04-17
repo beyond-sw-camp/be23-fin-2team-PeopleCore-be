@@ -3,6 +3,7 @@ package com.peoplecore.client.component;
 import com.peoplecore.client.dto.CompanyInfoResponse;
 import com.peoplecore.client.dto.DeptInfoResponse;
 import com.peoplecore.client.dto.EmployeeSimpleResDto;
+import com.peoplecore.client.dto.TitleInfoResponse;
 import com.peoplecore.exception.BusinessException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +39,19 @@ public class HrServiceClient {
     public DeptInfoResponse getDeptFallback(Long deptId, Throwable t) {
         log.warn("HR 서비스 부서 조회 실패 deptId: {}, error: {}", deptId, t.getMessage());
         throw new BusinessException("HR 서비스 연결 실패: 부서 정보를 조회할 수 없습니다.", HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    @CircuitBreaker(name = "hrService", fallbackMethod = "getTitleFallback")
+    public TitleInfoResponse getTitle(Long titleId) {
+        return restClient.get()
+                .uri("/internal/title/{titleId}", titleId)
+                .retrieve()
+                .body(TitleInfoResponse.class);
+    }
+
+    public TitleInfoResponse getTitleFallback(Long titleId, Throwable t) {
+        log.warn("HR 서비스 직책 조회 실패 titleId: {}, error: {}", titleId, t.getMessage());
+        throw new BusinessException("HR 서비스 연결 실패: 직책 정보를 조회할 수 없습니다.", HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     @CircuitBreaker(name = "hrService", fallbackMethod = "getCompanyFallback")
