@@ -45,6 +45,15 @@ public class Season extends BaseTimeEntity {
     @Column(name = "finalized_at")
     private LocalDateTime finalizedAt; // 최종 등급 확정 시각 (이후 수정 불가)
 
+    // 시즌 OPEN 시점에 회사 규칙(EvaluationRules.formValues)을 통째로 복사해 박제
+    // 이후 평가 산정/보정/분포 계산은 모두 이 스냅샷 기준
+    @Column(name = "form_snapshot", columnDefinition = "JSON")
+    private String formSnapshot;
+
+    // 스냅샷 찍을 때의 회사 규칙 버전 (감사 추적용)
+    @Column(name = "form_version")
+    private Long formVersion;
+
     public void updateBasicInfo(String name, String period, LocalDate startDate, LocalDate endDate){
         this.name = name;
         this.period = period;
@@ -59,5 +68,11 @@ public class Season extends BaseTimeEntity {
 //    OPEN → CLOSED
     public void close(){
         this.status = EvalSeasonStatus.CLOSED;
+    }
+
+//    시즌 OPEN 시점에 회사 규칙 JSON + 버전을 박제
+    public void freezeSnapshot(String formJson, Long version){
+        this.formSnapshot = formJson;
+        this.formVersion = version;
     }
 }

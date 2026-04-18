@@ -9,6 +9,8 @@ import com.peoplecore.evaluation.repository.StageRepository;
 import com.peoplecore.evaluation.service.EvaluationRulesService;
 import com.peoplecore.evaluation.service.SeasonService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,6 +41,16 @@ public class SeasonScheduler {
         LocalDate today = LocalDate.now();
         transitionSeasons(today);
         transitionStages(today);
+    }
+
+//    앱 시작 시 한 번 실행 — 자정 스케줄러 놓친 전이 메꿈
+    @EventListener(ApplicationReadyEvent.class)
+    @Transactional
+    public void transitionOnStartup(){
+        LocalDate today = LocalDate.now();
+        transitionSeasons(today);
+        transitionStages(today);
+        log.info("시작 시 상태 전이 완료 (today={})", today);
     }
 //시즌상태 전이
     private void transitionSeasons(LocalDate today){

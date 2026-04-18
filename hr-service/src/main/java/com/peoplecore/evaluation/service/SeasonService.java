@@ -9,11 +9,13 @@ import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.domain.Stage;
+import com.peoplecore.evaluation.domain.StageType;
 import com.peoplecore.evaluation.dto.*;
 import com.peoplecore.evaluation.repository.EvalGradeRepository;
-import com.peoplecore.evaluation.repository.EvaluationRulesRepository;
 import com.peoplecore.evaluation.repository.SeasonRepository;
 import com.peoplecore.evaluation.repository.StageRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,18 +32,18 @@ public class SeasonService {
     private final StageRepository stageRepository;
     private final EvaluationRulesService rulesService;
     private final CompanyRepository companyRepository;
-    private final EvaluationRulesRepository rulesRepository;
     private final EmployeeRepository employeeRepository;
     private final EvalGradeRepository evalGradeRepository;
+    private final ObjectMapper objectMapper;
 
-    public SeasonService(SeasonRepository seasonRepository, StageRepository stageRepository, EvaluationRulesService rulesService, CompanyRepository companyRepository, EvaluationRulesRepository rulesRepository, EmployeeRepository employeeRepository, EvalGradeRepository evalGradeRepository) {
+    public SeasonService(SeasonRepository seasonRepository, StageRepository stageRepository, EvaluationRulesService rulesService, CompanyRepository companyRepository, EmployeeRepository employeeRepository, EvalGradeRepository evalGradeRepository, ObjectMapper objectMapper) {
         this.seasonRepository = seasonRepository;
         this.stageRepository = stageRepository;
         this.rulesService = rulesService;
         this.companyRepository = companyRepository;
-        this.rulesRepository = rulesRepository;
         this.employeeRepository = employeeRepository;
         this.evalGradeRepository = evalGradeRepository;
+        this.objectMapper = objectMapper;
     }
 
     //  1. 시즌목록
@@ -59,6 +61,7 @@ public class SeasonService {
     }
 
     //    3.시즌상세조회
+    //    - rules: OPEN 이후면 Season.formSnapshot(박제본) 기준, DRAFT 면 회사 현재 규칙 기준
     public SeasonDetailDto getSeasonDetail(UUID companyId, Long seasonId) {
         Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalArgumentException("시즌을 찿을 수 없습니다"));
 
@@ -68,13 +71,20 @@ public class SeasonService {
         }
 
         List<Stage> stages = stageRepository.findBySeason_SeasonId(seasonId);
-        EvaluationRulesDto rules = rulesService.getBySeasonId(seasonId); //규칙없으면 null
+
+        // rules 주입: 시즌이 스냅샷을 박제했으면 그걸 파싱, 아니면 회사 현재 규칙
+        EvaluationRulesDto rules;
+        if (season.getFormSnapshot() != null) {
+            rules = EvaluationRulesDto.fromSnapshot(season.getFormSnapshot(), season.getFormVersion(), objectMapper);
+        } else {
+            rules = rulesService.getByCompanyId(companyId);
+        }
 
         return SeasonDetailDto.from(season, stages, rules);
     }
 
     //    4. 시즌생성
-//    드롭다운, 날짜 선택형 // +입력받는 동시 5단계 생성(관리)
+//    드롭다운, 날짜 선택형 // +입력받는 동시 단계 생성 (회사 규칙 items 기준 동적 개수)
     public Long createSeason(UUID companyId, Long empid, SeasonCreateRequestDto requestDto) {
 
         // 기간 유효성 — 시즌 기간
@@ -82,8 +92,9 @@ public class SeasonService {
             throw new IllegalArgumentException("종료일이 시작일보다 빠를 수 없습니다");
         }
 
-        // 단계 일정 유효성 — 5개 / 순서 / 시즌 기간 내 포함
-        validateStageInputs(requestDto);
+        // 단계 스펙(이름+타입) 먼저 구성 -> 검증/저장에 재사용
+        List<StageSpec> stageSpecs = buildStageSpecs(companyId);
+        validateStageInputs(requestDto, stageSpecs.size());
 
         // 회사 확인 (FK 참조용 엔티티 로드)
         Company company = companyRepository.findById(companyId).orElseThrow(() -> new IllegalArgumentException("회사를 찾을 수 없습니다"));
@@ -98,14 +109,15 @@ public class SeasonService {
                 .status(EvalSeasonStatus.DRAFT)
                 .build());
 
-//        고정 이름 + 요청받은 날짜로 5단계 생성
-        String[] stageNames = {"목표등록", "자기평가", "상위자평가", "등급 산정 및 보정", "결과확정"};
+//        동적 단계 저장 (name + type + 날짜)
         List<SeasonCreateRequestDto.StageInput> stageInputs = requestDto.getStages();
-        for (int i = 0; i < stageNames.length; i++) {
+        for (int i = 0; i < stageSpecs.size(); i++) {
+            StageSpec spec = stageSpecs.get(i);
             SeasonCreateRequestDto.StageInput in = stageInputs.get(i);
             stageRepository.save(Stage.builder()
                     .season(season)
-                    .name(stageNames[i])
+                    .name(spec.name())              // EVALUATION 만 값, 나머지 null
+                    .type(spec.type())              // 시스템 식별용 타입
                     .orderNo(i + 1)
                     .startDate(in.getStartDate())
                     .endDate(in.getEndDate())
@@ -113,17 +125,15 @@ public class SeasonService {
 //            status= Builder.Default로 자동주입
         }
 
-//        규칙 row 자동 생성 — 직전 시즌 복사 or 업계 표준 기본값 (내부 분기)
-        rulesService.createInitialRules(season);
-
+//       시즌 OPEN 시 현재 회사 규칙을 스냅샷으로 박제
         return season.getSeasonId();
     }
 
     // 단계 일정 검증 — 순서/기간 포함 여부/겹침 방지
-    private void validateStageInputs(SeasonCreateRequestDto req) {
+    private void validateStageInputs(SeasonCreateRequestDto req, int expectedSize) {
         List<SeasonCreateRequestDto.StageInput> stages = req.getStages();
-        if (stages == null || stages.size() != 5) {
-            throw new IllegalArgumentException("단계 일정 5개가 필요합니다");
+        if (stages == null || stages.size() != expectedSize) {
+            throw new IllegalArgumentException("단계 일정 " + expectedSize + "개가 필요합니다");
         }
 
         java.time.LocalDate seasonStart = req.getStartDate();
@@ -142,13 +152,51 @@ public class SeasonService {
             if (s.getStartDate().isBefore(seasonStart) || s.getEndDate().isAfter(seasonEnd)) {
                 throw new IllegalArgumentException((i + 1) + "번째 단계는 시즌 기간 내여야 합니다");
             }
-            // 시작일 순서만 보장 (이전 단계 종료일과 겹침 허용)
-            if (prevStart != null && !s.getStartDate().isAfter(prevStart)) {
-                throw new IllegalArgumentException((i + 1) + "번째 단계 시작일은 이전 단계 시작일보다 늦어야 합니다");
+            // 시작일 겹침 허용, 이전 단계보다 앞서지만 않으면 OK
+            if (prevStart != null && s.getStartDate().isBefore(prevStart)) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계 시작일은 이전 단계 시작일보다 앞설 수 없습니다");
             }
             prevStart = s.getStartDate();
         }
+
+        // 첫 단계 시작일 = 시즌 시작일
+        if (!stages.get(0).getStartDate().equals(seasonStart)) {
+            throw new IllegalArgumentException("첫 단계 시작일은 시즌 시작일과 같아야 합니다");
+        }
+        // 끝 단계 종료일 = 시즌 종료일
+        if (!stages.get(stages.size() - 1).getEndDate().equals(seasonEnd)) {
+            throw new IllegalArgumentException("마지막 단계 종료일은 시즌 종료일과 같아야 합니다");
+        }
     }
+
+    // 회사 규칙 기준 단계 스펙 리스트
+    //   고정 3종(GOAL_ENTRY/GRADING/FINALIZATION)은 name=null → FE 에서 type 으로 라벨 매핑
+    //   EVALUATION 만 rules.items 에서 이름 가져옴 (HR이 커스텀한 평가항목명)
+    //   locked=true AND enabled=false 인 항목은 스킵
+    private List<StageSpec> buildStageSpecs(UUID companyId) {
+        EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
+        FormSnapshotDto snap;
+        try {
+            snap = objectMapper.readValue(rules.getFormValues(), FormSnapshotDto.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("회사 규칙 파싱 실패", e);
+        }
+
+        List<StageSpec> specs = new ArrayList<>();
+        specs.add(new StageSpec(null, StageType.GOAL_ENTRY));                // 1번
+        if (snap.getItemList() != null) {
+            for (FormSnapshotDto.Item item : snap.getItemList()) {
+                if (Boolean.TRUE.equals(item.getLocked()) && Boolean.FALSE.equals(item.getEnabled())) continue;
+                specs.add(new StageSpec(item.getName(), StageType.EVALUATION)); // 2번~
+            }
+        }
+        specs.add(new StageSpec(null, StageType.GRADING));                   // N+2
+        specs.add(new StageSpec(null, StageType.FINALIZATION));              // N+3
+        return specs;
+    }
+
+    // 이름+타입 페어 레코드 (EVALUATION 만 name 채움, 고정 3종은 null)
+    private record StageSpec(String name, StageType type) {}
 
     //    5.시즌 수정 -closed는 수정 불가
     public SeasonResponseDto updateSeason(UUID companyId, Long seasonId, SeasonUpdateRequestDto req) {
@@ -192,8 +240,6 @@ public class SeasonService {
         // 연관 데이터 정리 — FK 제약, 부모 삭제 전 자식 먼저 제거
         //  1 단계
         stageRepository.deleteAll(stageRepository.findBySeason_SeasonId(seasonId));
-        //  2 평가 규칙 (있을 수도, 없을 수도)
-        rulesService.deleteBySeasonId(seasonId);
 
         // 시즌 본체 삭제
         seasonRepository.delete(season);
@@ -214,13 +260,15 @@ public class SeasonService {
         // 1) 상태 전이
         season.open();
 
-        // 2) 규칙 스냅샷 동결 (formValues → formSnapshot, version++)
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).get();
-        rules.freezeSnapshot();
+        UUID companyId = season.getCompany().getCompanyId();
+
+        // 2) 회사 규칙(하드 컬럼 + formValues JSON) 을 병합 스냅샷 JSON 으로 빌드 -> Season.formSnapshot 박제
+        EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
+        String mergedJson = rulesService.buildMergedSnapshotJson(rules);
+        season.freezeSnapshot(mergedJson, rules.getFormVersion());
 
         // 3) 전 사원 EvalGrade row 일괄 INSERT — 점수/등급 컬럼은 NULL 로 시작
         //    dept/title 은 스냅샷 컬럼에 박제 (이후 조직개편/이동해도 그 시즌은 고정)
-        UUID companyId = season.getCompany().getCompanyId();
         List<Employee> employees = employeeRepository.findActiveEmployeesWithDeptAndGrade(companyId);
 
         List<EvalGrade> rows = new ArrayList<>();

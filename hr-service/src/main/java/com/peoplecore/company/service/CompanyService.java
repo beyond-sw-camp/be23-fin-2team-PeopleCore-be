@@ -10,6 +10,7 @@ import com.peoplecore.company.dtos.CompanyCreateReqDto;
 import com.peoplecore.company.dtos.CompanyResDto;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.department.service.DepartmentService;
+import com.peoplecore.evaluation.service.EvaluationRulesService;
 import com.peoplecore.event.CompanyCreateEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
@@ -52,10 +53,11 @@ public class CompanyService {
     private final WorkGroupService workGroupService;
     private final VacationPolicyService vacationPolicyService;
     private final VacationTypeService vacationTypeService;
+    private final EvaluationRulesService evaluationRulesService;
 
 
     @Autowired
-    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, VacationPolicyService vacationPolicyService, VacationTypeService vacationTypeService) {
+    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, VacationPolicyService vacationPolicyService, VacationTypeService vacationTypeService, EvaluationRulesService evaluationRulesService) {
         this.companyRepository = companyRepository;
         this.departmentService = departmentService;
         this.gradeService = gradeService;
@@ -71,6 +73,7 @@ public class CompanyService {
         this.workGroupService = workGroupService;
         this.vacationPolicyService = vacationPolicyService;
         this.vacationTypeService = vacationTypeService;
+        this.evaluationRulesService = evaluationRulesService;
     }
 
     //    1. 회사 등록 + 기본데이터 세팅 + superAdmin 생성
@@ -104,6 +107,7 @@ public class CompanyService {
         workGroupService.initDefault(company);
         vacationTypeService.initDefault(company);     /* ← 신규 추가 (시스템 예약 유형 2건) */
         vacationPolicyService.initDefault(company);
+        evaluationRulesService.createDefaultRules(company);  // 평가규칙 기본값 1 row 생성
 
 
         // superAdmin 계정 생성

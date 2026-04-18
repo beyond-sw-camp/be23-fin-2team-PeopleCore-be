@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 
 // 등급 - 사원별 시즌 최종 등급 (자동산정 + 보정)
 @Entity
-@Table(name = "grade")
+@Table(name = "eval_grade")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
