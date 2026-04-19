@@ -109,6 +109,10 @@ public class InterestCalenderService {
             interestCalendarsRepository.save(interestCalendar);
         } else {
             shareRequest.reject();
+            // 이미 승인되어 생성된 관심캘린더가 있으면 삭제
+            interestCalendarsRepository
+                    .findByCalendarShareRequest(shareRequest)
+                    .ifPresent(interestCalendarsRepository::delete);
         }
 
 //        요청자에게 알림
