@@ -333,6 +333,38 @@ public class EvalGradeService {
         }
     }
 
+
+    //    팀장 편향 보정(Z-score) 팀별 효과 요약 (자동 산정 화면 차트용)
+    //    - 부서별로 managerScore(보정 전) / managerScoreAdjusted(보정 후) 평균 집계
+    //    - minTeamSize 는 시즌 OPEN 당시 박제된 formSnapshot 기준 (실제 보정에 적용된 값)
+    @Transactional(readOnly = true)
+    public TeamBiasResponseDto getTeamBiasSummary(UUID companyId, Long seasonId) {
+        Season season = seasonRepository.findById(seasonId)
+                .orElseThrow(() -> new IllegalArgumentException("시즌을 찾을 수 없습니다"));
+
+        // 회사 소유권 검증
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한이 없는 시즌입니다");
+        }
+
+        // 시즌 스냅샷에서 minTeamSize 추출 (없으면 기본 5)
+        int minTeamSize = 5;
+        if (season.getFormSnapshot() != null) {
+            try {
+                FormSnapshotDto snapshot = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);
+                if (snapshot.getMinTeamSize() != null) {
+                    minTeamSize = snapshot.getMinTeamSize();
+                }
+            } catch (JsonProcessingException e) {
+                // 파싱 실패 시 기본값 유지
+            }
+        }
+
+        List<TeamBiasResponseDto.Team> teams = evalGradeRepository.findTeamBiasSummary(seasonId);
+        return new TeamBiasResponseDto(minTeamSize, teams);
+    }
+
+
     //    보정된 상위자점수 + 기존 자기점수/조정점수로 최종 점수 재계산
 //    = (self × selfWeight + adjustedMgr × mgrWeight) / weightSum + adjustment
     private BigDecimal recalcTotal(EvalGrade row, BigDecimal adjustedMgr,
@@ -999,10 +1031,32 @@ public class EvalGradeService {
     }
 
 
-    //    13. 평가 결과 목록 (HR 전용, 확정 전/후 모두 조회, 미산정자 포함)
-//       - 확정 전: finalGrade = 보정까지 반영된 현재 값, 확정 후: finalGrade = 박제된 최종 값
+    //    10. 최종 확정 페이지 상단 요약 지표
+//       - 배정/미산정/보정 카운트 4개 (잠금 상태는 시즌 스토어에서 별도 로드)
+    @Transactional(readOnly = true)
+    public FinalizeSummaryDto getFinalizeSummary(UUID companyId, Long seasonId) {
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+
+        long total= evalGradeRepository.countBySeason_SeasonId(seasonId);
+        long assigned= evalGradeRepository.countBySeason_SeasonIdAndFinalGradeNotNull(seasonId);
+        long calibrated= evalGradeRepository.countBySeason_SeasonIdAndIsCalibratedTrue(seasonId);
+
+        return FinalizeSummaryDto.builder()
+                .totalCount((int) total)
+                .assignedCount((int) assigned)
+                .unassignedCount((int) (total - assigned))
+                .calibratedCount((int) calibrated)
+                .build();
+    }
+
+
+    //    13. 평가 결과 목록 ( 진행중/완료 시즌만 조회, 미산정자 포함)
+//       - 진행중: finalGrade = 보정까지 반영된 현재 값 (실시간)
+//       - 완료: finalGrade = 박제된 최종 값
 //       - unscoredOnly: null=전체 / true=미산정자만 / false=산정자만
-//       - 프론트에서 시즌 상태/finalizedAt 배너 분기, autoGrade=null 이면 "미산정자" 배지
     @Transactional(readOnly = true)
     public Page<FinalGradeListItemDto> getFinalList(UUID companyId, Long seasonId,
                                                     Long deptId, String keyword,
@@ -1013,6 +1067,11 @@ public class EvalGradeService {
         Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
         if (!season.getCompany().getCompanyId().equals(companyId)) {
             throw new IllegalArgumentException("접근 권한 없음");
+        }
+
+//        시즌 상태 검증 - DRAFT(준비중) 시즌은 조회 불가
+        if (season.getStatus() == EvalSeasonStatus.DRAFT) {
+            throw new IllegalStateException("준비중 시즌은 결과 조회 불가");
         }
 
 //        Impl 에서 필터 + DTO 변환까지 수행 (1번 searchDraftList 와 동일 패턴)

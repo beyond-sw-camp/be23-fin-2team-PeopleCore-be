@@ -2,6 +2,7 @@ package com.peoplecore.evaluation.repository;
 
 import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.dto.AutoGradeCountDto;
+import com.peoplecore.evaluation.dto.TeamBiasResponseDto;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -33,6 +34,14 @@ public interface EvalGradeRepository extends JpaRepository<EvalGrade, Long>, Eva
     long countBySeason_SeasonIdAndIsCalibratedTrue(Long seasonId);
 
 
+//    10번 - 시즌 전체 대상 인원
+    long countBySeason_SeasonId(Long seasonId);
+
+
+//    10번 - 배정 완료 인원 (finalGrade IS NOT NULL)
+    long countBySeason_SeasonIdAndFinalGradeNotNull(Long seasonId);
+
+
 //    5번 강제배분 - 현재 랭킹 대상 인원 (biasAdjustedScore 있는 사람)
     long countBySeason_SeasonIdAndBiasAdjustedScoreNotNull(Long seasonId);
 
@@ -40,4 +49,26 @@ public interface EvalGradeRepository extends JpaRepository<EvalGrade, Long>, Eva
 //    5번 강제배분 - 이전 배분 인원 (autoGrade 있는 사람)
 //    - 위 두 수가 다르면 cohort 변화 -> 재산정 필요
     long countBySeason_SeasonIdAndAutoGradeNotNull(Long seasonId);
+
+
+//    팀장 편향 보정(Z-score) 팀별 효과 집계 - 자동 산정 화면 차트용
+//    - 부서별로 managerScore(보정 전) / managerScoreAdjusted(보정 후) 평균과 인원 수
+//    - managerScore NULL 인 사원(평가 미제출)은 제외
+    @Query("""
+           SELECT new com.peoplecore.evaluation.dto.TeamBiasResponseDto.Team(
+                d.deptId,
+                d.deptName,
+                COUNT(g),
+                AVG(g.managerScore),
+                AVG(g.managerScoreAdjusted)
+           )
+           FROM EvalGrade g
+           JOIN g.emp e
+           JOIN e.dept d
+           WHERE g.season.seasonId = :seasonId
+             AND g.managerScore IS NOT NULL
+           GROUP BY d.deptId, d.deptName
+           ORDER BY d.deptId
+           """)
+    List<TeamBiasResponseDto.Team> findTeamBiasSummary(@Param("seasonId") Long seasonId);
 }
