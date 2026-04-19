@@ -8,7 +8,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @RestControllerAdvice
@@ -63,12 +65,26 @@ public class GlobalExceptionHandler {
             log.warn("Client disconnected (wrapped): {}", e.getMessage());
             return null;
         }
-        log.error("Unhandled exception", e);
-        return ResponseEntity
-                .status(500)
-                .body(Map.of(
-                        "message", "서버 내부 오류가 발생했습니다.",
-                        "timestamp", LocalDateTime.now()
-                ));
+        String traceId = UUID.randomUUID().toString().substring(0, 8);
+        log.error("Unhandled exception [traceId={}]", traceId, e);
+
+        Throwable root = e;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String detail = root.getClass().getSimpleName()
+                + (root.getMessage() != null ? ": " + truncate(root.getMessage(), 300) : "");
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("message", "서버 내부 오류가 발생했습니다.");
+        body.put("detail", detail);
+        body.put("traceId", traceId);
+        body.put("timestamp", LocalDateTime.now());
+        return ResponseEntity.status(500).body(body);
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max) + "…";
     }
 }

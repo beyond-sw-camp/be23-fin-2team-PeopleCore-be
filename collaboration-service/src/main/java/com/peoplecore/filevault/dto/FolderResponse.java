@@ -18,8 +18,14 @@ public class FolderResponse {
     private Boolean isSystemDefault;
     private LocalDateTime createdAt;
     private LocalDateTime deletedAt;
+    /** 현재 사용자의 즐겨찾기 여부. 단건 응답이나 호출자가 모를 땐 false. */
+    private boolean starred;
 
     public static FolderResponse from(FileFolder folder) {
+        return from(folder, false);
+    }
+
+    public static FolderResponse from(FileFolder folder, boolean starred) {
         return FolderResponse.builder()
             .folderId(folder.getId())
             .name(folder.getName())
@@ -28,6 +34,7 @@ public class FolderResponse {
             .isSystemDefault(folder.getIsSystemDefault())
             .createdAt(folder.getCreatedAt())
             .deletedAt(folder.getDeletedAt())
+            .starred(starred)
             .build();
     }
 }

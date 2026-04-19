@@ -28,6 +28,11 @@ public class FaceAuthController {
         return ResponseEntity.ok(faceRecognitionClient.extractEmbedding(request));
     }
 
+    @PostMapping("/validate")
+    public ResponseEntity<FaceValidateResponse> validateFace(@RequestBody FaceExtractRequest request) {
+        return ResponseEntity.ok(faceAuthService.validateFace(request.getImage()));
+    }
+
     @PostMapping("/register")
     public ResponseEntity<FaceRegisterResponse> registerFace(@RequestBody FaceRegisterRequest request) {
         return ResponseEntity.ok(faceAuthService.registerFace(request));
