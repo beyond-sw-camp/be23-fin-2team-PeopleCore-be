@@ -6,6 +6,7 @@ import com.peoplecore.evaluation.domain.EvalGradeSortField;
 import com.peoplecore.evaluation.domain.QEvalGrade;
 import com.peoplecore.evaluation.dto.DraftListItemDto;
 import com.peoplecore.evaluation.dto.FinalGradeListItemDto;
+import com.peoplecore.evaluation.dto.UnassignedEmployeeDto;
 import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -190,6 +191,66 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
             return null;
         }
         return unscoredOnly ? qGrade.autoGrade.isNull() : qGrade.autoGrade.isNotNull();
+    }
+
+
+    // 11. 미제출·미산정 직원 목록 (finalGrade IS NULL 대상)
+    //  - 회사/시즌 범위 + 부서 필터 + 정렬/페이징
+    //  - 정렬 기본값: 사번 오름차순
+    @Override
+    public Page<UnassignedEmployeeDto> searchUnassigned(UUID companyId, Long seasonId,
+                                                         Long deptId,
+                                                         EvalGradeSortField sortField,
+                                                         Pageable pageable) {
+
+        List<EvalGrade> content = queryFactory
+                .selectFrom(qGrade)
+                .join(qGrade.emp, qEmployee).fetchJoin()
+                .where(
+                        companyEq(companyId),
+                        seasonEq(seasonId),
+                        deptEq(deptId),
+                        qGrade.finalGrade.isNull()         // 미산정만
+                )
+                .orderBy(getUnassignedOrder(sortField))
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(qGrade.count())
+                .from(qGrade)
+                .join(qGrade.emp, qEmployee)
+                .where(
+                        companyEq(companyId),
+                        seasonEq(seasonId),
+                        deptEq(deptId),
+                        qGrade.finalGrade.isNull()
+                )
+                .fetchOne();
+
+        List<UnassignedEmployeeDto> dtos = new ArrayList<>();
+        for (EvalGrade g : content) {
+            dtos.add(UnassignedEmployeeDto.builder()
+                    .empNum(g.getEmp().getEmpNum())
+                    .empName(g.getEmp().getEmpName())
+                    .deptName(g.getDeptNameSnapshot())
+                    .position(g.getPositionSnapshot())
+                    .build());
+        }
+        return new PageImpl<>(dtos, pageable, total != null ? total : 0L);
+    }
+
+    // 미산정 목록 전용 정렬 (기본: 사번 오름차순 — 점수 컬럼 없음)
+    private OrderSpecifier<?> getUnassignedOrder(EvalGradeSortField sortField) {
+        if (sortField == null) return qEmployee.empNum.asc();
+        switch (sortField) {
+            case EMP_NUM:   return qEmployee.empNum.asc();
+            case EMP_NAME:  return qEmployee.empName.asc();
+            case DEPT_NAME: return qGrade.deptNameSnapshot.asc();
+            case POSITION:  return qGrade.positionSnapshot.asc();
+            default:        return qEmployee.empNum.asc();
+        }
     }
 
 

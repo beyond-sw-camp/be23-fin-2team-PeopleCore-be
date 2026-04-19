@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.*;
 
 
@@ -1049,6 +1050,56 @@ public class EvalGradeService {
                 .assignedCount((int) assigned)
                 .unassignedCount((int) (total - assigned))
                 .calibratedCount((int) calibrated)
+                .build();
+    }
+
+
+    //    11. 최종 확정 페이지 미제출·미산정 직원 목록 (finalGrade IS NULL 대상)
+    @Transactional(readOnly = true)
+    public Page<UnassignedEmployeeDto> getUnassignedList(UUID companyId, Long seasonId,
+                                                          Long deptId,
+                                                          EvalGradeSortField sortField,
+                                                          Pageable pageable) {
+        return evalGradeRepository.searchUnassigned(companyId, seasonId, deptId, sortField, pageable);
+    }
+
+    
+//    12. 최종 확정 및 잠금
+    public FinalizeDto finalize(UUID companyId, Long adjusterEmpId, Long seasonId, FinalizeDto request) {
+
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌이 없습니다"));
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한이 없습니다");
+        }
+        if (season.getFinalizedAt() != null) {
+            throw new IllegalStateException("이미 확정된 시즌입니다");
+        }
+        if (season.getStatus() != EvalSeasonStatus.OPEN) {
+            throw new IllegalStateException("진행중인 시즌만 확정 가능합니다");
+        }
+
+//        미산정자 ack리스트 포함여부 검증
+        List<Long> unassignedEmpIds = evalGradeRepository.findUnassignedEmpIds(seasonId);
+        Set<Long> ackSet = new HashSet<>(
+                request.getAcknowledgedEmpIds() != null ? request.getAcknowledgedEmpIds() : Collections.emptyList());
+
+//        미체크된 미산정자 남을 시 확정 거부
+        for (Long empId : unassignedEmpIds) {
+            if (!ackSet.contains(empId)) {
+                throw new IllegalStateException("미산정자 전원 확인이 필요합니다");
+            }
+        }
+
+//        확정-EvalGrade전체 잠금 + 시즌 finalizedAt세팅 + status CLOSED 전환
+//        (status=CLOSED 로 변경)
+        LocalDateTime now = LocalDateTime.now();
+        int lockedCount = evalGradeRepository.lockAllAssigned(seasonId, now);
+        season.markFinalized(now);
+        season.close();
+
+        return FinalizeDto.builder()
+                .finalizedAt(now)
+                .lockedCount(lockedCount)
                 .build();
     }
 

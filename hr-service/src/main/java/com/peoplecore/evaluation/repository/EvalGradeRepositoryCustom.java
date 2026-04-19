@@ -4,6 +4,7 @@ import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.domain.EvalGradeSortField;
 import com.peoplecore.evaluation.dto.DraftListItemDto;
 import com.peoplecore.evaluation.dto.FinalGradeListItemDto;
+import com.peoplecore.evaluation.dto.UnassignedEmployeeDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -23,6 +24,12 @@ public interface EvalGradeRepositoryCustom {
     Page<EvalGrade> searchCalibrationGrades(UUID companyId, Long seasonId,
                                             Long deptId, String keyword,
                                             EvalGradeSortField sortField, Pageable pageable);
+
+    // 11번 - 최종 확정 페이지 미제출·미산정 직원 목록 (finalGrade IS NULL 대상)
+    Page<UnassignedEmployeeDto> searchUnassigned(UUID companyId, Long seasonId,
+                                                  Long deptId,
+                                                  EvalGradeSortField sortField,
+                                                  Pageable pageable);
 
     // 13번 - 평가 결과 목록 (HR 전용, 미산정자 포함)
     //  - unscoredOnly: null=전체 / true=미산정자(autoGrade=null)만 / false=산정자만

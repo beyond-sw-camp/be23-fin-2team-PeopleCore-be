@@ -191,11 +191,11 @@ public class EvalGradeController {
 
     // 12. 최종 확정 및 잠금 - body.acknowledgedEmpIds 로 미산정자 전원 "제외 확정" 검증
     @PostMapping("/{seasonId}/finalize")
-    public ResponseEntity<FinalizeResultDto> finalize(
+    public ResponseEntity<FinalizeDto> finalize(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Emp") Long adjusterEmpId,
             @PathVariable Long seasonId,
-            @RequestBody FinalizeRequestDto request) { //실제 미산정 대상인지 체크용
+            @RequestBody FinalizeDto request) { //실제 미산정 대상인지 체크용
         return ResponseEntity.ok(
                 gradeService.finalize(companyId, adjusterEmpId, seasonId, request)
         );

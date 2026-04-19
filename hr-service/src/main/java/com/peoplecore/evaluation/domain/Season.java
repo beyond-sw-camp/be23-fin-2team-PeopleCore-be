@@ -75,4 +75,9 @@ public class Season extends BaseTimeEntity {
         this.formSnapshot = formJson;
         this.formVersion = version;
     }
+
+//    최종 확정 - finalizedAt세팅( 이후 수정 불가)
+    public void markFinalized(LocalDateTime now){
+        this.finalizedAt = now;
+    }
 }
