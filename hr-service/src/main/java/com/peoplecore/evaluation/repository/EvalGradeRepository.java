@@ -49,9 +49,9 @@ public interface EvalGradeRepository extends JpaRepository<EvalGrade, Long>, Eva
 
     //    팀장 편향 보정(Z-score) 팀별 효과 집계 - 자동 산정 화면 차트용
 //    - 부서별로 managerScore(보정 전) / managerScoreAdjusted(보정 후) 평균과 인원 수
-//    - managerScore NULL 인 사원(평가 미제출)은 제외
+//    - managerScore NULL 인 사원(평가 미제출)은 제외 //innerclass사용
     @Query("""
-            SELECT new com.peoplecore.evaluation.dto.TeamBiasResponseDto.Team(
+            SELECT new com.peoplecore.evaluation.dto.TeamBiasResponseDto$Team(
                  d.deptId,
                  d.deptName,
                  COUNT(g),

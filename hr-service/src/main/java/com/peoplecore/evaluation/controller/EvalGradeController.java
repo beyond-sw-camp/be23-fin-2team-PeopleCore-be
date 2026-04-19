@@ -100,7 +100,7 @@ public class EvalGradeController {
     }
 
 
-    // 팀장 편향 보정(Z-score) 팀별 효과 요약 (자동 산정 화면 차트용)
+    // 6. 팀장 편향 보정(Z-score) 팀별 효과 요약 -(자동 산정 화면 차트용)
     //  - 부서별 managerScore 평균(보정 전) / managerScoreAdjusted 평균(보정 후) + 인원 수
     //  - 응답에 minTeamSize 동봉 → 프론트에서 "소규모" 제외 판정에 사용
     @GetMapping("/{seasonId}/team-bias")
@@ -113,7 +113,7 @@ public class EvalGradeController {
 
     // ─── 등급 보정 페이지 ─────────────────────────
 
-    // 6. 실제 vs 목표 분포 + 보정 건수
+    // 7. 실제 vs 목표 분포 + 보정 건수
     //  - 페이지 상단 카드 5개 + "N개 등급 불일치" 배지 + "현재 보정 건수 N건"
     @GetMapping("/{seasonId}/distribution-diff")
     public ResponseEntity<DistributionDiffDto> getDistributionDiff(
@@ -123,7 +123,7 @@ public class EvalGradeController {
     }
 
 
-    // 7. 보정 페이지 사원 목록
+    // 8. 보정 페이지 사원 목록
     @GetMapping("/{seasonId}/list/calibration")
     public ResponseEntity<Page<CalibrationListItemDto>> getCalibrationList(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -138,7 +138,7 @@ public class EvalGradeController {
     }
 
 
-    // 8. 보정 이력
+    // 9. 보정 이력
     //  autoGrade -> adjustedGrade
     @GetMapping("/{seasonId}/calibrations")
     public ResponseEntity<List<CalibrationHistoryDto>> getCalibrations(
@@ -148,7 +148,7 @@ public class EvalGradeController {
     }
 
 
-    // 9. 일괄 보정 저장
+    // 10. 일괄 보정 저장
     //  - 사용자가 누적한 변경 N건 한 번에 전송 -> 서버에서 비율 검증 -> 통과 시 저장
     //  - Calibration 이력도 함께 INSERT
     //  - 비율 불일치 시 400 + currentDiff 반환 (저장 X)
@@ -166,7 +166,7 @@ public class EvalGradeController {
 
     // ─── 최종 등급 확정 및 잠금 페이지 ─────────────────
 
-    // 10. 상단 요약 지표 - 배정/미산정/보정 인원 + 잠금 상태
+    // 11. 상단 요약 지표 - 배정/미산정/보정 인원 + 잠금 상태
     @GetMapping("/{seasonId}/finalize/summary")
     public ResponseEntity<FinalizeSummaryDto> getFinalizeSummary(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -175,7 +175,7 @@ public class EvalGradeController {
     }
 
 
-    // 11. 미제출·미산정 직원 목록 (finalGrade IS NULL 대상, 부서필터/정렬/페이징)
+    // 12. 미제출·미산정 직원 목록 (finalGrade IS NULL 대상, 부서필터/정렬/페이징)
     @GetMapping("/{seasonId}/finalize/unassigned")
     public ResponseEntity<Page<UnassignedEmployeeDto>> getUnassignedList(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -189,7 +189,7 @@ public class EvalGradeController {
     }
 
 
-    // 12. 최종 확정 및 잠금 - body.acknowledgedEmpIds 로 미산정자 전원 "제외 확정" 검증
+    // 13. 최종 확정 및 잠금 - body.acknowledgedEmpIds 로 미산정자 전원 "제외 확정" 검증
     @PostMapping("/{seasonId}/finalize")
     public ResponseEntity<FinalizeDto> finalize(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -205,7 +205,7 @@ public class EvalGradeController {
 
     // ─── 평가 결과 조회 페이지 ─────────────────────────
 
-    // 13. 평가 결과 목록 (HR 전용, 확정 전/후 모두 조회, 미산정자 포함)
+    // 14. 평가 결과 목록 (HR 전용, 확정 전/후 모두 조회, 미산정자 포함)
     //  - 필터: deptId, keyword(이름/사번), unscoredOnly(null=전체 / true=미산정자만 / false=산정자만)
     //  - 시즌 상태 배너는 프론트에서 시즌 상세 조회로 분기 (확정 전 잠정 / 확정 후 잠금)
     @GetMapping("/{seasonId}/list/final")
@@ -223,7 +223,7 @@ public class EvalGradeController {
     }
 //
 //
-//    // 14. 평가 결과 상세 (HR 전용)
+//    // 15. 평가 결과 상세 (HR 전용)
 //    //  - 단계별 타임라인: 평가입력 -> 종합점수 -> Z-score보정 -> 등급산정 -> 보정 -> 최종확정
 //    //  - 각 단계 status: DONE | PENDING | SKIPPED
 //    //  - 시즌 확정 전에도 조회 가능 (미완료 단계는 data=null, PENDING)

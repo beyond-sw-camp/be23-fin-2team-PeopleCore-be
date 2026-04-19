@@ -172,10 +172,9 @@ public class SeasonService {
         }
     }
 
-    // 회사 규칙 기준 단계 스펙 리스트
-    //   고정 3종(GOAL_ENTRY/GRADING/FINALIZATION)은 name=null → FE 에서 type 으로 라벨 매핑
+    // 회사 규칙 기준 단계 스펙 리스트 custom
     //   EVALUATION 만 rules.items 에서 이름 가져옴 (HR이 커스텀한 평가항목명)
-    //   locked=true AND enabled=false 인 항목은 스킵
+    //   locked=true, enabled=false 인 항목은 스킵
     private List<StageSpec> buildStageSpecs(UUID companyId) {
         EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
         FormSnapshotDto snap;
@@ -198,8 +197,10 @@ public class SeasonService {
         return specs;
     }
 
-    // 이름+타입 페어 레코드 (EVALUATION 만 name 채움, 고정 3종은 null)
+    // 이름+타입 페어 컬럼명 (EVALUATION 만 name 채움, 고정 3종은 null)
     private record StageSpec(String name, StageType type) {}
+
+
 
     //    5.시즌 수정 -closed는 수정 불가
     public SeasonResponseDto updateSeason(UUID companyId, Long seasonId, SeasonUpdateRequestDto req) {
