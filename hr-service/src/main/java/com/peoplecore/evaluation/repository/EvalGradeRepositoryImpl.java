@@ -5,6 +5,7 @@ import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.domain.EvalGradeSortField;
 import com.peoplecore.evaluation.domain.QEvalGrade;
 import com.peoplecore.evaluation.dto.DraftListItemDto;
+import com.peoplecore.evaluation.dto.FinalGradeListItemDto;
 import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -138,10 +139,14 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
                 return qEmployee.empNum.asc();          // 사번 오름차순
             case EMP_NAME:
                 return qEmployee.empName.asc();         // 이름 가나다순
+            case DEPT_NAME:
+                return qGrade.deptNameSnapshot.asc();   // 부서 가나다순 (스냅샷)
             case TOTAL_SCORE:
                 return qGrade.totalScore.desc();        // 점수 높은순
             case AUTO_GRADE:
-                return qGrade.autoGrade.asc();          // 등급 오름차순
+                return qGrade.autoGrade.asc();          // 예정등급 오름차순
+            case FINAL_GRADE:
+                return qGrade.finalGrade.asc();         // 확정/보정등급 오름차순 (최신 보정값)
             default:
                 return qGrade.totalScore.desc();        // 기본값
         }
@@ -177,6 +182,74 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
             return null;
         }
         return qEmployee.empName.contains(search).or(qEmployee.empNum.contains(search));
+    }
+
+    //  미산정자 필터 (null=전체 / true=autoGrade null만 / false=autoGrade not null만)
+    private BooleanExpression unscoredEq(Boolean unscoredOnly) {
+        if (unscoredOnly == null) {
+            return null;
+        }
+        return unscoredOnly ? qGrade.autoGrade.isNull() : qGrade.autoGrade.isNotNull();
+    }
+
+
+    // 13. 평가 결과 목록 (미산정자 포함, unscoredOnly 로 분기)
+    //  - 시즌/회사 범위 + 부서·키워드·미산정자 필터 + 정렬/페이징
+    @Override
+    public Page<FinalGradeListItemDto> searchFinalList(UUID companyId, Long seasonId,
+                                                       Long deptId, String keyword,
+                                                       Boolean unscoredOnly,
+                                                       EvalGradeSortField sortField, Pageable pageable) {
+
+//        데이터 조회 fetch join
+        List<EvalGrade> content = queryFactory
+                .selectFrom(qGrade)
+                .join(qGrade.emp, qEmployee).fetchJoin()   //사원정보 join
+                .where(
+                        companyEq(companyId),              //회사필터
+                        seasonEq(seasonId),                //시즌필터
+                        deptEq(deptId),                    //부서(스냅샷) 필터
+                        searchContains(keyword),           //이름/사번 검색
+                        unscoredEq(unscoredOnly)           //미산정자 포함/배제/단독
+                )
+                .orderBy(getOrderSpecifier(sortField))     //정렬
+                .offset(pageable.getOffset())              //시작위치
+                .limit(pageable.getPageSize())             //한 페이지 개수
+                .fetch();   //실행 -> List반환
+
+//        전체건수 조회(페이징 계산용 count만조회-fetchjoinX)
+        Long total = queryFactory
+                .select(qGrade.count())
+                .from(qGrade)
+                .join(qGrade.emp, qEmployee) //search 필터에 사원 필드 필요
+                .where(
+                        companyEq(companyId),
+                        seasonEq(seasonId),
+                        deptEq(deptId),
+                        searchContains(keyword),
+                        unscoredEq(unscoredOnly)
+                )
+                .fetchOne(); //count값으로 단일값
+
+//        Entity -> Dto반환
+        List<FinalGradeListItemDto> dtos = new ArrayList<>();
+        for (EvalGrade g : content) {
+            FinalGradeListItemDto dto = FinalGradeListItemDto.builder()
+                    .gradeId(g.getGradeId())
+                    .empNum(g.getEmp().getEmpNum())
+                    .empName(g.getEmp().getEmpName())
+                    .deptName(g.getDeptNameSnapshot())    // 시즌 오픈 시 스냅샷
+                    .position(g.getPositionSnapshot())    // 스냅샷
+                    .totalScore(g.getTotalScore())        // null -> 미산정
+                    .autoGrade(g.getAutoGrade())          // null -> 미산정자 (프론트 배지 분기)
+                    .finalGrade(g.getFinalGrade())        // 보정 반영 / 확정 후 박제값
+                    .isCalibrated(Boolean.TRUE.equals(g.getIsCalibrated()))
+                    .build();
+            dtos.add(dto);
+        }
+
+//        데이터, 페이지정보, 전체건수 합쳐서 page객체 반환
+        return new PageImpl<>(dtos, pageable, total != null ? total : 0L);
     }
 
 }

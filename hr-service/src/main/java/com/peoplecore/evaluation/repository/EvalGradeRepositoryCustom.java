@@ -3,6 +3,7 @@ package com.peoplecore.evaluation.repository;
 import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.domain.EvalGradeSortField;
 import com.peoplecore.evaluation.dto.DraftListItemDto;
+import com.peoplecore.evaluation.dto.FinalGradeListItemDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -22,4 +23,12 @@ public interface EvalGradeRepositoryCustom {
     Page<EvalGrade> searchCalibrationGrades(UUID companyId, Long seasonId,
                                             Long deptId, String keyword,
                                             EvalGradeSortField sortField, Pageable pageable);
+
+    // 13번 - 평가 결과 목록 (HR 전용, 미산정자 포함)
+    //  - unscoredOnly: null=전체 / true=미산정자(autoGrade=null)만 / false=산정자만
+    //  - 미산정자는 프론트에서 "미산정자" 배지로 표시 (상세보기 버튼 숨김)
+    Page<FinalGradeListItemDto> searchFinalList(UUID companyId, Long seasonId,
+                                                Long deptId, String keyword,
+                                                Boolean unscoredOnly,
+                                                EvalGradeSortField sortField, Pageable pageable);
 }

@@ -15,6 +15,7 @@ import com.peoplecore.vacation.repository.VacationLedgerRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,7 +44,7 @@ public class VacationBalanceService {
                                   VacationBalanceQueryRepository vacationBalanceQueryRepository,
                                   VacationLedgerRepository vacationLedgerRepository,
                                   VacationTypeRepository vacationTypeRepository,
-                                  EmployeeRepository employeeRepository, VacationBalanceService self) {
+                                  EmployeeRepository employeeRepository, @Lazy VacationBalanceService self) {
         this.vacationBalanceRepository = vacationBalanceRepository;
         this.vacationBalanceQueryRepository = vacationBalanceQueryRepository;
         this.vacationLedgerRepository = vacationLedgerRepository;

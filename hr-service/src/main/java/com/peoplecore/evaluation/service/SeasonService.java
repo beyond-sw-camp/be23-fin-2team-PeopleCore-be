@@ -92,6 +92,9 @@ public class SeasonService {
             throw new IllegalArgumentException("종료일이 시작일보다 빠를 수 없습니다");
         }
 
+        // 시즌 간 기간 겹침 금지 (같은 회사 내)
+        validateNoOverlap(companyId, requestDto.getStartDate(), requestDto.getEndDate(), null);
+
         // 단계 스펙(이름+타입) 먼저 구성 -> 검증/저장에 재사용
         List<StageSpec> stageSpecs = buildStageSpecs(companyId);
         validateStageInputs(requestDto, stageSpecs.size());
@@ -216,10 +219,24 @@ public class SeasonService {
         if (season.getStatus() == EvalSeasonStatus.CLOSED) {
             throw new IllegalStateException("완료된 시즌은 수정할 수 없습니다");
         }
+        // 시즌 간 기간 겹침 금지 (자기 자신 제외)
+        validateNoOverlap(companyId, req.getStartDate(), req.getEndDate(), seasonId);
+
         // 기본정보 갱신 (dirty checking 으로 UPDATE 발행)
         season.updateBasicInfo(req.getName(), req.getPeriod(), req.getStartDate(), req.getEndDate());
 
         return SeasonResponseDto.from(season);
+    }
+
+    // 시즌 간 기간 겹침 검증 — 같은 회사 다른 시즌과 날짜 범위가 겹치면 예외
+    private void validateNoOverlap(UUID companyId, java.time.LocalDate newStart, java.time.LocalDate newEnd, Long excludeSeasonId) {
+        List<Season> overlapping = seasonRepository.findOverlapping(companyId, newStart, newEnd, excludeSeasonId);
+        if (!overlapping.isEmpty()) {
+            Season first = overlapping.get(0);
+            throw new IllegalArgumentException(
+                    String.format("다른 시즌(%s: %s ~ %s)과 기간이 겹칩니다",
+                            first.getName(), first.getStartDate(), first.getEndDate()));
+        }
     }
 
 

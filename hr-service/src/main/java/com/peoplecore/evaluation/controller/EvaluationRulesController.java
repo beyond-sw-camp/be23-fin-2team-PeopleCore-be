@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-// 평가규칙 - 회사당 1 row, 시즌과 무관하게 자유 편집
+// 평가규칙 - 회사당 1 row, 회사기준으로 자유 편집
 @RestController
 @RequestMapping("/eval/rules")
 @RequiredArgsConstructor

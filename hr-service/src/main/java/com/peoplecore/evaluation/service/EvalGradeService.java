@@ -364,8 +364,10 @@ public class EvalGradeService {
 
 //    5.강제배분 등급적용 - 보정전// 규칙 스냅샷+소유권 상태//점수 있는 row만 내림차순// ratio대로 위에서 배정-> 동일 점수=비율>가감
 //    없는 점수row= autoGrade/순위 null세팅
+//    재실행 시: cohort(참여자 수) 변화 없으면 no-op, 변화 있고 보정 이력 있으면 confirm 필요
+//              confirm=true 면 보정 전부 리셋 후 재배분
 
-    public void applyDistribution(UUID companyId, Long seasonId) {
+    public DistributionApplyResultDto applyDistribution(UUID companyId, Long seasonId, boolean confirm) {
 
 //        시즌 로드
         Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
@@ -382,6 +384,39 @@ public class EvalGradeService {
 //        단계 검증
         requireGradingStageOpen(seasonId);
 
+//        cohort 변화 판정: 현재 랭킹 대상 수 vs 이전 배분된 인원 수
+        long currentRankedCount = evalGradeRepository.countBySeason_SeasonIdAndBiasAdjustedScoreNotNull(seasonId);
+        long previousGradedCount = evalGradeRepository.countBySeason_SeasonIdAndAutoGradeNotNull(seasonId);
+        boolean cohortChanged = (currentRankedCount != previousGradedCount);
+
+//        cohort 변화 없음 -> no-op (보정 작업 보호)
+//        이전 배분 결과와 동일하게 나올 것이므로 autoGrade/보정 둘 다 손대지 않음
+        if (!cohortChanged && previousGradedCount > 0) {
+            return DistributionApplyResultDto.builder()
+                    .success(false)
+                    .noChange(true)
+                    .build();
+        }
+
+//        보정 이력 개수 조회 (cohort 바뀐 경우만 의미 있음)
+        long calibCount = calibrationRepository.countByGrade_Season_SeasonId(seasonId);
+
+//        보정 이력 존재 + confirm=false -> 확인 필요 (DB 변경 없이 반환)
+        if (calibCount > 0 && !confirm) {
+            return DistributionApplyResultDto.builder()
+                    .success(false)
+                    .requiresConfirm(true)
+                    .pendingResetCount((int) calibCount)
+                    .build();
+        }
+
+//        보정 리셋 (이력 삭제 + isCalibrated 플래그는 아래 row 순회에서 리셋)
+        int resetCount = 0;
+        if (calibCount > 0) {
+            calibrationRepository.deleteAllByGrade_Season_SeasonId(seasonId);
+            resetCount = (int) calibCount;
+        }
+
 //        스냅샷 파싱 (시즌 OPEN 시 박제된 병합 JSON)
         FormSnapshotDto snapshot;
         try {
@@ -391,9 +426,11 @@ public class EvalGradeService {
         }
 
 //        보정점수 있는 row만 랭킹 대상, 없는 건 초기화
+//        전 row 순회하면서 isCalibrated 도 함께 리셋 (이미 로드했으므로 추가 쿼리 불필요)
         List<EvalGrade> rows = evalGradeRepository.findBySeason_SeasonId(seasonId);
         List<EvalGrade> ranked = new ArrayList<>();
         for (EvalGrade row : rows) {
+            row.resetCalibration();
             if (row.getBiasAdjustedScore() != null) {
                 ranked.add(row);
             } else {
@@ -435,6 +472,11 @@ public class EvalGradeService {
 
         }
 
+        return DistributionApplyResultDto.builder()
+                .success(true)
+                .distributedCount(total)
+                .resetCount(resetCount)
+                .build();
     }
 
 
@@ -574,7 +616,7 @@ public class EvalGradeService {
 
 
     //    6. 실제 vs 목표 분포 + 보정 건수 조회 (GradeCalibration 화면 초기 진입)
-//       - 실제: DB autoGrade 집계 + 실시간 변동은 프론트
+//       - 실제: DB finalGrade 집계 (보정 반영) + 실시간 변동은 프론트
     @Transactional(readOnly = true)
     public DistributionDiffDto getDistributionDiff(UUID companyId, Long seasonId) {
 
@@ -593,7 +635,7 @@ public class EvalGradeService {
         }
         List<FormSnapshotDto.GradeRule> gradeRules = snapshot.getGradeRules();
 
-//        c. autoGrade 별 실제 인원 집계 (null 은 미산정 -> 쿼리에서 제외됨)
+//        c. finalGrade 별 실제 인원 집계 (보정 반영 / null=미배분은 쿼리에서 제외)
 //           DTO 리스트 -> Map<등급라벨, 실제인원> + 총 인원 누적
         Map<String, Integer> actualMap = new HashMap<>();
         int totalCount = 0;
@@ -667,9 +709,9 @@ public class EvalGradeService {
 
 
     //    7. 보정 페이지 사원 목록 (페이징/필터/검색/정렬)
-//       - 보정된 사원 자동등급= Calibration 이력에서 원본 fromGrade + 최신 reason/actor 복원
-//         - 원본 자동등급 = 이력 첫 row 의 fromGrade (강제배분이 부여한 최초 등급) //보정등급 = 현재 autoGrade (= 마지막 toGrade, 덮어쓰기 구조) //여러 번 보정해도 원본은 첫 fromGrade에서 항상 복원
-//       - 사유는 최신 1건 (전체 이력은 8번 API)
+//       - autoGrade = 불변 원본 (그대로 읽음)
+//       - finalGrade = 보정 반영된 현재 등급 (보정된 경우만 adjustedGrade 로 표시)
+//       - 사유/수행자는 Calibration 이력에서 최신 1건만 조회 (전체 이력은 8번 API)
     @Transactional(readOnly = true)
     public Page<CalibrationListItemDto> getCalibrationList(UUID companyId, Long seasonId,
                                                            Long deptId, String keyword,
@@ -679,7 +721,7 @@ public class EvalGradeService {
         Page<EvalGrade> gradePage = evalGradeRepository.searchCalibrationGrades(
                 companyId, seasonId, deptId, keyword, sortField, pageable);
 
-//        b. 보정된 row 의 gradeId 수집 -> Calibration 이력 batch 조회
+//        b. 보정된 row 의 gradeId 수집 -> Calibration 이력 batch 조회 (사유/수행자만 추출)
         List<Long> calibratedIds = new ArrayList<>();
         for (EvalGrade g : gradePage.getContent()) {
             if (Boolean.TRUE.equals(g.getIsCalibrated())) {
@@ -687,11 +729,8 @@ public class EvalGradeService {
             }
         }
 
-//        원본 자동등급 Map + 최신 사유/수행자 Map 구성
-//          첫 row.fromGrade = 원본 자동등급 (강제배분 최초 부여값)
-//          마지막 row.reason = 최신 보정 사유 (7번에서는 이것만 표시)
-//          마지막 row.actor.empName = 최신 보정 수행자
-        Map<Long, String> originalGradeMap = new HashMap<>();  // gradeId -> 원본 fromGrade
+//        최신 사유/수행자 Map 구성 (이력 시간순 조회 후 덮어쓰기로 마지막 값만 남김)
+//        ※ 원본 등급은 이제 EvalGrade.autoGrade 가 불변이므로 이력 복원 불필요
         Map<Long, String> latestReasonMap = new HashMap<>();   // gradeId -> 최신 reason
         Map<Long, String> latestAdjusterMap = new HashMap<>(); // gradeId -> 최신 수행자 이름
 
@@ -701,11 +740,6 @@ public class EvalGradeService {
 
             for (Calibration cal : histories) {
                 Long gid = cal.getGrade().getGradeId();
-
-//                첫 등장만 원본으로 저장 (이미 있으면 스킵 -> 원본 불변)
-                if (!originalGradeMap.containsKey(gid)) {
-                    originalGradeMap.put(gid, cal.getFromGrade());
-                }
 //                매번 덮어쓰기 -> 루프 끝나면 마지막(최신) 값만 남음
                 latestReasonMap.put(gid, cal.getReason());
                 if (cal.getActor() != null) {
@@ -720,13 +754,10 @@ public class EvalGradeService {
             Long gid = g.getGradeId();
             boolean calibrated = Boolean.TRUE.equals(g.getIsCalibrated());
 
-//            원본 등급: 보정됐으면 이력의 첫 fromGrade, 아니면 현재 autoGrade
-            String originalGrade = calibrated
-                    ? originalGradeMap.getOrDefault(gid, g.getAutoGrade())
-                    : g.getAutoGrade();
-
-//            보정등급: 보정됐으면 현재 autoGrade (= 마지막 toGrade), 아니면 null
-            String adjustedGrade = calibrated ? g.getAutoGrade() : null;
+//            원본 등급: 항상 autoGrade (불변)
+//            보정등급: 보정됐으면 현재 finalGrade, 아니면 null
+            String originalGrade = g.getAutoGrade();
+            String adjustedGrade = calibrated ? g.getFinalGrade() : null;
 
 //            사유: 보정됐으면 최신 reason 1건만, 아니면 null
             String reason = calibrated ? latestReasonMap.get(gid) : null;
@@ -860,8 +891,8 @@ public class EvalGradeService {
             if (g == null) {
                 throw new IllegalArgumentException("존재하지 않는 등급입니다");
             }
-//      현재 autoGrade = 변경 전 등급
-            String fromGrade = g.getAutoGrade();
+//      현재 finalGrade = 변경 전 등급 (보정 반영된 현재 값)
+            String fromGrade = g.getFinalGrade();
 //            요청에서 받은 새등급
             String toGrade = item.getToGrade();
 //            같은 등급이면 분포 변경 x(스킵)
@@ -937,15 +968,15 @@ public class EvalGradeService {
         for (CalibrationItemRequest item : items) {
 //            대상 EvalGrade
             EvalGrade target = gradeMap.get(item.getGradeId());
-//            변경 전 등급
-            String fromGrade = target.getAutoGrade();
+//            변경 전 등급 (보정 반영된 현재 값 = finalGrade)
+            String fromGrade = target.getFinalGrade();
 //            변경 후 등급
             String toGrade = item.getToGrade();
 //            같은 등급이면 스킵 (변경 없음 방어)
             if (fromGrade.equals(toGrade)) {
                 continue;
             }
-//            autoGrade 덮어쓰기 + isCalibrated = true (dirty checking UPDATE)
+//            finalGrade 덮어쓰기 + isCalibrated = true (autoGrade 는 불변 원본 유지)
             target.applyCalibration(toGrade);
 //            Calibration 이력 INSERT (건별 - 8번에서 전부 조회)
             Calibration cal = Calibration.builder()
@@ -965,6 +996,28 @@ public class EvalGradeService {
                 .saveCount(savedCount)
                 .currentDiff(null)
                 .build();
+    }
+
+
+    //    13. 평가 결과 목록 (HR 전용, 확정 전/후 모두 조회, 미산정자 포함)
+//       - 확정 전: finalGrade = 보정까지 반영된 현재 값, 확정 후: finalGrade = 박제된 최종 값
+//       - unscoredOnly: null=전체 / true=미산정자만 / false=산정자만
+//       - 프론트에서 시즌 상태/finalizedAt 배너 분기, autoGrade=null 이면 "미산정자" 배지
+    @Transactional(readOnly = true)
+    public Page<FinalGradeListItemDto> getFinalList(UUID companyId, Long seasonId,
+                                                    Long deptId, String keyword,
+                                                    Boolean unscoredOnly,
+                                                    EvalGradeSortField sortField, Pageable pageable) {
+
+//        시즌 로드 + 회사 소유권 검증 (멀티테넌시)
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+
+//        Impl 에서 필터 + DTO 변환까지 수행 (1번 searchDraftList 와 동일 패턴)
+        return evalGradeRepository.searchFinalList(
+                companyId, seasonId, deptId, keyword, unscoredOnly, sortField, pageable);
     }
 
 }
