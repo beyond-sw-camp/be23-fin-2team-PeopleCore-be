@@ -1,6 +1,9 @@
 package com.peoplecore.filevault.service;
 
 import com.peoplecore.exception.BusinessException;
+import com.peoplecore.filevault.audit.AuditAction;
+import com.peoplecore.filevault.audit.FileVaultAuditEvent;
+import com.peoplecore.filevault.audit.ResourceType;
 import com.peoplecore.filevault.dto.FileResponse;
 import com.peoplecore.filevault.dto.FolderResponse;
 import com.peoplecore.filevault.dto.TrashResponse;
@@ -11,6 +14,7 @@ import com.peoplecore.filevault.repository.FileItemRepository;
 import com.peoplecore.filevault.security.FileVaultAccessPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,6 +45,7 @@ public class FileVaultTrashService {
     private final FileItemRepository fileItemRepository;
     private final FileVaultMinioService minioService;
     private final FileVaultAccessPolicy accessPolicy;
+    private final ApplicationEventPublisher eventPublisher;
 
     public TrashResponse listTrash(UUID companyId, Long titleId, Long empId) {
         List<FileFolder> allCompanyFolders = folderRepository.findByCompanyId(companyId);
@@ -88,6 +93,9 @@ public class FileVaultTrashService {
         List<FileItem> files = folderIds.isEmpty()
             ? List.of()
             : fileItemRepository.findByFolderIdIn(new ArrayList<>(folderIds));
+        List<FileFolder> foldersToLog = folderIds.isEmpty()
+            ? List.of()
+            : new ArrayList<>(folderRepository.findAllById(folderIds));
 
         for (FileItem file : files) {
             try {
@@ -98,6 +106,27 @@ public class FileVaultTrashService {
         }
         if (!files.isEmpty()) fileItemRepository.deleteAll(files);
         if (!folderIds.isEmpty()) folderRepository.deleteAllById(folderIds);
+
+        for (FileItem file : files) {
+            eventPublisher.publishEvent(FileVaultAuditEvent.builder()
+                .action(AuditAction.PERMANENT_DELETE_FILE)
+                .resourceType(ResourceType.FILE)
+                .resourceId(file.getId())
+                .resourceName(file.getName())
+                .parentFolderId(file.getFolderId())
+                .parentName(folder.getName())
+                .build());
+        }
+        for (FileFolder f : foldersToLog) {
+            eventPublisher.publishEvent(FileVaultAuditEvent.builder()
+                .action(AuditAction.PERMANENT_DELETE_FOLDER)
+                .resourceType(ResourceType.FOLDER)
+                .resourceId(f.getId())
+                .resourceName(f.getName())
+                .parentFolderId(f.getParentFolderId())
+                .parentName(folder.getName())
+                .build());
+        }
     }
 
     @Transactional
@@ -105,12 +134,22 @@ public class FileVaultTrashService {
         FileItem file = fileItemRepository.findById(fileId)
             .orElseThrow(() -> new BusinessException("파일을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
         accessPolicy.ensureCanManageFile(titleId, empId, file);
+        Long folderId = file.getFolderId();
+        String name = file.getName();
         try {
             minioService.deleteObject(file.getStorageKey());
         } catch (Exception e) {
             log.warn("MinIO 객체 삭제 실패 storageKey={}, error={}", file.getStorageKey(), e.getMessage());
         }
         fileItemRepository.delete(file);
+        eventPublisher.publishEvent(FileVaultAuditEvent.builder()
+            .action(AuditAction.PERMANENT_DELETE_FILE)
+            .resourceType(ResourceType.FILE)
+            .resourceId(fileId)
+            .resourceName(name)
+            .parentFolderId(folderId)
+            .parentName(folderRepository.findById(folderId).map(FileFolder::getName).orElse("(unknown)"))
+            .build());
     }
 
     @Transactional

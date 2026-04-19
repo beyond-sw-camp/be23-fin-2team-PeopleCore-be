@@ -43,6 +43,15 @@ public class FaceAuthService {
         this.redisTemplate = redisTemplate;
     }
 
+    public FaceValidateResponse validateFace(String image) {
+        FaceExtractResponse extracted =
+                faceRecognitionClient.extractEmbedding(new FaceExtractRequest(image));
+        return FaceValidateResponse.builder()
+                .valid(true)
+                .message(extracted.getMessage() != null ? extracted.getMessage() : "얼굴이 정상적으로 인식되었습니다.")
+                .build();
+    }
+
     @Transactional
     public FaceRegisterResponse registerFace(FaceRegisterRequest request) {
         Employee employee = employeeRepository.findById(request.getEmpId())

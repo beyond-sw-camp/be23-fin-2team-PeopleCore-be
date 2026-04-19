@@ -6,6 +6,7 @@ import com.peoplecore.filevault.entity.FileFolder;
 import com.peoplecore.filevault.entity.FolderType;
 import com.peoplecore.filevault.security.FileVaultAccessPolicy;
 import com.peoplecore.filevault.service.FileFolderService;
+import com.peoplecore.filevault.service.FileVaultFavoriteService;
 import com.peoplecore.filevault.service.FileVaultTrashService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -24,6 +25,7 @@ public class FileFolderController {
     private final FileFolderService folderService;
     private final FileVaultAccessPolicy accessPolicy;
     private final FileVaultTrashService trashService;
+    private final FileVaultFavoriteService favoriteService;
 
     @GetMapping
     public ResponseEntity<List<FolderResponse>> listRootFolders(
@@ -31,7 +33,8 @@ public class FileFolderController {
         @RequestHeader("X-User-Id") Long empId,
         @RequestParam FolderType type
     ) {
-        return ResponseEntity.ok(folderService.listRootFolders(companyId, type, empId));
+        return ResponseEntity.ok(favoriteService.markStarredFolders(empId,
+            new java.util.ArrayList<>(folderService.listRootFolders(companyId, type, empId))));
     }
 
     @PostMapping("/ensure-personal")
@@ -60,7 +63,8 @@ public class FileFolderController {
         @PathVariable Long folderId
     ) {
         accessPolicy.ensureCanReadFolder(titleId, empId, folderId);
-        return ResponseEntity.ok(folderService.listChildren(folderId));
+        return ResponseEntity.ok(favoriteService.markStarredFolders(empId,
+            new java.util.ArrayList<>(folderService.listChildren(folderId))));
     }
 
     @PostMapping
