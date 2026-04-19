@@ -123,15 +123,19 @@ public class VacationTypeService {
         type.activate();
         log.info("[VacationType] 활성화 - typeId={}", typeId);
     }
-
     /* typeId 조회 + 회사 소속 검증 - 다른 회사 유형 조작 방지 */
-    /* 타 회사 typeId 접근 시 NOT_FOUND 로 위장 (권한 누수 방지) */
+    /* 1. typeId 로 조회, 없으면 VACATION_TYPE_NOT_FOUND */
+    /* 2. 회사 불일치 시 WARN 로그 + 동일 NOT_FOUND 예외 (존재 여부 노출 방지) */
+    /* 예외: 존재 안 함 / 타 회사 접근 모두 VACATION_TYPE_NOT_FOUND 로 통일 (권한 누수 방지) */
     private VacationType loadWithCompanyCheck(UUID companyId, Long typeId) {
         VacationType type = vacationTypeRepository.findById(typeId)
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND));
         if (!type.getCompanyId().equals(companyId)) {
+            log.warn("[VacationType] 타 회사 typeId 접근 차단 - requestCompany={}, typeId={}, ownerCompany={}",
+                    companyId, typeId, type.getCompanyId());
             throw new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND);
         }
         return type;
     }
+
 }

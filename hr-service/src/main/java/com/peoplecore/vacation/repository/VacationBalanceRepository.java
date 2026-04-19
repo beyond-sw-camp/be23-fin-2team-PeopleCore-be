@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,4 +39,22 @@ public interface VacationBalanceRepository extends JpaRepository<VacationBalance
     default Optional<VacationBalance> findForAllowance(UUID companyId, Long empId, Long typeId, Integer year) {
         return findOne(companyId, empId, typeId, year);
     }
+
+    /*
+     * 사원 + 유형 + 연도 범위 일괄 조회 - AnnualTransition 월차 소멸 시 N+1 방지
+     * 조건: balance_year BETWEEN startYear AND endYear
+     */
+    @Query("""
+            SELECT b FROM VacationBalance b
+             WHERE b.companyId = :companyId
+               AND b.employee.empId = :empId
+               AND b.vacationType.typeId = :typeId
+               AND b.balanceYear BETWEEN :startYear AND :endYear
+             ORDER BY b.balanceYear ASC
+            """)
+    List<VacationBalance> findAllByYearRange(@Param("companyId") UUID companyId,
+                                             @Param("empId") Long empId,
+                                             @Param("typeId") Long typeId,
+                                             @Param("startYear") Integer startYear,
+                                             @Param("endYear") Integer endYear);
 }

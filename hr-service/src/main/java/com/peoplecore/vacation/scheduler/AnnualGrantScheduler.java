@@ -81,19 +81,24 @@ public class AnnualGrantScheduler {
             return;
         }
         log.info("[AnnualGrant] 시작 - date={}", today);
+        try {
 
-        List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
-        int processed = 0;
-        for (Company company : activeCompanies) {
-            try {
-                processCompany(company, today);
-                processed++;
-            } catch (Exception e) {
-                log.error("[AnnualGrant] 회사 처리 실패 - companyId={}, err={}",
-                        company.getCompanyId(), e.getMessage(), e);
+
+            List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
+            int processed = 0;
+            for (Company company : activeCompanies) {
+                try {
+                    processCompany(company, today);
+                    processed++;
+                } catch (Exception e) {
+                    log.error("[AnnualGrant] 회사 처리 실패 - companyId={}, err={}",
+                            company.getCompanyId(), e.getMessage(), e);
+                }
             }
+            log.info("[AnnualGrant] 완료 - date={}, companies={}/{}", today, processed, activeCompanies.size());
+        } finally {
+            redisTemplate.delete(lockKey);
         }
-        log.info("[AnnualGrant] 완료 - date={}, companies={}/{}", today, processed, activeCompanies.size());
     }
 
     /* 회사 단위 - 정책 조회 후 HIRE/FISCAL 분기 */

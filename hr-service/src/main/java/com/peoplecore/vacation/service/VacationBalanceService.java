@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -35,18 +36,20 @@ public class VacationBalanceService {
     private final VacationLedgerRepository vacationLedgerRepository;
     private final VacationTypeRepository vacationTypeRepository;
     private final EmployeeRepository employeeRepository;
+    private final VacationBalanceService self;
 
     @Autowired
     public VacationBalanceService(VacationBalanceRepository vacationBalanceRepository,
                                   VacationBalanceQueryRepository vacationBalanceQueryRepository,
                                   VacationLedgerRepository vacationLedgerRepository,
                                   VacationTypeRepository vacationTypeRepository,
-                                  EmployeeRepository employeeRepository) {
+                                  EmployeeRepository employeeRepository, VacationBalanceService self) {
         this.vacationBalanceRepository = vacationBalanceRepository;
         this.vacationBalanceQueryRepository = vacationBalanceQueryRepository;
         this.vacationLedgerRepository = vacationLedgerRepository;
         this.vacationTypeRepository = vacationTypeRepository;
         this.employeeRepository = employeeRepository;
+        this.self = self;
     }
 
     /* 내 잔여 목록 - 해당 연도 모든 유형. Type fetch join 으로 N+1 방지 */
@@ -78,18 +81,29 @@ public class VacationBalanceService {
         Integer targetYear = (request.getYear() != null) ? request.getYear() : LocalDate.now().getYear();
         LocalDate today = LocalDate.now();
 
+        int success = 0;
+        List<Long> failed = new ArrayList<>();
+
         for (Long empId : request.getEmpIds()) {
-            grantSingle(companyId, managerId, empId, type, targetYear, today,
-                    request.getDays(), request.getExpiresAt(), request.getReason());
+            try {
+                /* self 경유 - 외부 프록시 호출로 전환되어야 REQUIRES_NEW 적용됨 */
+                self.grantSingle(companyId, managerId, empId, type, targetYear, today,
+                        request.getDays(), request.getExpiresAt(), request.getReason());
+                success++;
+            } catch (Exception e) {
+                failed.add(empId);
+                log.error("[VacationBalance] 사원 부여 실패 - empId={}, err={}",
+                        empId, e.getMessage(), e);
+            }
         }
-        log.info("[VacationBalance] 관리자 부여 완료 - companyId={}, managerId={}, typeId={}, empIds={}, days={}",
-                companyId, managerId, type.getTypeId(), request.getEmpIds().size(), request.getDays());
+        log.info("[VacationBalance] 관리자 부여 완료 - companyId={}, managerId={}, typeId={}, success={}/{}, failed={}",
+                companyId, managerId, type.getTypeId(), success, request.getEmpIds().size(), failed);
     }
 
     /* 사원 1명 부여 - balance 조회/생성 + accrue + Ledger */
     private void grantSingle(UUID companyId, Long managerId, Long empId, VacationType type,
-                              Integer year, LocalDate grantedAt, BigDecimal days,
-                              LocalDate expiresAt, String reason) {
+                             Integer year, LocalDate grantedAt, BigDecimal days,
+                             LocalDate expiresAt, String reason) {
         Employee emp = employeeRepository.findById(empId)
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
@@ -99,7 +113,7 @@ public class VacationBalanceService {
                         VacationBalance.createNew(companyId, type, emp, year, grantedAt, expiresAt)));
 
         BigDecimal before = balance.getTotalDays();
-        balance.accrue(days);
+        balance.accrue(days, null);
         BigDecimal after = balance.getTotalDays();
 
         vacationLedgerRepository.save(VacationLedger.ofManualGrant(

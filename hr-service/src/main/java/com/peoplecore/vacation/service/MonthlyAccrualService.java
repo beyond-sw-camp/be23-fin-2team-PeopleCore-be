@@ -76,7 +76,8 @@ public class MonthlyAccrualService {
 
         /* 1일 적립 + ACCRUAL Ledger 기록 */
         BigDecimal before = balance.getTotalDays();
-        balance.accrue(BigDecimal.ONE);
+        /**/
+        balance.accrue(BigDecimal.ONE, BigDecimal.valueOf(MONTHLY_CAP_DAYS));
         BigDecimal after = balance.getTotalDays();
         vacationLedgerRepository.save(VacationLedger.ofAccrual(balance, BigDecimal.ONE, before, after));
 

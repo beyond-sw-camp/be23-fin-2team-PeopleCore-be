@@ -67,19 +67,22 @@ public class AnnualTransitionScheduler {
             return;
         }
         log.info("[AnnualTransition] 시작 - date={}", today);
-
-        List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
-        int processed = 0;
-        for (Company company : activeCompanies) {
-            try {
-                processCompany(company, today);
-                processed++;
-            } catch (Exception e) {
-                log.error("[AnnualTransition] 회사 처리 실패 - companyId={}, err={}",
-                        company.getCompanyId(), e.getMessage(), e);
+        try {
+            List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
+            int processed = 0;
+            for (Company company : activeCompanies) {
+                try {
+                    processCompany(company, today);
+                    processed++;
+                } catch (Exception e) {
+                    log.error("[AnnualTransition] 회사 처리 실패 - companyId={}, err={}",
+                            company.getCompanyId(), e.getMessage(), e);
+                }
             }
+            log.info("[AnnualTransition] 완료 - date={}, companies={}/{}", today, processed, activeCompanies.size());
+        } finally {
+            redisTemplate.delete(lockKey);
         }
-        log.info("[AnnualTransition] 완료 - date={}, companies={}/{}", today, processed, activeCompanies.size());
     }
 
     /* 회사 단위 - 정책/유형 조회 후 1주년 도달 사원 처리 */

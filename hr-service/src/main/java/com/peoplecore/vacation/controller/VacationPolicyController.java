@@ -67,16 +67,17 @@ public class VacationPolicyController {
     @RoleRequired("HR_SUPER_ADMIN")
     @PutMapping("/rules/{ruleId}")
     public ResponseEntity<VacationRuleResponse> updateRule(
+            @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long ruleId,
             @RequestBody VacationRuleCreateRequest request) {
-        return ResponseEntity.ok(vacationPolicyService.updateLeaveRule(ruleId, request));
+        return ResponseEntity.ok(vacationPolicyService.updateLeaveRule(companyId,ruleId, request));
     }
 
     /* 연차 발생 규칙 삭제 */
     @RoleRequired("HR_SUPER_ADMIN")
     @DeleteMapping("/rules/{ruleId}")
-    public ResponseEntity<Void> deleteRule(@PathVariable Long ruleId) {
-        vacationPolicyService.deleteVacationRule(ruleId);
+    public ResponseEntity<Void> deleteRule(@RequestHeader("X-User-Company") UUID companyId,@PathVariable Long ruleId) {
+        vacationPolicyService.deleteVacationRule(companyId,ruleId);
         return ResponseEntity.noContent().build();
     }
 

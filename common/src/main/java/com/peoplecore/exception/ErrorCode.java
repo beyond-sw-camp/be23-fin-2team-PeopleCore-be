@@ -111,11 +111,11 @@ public enum ErrorCode {
     EMPLOYEE_HIRE_DATE_NOT_FOUND(404, "사원의 입사일 정보가 없습니다."),
 
     // -- 퇴직금
-    SEVERANCE_NOT_FOUND(404,"퇴직금 대장을 찾을 수 없습니다."),
-    SEVERANCE_STATUS_INVALID(400,"퇴직금 상태가 유효하지 않습니다."),
-    RESIGN_DATE_NOT_SET(404,"퇴직일이 설정되지 않았습니다."),
-    SERVICE_PERIOD_TOO_SHORT(404,"근속기간이 1년 미만입니다."),
-    LEAVE_ALLOWANCE_TYPE_INVALID(400,"연차수당 유형이 유효하지 않습니다."),
+    SEVERANCE_NOT_FOUND(404, "퇴직금 대장을 찾을 수 없습니다."),
+    SEVERANCE_STATUS_INVALID(400, "퇴직금 상태가 유효하지 않습니다."),
+    RESIGN_DATE_NOT_SET(404, "퇴직일이 설정되지 않았습니다."),
+    SERVICE_PERIOD_TOO_SHORT(404, "근속기간이 1년 미만입니다."),
+    LEAVE_ALLOWANCE_TYPE_INVALID(400, "연차수당 유형이 유효하지 않습니다."),
     EMPLOYEE_RETIREMENT_TYPE_NOT_SET(400, "퇴직금 설정이 되어있지 않습니다."),
 
     // 캘린더
@@ -220,9 +220,10 @@ public enum ErrorCode {
     VACATION_BALANCE_USED_INSUFFICIENT(500, "잔여 사용 일수 정합성 오류 — 관리자 문의 필요."),
     VACATION_TYPE_SYSTEM_RESERVED(400, "시스템 예약 휴가 유형은 변경/삭제할 수 없습니다."),
     VACATION_TYPE_CODE_DUPLICATE(409, "이미 존재하는 휴가 유형 코드입니다."),
-    VACATION_TYPE_NOT_FOUND(404, "존재하지 않는 휴가 종류입니다.");
+    VACATION_TYPE_NOT_FOUND(404, "존재하지 않는 휴가 종류입니다."),
+    VACATION_RULE_OVERLAP(409, "근속 구간이 기존 규칙과 겹칩니다.");
 
 
     private final int status;
     private final String message;
-}
+    }
