@@ -5,6 +5,7 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.dto.VacationTypeRequest;
 import com.peoplecore.vacation.dto.VacationTypeResponse;
+import com.peoplecore.vacation.entity.StatutoryVacationType;
 import com.peoplecore.vacation.entity.VacationType;
 import com.peoplecore.vacation.repository.VacationBalanceRepository;
 import com.peoplecore.vacation.repository.VacationRequestRepository;
@@ -14,11 +15,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /* 휴가 유형 서비스 - 회사 생성 시 자동 INSERT + 관리자 CRUD */
-/* 시스템 예약 유형 (MONTHLY/ANNUAL) 은 생성/수정/삭제 모두 차단 */
+/* 시스템 예약 유형(StatutoryVacationType enum) 은 생성/수정/삭제 모두 차단 */
 @Service
 @Slf4j
 @Transactional(readOnly = true)
@@ -40,19 +44,32 @@ public class VacationTypeService {
         this.vacationRequestRepository = vacationRequestRepository;
     }
 
-    /* 회사 생성 시 시스템 예약 유형 2건 자동 INSERT (멱등) */
+    /* 회사 생성 시 시스템 예약 유형 전체 INSERT (멱등) */
+    /* 기존 코드 Set 1회 조회 → enum 순회 → 누락된 코드만 saveAll → 법 개정으로 enum 확장 시 기존 회사도 재실행만으로 보충 가능 */
     @Transactional
     public void initDefault(Company company) {
         UUID companyId = company.getCompanyId();
-        if (vacationTypeRepository.existsByCompanyIdAndTypeCode(companyId, VacationType.CODE_MONTHLY)) {
-            log.info("VacationType 시스템 예약 이미 존재 - companyId={}, 초기화 스킵", companyId);
+
+        // 현재 회사 보유 코드 한 번에 조회 (N 쿼리 방지)
+        Set<String> existingCodes = vacationTypeRepository
+                .findAllByCompanyIdOrderBySortOrderAsc(companyId).stream()
+                .map(VacationType::getTypeCode)
+                .collect(Collectors.toSet());
+
+        // enum 순회하여 누락된 유형만 필터링
+        List<VacationType> toInsert = Arrays.stream(StatutoryVacationType.values())
+                .filter(t -> !existingCodes.contains(t.getCode()))
+                .map(t -> t.toEntity(companyId))
+                .toList();
+
+        if (toInsert.isEmpty()) {
+            log.info("VacationType 시스템 예약 모두 존재 - companyId={}, 초기화 스킵", companyId);
             return;
         }
-        vacationTypeRepository.saveAll(List.of(
-                VacationType.createDefaultMonthly(companyId),
-                VacationType.createDefaultAnnual(companyId)
-        ));
-        log.info("VacationType 기본 유형 (MONTHLY + ANNUAL) 생성 완료 - companyId={}", companyId);
+        vacationTypeRepository.saveAll(toInsert);
+        log.info("VacationType 시스템 예약 {} 건 INSERT - companyId={}, codes={}",
+                toInsert.size(), companyId,
+                toInsert.stream().map(VacationType::getTypeCode).toList());
     }
 
     /* 활성 유형 목록 - 사원 휴가 신청 드롭다운. sortOrder 오름차순 */
@@ -78,7 +95,8 @@ public class VacationTypeService {
     @Transactional
     public VacationTypeResponse create(UUID companyId, VacationTypeRequest request) {
         String typeCode = request.getTypeCode();
-        if (VacationType.CODE_MONTHLY.equals(typeCode) || VacationType.CODE_ANNUAL.equals(typeCode)) {
+        // enum 정의된 예약 코드(월차/연차/법정휴가 전체) 는 관리자가 직접 생성 불가
+        if (StatutoryVacationType.isReserved(typeCode)) {
             throw new CustomException(ErrorCode.VACATION_TYPE_SYSTEM_RESERVED);
         }
         if (vacationTypeRepository.existsByCompanyIdAndTypeCode(companyId, typeCode)) {
@@ -133,7 +151,7 @@ public class VacationTypeService {
     }
 
     /* 물리 삭제 - 완전한 DELETE. 잔여/신청 이력 0 건일 때만 허용 */
-    /* 1. 시스템 예약(MONTHLY/ANNUAL) 차단 → VACATION_TYPE_SYSTEM_RESERVED */
+    /* 1. 시스템 예약(enum) 차단 → VACATION_TYPE_SYSTEM_RESERVED */
     /* 2. VacationBalance / VacationRequest 참조 존재 시 차단 → VACATION_TYPE_IN_USE */
     /* 3. 참조 없음 확인 후 DELETE - 오타로 생성한 유형 즉시 제거 용도 */
     @Transactional
