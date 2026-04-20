@@ -129,7 +129,7 @@ public class PayrollService {
         Company company = companyRepository.findById(companyId).orElseThrow(() -> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
 //        재직 + 휴직 사원 목록 (퇴직 제외)
-        List<Employee> employees = employeeRepository.findAllWithFilter(companyId, null, null, null, null, null, Pageable.unpaged()).getContent()
+        List<Employee> employees = employeeRepository.findAllForPayroll(companyId, null, null, null, null, null, Pageable.unpaged()).getContent()
                 .stream()
                 .filter(e -> e.getEmpStatus() != EmpStatus.RESIGNED)
                 .filter(e -> e.getCompany().getCompanyId().equals(companyId))

@@ -93,7 +93,7 @@ public class LeaveAllowance extends BaseTimeEntity {
     }
 
 //    퇴직금 평균임금 산정 대상 여부 판정
-//    소멸일이 resignedDate -1 년~resignDate 범위 내에 있으면 true
+//    소멸일이 resignedDate -1년 ~ resignDate 범위 내에 있으면 true
 //    산정완료(CALCULATED)/급여반영(APPLIED) 상태에서만
     public boolean isInSeverancePeriod(LocalDate resignDate, String fiscalYearStart){
         if (this.status != AllowanceStatus.CALCULATED && this.status != AllowanceStatus.APPLIED){
