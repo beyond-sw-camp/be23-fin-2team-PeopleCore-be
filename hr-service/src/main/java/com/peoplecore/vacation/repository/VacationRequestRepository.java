@@ -24,4 +24,11 @@ public interface VacationRequestRepository extends JpaRepository<VacationRequest
      * 인덱스: idx_vacation_request_approval_doc
      */
     Optional<VacationRequest> findByCompanyIdAndApprovalDocId(UUID companyId, Long approvalDocId);
+
+    /*
+     * 특정 휴가 유형을 참조하는 신청 존재 여부
+     * 용도: 휴가 유형 물리 삭제 시 FK 참조 체크
+     * 반환: true 면 삭제 차단 (VACATION_TYPE_IN_USE)
+     */
+    boolean existsByVacationType_TypeId(Long typeId);
 }

@@ -214,6 +214,7 @@ public enum ErrorCode {
     /*휴가 */
     INVALID_REQUEST_STATUS_TRANSITION(400, "허용되지 않은 휴가 신청 상태 전이입니다."),
     VACATION_POLICY_FIRST_NOTICE_REQUIRED(400, "연차 촉진 사용 시 1차 통지 시기는 필수입니다."),
+    VACATION_POLICY_NOTICE_ORDER_INVALID(400, "2차 통지는 1차 통지보다 만료일에 가까워야 합니다."),
     VACATION_BALANCE_CAP_EXCEEDED(409, "연 최대 적립 일수를 초과했습니다."),
     VACATION_BALANCE_INSUFFICIENT(409, "휴가 잔여가 부족합니다."),
     VACATION_BALANCE_PENDING_INSUFFICIENT(500, "잔여 대기 일수 정합성 오류 — 관리자 문의 필요."),
@@ -221,6 +222,7 @@ public enum ErrorCode {
     VACATION_TYPE_SYSTEM_RESERVED(400, "시스템 예약 휴가 유형은 변경/삭제할 수 없습니다."),
     VACATION_TYPE_CODE_DUPLICATE(409, "이미 존재하는 휴가 유형 코드입니다."),
     VACATION_TYPE_NOT_FOUND(404, "존재하지 않는 휴가 종류입니다."),
+    VACATION_TYPE_IN_USE(409, "해당 유형을 사용 중인 잔여/신청이 있어 삭제할 수 없습니다."),
     VACATION_RULE_OVERLAP(409, "근속 구간이 기존 규칙과 겹칩니다.");
 
 

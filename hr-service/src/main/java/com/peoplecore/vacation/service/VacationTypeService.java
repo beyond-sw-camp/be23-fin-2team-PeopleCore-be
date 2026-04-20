@@ -6,6 +6,8 @@ import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.dto.VacationTypeRequest;
 import com.peoplecore.vacation.dto.VacationTypeResponse;
 import com.peoplecore.vacation.entity.VacationType;
+import com.peoplecore.vacation.repository.VacationBalanceRepository;
+import com.peoplecore.vacation.repository.VacationRequestRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,10 +28,16 @@ public class VacationTypeService {
     private static final int DEFAULT_SORT_ORDER = 999;
 
     private final VacationTypeRepository vacationTypeRepository;
+    private final VacationBalanceRepository vacationBalanceRepository;   // 물리 삭제 참조 체크용
+    private final VacationRequestRepository vacationRequestRepository;   // 물리 삭제 참조 체크용
 
     @Autowired
-    public VacationTypeService(VacationTypeRepository vacationTypeRepository) {
+    public VacationTypeService(VacationTypeRepository vacationTypeRepository,
+                               VacationBalanceRepository vacationBalanceRepository,
+                               VacationRequestRepository vacationRequestRepository) {
         this.vacationTypeRepository = vacationTypeRepository;
+        this.vacationBalanceRepository = vacationBalanceRepository;
+        this.vacationRequestRepository = vacationRequestRepository;
     }
 
     /* 회사 생성 시 시스템 예약 유형 2건 자동 INSERT (멱등) */
@@ -123,6 +131,27 @@ public class VacationTypeService {
         type.activate();
         log.info("[VacationType] 활성화 - typeId={}", typeId);
     }
+
+    /* 물리 삭제 - 완전한 DELETE. 잔여/신청 이력 0 건일 때만 허용 */
+    /* 1. 시스템 예약(MONTHLY/ANNUAL) 차단 → VACATION_TYPE_SYSTEM_RESERVED */
+    /* 2. VacationBalance / VacationRequest 참조 존재 시 차단 → VACATION_TYPE_IN_USE */
+    /* 3. 참조 없음 확인 후 DELETE - 오타로 생성한 유형 즉시 제거 용도 */
+    @Transactional
+    public void hardDelete(UUID companyId, Long typeId) {
+        VacationType type = loadWithCompanyCheck(companyId, typeId);
+        if (type.isSystemReserved()) {
+            throw new CustomException(ErrorCode.VACATION_TYPE_SYSTEM_RESERVED);
+        }
+        // FK 참조 검사 - 두 테이블 중 하나라도 걸리면 차단 (과거 이력 보존)
+        if (vacationBalanceRepository.existsByVacationType_TypeId(typeId)
+                || vacationRequestRepository.existsByVacationType_TypeId(typeId)) {
+            throw new CustomException(ErrorCode.VACATION_TYPE_IN_USE);
+        }
+        vacationTypeRepository.delete(type);
+        log.info("[VacationType] 물리 삭제 - companyId={}, typeId={}, code={}",
+                companyId, typeId, type.getTypeCode());
+    }
+
     /* typeId 조회 + 회사 소속 검증 - 다른 회사 유형 조작 방지 */
     /* 1. typeId 로 조회, 없으면 VACATION_TYPE_NOT_FOUND */
     /* 2. 회사 불일치 시 WARN 로그 + 동일 NOT_FOUND 예외 (존재 여부 노출 방지) */

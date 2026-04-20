@@ -78,4 +78,14 @@ public class VacationTypeController {
         vacationTypeService.activate(companyId, typeId);
         return ResponseEntity.noContent().build();
     }
+
+    /* 물리 삭제 - 참조 0 건일 때만. 시스템 예약/사용 중이면 4xx */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @DeleteMapping("/{typeId}/hard")
+    public ResponseEntity<Void> hardDelete(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long typeId) {
+        vacationTypeService.hardDelete(companyId, typeId);
+        return ResponseEntity.noContent().build();
+    }
 }

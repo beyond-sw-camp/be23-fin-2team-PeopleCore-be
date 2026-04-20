@@ -106,7 +106,7 @@ public class VacationPolicy extends BaseTimeEntity {
 
     /* 연차 촉진 정책 변경 - 화면 저장 시 호출 */
     /* isActive=false 면 1차/2차 모두 NULL 처리 */
-    /* isActive=true 면 1차 필수(NULL 불가), 2차 선택 */
+    /* isActive=true 면 1차 필수, 2차 선택. 2차는 1차보다 작아야 (만료에 더 가까워야) 함 */
     public void updatePromotionPolicy(boolean isActive,
                                       Integer firstMonthsBefore,
                                       Integer secondMonthsBefore) {
@@ -118,6 +118,10 @@ public class VacationPolicy extends BaseTimeEntity {
         }
         if (firstMonthsBefore == null) {
             throw new CustomException(ErrorCode.VACATION_POLICY_FIRST_NOTICE_REQUIRED);
+        }
+        // 2차는 만료에 더 가까운 통지라 1차보다 개월수가 작아야 함. 같거나 크면 의미 없음
+        if (secondMonthsBefore != null && secondMonthsBefore >= firstMonthsBefore) {
+            throw new CustomException(ErrorCode.VACATION_POLICY_NOTICE_ORDER_INVALID);
         }
         this.isPromotionActive = true;
         this.firstNoticeMonthsBefore = firstMonthsBefore;
