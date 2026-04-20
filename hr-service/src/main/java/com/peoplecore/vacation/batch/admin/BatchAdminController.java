@@ -54,6 +54,8 @@ public class BatchAdminController {
 
     /* Discord 웹훅 단독 테스트 - DiscordNotifier.notifyBatchFailure 를 페이크 파라미터로 호출 */
     /* 배치 메타 DB 오염 없음. 202 Accepted 반환(비동기 전송이라 성공 여부는 서버 로그/Discord 채널 확인) */
+    // TODO(배포 전): 운영 환경에는 노출 금지 - @Profile("!prod") 로 제한하거나 해당 메서드 제거
+    //                 개발/스테이징 스모크 테스트 전용 엔드포인트
     @RoleRequired({"HR_SUPER_ADMIN"})
     @PostMapping("/test-discord")
     public ResponseEntity<Void> testDiscord(@RequestBody(required = false) DiscordTestRequest request) {
