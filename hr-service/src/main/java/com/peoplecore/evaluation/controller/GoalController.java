@@ -1,7 +1,9 @@
 package com.peoplecore.evaluation.controller;
 
+import com.peoplecore.evaluation.dto.GoalRejectRequest;
 import com.peoplecore.evaluation.dto.GoalRequest;
 import com.peoplecore.evaluation.dto.GoalResponse;
+import com.peoplecore.evaluation.dto.TeamMemberGoalResponse;
 import com.peoplecore.evaluation.service.GoalService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -78,5 +80,43 @@ public class GoalController {
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId) {
         return ResponseEntity.ok(goalService.submitAllDrafts(companyId, empId));
+    }
+
+//    팀장 목표 조회 및 승인
+
+    // 7. 팀원 목표 전체 조회 - 팀원별 묶음 (상단 카드 집계 -> 프론트)
+    @GetMapping("/team")
+    public ResponseEntity<List<TeamMemberGoalResponse>> getTeamGoals(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId) {
+        return ResponseEntity.ok(goalService.getTeamGoals(companyId, managerId));
+    }
+
+    // 8. 단건 승인
+    @PostMapping("/{id}/approve")
+    public ResponseEntity<GoalResponse> approveGoal(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId,
+            @PathVariable Long id) {
+        return ResponseEntity.ok(goalService.approveGoal(companyId, managerId, id));
+    }
+
+    // 9. 단건 반려 (body 에 사유)
+    @PostMapping("/{id}/reject")
+    public ResponseEntity<GoalResponse> rejectGoal(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId,
+            @PathVariable Long id,
+            @RequestBody @Valid GoalRejectRequest request) {
+        return ResponseEntity.ok(goalService.rejectGoal(companyId, managerId, id, request.getRejectReason()));
+    }
+
+    // 10. 팀원 단위 대기 건 일괄 승인
+    @PostMapping("/approve-all/{empId}")
+    public ResponseEntity<List<GoalResponse>> approveAllPending(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId,
+            @PathVariable Long empId) {
+        return ResponseEntity.ok(goalService.approveAllPending(companyId, managerId, empId));
     }
 }

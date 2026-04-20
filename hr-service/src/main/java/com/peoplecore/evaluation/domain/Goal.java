@@ -104,4 +104,17 @@ public class Goal extends BaseTimeEntity {
         this.approvalStatus = GoalApprovalStatus.PENDING;
         this.rejectReason = null;   // 이전 반려 사유 초기화
     }
+
+    // 팀장 승인 - 대기 상태만 승인 가능, 반려 사유 초기화
+    public void approve() {
+        this.approvalStatus = GoalApprovalStatus.APPROVED;
+        this.rejectReason = null;
+    }
+
+    // 팀장 반려 - 사유 저장 + submittedAt 초기화하여 사원 화면에서 작성중으로 전환
+    public void reject(String reason) {
+        this.approvalStatus = GoalApprovalStatus.REJECTED;
+        this.rejectReason = reason;
+        this.submittedAt = null;
+    }
 }

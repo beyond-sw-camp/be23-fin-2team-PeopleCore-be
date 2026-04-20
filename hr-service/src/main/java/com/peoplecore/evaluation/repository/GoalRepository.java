@@ -13,4 +13,7 @@ public interface GoalRepository extends JpaRepository<Goal, Long>, GoalRepositor
 
     // 사원의 특정 시즌 목표 목록 - 최신순
     List<Goal> findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(Long empId, Long seasonId);
+
+    // 여러 사원의 특정 시즌 목표 한 번에 조회 (팀장 화면용)
+    List<Goal> findByEmp_EmpIdInAndSeason_SeasonIdOrderByGoalIdDesc(List<Long> empIds, Long seasonId);
 }
