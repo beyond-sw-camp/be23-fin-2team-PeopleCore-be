@@ -2,6 +2,8 @@ package com.peoplecore.filevault.consumer;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.filevault.audit.AuditContext;
+import com.peoplecore.filevault.audit.AuditContextHolder;
 import com.peoplecore.filevault.entity.FolderType;
 import com.peoplecore.filevault.service.FileFolderService;
 import lombok.RequiredArgsConstructor;
@@ -37,9 +39,14 @@ public class FileVaultCdcConsumer {
                 return;
             }
 
-            folderService.createSystemDefaultFolder(
-                companyId, deptName + " 파일함", FolderType.DEPT, deptId, null, 0L);
-            log.info("[FileVault CDC] 부서 기본 파일함 생성 완료 deptId={}", deptId);
+            try {
+                AuditContextHolder.set(AuditContext.cdc(companyId));
+                folderService.createSystemDefaultFolder(
+                    companyId, deptName + " 파일함", FolderType.DEPT, deptId, null, 0L);
+                log.info("[FileVault CDC] 부서 기본 파일함 생성 완료 deptId={}", deptId);
+            } finally {
+                AuditContextHolder.clear();
+            }
 
         } catch (Exception e) {
             log.error("[FileVault CDC] 부서 이벤트 처리 실패: {}", e.getMessage());
@@ -64,9 +71,14 @@ public class FileVaultCdcConsumer {
                 return;
             }
 
-            folderService.createSystemDefaultFolder(
-                companyId, empName + "의 파일함", FolderType.PERSONAL, null, empId, empId);
-            log.info("[FileVault CDC] 개인 파일함 생성 완료 empId={}", empId);
+            try {
+                AuditContextHolder.set(AuditContext.cdc(companyId));
+                folderService.createSystemDefaultFolder(
+                    companyId, empName + "의 파일함", FolderType.PERSONAL, null, empId, empId);
+                log.info("[FileVault CDC] 개인 파일함 생성 완료 empId={}", empId);
+            } finally {
+                AuditContextHolder.clear();
+            }
 
         } catch (Exception e) {
             log.error("[FileVault CDC] 사원 이벤트 처리 실패: {}", e.getMessage());

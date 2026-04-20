@@ -56,6 +56,12 @@ public class CapabilitySeeder {
             .description("타 사용자 개인 폴더 열람")
             .category("FILE")
             .scope("PERSONAL")
+            .build(),
+        Capability.builder()
+            .code("FILE_VIEW_AUDIT_LOG")
+            .description("파일함 감사 로그 전체 조회 (관리자용)")
+            .category("FILE")
+            .scope("COMPANY")
             .build()
     );
 
