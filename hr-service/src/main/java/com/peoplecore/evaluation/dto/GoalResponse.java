@@ -28,6 +28,7 @@ public class GoalResponse {
     private String approval;
     private LocalDateTime submittedAt;
     private String rejectReason;
+    private BigDecimal ratio;        // 승인된 목표 중 비율(%). 미승인/단건응답은 null
 
     public static GoalResponse from(Goal g) {
         return GoalResponse.builder()

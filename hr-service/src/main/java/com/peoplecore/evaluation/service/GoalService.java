@@ -11,8 +11,12 @@ import com.peoplecore.evaluation.repository.SeasonRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 // 목표 - 사원 목표 등록/수정 및 팀장 승인/반려
@@ -24,13 +28,16 @@ public class GoalService {
     private final SeasonRepository seasonRepository;
     private final EmployeeRepository employeeRepository;
     private final KpiTemplateRepository kpiTemplateRepository;
+    private final EvaluationRulesService rulesService;
 
     public GoalService(GoalRepository goalRepository,
-                       SeasonRepository seasonRepository, EmployeeRepository employeeRepository, KpiTemplateRepository kpiTemplateRepository) {
+                       SeasonRepository seasonRepository, EmployeeRepository employeeRepository,
+                       KpiTemplateRepository kpiTemplateRepository, EvaluationRulesService rulesService) {
         this.goalRepository = goalRepository;
         this.seasonRepository = seasonRepository;
         this.employeeRepository = employeeRepository;
         this.kpiTemplateRepository = kpiTemplateRepository;
+        this.rulesService = rulesService;
     }
 
     // 1번 본인 목표 목록 조회 - 회사의 OPEN 시즌만
@@ -46,10 +53,16 @@ public class GoalService {
         // 본인 + 해당 시즌 목표 조회
         List<Goal> goals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(empId, openSeason.getSeasonId());
 
-        // Entity -> DTO 변환
+        // 회사 규칙 로드 -> 승인된 목표 비율 계산
+        EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
+        Map<Long, BigDecimal> ratios = computeRatios(goals, rules);
+
+        // Entity -> DTO 변환 (비율 주입)
         List<GoalResponse> result = new ArrayList<>();
         for (Goal g : goals) {
-            result.add(GoalResponse.from(g));
+            GoalResponse dto = GoalResponse.from(g);
+            dto.setRatio(ratios.get(g.getGoalId()));
+            result.add(dto);
         }
         return result;
     }
@@ -190,6 +203,10 @@ public class GoalService {
 //        본인 + 해당 시즌 목표 전체 로드
         List<Goal> goals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(empId, openSeason.getSeasonId());
 
+//        회사 규칙 로드 -> 승인된 목표 비율 계산
+        EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
+        Map<Long, BigDecimal> ratios = computeRatios(goals, rules);
+
 //        작성중(submittedAt == null) 만 제출.
         List<GoalResponse> result = new ArrayList<>();
         for (Goal g : goals) {
@@ -201,9 +218,51 @@ public class GoalService {
             if (g.getSubmittedAt() == null) {
                 g.submit();
             }
-            result.add(GoalResponse.from(g));
+            GoalResponse dto = GoalResponse.from(g);
+            dto.setRatio(ratios.get(g.getGoalId()));
+            result.add(dto);
         }
         return result;
+    }
+
+
+    // 승인된 목표 중 taskWeight 합 기준 백분율 계산
+    //   미승인 목표는 결과 Map 에 키 없음 -> DTO 에서 null
+    private Map<Long, BigDecimal> computeRatios(List<Goal> goals, EvaluationRules rules) {
+        // 승인된 목표만 수집
+        List<Goal> approved = new ArrayList<>();
+        for (Goal g : goals) {
+            if (g.getApprovalStatus() == GoalApprovalStatus.APPROVED) {
+                approved.add(g);
+            }
+        }
+
+        // 전체 가중치 합계
+        int total = 0;
+        for (Goal g : approved) {
+            total += weightOf(g.getTaskGrade(), rules);
+        }
+
+        Map<Long, BigDecimal> result = new HashMap<>();
+        if (total == 0) return result;
+
+        // 각 목표별 비율
+        for (Goal g : approved) {
+            int w = weightOf(g.getTaskGrade(), rules);
+            BigDecimal ratio = BigDecimal.valueOf(w)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(BigDecimal.valueOf(total), 1, RoundingMode.HALF_UP);
+            result.put(g.getGoalId(), ratio);
+        }
+        return result;
+    }
+
+    // 업무등급별 가중치 조회 (회사 규칙 기반)
+    private int weightOf(TaskGrade grade, EvaluationRules rules) {
+        if (grade == TaskGrade.HIGH) return rules.getTaskWeightSang();
+        if (grade == TaskGrade.MID)  return rules.getTaskWeightJung();
+        if (grade == TaskGrade.LOW)  return rules.getTaskWeightHa();
+        return 0;
     }
 
 
