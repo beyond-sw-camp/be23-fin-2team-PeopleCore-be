@@ -29,8 +29,9 @@ public class Season extends BaseTimeEntity {
     @Column(name = "name", nullable = false, length = 100)
     private String name; // 시즌명
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "period", length = 20)
-    private String period; // 기간구분 (상반기/하반기/연간)
+    private SeasonPeriod period; // 기간구분 (상반기/하반기/연간)
 
     @Column(name = "start_date")
     private LocalDate startDate; // 시작일
@@ -54,7 +55,7 @@ public class Season extends BaseTimeEntity {
     @Column(name = "form_version")
     private Long formVersion;
 
-    public void updateBasicInfo(String name, String period, LocalDate startDate, LocalDate endDate){
+    public void updateBasicInfo(String name, SeasonPeriod period, LocalDate startDate, LocalDate endDate){
         this.name = name;
         this.period = period;
         this.startDate = startDate;

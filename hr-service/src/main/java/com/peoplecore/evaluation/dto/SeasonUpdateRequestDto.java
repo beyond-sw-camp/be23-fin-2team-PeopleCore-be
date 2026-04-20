@@ -1,6 +1,7 @@
 package com.peoplecore.evaluation.dto;
 
 
+import com.peoplecore.evaluation.domain.SeasonPeriod;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -19,7 +20,7 @@ public class SeasonUpdateRequestDto {
     @NotBlank(message = "시즌명은 필수입니다")
     private String name;
 
-    private String period;
+    private SeasonPeriod period;
 
     @NotNull(message = "시작일은 필수입니다")
     private LocalDate startDate;

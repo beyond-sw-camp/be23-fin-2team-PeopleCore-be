@@ -86,16 +86,13 @@ public class GoalService {
         if (!employee.getCompany().getCompanyId().equals(companyId)) {
             throw new IllegalArgumentException("다른 회사 사원입니다");
         }
-//        업무 등급 파싱(상중하) -- TODO 동적 디벨롭
-        TaskGrade grade = parseGrade(request.getGrade());
-
-//        껍데기 엔티티 생성 후 헬퍼로 타입별 필드 주입
+//        껍데기 엔티티 생성 후 헬퍼로 타입별 필드 주입 -- TODO 동적 디벨롭
         Goal goal = Goal.builder()
                 .emp(employee)
                 .season(openSeason)
                 .approvalStatus(GoalApprovalStatus.PENDING)
                 .build();
-        applyRequestToGoal(goal, companyId, request, grade);
+        applyRequestToGoal(goal, companyId, request, request.getGrade());
 
         Goal saved = goalRepository.save(goal);
         return GoalResponse.from(saved);
@@ -116,19 +113,15 @@ public class GoalService {
         }
 
 //        수정 가능 상태 검증 (작성중 OR 반려만)
-        boolean isDraft = goal.getSubmittedAt() == null;
-        boolean isRejected = goal.getApprovalStatus() == GoalApprovalStatus.REJECTED;
-        if (!isDraft && !isRejected) {
+        GoalApprovalStatus status = goal.getApprovalStatus();
+        if (status != GoalApprovalStatus.DRAFT && status != GoalApprovalStatus.REJECTED) {
             throw new IllegalStateException("제출완료/승인된 목표는 수정할 수 없습니다");
         }
 
-        TaskGrade grade = parseGrade(request.getGrade());
-        applyRequestToGoal(goal, companyId, request, grade);
+        applyRequestToGoal(goal, companyId, request, request.getGrade());
 
-//        반려였으면 재제출 대기 상태로 리셋
-        if (isRejected) {
-            goal.resetToDraft();
-        }
+//        반려 상태 유지 - rejectReason 도 그대로 남겨서 사원이 재작성 근거로 참조
+//        제출(submit) 호출 시에만 PENDING 전환 + rejectReason 초기화
         // dirty checking 으로 자동 UPDATE
         return GoalResponse.from(goal);
     }
@@ -153,9 +146,8 @@ public class GoalService {
         }
 
 //        삭제 가능 상태 검증 (작성중 OR 반려만 허용)
-        boolean isDraft = goal.getSubmittedAt() == null;
-        boolean isRejected = goal.getApprovalStatus() == GoalApprovalStatus.REJECTED;
-        if (!isDraft && !isRejected) {
+        GoalApprovalStatus status = goal.getApprovalStatus();
+        if (status != GoalApprovalStatus.DRAFT && status != GoalApprovalStatus.REJECTED) {
             throw new IllegalStateException("제출완료/승인된 목표는 삭제할 수 없습니다");
         }
 
@@ -163,6 +155,9 @@ public class GoalService {
     }
 
     //    5번 단건 제출 - 작성중/반려 상태만 제출 가능
+    //  - 프론트 카드별 "제출" 버튼 제거됨. 일괄 제출(submitAllDrafts)로 통합
+    //  - 단건 제출 필요 시 아래 주석 해제
+    /*
     public GoalResponse submitGoal(UUID companyId, Long empId, Long goalId) {
 
 //        기존 목표 로드
@@ -191,6 +186,7 @@ public class GoalService {
         goal.submit();
         return GoalResponse.from(goal);
     }
+    */
 
     //    6번 일괄 제출 - 본인의 작성중 목표 전체를 제출완료로 전환
     //    (프론트 "작성중 전체 제출" 버튼 대응)
@@ -209,15 +205,15 @@ public class GoalService {
         EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
         Map<Long, BigDecimal> ratios = computeRatios(goals, rules);
 
-//        작성중(submittedAt == null) 만 제출.
+//        작성중/반려 상태만 submit (대기/승인은 스킵)
         List<GoalResponse> result = new ArrayList<>();
         for (Goal g : goals) {
             // 회사 일치 검증 (이중 방어)
             if (!g.getEmp().getCompany().getCompanyId().equals(companyId)) {
                 continue;
             }
-            // 작성중만 submit
-            if (g.getSubmittedAt() == null) {
+            GoalApprovalStatus st = g.getApprovalStatus();
+            if (st == GoalApprovalStatus.DRAFT || st == GoalApprovalStatus.REJECTED) {
                 g.submit();
             }
             GoalResponse dto = GoalResponse.from(g);
@@ -293,23 +289,19 @@ public class GoalService {
         return result;
     }
 
-    // 8번 단건 승인 - 대기 + 제출완료 상태만 가능
+    // 8번 단건 승인 - 대기 상태만 가능 (PENDING 이 곧 "제출완료+대기")
     public GoalResponse approveGoal(UUID companyId, Long managerId, Long goalId) {
         Goal goal = loadGoalForManager(companyId, managerId, goalId);
 
-        // 승인 가능 상태 검증
         if (goal.getApprovalStatus() != GoalApprovalStatus.PENDING) {
             throw new IllegalStateException("대기 상태가 아닌 목표는 승인할 수 없습니다");
-        }
-        if (goal.getSubmittedAt() == null) {
-            throw new IllegalStateException("제출되지 않은 목표는 승인할 수 없습니다");
         }
 
         goal.approve();
         return GoalResponse.from(goal);
     }
 
-    // 9번 단건 반려 - 대기 + 제출완료 상태만 가능, 사유 필수
+    // 9번 단건 반려 - 대기 상태만 가능, 사유 필수
     public GoalResponse rejectGoal(UUID companyId, Long managerId, Long goalId, String rejectReason) {
         if (rejectReason == null || rejectReason.isBlank()) {
             throw new IllegalArgumentException("반려 사유는 필수입니다");
@@ -317,12 +309,8 @@ public class GoalService {
 
         Goal goal = loadGoalForManager(companyId, managerId, goalId);
 
-        // 반려 가능 상태 검증
         if (goal.getApprovalStatus() != GoalApprovalStatus.PENDING) {
             throw new IllegalStateException("대기 상태가 아닌 목표는 반려할 수 없습니다");
-        }
-        if (goal.getSubmittedAt() == null) {
-            throw new IllegalStateException("제출되지 않은 목표는 반려할 수 없습니다");
         }
 
         goal.reject(rejectReason);
@@ -347,7 +335,7 @@ public class GoalService {
         // 대기 + 제출완료 상태만 골라 승인
         List<GoalResponse> result = new ArrayList<>();
         for (Goal g : goals) {
-            if (g.getApprovalStatus() == GoalApprovalStatus.PENDING && g.getSubmittedAt() != null) {
+            if (g.getApprovalStatus() == GoalApprovalStatus.PENDING) {
                 g.approve();
                 result.add(GoalResponse.from(g));
             }
@@ -437,19 +425,10 @@ public class GoalService {
     }
 
 
-    // 업무등급 문자열(HIGH/MID/LOW)
-    private TaskGrade parseGrade(String raw) {
-        try {
-            return TaskGrade.valueOf(raw);
-        } catch (IllegalArgumentException | NullPointerException e) {
-            throw new IllegalArgumentException("업무등급 값이 잘못되었습니다");
-        }
-    }
-
     // 타입별 검증 + Goal 엔티티에 필드 주입 (create/update 공용)
     private void applyRequestToGoal(Goal goal, UUID companyId, GoalRequest request, TaskGrade grade) {
 
-        if ("KPI".equals(request.getGoalType())) {
+        if (request.getGoalType() == GoalType.KPI) {
             if (request.getKpiTemplateId() == null || request.getTargetValue() == null) {
                 throw new IllegalArgumentException("KPI 목표는 지표와 목표값이 필수입니다");
             }
@@ -462,7 +441,7 @@ public class GoalService {
             }
             goal.updateAsKpi(t, request.getTargetValue(), grade);
 
-        } else if ("OKR".equals(request.getGoalType())) {
+        } else if (request.getGoalType() == GoalType.OKR) {
             if (request.getCategory() == null || request.getCategory().isBlank()
                     || request.getTitle() == null || request.getTitle().isBlank()
                     || request.getDescription() == null || request.getDescription().isBlank()) {

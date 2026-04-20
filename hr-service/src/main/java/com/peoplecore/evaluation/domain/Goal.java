@@ -34,8 +34,9 @@ public class Goal extends BaseTimeEntity {
     @JoinColumn(name = "kpi_id")
     private KpiTemplate kpiTemplate; // KPI 템플릿 (OKR이면 NULL)
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "goal_type", length = 10)
-    private String goalType; // 목표 유형 (KPI/OKR)
+    private GoalType goalType; // 목표 유형 (KPI/OKR)
 
     @Column(name = "category", length = 30)
     private String category; // 카테고리
@@ -59,7 +60,7 @@ public class Goal extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "approval_status", length = 20)
     @Builder.Default
-    private GoalApprovalStatus approvalStatus = GoalApprovalStatus.PENDING; // 승인 상태 (대기/승인/반려)
+    private GoalApprovalStatus approvalStatus = GoalApprovalStatus.DRAFT; // 상태 (작성중/대기/승인/반려)
 
     @Column(name = "reject_reason", length = 500)
     private String rejectReason; // 반려 사유
@@ -70,7 +71,7 @@ public class Goal extends BaseTimeEntity {
     // KPI 목표 수정 - 템플릿에서 필드 자동 복사
     public void updateAsKpi(KpiTemplate template, BigDecimal targetValue, TaskGrade grade) {
         this.kpiTemplate = template;
-        this.goalType = "KPI";
+        this.goalType = GoalType.KPI;
         this.category = template.getCategory().getOptionValue();
         this.title = template.getName();
         this.description = template.getDescription();
@@ -82,7 +83,7 @@ public class Goal extends BaseTimeEntity {
     // OKR 목표 수정 - 사원 입력값 그대로, KPI 관련 필드는 NULL 처리
     public void updateAsOkr(String category, String title, String description, TaskGrade grade) {
         this.kpiTemplate = null;
-        this.goalType = "OKR";
+        this.goalType = GoalType.OKR;
         this.category = category;
         this.title = title;
         this.description = description;
@@ -91,14 +92,14 @@ public class Goal extends BaseTimeEntity {
         this.targetUnit = null;
     }
 
-    // 반려된 목표 재수정 시 작성중/대기 상태로 리셋 (재제출 가능)
+    // 반려된 목표 재수정 시 작성중 상태로 리셋 (재제출 가능)
     public void resetToDraft() {
-        this.approvalStatus = GoalApprovalStatus.PENDING;
+        this.approvalStatus = GoalApprovalStatus.DRAFT;
         this.submittedAt = null;
         this.rejectReason = null;
     }
 
-    // 목표 제출 - 작성중/반려 상태에서 제출완료 + 대기 로 전환
+    // 목표 제출 - 작성중/반려 상태에서 대기 로 전환
     public void submit() {
         this.submittedAt = LocalDateTime.now();
         this.approvalStatus = GoalApprovalStatus.PENDING;
@@ -111,10 +112,9 @@ public class Goal extends BaseTimeEntity {
         this.rejectReason = null;
     }
 
-    // 팀장 반려 - 사유 저장 + submittedAt 초기화하여 사원 화면에서 작성중으로 전환
+    // 팀장 반려 - 사유 저장 (submittedAt 은 이력으로 유지)
     public void reject(String reason) {
         this.approvalStatus = GoalApprovalStatus.REJECTED;
         this.rejectReason = reason;
-        this.submittedAt = null;
     }
 }

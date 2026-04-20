@@ -66,6 +66,9 @@ public class GoalController {
     }
 
     // 5. 단건 제출 (작성중 -> 제출완료, approval = 대기)
+    //  - 프론트에서 카드별 "제출" 버튼 제거됨. 일괄 제출(submit-all)로 통합
+    //  - 단건 제출이 다시 필요해지면 아래 주석 해제
+    /*
     @PostMapping("/{id}/submit")
     public ResponseEntity<GoalResponse> submitGoal(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -73,6 +76,7 @@ public class GoalController {
             @PathVariable Long id) {
         return ResponseEntity.ok(goalService.submitGoal(companyId, empId, id));
     }
+    */
 
     // 6. 본인의 작성중 목표 일괄 제출
     @PostMapping("/submit-all")

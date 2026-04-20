@@ -1,6 +1,8 @@
 package com.peoplecore.evaluation.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import com.peoplecore.evaluation.domain.GoalType;
+import com.peoplecore.evaluation.domain.TaskGrade;
+import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -15,11 +17,11 @@ import java.math.BigDecimal;
 @NoArgsConstructor
 public class GoalRequest {
 
-    @NotBlank
-    private String goalType;        // "KPI" or "OKR"
+    @NotNull
+    private GoalType goalType;      // KPI / OKR
 
-    @NotBlank
-    private String grade;           // "HIGH" / "MID" / "LOW"
+    @NotNull
+    private TaskGrade grade;        // HIGH / MID / LOW
 
     // KPI (OKR 일 때 null)
     private Long kpiTemplateId;
