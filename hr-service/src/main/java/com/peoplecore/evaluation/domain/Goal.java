@@ -66,4 +66,42 @@ public class Goal extends BaseTimeEntity {
 
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt; // 제출 시각
+
+    // KPI 목표 수정 - 템플릿에서 필드 자동 복사
+    public void updateAsKpi(KpiTemplate template, BigDecimal targetValue, TaskGrade grade) {
+        this.kpiTemplate = template;
+        this.goalType = "KPI";
+        this.category = template.getCategory().getOptionValue();
+        this.title = template.getName();
+        this.description = template.getDescription();
+        this.targetUnit = template.getUnit().getOptionValue();
+        this.targetValue = targetValue;
+        this.taskGrade = grade;
+    }
+
+    // OKR 목표 수정 - 사원 입력값 그대로, KPI 관련 필드는 NULL 처리
+    public void updateAsOkr(String category, String title, String description, TaskGrade grade) {
+        this.kpiTemplate = null;
+        this.goalType = "OKR";
+        this.category = category;
+        this.title = title;
+        this.description = description;
+        this.taskGrade = grade;
+        this.targetValue = null;
+        this.targetUnit = null;
+    }
+
+    // 반려된 목표 재수정 시 작성중/대기 상태로 리셋 (재제출 가능)
+    public void resetToDraft() {
+        this.approvalStatus = GoalApprovalStatus.PENDING;
+        this.submittedAt = null;
+        this.rejectReason = null;
+    }
+
+    // 목표 제출 - 작성중/반려 상태에서 제출완료 + 대기 로 전환
+    public void submit() {
+        this.submittedAt = LocalDateTime.now();
+        this.approvalStatus = GoalApprovalStatus.PENDING;
+        this.rejectReason = null;   // 이전 반려 사유 초기화
+    }
 }

@@ -1,5 +1,6 @@
 package com.peoplecore.evaluation.domain;
 
+import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.*;
@@ -20,28 +21,48 @@ public class KpiTemplate extends BaseTimeEntity {
     @Column(name = "kpi_id")
     private Long kpiId; // KPI PK
 
+//    옵션관리는 depth 정책만 저장. 실제 부서는 조직도(Department) 직접 참조
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "department_option_id")
-    private KpiOption department; // 부서 옵션 (KpiOption DEPARTMENT)
+    @JoinColumn(name = "department_id", nullable = false)
+    private Department department;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_option_id")
+    @JoinColumn(name = "category_option_id", nullable = false)
     private KpiOption category; // 카테고리 옵션 (KpiOption CATEGORY)
 
-    @Column(name = "name", length = 100)
+    @Column(name = "name", length = 100, nullable = false)
     private String name; // 지표명
 
-    @Column(name = "description", length = 300)
+    @Column(name = "description", length = 300, nullable = false)
     private String description; // 설명
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "direction_option_id")
-    private KpiOption direction; // 방향성 옵션 (KpiOption DIRECTION)
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "unit_option_id")
+    @JoinColumn(name = "unit_option_id", nullable = false)
     private KpiOption unit; // 단위 옵션 (KpiOption UNIT)
 
     @Column(name = "baseline", precision = 12, scale = 2)
     private BigDecimal baseline; // 사내평균(기준값)
+
+    @Column(name = "is_active", nullable = false)
+    @Builder.Default
+    private Boolean isActive = true;
+
+    // 소프트 삭제 - 과거 Goal 의 KPI 참조 보호용
+    public void deactivate() {
+        this.isActive = false;
+    }
+
+    // KPI 지표 수정 - 등록/수정 폼에서 받는 필드 일괄 갱신
+    public void update(Department department,
+                       KpiOption category,
+                       KpiOption unit,
+                       String name,
+                       String description) {
+        this.department = department;
+        this.category = category;
+        this.unit = unit;
+        this.name = name;
+        this.description = description;
+    }
 }
