@@ -237,7 +237,8 @@ public enum ErrorCode {
     BATCH_JOB_NOT_SUPPORTED(400, "지원하지 않는 배치 Job 입니다."),
     BATCH_JOB_NOT_FOUND(404, "배치 Job Bean 을 찾을 수 없습니다."),
     BATCH_PARAMETER_INVALID(400, "배치 재실행 파라미터가 올바르지 않습니다."),
-    BATCH_RERUN_FAILED(500, "배치 재실행에 실패했습니다.");
+    BATCH_RERUN_FAILED(500, "배치 재실행에 실패했습니다."),
+    BATCH_TENANT_FORBIDDEN(403, "다른 회사의 배치에 접근할 수 없습니다.");
 
 
     private final int status;

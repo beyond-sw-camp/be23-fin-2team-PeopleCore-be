@@ -8,8 +8,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 
@@ -23,9 +23,6 @@ public class DiscordNotifier {
     private static final int COLOR_FAIL = 15158332;
     private static final int COLOR_WARN = 16776960;
 
-    /* 한국시간 포맷 - embed timestamp 용 */
-    private static final DateTimeFormatter TS_FORMAT = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
-
     private final String webhookUrl;
     private final WebClient webClient;
 
@@ -37,26 +34,28 @@ public class DiscordNotifier {
     }
 
     /* 배치 실패 알림 - 실패 건별 호출. 웹훅 미설정 시 조용히 skip */
-    public void notifyBatchFailure(String jobName, String params, String exitCode,
-                                   int failureCount, String rootCauseMessage) {
+    /* companyLabel - 회사 식별 라벨 (예: "우리회사 (c0ffee12)" 또는 "전사 통합"). null/blank 면 "N/A" */
+    public void notifyBatchFailure(String jobName, String companyLabel, String params,
+                                   String exitCode, int failureCount, String rootCauseMessage) {
         if (webhookUrl == null || webhookUrl.isBlank()) {
             log.debug("[DiscordNotifier] webhook URL 미설정 - skip. job={}", jobName);
             return;
         }
 
-        // Discord embed 1개 포함한 payload 구성 - embeds 는 최대 10개, field 는 최대 25개 제한
+        // Discord embed 1개 포함한 payload 구성 - embeds 최대 10개, field 최대 25개 제한
         Map<String, Object> payload = Map.of(
-                "content", ":rotating_light: **배치 실패** — `" + jobName + "`",
+                "content", ":rotating_light: **배치 실패** — `" + jobName + "` / " + nullToNA(companyLabel),
                 "embeds", List.of(Map.of(
                         "title", "[FAIL] " + jobName,
                         "color", COLOR_FAIL,
                         "fields", List.of(
+                                Map.of("name", "Company", "value", nullToNA(companyLabel), "inline", true),
                                 Map.of("name", "Exit Code", "value", nullToNA(exitCode), "inline", true),
                                 Map.of("name", "Failure Count", "value", String.valueOf(failureCount), "inline", true),
                                 Map.of("name", "Parameters", "value", "```" + truncate(params, 900) + "```"),
                                 Map.of("name", "Root Cause", "value", "```" + truncate(nullToNA(rootCauseMessage), 900) + "```")
                         ),
-                        "timestamp", LocalDateTime.now().format(TS_FORMAT)
+                        "timestamp", OffsetDateTime.now(ZoneOffset.UTC).toString()
                 ))
         );
 
@@ -65,7 +64,7 @@ public class DiscordNotifier {
 
     /* 배치 부분 실패 경고 - Step 은 COMPLETED 지만 skipCount > 0 일 때 호출. 노란색 embed */
     /* 웹훅 미설정 시 조용히 skip */
-    public void notifyBatchWarning(String jobName, String params,
+    public void notifyBatchWarning(String jobName, String companyLabel, String params,
                                    long readCount, long writeCount, long skipCount) {
         if (webhookUrl == null || webhookUrl.isBlank()) {
             log.debug("[DiscordNotifier] webhook URL 미설정 - skip. job={}", jobName);
@@ -73,17 +72,18 @@ public class DiscordNotifier {
         }
 
         Map<String, Object> payload = Map.of(
-                "content", ":warning: **배치 부분 실패** — `" + jobName + "`",
+                "content", ":warning: **배치 부분 실패** — `" + jobName + "` / " + nullToNA(companyLabel),
                 "embeds", List.of(Map.of(
                         "title", "[WARN] " + jobName,
                         "color", COLOR_WARN,
                         "fields", List.of(
+                                Map.of("name", "Company", "value", nullToNA(companyLabel), "inline", true),
                                 Map.of("name", "Read", "value", String.valueOf(readCount), "inline", true),
                                 Map.of("name", "Write", "value", String.valueOf(writeCount), "inline", true),
                                 Map.of("name", "Skip", "value", String.valueOf(skipCount), "inline", true),
                                 Map.of("name", "Parameters", "value", "```" + truncate(params, 900) + "```")
                         ),
-                        "timestamp", LocalDateTime.now().format(TS_FORMAT)
+                        "timestamp", OffsetDateTime.now(ZoneOffset.UTC).toString()
                 ))
         );
 
