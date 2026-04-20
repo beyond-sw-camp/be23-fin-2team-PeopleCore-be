@@ -22,7 +22,7 @@ public class EmailFindController {
 
     @PostMapping("/sms/send")
     public ResponseEntity<Void> sendSmsCode(@RequestBody SmsCodeRequest request) {
-        smsAuthService.sendCode(request.getCompanyId(), request.getEmpName(), request.getEmpPhone());
+        smsAuthService.sendCode(request.getCompanyId(), request.getEmpName(), request.getEmpBirthDate(), request.getEmpPhone());
         return ResponseEntity.ok().build();
     }
 

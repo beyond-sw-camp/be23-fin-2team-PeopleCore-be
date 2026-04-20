@@ -85,9 +85,11 @@ public class FileItemService {
     }
 
     @Transactional
-    public String generateDownloadUrl(Long fileId) {
+    public String generateDownloadUrl(Long fileId, boolean attachment) {
         FileItem file = findActiveFile(fileId);
-        String url = minioService.generatePresignedGetUrl(file.getStorageKey(), 5);
+        String url = attachment
+            ? minioService.generatePresignedGetUrl(file.getStorageKey(), 5, file.getName())
+            : minioService.generatePresignedGetUrl(file.getStorageKey(), 5);
         eventPublisher.publishEvent(FileVaultAuditEvent.builder()
             .action(AuditAction.DOWNLOAD_FILE)
             .resourceType(ResourceType.FILE)

@@ -22,6 +22,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
     Optional<Employee> findByCompany_CompanyIdAndEmpEmail(UUID companyId, String empEmail);
 
+    Optional<Employee> findByEmpEmail(String empEmail);
+
     /** 회사 내 특정 역할 사원 목록 — NOTIFY 알림 대상 (HR_ADMIN/HR_SUPER_ADMIN) 조회용 */
     List<Employee> findByCompany_CompanyIdAndEmpRoleIn(UUID companyId, List<EmpRole> roles);
 
@@ -32,6 +34,28 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     boolean existsByEmpNum(String empNum);
 
     Optional<Employee> findByCompany_CompanyIdAndEmpNameAndEmpPhone(UUID companyId, String empName, String empPhone);
+
+    Optional<Employee> findByCompany_CompanyIdAndEmpNameAndEmpBirthDateAndEmpPhone(
+            UUID companyId, String empName, LocalDate empBirthDate, String empPhone);
+
+    /** 전화번호의 하이픈 유무와 관계없이 조회 (FE는 하이픈 제거해서 전송, DB에는 '010-1234-5678' 포맷 혼재) */
+    @Query("SELECT e FROM Employee e WHERE e.company.companyId = :companyId " +
+            "AND e.empName = :empName " +
+            "AND REPLACE(e.empPhone, '-', '') = :empPhone")
+    Optional<Employee> findByCompanyAndNameAndNormalizedPhone(
+            @Param("companyId") UUID companyId,
+            @Param("empName") String empName,
+            @Param("empPhone") String empPhone);
+
+    @Query("SELECT e FROM Employee e WHERE e.company.companyId = :companyId " +
+            "AND e.empName = :empName " +
+            "AND e.empBirthDate = :empBirthDate " +
+            "AND REPLACE(e.empPhone, '-', '') = :empPhone")
+    Optional<Employee> findByCompanyAndNameAndBirthAndNormalizedPhone(
+            @Param("companyId") UUID companyId,
+            @Param("empName") String empName,
+            @Param("empBirthDate") LocalDate empBirthDate,
+            @Param("empPhone") String empPhone);
 
     Optional<Employee> findByEmpPhone(String empPhone);
 

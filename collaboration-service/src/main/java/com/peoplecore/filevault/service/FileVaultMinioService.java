@@ -10,6 +10,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -56,14 +59,27 @@ public class FileVaultMinioService {
     }
 
     public String generatePresignedGetUrl(String storageKey, int expiryMinutes) {
+        return generatePresignedGetUrl(storageKey, expiryMinutes, null);
+    }
+
+    /**
+     * @param attachmentFilename non-null이면 response-content-disposition=attachment; filename*=UTF-8''<percent-encoded>
+     *                           쿼리 파라미터를 붙여 MinIO가 다운로드 응답 시 해당 Content-Disposition을 반환하도록 함.
+     *                           null이면 기본(inline) 동작.
+     */
+    public String generatePresignedGetUrl(String storageKey, int expiryMinutes, String attachmentFilename) {
         try {
-            return minioClient.getPresignedObjectUrl(
-                GetPresignedObjectUrlArgs.builder()
-                    .method(Method.GET)
-                    .bucket(bucket)
-                    .object(storageKey)
-                    .expiry(expiryMinutes, TimeUnit.MINUTES)
-                    .build());
+            GetPresignedObjectUrlArgs.Builder builder = GetPresignedObjectUrlArgs.builder()
+                .method(Method.GET)
+                .bucket(bucket)
+                .object(storageKey)
+                .expiry(expiryMinutes, TimeUnit.MINUTES);
+            if (attachmentFilename != null && !attachmentFilename.isEmpty()) {
+                String encoded = URLEncoder.encode(attachmentFilename, StandardCharsets.UTF_8).replace("+", "%20");
+                String disposition = "attachment; filename*=UTF-8''" + encoded;
+                builder.extraQueryParams(Map.of("response-content-disposition", disposition));
+            }
+            return minioClient.getPresignedObjectUrl(builder.build());
         } catch (Exception e) {
             log.error("Presigned GET URL 생성 실패 key={}, error={}", storageKey, e.getMessage());
             throw new BusinessException("파일 다운로드 URL 생성에 실패했습니다.", HttpStatus.SERVICE_UNAVAILABLE);
