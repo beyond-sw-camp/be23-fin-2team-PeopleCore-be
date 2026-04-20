@@ -1,9 +1,10 @@
 package com.peoplecore.evaluation.domain;
 
 // KPI 옵션 종류
+//   CATEGORY/UNIT : 회사별 리스트 관리 (관리자가 자유 추가/수정/삭제)
+//   DEPARTMENT    : 부서 depth 설정 (회사당 1행, option_value 에 "1".."N" / "leaf" 저장)
 public enum KpiOptionType {
-    DIRECTION,   // 방향 (UP/DOWN/MAINTAIN)
-    UNIT,        // 단위 (PERCENT/COUNT/WON/HOUR/SCORE/DAY)
-    CATEGORY,    // 카테고리 (업무성과/역량개발/조직기여)
-    DEPARTMENT   // 부서 (COMMON/영업팀/...)
+    CATEGORY,
+    UNIT,
+    DEPARTMENT
 }

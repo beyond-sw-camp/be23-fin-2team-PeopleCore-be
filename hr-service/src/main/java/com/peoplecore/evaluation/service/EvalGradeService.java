@@ -10,13 +10,16 @@ import com.peoplecore.evaluation.domain.DiffStatus;
 import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.domain.EvalGradeSortField;
 import com.peoplecore.evaluation.domain.EvalSeasonStatus;
-import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.domain.Calibration;
 import com.peoplecore.evaluation.dto.*;
+import com.peoplecore.evaluation.domain.Stage;
+import com.peoplecore.evaluation.domain.StageStatus;
+import com.peoplecore.evaluation.domain.StageType;
 import com.peoplecore.evaluation.repository.CalibrationRepository;
 import com.peoplecore.evaluation.repository.EvalGradeRepository;
-import com.peoplecore.evaluation.repository.EvaluationRulesRepository;
+import com.peoplecore.evaluation.repository.SeasonRepository;
+import com.peoplecore.evaluation.repository.StageRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -26,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.*;
 
 
@@ -36,21 +40,24 @@ import java.util.*;
 public class EvalGradeService {
 
     private final EvalGradeRepository evalGradeRepository;
-    private final EvaluationRulesRepository rulesRepository;
+    private final SeasonRepository seasonRepository;
     private final DepartmentRepository departmentRepository;
     private final CalibrationRepository calibrationRepository;
+    private final StageRepository stageRepository;
     private final ObjectMapper objectMapper;
     private final EmployeeRepository employeeRepository;
 
     public EvalGradeService(EvalGradeRepository evalGradeRepository,
-                            EvaluationRulesRepository rulesRepository,
+                            SeasonRepository seasonRepository,
                             DepartmentRepository departmentRepository,
                             CalibrationRepository calibrationRepository,
+                            StageRepository stageRepository,
                             ObjectMapper objectMapper, EmployeeRepository employeeRepository) {
         this.evalGradeRepository = evalGradeRepository;
-        this.rulesRepository = rulesRepository;
+        this.seasonRepository = seasonRepository;
         this.departmentRepository = departmentRepository;
         this.calibrationRepository = calibrationRepository;
+        this.stageRepository = stageRepository;
         this.objectMapper = objectMapper;
         this.employeeRepository = employeeRepository;
     }
@@ -67,11 +74,10 @@ public class EvalGradeService {
 //    시즌 전사원 row순회하며 점수 집계 +autoGrade판정 +update //json돌면서 있는 항목 하나라도 미제출 시 스킵
     public void calculateAutoGrades(UUID companyId, Long seasonId) {
 
-//        a)규칙 로드 + 소유권/상태 검증
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId)
-                .orElseThrow(() -> new IllegalStateException("규칙 없음"));
+//        a)시즌 로드 + 소유권/상태 검증 (스냅샷은 Season.formSnapshot 에 박제되어 있음)
+        Season season = seasonRepository.findById(seasonId)
+                .orElseThrow(() -> new IllegalStateException("시즌 없음"));
 
-        Season season = rules.getSeason();
 //        회사 소유권 검증 (멀티테넌시)
         if (!season.getCompany().getCompanyId().equals(companyId)) {
             throw new IllegalArgumentException("접근 권한 없음");
@@ -84,11 +90,13 @@ public class EvalGradeService {
         if (season.getStatus() != EvalSeasonStatus.OPEN) {
             throw new IllegalStateException("진행중 시즌만 산정 가능");
         }
+//        단계 검증 (4단계 또는 5단계가 진행중이어야 수동 산정 가능)
+        requireGradingStageOpen(seasonId);
 
-//        스냅샷 파싱
+//        스냅샷 파싱 (시즌 OPEN 시 박제된 병합 JSON)
         FormSnapshotDto snapshot;
         try {
-            snapshot = objectMapper.readValue(rules.getFormSnapshot(), FormSnapshotDto.class);
+            snapshot = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("규칙 스냅샷 파싱 실패", e);
         }
@@ -123,7 +131,7 @@ public class EvalGradeService {
                 // 비활성화된 잠금 항목(enabled=false)은 집계 대상에서 제외
                 if (isItemDisabled(item)) continue;
 
-                BigDecimal score = aggregateScoreByItem(item, empId, seasonId, rules, snapshot);
+                BigDecimal score = aggregateScoreByItem(item, empId, seasonId, snapshot);
                 if (score == null) {
 //                    해당 평가 미제출 -> 산정 스킵
                     missing = true;
@@ -162,6 +170,22 @@ public class EvalGradeService {
 
     // 헬퍼
 
+    // GRADING 또는 FINALIZATION 단계가 IN_PROGRESS인지 검증
+    private void requireGradingStageOpen(Long seasonId) {
+        List<Stage> stages = stageRepository.findBySeason_SeasonId(seasonId);
+        boolean open = false;
+        for (Stage stage : stages) {
+            if ((stage.getType() == StageType.GRADING || stage.getType() == StageType.FINALIZATION)
+                    && stage.getStatus() == StageStatus.IN_PROGRESS) {
+                open = true;
+                break;
+            }
+        }
+        if (!open) {
+            throw new IllegalStateException("등급 산정 또는 결과확정 단계가 진행중이 아닙니다");
+        }
+    }
+
     // 잠금 항목(자기평가/상위자평가)의 체크박스 off 여부 판정
     //   - locked=true AND enabled=false 인 경우에만 비활성으로 간주
     //   - 일반 항목이나 enabled 미지정(null)/true 는 사용 중
@@ -171,7 +195,7 @@ public class EvalGradeService {
     }
 
     //    item별 점수 집계 -.id로 분기(ex.자기/팀장 점수 집계)
-    private BigDecimal aggregateScoreByItem(FormSnapshotDto.Item item, Long empId, Long seasonId, EvaluationRules rules, FormSnapshotDto snapshotDto) {
+    private BigDecimal aggregateScoreByItem(FormSnapshotDto.Item item, Long empId, Long seasonId, FormSnapshotDto snapshotDto) {
 //        TODO:self로직 생성후  achievementLevel 점수 매핑 + taskWeight 난이도 가중평균, manager 로직 생성후 gradeLabel 조회snapshot.rawScoreTable 로 점수 환산
         return null;//(미체출 시 null)
     }
@@ -197,11 +221,10 @@ public class EvalGradeService {
     //    3.z score편향 보정
     public void applyBiasAdjustment(UUID companyId, Long seasonId) {
 
-//        a.규칙 로드+소유권
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId)
-                .orElseThrow(() -> new IllegalStateException("규칙 없음"));
+//        a.시즌 로드+소유권
+        Season season = seasonRepository.findById(seasonId)
+                .orElseThrow(() -> new IllegalStateException("시즌 없음"));
 
-        Season season = rules.getSeason();
 //        회사 소유권 검증 (멀티테넌시)
         if (!season.getCompany().getCompanyId().equals(companyId)) {
             throw new IllegalArgumentException("접근 권한 없음");
@@ -214,11 +237,13 @@ public class EvalGradeService {
         if (season.getStatus() != EvalSeasonStatus.OPEN) {
             throw new IllegalStateException("진행중 시즌만 산정 가능");
         }
+//        단계 검증
+        requireGradingStageOpen(seasonId);
 
-        // b.스냅샷 파싱
+        // b.스냅샷 파싱 (시즌 OPEN 시 박제된 병합 JSON)
         FormSnapshotDto snapshot;
         try {
-            snapshot = objectMapper.readValue(rules.getFormSnapshot(), FormSnapshotDto.class);
+            snapshot = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("규칙 스냅샷 파싱 실패", e);
         }
@@ -259,7 +284,7 @@ public class EvalGradeService {
         BigDecimal companyStd = calcMgrStdDev(scored, companyAvg);
 
         // g. 편향보정 off -> managerScoreAdjusted = managerScore 그대로 (감사/일관성)
-        if (!Boolean.TRUE.equals(rules.getUseBiasAdjustment())) {
+        if (!Boolean.TRUE.equals(snapshot.getUseBiasAdjustment())) {
             for (EvalGrade row : scored) {
                 int ts = byTeam.get(row.getDeptIdSnapshot()).size();
                 BigDecimal newTotal = recalcTotal(row, row.getManagerScore(), selfWeight, managerWeight, weightSum);
@@ -309,6 +334,38 @@ public class EvalGradeService {
         }
     }
 
+
+    //    팀장 편향 보정(Z-score) 팀별 효과 요약 (자동 산정 화면 차트용)
+    //    - 부서별로 managerScore(보정 전) / managerScoreAdjusted(보정 후) 평균 집계
+    //    - minTeamSize 는 시즌 OPEN 당시 박제된 formSnapshot 기준 (실제 보정에 적용된 값)
+    @Transactional(readOnly = true)
+    public TeamBiasResponseDto getTeamBiasSummary(UUID companyId, Long seasonId) {
+        Season season = seasonRepository.findById(seasonId)
+                .orElseThrow(() -> new IllegalArgumentException("시즌을 찾을 수 없습니다"));
+
+        // 회사 소유권 검증
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한이 없는 시즌입니다");
+        }
+
+        // 시즌 스냅샷에서 minTeamSize 추출 (없으면 기본 5)
+        int minTeamSize = 5;
+        if (season.getFormSnapshot() != null) {
+            try {
+                FormSnapshotDto snapshot = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);
+                if (snapshot.getMinTeamSize() != null) {
+                    minTeamSize = snapshot.getMinTeamSize();
+                }
+            } catch (JsonProcessingException e) {
+                // 파싱 실패 시 기본값 유지
+            }
+        }
+
+        List<TeamBiasResponseDto.Team> teams = evalGradeRepository.findTeamBiasSummary(seasonId);
+        return new TeamBiasResponseDto(minTeamSize, teams);
+    }
+
+
     //    보정된 상위자점수 + 기존 자기점수/조정점수로 최종 점수 재계산
 //    = (self × selfWeight + adjustedMgr × mgrWeight) / weightSum + adjustment
     private BigDecimal recalcTotal(EvalGrade row, BigDecimal adjustedMgr,
@@ -340,13 +397,14 @@ public class EvalGradeService {
 
 //    5.강제배분 등급적용 - 보정전// 규칙 스냅샷+소유권 상태//점수 있는 row만 내림차순// ratio대로 위에서 배정-> 동일 점수=비율>가감
 //    없는 점수row= autoGrade/순위 null세팅
+//    재실행 시: cohort(참여자 수) 변화 없으면 no-op, 변화 있고 보정 이력 있으면 confirm 필요
+//              confirm=true 면 보정 전부 리셋 후 재배분
 
-    public void applyDistribution(UUID companyId, Long seasonId) {
+    public DistributionApplyResultDto applyDistribution(UUID companyId, Long seasonId, boolean confirm) {
 
-//        규칙 로드
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElseThrow(() -> new IllegalStateException("규칙 없음"));
+//        시즌 로드
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
 //        소유권/상태검증
-        Season season = rules.getSeason();
         if (!season.getCompany().getCompanyId().equals(companyId)) {
             throw new IllegalArgumentException("접근 권한이 없습니다");
         }
@@ -356,19 +414,56 @@ public class EvalGradeService {
         if (season.getStatus() != EvalSeasonStatus.OPEN) {
             throw new IllegalStateException("진행중인 시즌만 재분배가 가능합니다");
         }
+//        단계 검증
+        requireGradingStageOpen(seasonId);
 
-//        스냅샷 파싱
+//        cohort 변화 판정: 현재 랭킹 대상 수 vs 이전 배분된 인원 수
+        long currentRankedCount = evalGradeRepository.countBySeason_SeasonIdAndBiasAdjustedScoreNotNull(seasonId);
+        long previousGradedCount = evalGradeRepository.countBySeason_SeasonIdAndAutoGradeNotNull(seasonId);
+        boolean cohortChanged = (currentRankedCount != previousGradedCount);
+
+//        cohort 변화 없음 -> no-op (보정 작업 보호)
+//        이전 배분 결과와 동일하게 나올 것이므로 autoGrade/보정 둘 다 손대지 않음
+        if (!cohortChanged && previousGradedCount > 0) {
+            return DistributionApplyResultDto.builder()
+                    .success(false)
+                    .noChange(true)
+                    .build();
+        }
+
+//        보정 이력 개수 조회 (cohort 바뀐 경우만 의미 있음)
+        long calibCount = calibrationRepository.countByGrade_Season_SeasonId(seasonId);
+
+//        보정 이력 존재 + confirm=false -> 확인 필요 (DB 변경 없이 반환)
+        if (calibCount > 0 && !confirm) {
+            return DistributionApplyResultDto.builder()
+                    .success(false)
+                    .requiresConfirm(true)
+                    .pendingResetCount((int) calibCount)
+                    .build();
+        }
+
+//        보정 리셋 (이력 삭제 + isCalibrated 플래그는 아래 row 순회에서 리셋)
+        int resetCount = 0;
+        if (calibCount > 0) {
+            calibrationRepository.deleteAllByGrade_Season_SeasonId(seasonId);
+            resetCount = (int) calibCount;
+        }
+
+//        스냅샷 파싱 (시즌 OPEN 시 박제된 병합 JSON)
         FormSnapshotDto snapshot;
         try {
-            snapshot = objectMapper.readValue(rules.getFormSnapshot(), FormSnapshotDto.class);
+            snapshot = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("규칙 스냅샷 파싱 실패", e);
         }
 
 //        보정점수 있는 row만 랭킹 대상, 없는 건 초기화
+//        전 row 순회하면서 isCalibrated 도 함께 리셋 (이미 로드했으므로 추가 쿼리 불필요)
         List<EvalGrade> rows = evalGradeRepository.findBySeason_SeasonId(seasonId);
         List<EvalGrade> ranked = new ArrayList<>();
         for (EvalGrade row : rows) {
+            row.resetCalibration();
             if (row.getBiasAdjustedScore() != null) {
                 ranked.add(row);
             } else {
@@ -410,6 +505,11 @@ public class EvalGradeService {
 
         }
 
+        return DistributionApplyResultDto.builder()
+                .success(true)
+                .distributedCount(total)
+                .resetCount(resetCount)
+                .build();
     }
 
 
@@ -452,23 +552,23 @@ public class EvalGradeService {
     @Transactional(readOnly = true)
     public BiasAdjustResultDto getBiasAdjustAnomalies(UUID companyId, Long seasonId) {
 
-//        a. 시즌 규칙 로드 + 소유권 검증
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElseThrow(() -> new IllegalStateException("규칙 없음"));
-
-        Season season = rules.getSeason();                              // 시즌 추출
+//        a. 시즌 로드 + 소유권 검증
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
         if (!season.getCompany().getCompanyId().equals(companyId)) {    // 회사 소유권 검증
             throw new IllegalArgumentException("접근 권한 없음");
         }
 
 //        b. 소규모 팀 기준(minTeamSize) 로드 - 보정 당시 스냅샷과 같은 기준 사용
         int minTeamSize = 5;                                            // 기본값
-        try {
-            FormSnapshotDto snap = objectMapper.readValue(rules.getFormSnapshot(), FormSnapshotDto.class);              // JSON 파싱
-            if (snap.getMinTeamSize() != null) {
-                minTeamSize = snap.getMinTeamSize();                    // 스냅샷 값으로 덮어씀
+        if (season.getFormSnapshot() != null) {
+            try {
+                FormSnapshotDto snap = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);           // JSON 파싱
+                if (snap.getMinTeamSize() != null) {
+                    minTeamSize = snap.getMinTeamSize();                // 스냅샷 값으로 덮어씀
+                }
+            } catch (JsonProcessingException ignored) {
+//                파싱 실패해도 기본값(5)으로 조회 계속 진행
             }
-        } catch (JsonProcessingException ignored) {
-//            파싱 실패해도 기본값(5)으로 조회 계속 진행
         }
 
 //        c. 해당 시즌의 모든 EvalGrade 레코드 조회
@@ -549,13 +649,12 @@ public class EvalGradeService {
 
 
     //    6. 실제 vs 목표 분포 + 보정 건수 조회 (GradeCalibration 화면 초기 진입)
-//       - 실제: DB autoGrade 집계 + 실시간 변동은 프론트
+//       - 실제: DB finalGrade 집계 (보정 반영) + 실시간 변동은 프론트
     @Transactional(readOnly = true)
     public DistributionDiffDto getDistributionDiff(UUID companyId, Long seasonId) {
 
-//        a. 규칙 로드 + 회사 소유권 검증 (멀티테넌시)
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElseThrow(() -> new IllegalStateException("규칙 없음"));
-        Season season = rules.getSeason();
+//        a. 시즌 로드 + 회사 소유권 검증 (멀티테넌시)
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
         if (!season.getCompany().getCompanyId().equals(companyId)) {
             throw new IllegalArgumentException("접근 권한 없음");
         }
@@ -563,13 +662,13 @@ public class EvalGradeService {
 //        b. 스냅샷 파싱 -> gradeRules (라벨/비율/색상) 추출
         FormSnapshotDto snapshot;
         try {
-            snapshot = objectMapper.readValue(rules.getFormSnapshot(), FormSnapshotDto.class);
+            snapshot = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("규칙 스냅샷 파싱 실패", e);
         }
         List<FormSnapshotDto.GradeRule> gradeRules = snapshot.getGradeRules();
 
-//        c. autoGrade 별 실제 인원 집계 (null 은 미산정 -> 쿼리에서 제외됨)
+//        c. finalGrade 별 실제 인원 집계 (보정 반영 / null=미배분은 쿼리에서 제외)
 //           DTO 리스트 -> Map<등급라벨, 실제인원> + 총 인원 누적
         Map<String, Integer> actualMap = new HashMap<>();
         int totalCount = 0;
@@ -643,9 +742,9 @@ public class EvalGradeService {
 
 
     //    7. 보정 페이지 사원 목록 (페이징/필터/검색/정렬)
-//       - 보정된 사원 자동등급= Calibration 이력에서 원본 fromGrade + 최신 reason/actor 복원
-//         - 원본 자동등급 = 이력 첫 row 의 fromGrade (강제배분이 부여한 최초 등급) //보정등급 = 현재 autoGrade (= 마지막 toGrade, 덮어쓰기 구조) //여러 번 보정해도 원본은 첫 fromGrade에서 항상 복원
-//       - 사유는 최신 1건 (전체 이력은 8번 API)
+//       - autoGrade = 불변 원본 (그대로 읽음)
+//       - finalGrade = 보정 반영된 현재 등급 (보정된 경우만 adjustedGrade 로 표시)
+//       - 사유/수행자는 Calibration 이력에서 최신 1건만 조회 (전체 이력은 8번 API)
     @Transactional(readOnly = true)
     public Page<CalibrationListItemDto> getCalibrationList(UUID companyId, Long seasonId,
                                                            Long deptId, String keyword,
@@ -655,7 +754,7 @@ public class EvalGradeService {
         Page<EvalGrade> gradePage = evalGradeRepository.searchCalibrationGrades(
                 companyId, seasonId, deptId, keyword, sortField, pageable);
 
-//        b. 보정된 row 의 gradeId 수집 -> Calibration 이력 batch 조회
+//        b. 보정된 row 의 gradeId 수집 -> Calibration 이력 batch 조회 (사유/수행자만 추출)
         List<Long> calibratedIds = new ArrayList<>();
         for (EvalGrade g : gradePage.getContent()) {
             if (Boolean.TRUE.equals(g.getIsCalibrated())) {
@@ -663,11 +762,8 @@ public class EvalGradeService {
             }
         }
 
-//        원본 자동등급 Map + 최신 사유/수행자 Map 구성
-//          첫 row.fromGrade = 원본 자동등급 (강제배분 최초 부여값)
-//          마지막 row.reason = 최신 보정 사유 (7번에서는 이것만 표시)
-//          마지막 row.actor.empName = 최신 보정 수행자
-        Map<Long, String> originalGradeMap = new HashMap<>();  // gradeId -> 원본 fromGrade
+//        최신 사유/수행자 Map 구성 (이력 시간순 조회 후 덮어쓰기로 마지막 값만 남김)
+//        ※ 원본 등급은 이제 EvalGrade.autoGrade 가 불변이므로 이력 복원 불필요
         Map<Long, String> latestReasonMap = new HashMap<>();   // gradeId -> 최신 reason
         Map<Long, String> latestAdjusterMap = new HashMap<>(); // gradeId -> 최신 수행자 이름
 
@@ -677,11 +773,6 @@ public class EvalGradeService {
 
             for (Calibration cal : histories) {
                 Long gid = cal.getGrade().getGradeId();
-
-//                첫 등장만 원본으로 저장 (이미 있으면 스킵 -> 원본 불변)
-                if (!originalGradeMap.containsKey(gid)) {
-                    originalGradeMap.put(gid, cal.getFromGrade());
-                }
 //                매번 덮어쓰기 -> 루프 끝나면 마지막(최신) 값만 남음
                 latestReasonMap.put(gid, cal.getReason());
                 if (cal.getActor() != null) {
@@ -696,13 +787,10 @@ public class EvalGradeService {
             Long gid = g.getGradeId();
             boolean calibrated = Boolean.TRUE.equals(g.getIsCalibrated());
 
-//            원본 등급: 보정됐으면 이력의 첫 fromGrade, 아니면 현재 autoGrade
-            String originalGrade = calibrated
-                    ? originalGradeMap.getOrDefault(gid, g.getAutoGrade())
-                    : g.getAutoGrade();
-
-//            보정등급: 보정됐으면 현재 autoGrade (= 마지막 toGrade), 아니면 null
-            String adjustedGrade = calibrated ? g.getAutoGrade() : null;
+//            원본 등급: 항상 autoGrade (불변)
+//            보정등급: 보정됐으면 현재 finalGrade, 아니면 null
+            String originalGrade = g.getAutoGrade();
+            String adjustedGrade = calibrated ? g.getFinalGrade() : null;
 
 //            사유: 보정됐으면 최신 reason 1건만, 아니면 null
             String reason = calibrated ? latestReasonMap.get(gid) : null;
@@ -736,9 +824,8 @@ public class EvalGradeService {
     @Transactional(readOnly = true)
     public List<CalibrationHistoryDto> getCalibrations(UUID companyId, Long seasonId) {
 
-//        a. 소유권 검증 (규칙 기반 — 시즌 직접 조회 대신 기존 패턴 재사용)
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElseThrow(() -> new IllegalStateException("규칙 없음"));
-        Season season = rules.getSeason();
+//        a. 소유권 검증
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
         if (!season.getCompany().getCompanyId().equals(companyId)) {
             throw new IllegalArgumentException("접근 권한 없음");
         }
@@ -772,12 +859,8 @@ public class EvalGradeService {
 //    변경 반영 후 등급 분포 미리 계산 -> 목표 ratio와 일치하는지 검증 //통과 시 autoGrade덮기 +이전값 calibration이력 남기기
     public CalibrationBatchResultDto batchSaveCalibration(UUID companyId, Long adjusterEmpId, Long seasonId, List<CalibrationItemRequest> items) {
 
-//   a. 규칙 로드 + 소유권/상태 검증
-//        시즌에 연결된 평가 규칙 조회 (없으면 예외)
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElseThrow(() -> new IllegalStateException("규칙 없음"));
-
-//        규칙에서 시즌 엔티티 추출
-        Season season = rules.getSeason();
+//   a. 시즌 로드 + 소유권/상태 검증
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
 
 //        회사 소유권 검증 (멀티테넌시 — 다른 회사 시즌 접근 차단)
         if (!season.getCompany().getCompanyId().equals(companyId)) {
@@ -795,11 +878,10 @@ public class EvalGradeService {
         }
 
 
-//       b. 스냅샷 파싱 -> gradeRules 추출
-//        규칙에 저장된 JSON 스냅샷을 DTO 로 역직렬화
+//       b. 스냅샷 파싱 -> gradeRules 추출 (시즌 OPEN 시 박제된 병합 JSON)
         FormSnapshotDto snapshot;
         try {
-            snapshot = objectMapper.readValue(rules.getFormSnapshot(), FormSnapshotDto.class);
+            snapshot = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("규칙 스냅샷 파싱 실패", e);
         }
@@ -842,8 +924,8 @@ public class EvalGradeService {
             if (g == null) {
                 throw new IllegalArgumentException("존재하지 않는 등급입니다");
             }
-//      현재 autoGrade = 변경 전 등급
-            String fromGrade = g.getAutoGrade();
+//      현재 finalGrade = 변경 전 등급 (보정 반영된 현재 값)
+            String fromGrade = g.getFinalGrade();
 //            요청에서 받은 새등급
             String toGrade = item.getToGrade();
 //            같은 등급이면 분포 변경 x(스킵)
@@ -919,15 +1001,15 @@ public class EvalGradeService {
         for (CalibrationItemRequest item : items) {
 //            대상 EvalGrade
             EvalGrade target = gradeMap.get(item.getGradeId());
-//            변경 전 등급
-            String fromGrade = target.getAutoGrade();
+//            변경 전 등급 (보정 반영된 현재 값 = finalGrade)
+            String fromGrade = target.getFinalGrade();
 //            변경 후 등급
             String toGrade = item.getToGrade();
 //            같은 등급이면 스킵 (변경 없음 방어)
             if (fromGrade.equals(toGrade)) {
                 continue;
             }
-//            autoGrade 덮어쓰기 + isCalibrated = true (dirty checking UPDATE)
+//            finalGrade 덮어쓰기 + isCalibrated = true (autoGrade 는 불변 원본 유지)
             target.applyCalibration(toGrade);
 //            Calibration 이력 INSERT (건별 - 8번에서 전부 조회)
             Calibration cal = Calibration.builder()
@@ -947,6 +1029,105 @@ public class EvalGradeService {
                 .saveCount(savedCount)
                 .currentDiff(null)
                 .build();
+    }
+
+
+    //    10. 최종 확정 페이지 상단 요약 지표
+//       - 배정/미산정/보정 카운트 4개 (잠금 상태는 시즌 스토어에서 별도 로드)
+    @Transactional(readOnly = true)
+    public FinalizeSummaryDto getFinalizeSummary(UUID companyId, Long seasonId) {
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+
+        long total= evalGradeRepository.countBySeason_SeasonId(seasonId);
+        long assigned= evalGradeRepository.countBySeason_SeasonIdAndFinalGradeNotNull(seasonId);
+        long calibrated= evalGradeRepository.countBySeason_SeasonIdAndIsCalibratedTrue(seasonId);
+
+        return FinalizeSummaryDto.builder()
+                .totalCount((int) total)
+                .assignedCount((int) assigned)
+                .unassignedCount((int) (total - assigned))
+                .calibratedCount((int) calibrated)
+                .build();
+    }
+
+
+    //    11. 최종 확정 페이지 미제출·미산정 직원 목록 (finalGrade IS NULL 대상)
+    @Transactional(readOnly = true)
+    public Page<UnassignedEmployeeDto> getUnassignedList(UUID companyId, Long seasonId,
+                                                          Long deptId,
+                                                          EvalGradeSortField sortField,
+                                                          Pageable pageable) {
+        return evalGradeRepository.searchUnassigned(companyId, seasonId, deptId, sortField, pageable);
+    }
+
+    
+//    12. 최종 확정 및 잠금
+    public FinalizeDto finalize(UUID companyId, Long adjusterEmpId, Long seasonId, FinalizeDto request) {
+
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌이 없습니다"));
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한이 없습니다");
+        }
+        if (season.getFinalizedAt() != null) {
+            throw new IllegalStateException("이미 확정된 시즌입니다");
+        }
+        if (season.getStatus() != EvalSeasonStatus.OPEN) {
+            throw new IllegalStateException("진행중인 시즌만 확정 가능합니다");
+        }
+
+//        미산정자 ack리스트 포함여부 검증
+        List<Long> unassignedEmpIds = evalGradeRepository.findUnassignedEmpIds(seasonId);
+        Set<Long> ackSet = new HashSet<>(
+                request.getAcknowledgedEmpIds() != null ? request.getAcknowledgedEmpIds() : Collections.emptyList());
+
+//        미체크된 미산정자 남을 시 확정 거부
+        for (Long empId : unassignedEmpIds) {
+            if (!ackSet.contains(empId)) {
+                throw new IllegalStateException("미산정자 전원 확인이 필요합니다");
+            }
+        }
+
+//        확정-EvalGrade전체 잠금 + 시즌 finalizedAt세팅 + status CLOSED 전환
+//        (status=CLOSED 로 변경)
+        LocalDateTime now = LocalDateTime.now();
+        int lockedCount = evalGradeRepository.lockAllAssigned(seasonId, now);
+        season.markFinalized(now);
+        season.close();
+
+        return FinalizeDto.builder()
+                .finalizedAt(now)
+                .lockedCount(lockedCount)
+                .build();
+    }
+
+
+    //    13. 평가 결과 목록 ( 진행중/완료 시즌만 조회, 미산정자 포함)
+//       - 진행중: finalGrade = 보정까지 반영된 현재 값 (실시간)
+//       - 완료: finalGrade = 박제된 최종 값
+//       - unscoredOnly: null=전체 / true=미산정자만 / false=산정자만
+    @Transactional(readOnly = true)
+    public Page<FinalGradeListItemDto> getFinalList(UUID companyId, Long seasonId,
+                                                    Long deptId, String keyword,
+                                                    Boolean unscoredOnly,
+                                                    EvalGradeSortField sortField, Pageable pageable) {
+
+//        시즌 로드 + 회사 소유권 검증 (멀티테넌시)
+        Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+
+//        시즌 상태 검증 - DRAFT(준비중) 시즌은 조회 불가
+        if (season.getStatus() == EvalSeasonStatus.DRAFT) {
+            throw new IllegalStateException("준비중 시즌은 결과 조회 불가");
+        }
+
+//        Impl 에서 필터 + DTO 변환까지 수행 (1번 searchDraftList 와 동일 패턴)
+        return evalGradeRepository.searchFinalList(
+                companyId, seasonId, deptId, keyword, unscoredOnly, sortField, pageable);
     }
 
 }

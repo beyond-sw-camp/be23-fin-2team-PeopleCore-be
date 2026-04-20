@@ -41,6 +41,8 @@ public class EvaluationRulesDto {
         private String id;         // 식별자
         private String name;       // 항목명
         private Integer weight;    // 가중치 %
+        private Boolean locked;    // true = 삭제/이름변경 불가한 시스템 필수 항목
+        private Boolean enabled;   // locked 항목의 ON/OFF (false = 이번 시즌은 건너뜀)
     }
 
 
@@ -115,40 +117,72 @@ public class EvaluationRulesDto {
     }
 
 
-    // formSnapshot JSON 파싱 전용 내부 타입
+    // JSON 파싱 전용 내부 타입 (저장 JSON 키: itemList/gradeRules/...)
+    // merged snapshot JSON 의 하드 컬럼 6종 키도 함께 파싱
     @Data
     @NoArgsConstructor
     @JsonIgnoreProperties(ignoreUnknown = true)
     private static class FormSnapshot {
-        private List<EvalItem> items;
-        private List<GradeItem> grades;
+        private List<EvalItem> itemList;
+        private List<GradeItem> gradeRules;
         private List<AdjustItem> adjustments;
         private List<GradeRawScoreItem> rawScoreTable;
         private KpiScoringConfig kpiScoring;
+        // merged snapshot 전용 (회사 규칙 formValues JSON 엔 없음)
+        private Integer taskWeightSang;
+        private Integer taskWeightJung;
+        private Integer taskWeightHa;
+        private Boolean useBiasAdjustment;
+        private BigDecimal biasWeight;
+        private Integer minTeamSize;
     }
 
 
-    // Entity -> DTO 변환 정적 팩토리
+    // 회사 규칙 Entity -> DTO (GET /eval/rules 용 — 현재 편집 가능한 회사 규칙)
     // r      : EvaluationRules 엔티티 (null이면 규칙 미설정)
-    // mapper : Spring 관리 ObjectMapper (파라미터로만 받음 — DTO가 Spring에 묶이지 않도록)
+    // mapper : Spring 관리 ObjectMapper (파라미터로만)
     public static EvaluationRulesDto from(EvaluationRules r, ObjectMapper mapper) {
         if (r == null) return null;   // 규칙 row 자체가 없으면 null 반환
 
-        // formSnapshot(시즌 OPEN 시점 스냅샷) 우선, 없으면(DRAFT 상태) formValues로 fallback
-        String json = r.getFormSnapshot() != null ? r.getFormSnapshot() : r.getFormValues();
-        FormSnapshot snap = parse(json, mapper);   // JSON 문자열 → FormSnapshot 객체
+        // 회사 규칙의 현재 편집값(formValues) 을 파싱
+        FormSnapshot snap = parse(r.getFormValues(), mapper);
 
+        return buildDto(snap,
+                r.getTaskWeightSang(), r.getTaskWeightJung(), r.getTaskWeightHa(),
+                r.getUseBiasAdjustment(), r.getBiasWeight(), r.getMinTeamSize(),
+                r.getFormVersion());
+    }
+
+    // 시즌 스냅샷 JSON -> DTO (SeasonDetail 용 — 그 시즌이 박제한 규칙)
+    //   mergedJson  : Season.formSnapshot (시즌 OPEN 시 동결된 병합 JSON — formValues 섹션 + 하드 컬럼 6종)
+    //   formVersion : Season.formVersion (박제 당시 회사 규칙 버전)
+    public static EvaluationRulesDto fromSnapshot(String mergedJson, Long formVersion, ObjectMapper mapper) {
+        if (mergedJson == null) return null;
+
+        FormSnapshot snap = parse(mergedJson, mapper);
+
+        // 하드 컬럼 값은 병합 JSON 안에 그대로 박제돼 있음 — snap 에서 바로 꺼냄
+        return buildDto(snap,
+                snap.taskWeightSang, snap.taskWeightJung, snap.taskWeightHa,
+                snap.useBiasAdjustment, snap.biasWeight, snap.minTeamSize,
+                formVersion);
+    }
+
+    // 공통 조립부 — JSON 파싱 결과 + 하드 컬럼 값으로 DTO 구성
+    private static EvaluationRulesDto buildDto(FormSnapshot snap,
+                                               Integer sang, Integer jung, Integer ha,
+                                               Boolean useBias, BigDecimal biasW, Integer minTeam,
+                                               Long formVersion) {
         return EvaluationRulesDto.builder()
                 // JSON 필드가 누락돼도 null 대신 빈 리스트로 방어 (FE가 .map() 안 터지게)
-                .items(snap.items != null ? snap.items : Collections.emptyList())
-                .grades(snap.grades != null ? snap.grades : Collections.emptyList())
+                .items(snap.itemList != null ? snap.itemList : Collections.emptyList())
+                .grades(snap.gradeRules != null ? snap.gradeRules : Collections.emptyList())
                 .adjustments(snap.adjustments != null ? snap.adjustments : Collections.emptyList())
                 .rawScoreTable(snap.rawScoreTable != null ? snap.rawScoreTable : Collections.emptyList())
-                // 엔티티 컬럼 3개(taskWeightSang/Jung/Ha) → TaskGradeWeight 객체로 조립
                 .taskGradeWeights(TaskGradeWeight.builder()
-                        .상(r.getTaskWeightSang())
-                        .중(r.getTaskWeightJung())
-                        .하(r.getTaskWeightHa())
+                        .상(sang)
+                        .중(jung)
+                        .하(ha)
                         .build())
                 // KPI 환산 규칙 — JSON에 없으면 기본값(120/100/0/0/1.0)으로 fallback
                 .kpiScoring(snap.kpiScoring != null ? snap.kpiScoring : KpiScoringConfig.builder()
@@ -158,10 +192,10 @@ public class EvaluationRulesDto {
                         .underperformanceThreshold(0)
                         .underperformanceFactor(BigDecimal.ONE)
                         .build())
-                .useBiasAdjustment(r.getUseBiasAdjustment())
-                .biasWeight(r.getBiasWeight())
-                .minTeamSize(r.getMinTeamSize())
-                .formVersion(r.getFormVersion())
+                .useBiasAdjustment(useBias)
+                .biasWeight(biasW)
+                .minTeamSize(minTeam)
+                .formVersion(formVersion)
                 .build();
     }
 

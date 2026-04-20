@@ -108,4 +108,14 @@ public class AuthService {
     public void logout(Long empId) {
         redisTemplate.delete(REFRESH_TOKEN_PREFIX + empId);
     }
+
+    // 현재 로그인 유저 비밀번호 재확인 — 민감 액션(단계 개폐/기간 변경) 전 본인확인
+    // 부작용 없음: 토큰/Redis/lastLoginAt 변경하지 않고 매칭 결과만 반환
+    @Transactional(readOnly = true)
+    public boolean verifyPassword(Long empId, String rawPassword) {
+        if (rawPassword == null || rawPassword.isEmpty()) return false;
+        Employee employee = employeeRepository.findById(empId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원입니다."));
+        return passwordEncoder.matches(rawPassword, employee.getEmpPassword());
+    }
 }

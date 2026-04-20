@@ -2,13 +2,11 @@ package com.peoplecore.evaluation.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.peoplecore.evaluation.domain.EvalSeasonStatus;
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.evaluation.domain.EvaluationRules;
-import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.dto.EvaluationRulesDto;
 import com.peoplecore.evaluation.dto.EvaluationRulesSaveRequestDto;
 import com.peoplecore.evaluation.repository.EvaluationRulesRepository;
-import com.peoplecore.evaluation.repository.SeasonRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,131 +16,107 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-// 평가규칙 - 항목/등급/가감점 커스텀 규칙
+// 평가규칙 - 회사별 전사 공통 규칙 (Company 와 1:1, 시즌과 무관하게 자유 편집)
+// 시즌 OPEN 시 buildMergedSnapshotJson 으로 하드컬럼+JSON 병합본 생성 → Season.formSnapshot 박제
 @Service
 @Transactional
 public class EvaluationRulesService {
     private final EvaluationRulesRepository rulesRepository;
-    private final SeasonRepository seasonRepository;
     private final ObjectMapper objectMapper;
 
 
-    public EvaluationRulesService(EvaluationRulesRepository rulesRepository, SeasonRepository seasonRepository, ObjectMapper objectMapper) {
+    public EvaluationRulesService(EvaluationRulesRepository rulesRepository,
+                                  ObjectMapper objectMapper) {
         this.rulesRepository = rulesRepository;
-        this.seasonRepository = seasonRepository;
         this.objectMapper = objectMapper;
     }
-//     시즌규칙 조회 -row없을 시 null, dto변환 시 formSnapshot우선, 없으면 formValues fallback
+
+    //    회사 규칙 조회 — 회사 생성 시 createDefaultRules 로 세팅되어 항상 존재
     @Transactional(readOnly = true)
-    public EvaluationRulesDto getBySeasonId(Long seasonId){
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElse(null);
-        return EvaluationRulesDto.from(rules,objectMapper);
+    public EvaluationRulesDto getByCompanyId(UUID companyId) {
+        EvaluationRules rules = rulesRepository.findByCompany_CompanyId(companyId).orElse(null);
+        return EvaluationRulesDto.from(rules, objectMapper);
     }
 
+    //    회사 규칙 수정 — 시즌 상태와 무관하게 항상 편집 가능
+    //    규칙 수정 시 버전 ++. 다음 시즌 OPEN 때 그 시점 값이 Season.formSnapshot 으로 박제됨
+    public EvaluationRulesDto save(UUID companyId, EvaluationRulesSaveRequestDto req) {
+        EvaluationRules rules = rulesRepository.findByCompany_CompanyId(companyId)
+                .orElseThrow(() -> new IllegalStateException("회사 규칙이 초기화되지 않았습니다"));
 
+        String formValuesJson = serializeFormValues(req);
+        EvaluationRulesDto.TaskGradeWeight tgw = req.getTaskGradeWeight();
 
-//    시즌규칙 저장/수정(upsert)// draft상태시즌만 편집허용-없으면 신규 생성, 있으면updateDraft로 갱신, 요청에 null필드 오면 기존값 유지
-    public EvaluationRulesDto save(Long seasonId, EvaluationRulesSaveRequestDto requestDto){
-//        시즌 존재 확인
-        Season season = seasonRepository.findById(seasonId).orElseThrow(()->new IllegalArgumentException("시즌을 찾을 수 없습니다"));
-//        Draft에서만 규칙 편집 허용
-        if(season.getStatus() != EvalSeasonStatus.DRAFT){
-            throw new IllegalStateException("Draft 상태 시즌만 규칙을 수정할 수 있습니다");
+        // null 오면 기존값 유지
+        rules.updateRules(
+                tgw != null ? tgw.get상() : rules.getTaskWeightSang(),
+                tgw != null ? tgw.get중() : rules.getTaskWeightJung(),
+                tgw != null ? tgw.get하() : rules.getTaskWeightHa(),
+                req.getUseBiasAdjustment() != null ? req.getUseBiasAdjustment() : rules.getUseBiasAdjustment(),
+                req.getBiasWeight() != null ? req.getBiasWeight() : rules.getBiasWeight(),
+                req.getMinTeamSize() != null ? req.getMinTeamSize() : rules.getMinTeamSize(),
+                formValuesJson
+        );
+
+        return EvaluationRulesDto.from(rules, objectMapper);
+    }
+
+    //    회사 생성 시 기본 규칙 row 1건 INSERT (CompanyService.createCompany 에서 호출)
+    //    업계 표준 기본값으로 채움 (하드 컬럼은 엔티티 @Builder.Default 가 처리: 3/2/1/true/1.0/5)
+    public EvaluationRules createDefaultRules(Company company) {
+        EvaluationRules rules = EvaluationRules.builder()
+                .company(company)
+                .formValues(buildDefaultFormValues())
+                .build();
+        return rulesRepository.save(rules);
+    }
+
+    //    회사 규칙 조회 엔티티 (시즌 OPEN 시 스냅샷 박제용)
+    @Transactional(readOnly = true)
+    public EvaluationRules getEntityByCompanyId(UUID companyId) {
+        return rulesRepository.findByCompany_CompanyId(companyId).orElseThrow(() -> new IllegalStateException("회사 규칙이 초기화되지 않았습니다"));
+    }
+
+    //    시즌 OPEN 시 박제용 병합 스냅샷 JSON 생성
+    //    formValues(JSON 섹션) + 하드 컬럼 6개를 하나의 JSON 오브젝트로 합쳐 반환
+    //    -> Season.formSnapshot 에 저장되어 산정/보정 로직은 이 JSON 만 참조
+    public String buildMergedSnapshotJson(EvaluationRules rules) {
+        Map<String, Object> merged = new LinkedHashMap<>();
+
+        // formValues JSON 섹션 파싱해서 펼쳐 넣기
+        if (rules.getFormValues() != null && !rules.getFormValues().isBlank()) {
+            try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> formSections = objectMapper.readValue(rules.getFormValues(), Map.class);
+                if (formSections != null) merged.putAll(formSections);
+            } catch (JsonProcessingException e) {
+                throw new IllegalStateException("회사 규칙 formValues 파싱 실패", e);
+            }
         }
-//        동적 섹션 5종을 json문자열로 직렬화(from_values에 저장될 값)
-        String formValuesJson = serializeFormValues(requestDto);
-        EvaluationRulesDto.TaskGradeWeight tgw =requestDto.getTaskGradeWeight();
 
-//        upsert분기
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElse(null);
-//         null 방어용 기본값 주입
-        if(rules == null){
-            rules = EvaluationRules.builder()
-                    .season(season)
-                    .taskWeightSang(tgw != null ? tgw.get상() : 3)
-                    .taskWeightJung(tgw != null ? tgw.get중() : 2)
-                    .taskWeightHa(tgw != null ? tgw.get하() :  1)
-                    .useBiasAdjustment(requestDto.getUseBiasAdjustment() != null ? requestDto.getUseBiasAdjustment() : true) //편향 보정 사용여부
-                    .biasWeight(requestDto.getBiasWeight() != null ? requestDto.getBiasWeight() : new BigDecimal("1.0")) //편향 보정 강도
-                    .minTeamSize(requestDto.getMinTeamSize() != null ? requestDto.getMinTeamSize() : 5)
-                    .formValues(formValuesJson)
-                    .formVersion(0L)
-                    .build();
-            rules = rulesRepository.save(rules);
-        }else{
-            // 기존 수정 — null 오면 기존값 유지 (dirty checking 으로 UPDATE 자동 발행)
-            rules.updateDraft(
-                    tgw != null ? tgw.get상() : rules.getTaskWeightSang(),
-                    tgw != null ? tgw.get중() : rules.getTaskWeightJung(),
-                    tgw != null ? tgw.get하() : rules.getTaskWeightHa(),
-                    requestDto.getUseBiasAdjustment() != null ? requestDto.getUseBiasAdjustment() : rules.getUseBiasAdjustment(),
-                    requestDto.getBiasWeight() != null ? requestDto.getBiasWeight(): rules.getBiasWeight(),
-                    requestDto.getMinTeamSize() != null ? requestDto.getMinTeamSize(): rules.getMinTeamSize(),
-                    formValuesJson
-            );
+        // 하드 컬럼 6개 박제
+        merged.put("taskWeightSang", rules.getTaskWeightSang());
+        merged.put("taskWeightJung", rules.getTaskWeightJung());
+        merged.put("taskWeightHa", rules.getTaskWeightHa());
+        merged.put("useBiasAdjustment", rules.getUseBiasAdjustment());
+        merged.put("biasWeight", rules.getBiasWeight());
+        merged.put("minTeamSize", rules.getMinTeamSize());
+
+        try {
+            return objectMapper.writeValueAsString(merged);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("스냅샷 JSON 직렬화 실패", e);
         }
-        return EvaluationRulesDto.from(rules,objectMapper);
     }
 
-
-
-
-//    시즌 open시 호출 formValues를 formSnapshot으로 동결(schedular)
-    public  void freezeSnapshot(Long seasonId){
-        EvaluationRules rules = rulesRepository.findBySeason_SeasonId(seasonId).orElseThrow(()->new IllegalStateException("규칙이 설정되지 않은 시즌입니다"));
-        rules.freezeSnapshot();
-    }
-
-
-//    시즌 삭제 시 연관 규칙 row 제거(있을 수도 없을 수도) - SeasonService.deleteSeason에서 호출
-    public void deleteBySeasonId(Long seasonId){
-        rulesRepository.findBySeason_SeasonId(seasonId).ifPresent(rulesRepository::delete);
-    }
-
-
-
-
-    // 신규 시즌용 규칙 row 생성, 직전값있으면 해당규칙 복사, 없으면 기본값(buildDefaultFormValues)
-    public EvaluationRules createInitialRules(Season newSeason) {
-        UUID companyId = newSeason.getCompany().getCompanyId();
-
-        // 같은 회사의 직전 시즌 규칙 조회 (신규 시즌 제외)
-        List<EvaluationRules> recent =
-                rulesRepository.findLatestByCompany(companyId, newSeason.getSeasonId());
-
-        EvaluationRules.EvaluationRulesBuilder builder = EvaluationRules.builder()
-                .season(newSeason)
-                .formVersion(0L);
-
-        if (!recent.isEmpty()) {
-            // 직전 시즌 규칙 복사 — formSnapshot 우선, 없으면 formValues
-            EvaluationRules last = recent.get(0);
-            String sourceJson = last.getFormSnapshot() != null
-                    ? last.getFormSnapshot()
-                    : last.getFormValues();
-
-            builder
-                    .taskWeightSang(last.getTaskWeightSang())
-                    .taskWeightJung(last.getTaskWeightJung())
-                    .taskWeightHa(last.getTaskWeightHa())
-                    .useBiasAdjustment(last.getUseBiasAdjustment())
-                    .biasWeight(last.getBiasWeight())
-                    .minTeamSize(last.getMinTeamSize())
-                    .formValues(sourceJson);
-        } else {
-            // 첫 시즌 — 업계 표준 기본값, 하드 컬럼은 엔티티 @Builder.Default 로 자동 주입 (3/2/1/true/1.0/5)
-            builder.formValues(buildDefaultFormValues());
-        }
-        return rulesRepository.save(builder.build());
-    }
-//    Request->form values Json직렬화, LinkedHashMap으로 키 순서 고정
+    //    Request -> formValues JSON 직렬화, LinkedHashMap으로 키 순서 고정
     private String serializeFormValues(EvaluationRulesSaveRequestDto req) {
         Map<String, Object> form = new LinkedHashMap<>();
-        form.put("items", req.getItemList());               // DTO 필드: itemList
-        form.put("grades", req.getGrades());                 // DTO 필드: grades
-        form.put("adjustments", req.getAdjustItems());       // DTO 필드: adjustItems
-        form.put("rawScoreTable", req.getGradeItems());      // DTO 필드: gradeItems (원점수 변환표)
-        form.put("kpiScoring", req.getKpiScoringConfig());   // DTO 필드: kpiScoringConfig
+        form.put("itemList", req.getItemList());             // FormSnapshotDto.itemList 와 키 맞춤
+        form.put("gradeRules", req.getGrades());              // FormSnapshotDto.gradeRules
+        form.put("adjustments", req.getAdjustItems());        // FormSnapshotDto.adjustments
+        form.put("rawScoreTable", req.getGradeItems());       // FormSnapshotDto.rawScoreTable
+        form.put("kpiScoring", req.getKpiScoringConfig());    // FormSnapshotDto.kpiScoring
         try {
             return objectMapper.writeValueAsString(form);
         } catch (JsonProcessingException e) {
@@ -150,21 +124,18 @@ public class EvaluationRulesService {
         }
     }
 
-
-
-
-    // 시즌 생성 시 깔아둘 기본 규칙 json, 기본값 ->편집 시 덮힘
+    // 회사 생성 시 깔아둘 기본 규칙 JSON (formValues 섹션만 — 하드 컬럼은 엔티티 기본값 사용)
     public String buildDefaultFormValues() {
         Map<String, Object> form = new LinkedHashMap<>();
 
         // 평가 항목 — 자기평가 30, 상위자평가 70
-        form.put("items", List.of(
-                Map.of("id", "self",    "name", "자기평가",   "weight", 30),
-                Map.of("id", "manager", "name", "상위자평가", "weight", 70)
+        form.put("itemList", List.of(
+                Map.of("id", "self",    "name", "자기평가",   "weight", 30, "locked", true, "enabled", true),
+                Map.of("id", "manager", "name", "상위자평가", "weight", 70, "locked", true, "enabled", true)
         ));
 
         // 등급 체계 — S/A/B/C/D 표준 컷오프 + 강제배분 비율
-        form.put("grades", List.of(
+        form.put("gradeRules", List.of(
                 Map.of("id", "S", "label", "S", "minScore", 90, "ratio", 10, "color", "#7c3aed"),
                 Map.of("id", "A", "label", "A", "minScore", 80, "ratio", 20, "color", "#2e9e6e"),
                 Map.of("id", "B", "label", "B", "minScore", 70, "ratio", 40, "color", "#3b82f6"),
@@ -172,11 +143,10 @@ public class EvaluationRulesService {
                 Map.of("id", "D", "label", "D", "minScore",  0, "ratio", 10, "color", "#ef4444")
         ));
 
-        // 가감점 — 근태 / 징계 / 표창
+        // 가감점 — 지각 / 무단결근 (근태 이벤트 기반)
         form.put("adjustments", List.of(
-                Map.of("id", "attendance", "name", "근태 감점", "points", -2, "enabled", true),
-                Map.of("id", "discipline", "name", "징계 감점", "points", -5, "enabled", true),
-                Map.of("id", "award",      "name", "표창 가산", "points",  3, "enabled", true)
+                Map.of("id", "late",    "name", "지각",     "points", -1, "enabled", true),
+                Map.of("id", "absence", "name", "무단결근", "points", -3, "enabled", true)
         ));
 
         // 등급 원점수 변환표 — 팀장 등급 → managerScore
@@ -203,7 +173,4 @@ public class EvaluationRulesService {
             throw new IllegalStateException("기본 규칙 JSON 생성 실패", e);
         }
     }
-
 }
-
-

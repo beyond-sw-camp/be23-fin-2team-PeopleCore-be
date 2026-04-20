@@ -37,4 +37,19 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
 
 //    상태 + 종료일 < 오늘-> close대상
     List<Season>findByStatusAndEndDateBefore(EvalSeasonStatus status, LocalDate today);
+
+//    회사 내 기간 겹치는 시즌 조회 (excludeSeasonId 는 update 시 자기 자신 제외용, create 시엔 null)
+//    두 기간이 겹치려면: newStart <= existingEnd AND existingStart <= newEnd
+    @Query("""
+            SELECT s
+            FROM Season s
+            WHERE s.company.companyId = :companyId
+            AND (:excludeSeasonId IS NULL OR s.seasonId <> :excludeSeasonId)
+            AND s.startDate <= :newEnd
+            AND s.endDate >= :newStart
+            """)
+    List<Season> findOverlapping(@Param("companyId") UUID companyId,
+                                 @Param("newStart") LocalDate newStart,
+                                 @Param("newEnd") LocalDate newEnd,
+                                 @Param("excludeSeasonId") Long excludeSeasonId);
 }

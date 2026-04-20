@@ -24,7 +24,7 @@ public class ResignApprovedConsumer {
     }
 
     @RetryableTopic(attempts = "3", backoff = @Backoff(delay = 10000, multiplier = 2))
-    @KafkaListener(topics = "resign-approved", groupId = "hr-resign-consumeer")
+    @KafkaListener(topics = "resign-approved", groupId = "hr-resign-consumer")
     public void consume(String message) {
         try {
             ResignApprovedEvent event = objectMapper.readValue(message, ResignApprovedEvent.class);
