@@ -1,5 +1,6 @@
 package com.peoplecore.employee.repository;
 
+import com.peoplecore.employee.domain.EmpGender;
 import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
@@ -78,6 +79,12 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
 //    퇴직 사원 조회 (퇴직자용 - 연차수당)
     List<Employee> findByCompany_CompanyIdAndEmpStatusAndDeleteAtIsNull(UUID companyId, EmpStatus empStatus);
+
+    /* 성별 + 재직 상태 + 소프트삭제 제외 필터링 - 생리휴가 월 스케줄러 대상 사원 조회 */
+    /* 조건: 해당 회사, 해당 성별, 특정 상태(ACTIVE), delete_at IS NULL */
+    /* 반환: 여성 + ACTIVE 사원만 (휴직자·퇴사자 제외) */
+    List<Employee> findByCompany_CompanyIdAndEmpGenderAndEmpStatusAndDeleteAtIsNull(
+            UUID companyId, EmpGender empGender, EmpStatus empStatus);
 
 
     /// ////////rim 사원관리

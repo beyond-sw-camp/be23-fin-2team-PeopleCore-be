@@ -30,6 +30,9 @@ public class BalanceExpiryJobConfig {
     /* 청크 단위 - 100건마다 외부 tx commit. expireBalance 는 REQUIRES_NEW 라 외부 tx 는 비어있음 */
     private static final int CHUNK_SIZE = 100;
 
+    /* 허용 skip 상한 - 초과 시 Step FAILED → Discord 빨간색 알림 (기존 경로) */
+    private static final int SKIP_LIMIT = 50;
+
     /* 잡 이름 - 스케줄러에서 @Qualifier 로 주입 */
     public static final String JOB_NAME = "balanceExpiryJob";
 
@@ -51,6 +54,9 @@ public class BalanceExpiryJobConfig {
                 .<VacationBalance, VacationBalance>chunk(CHUNK_SIZE, transactionManager)
                 .reader(balanceExpiryReader)
                 .writer(balanceExpiryWriter)
+                .faultTolerant()
+                .skip(Exception.class)   // writer 에서 튀는 예외는 item 단위 skip
+                .skipLimit(SKIP_LIMIT)   // 초과 시 SkipLimitExceededException → Step FAILED
                 .build();
     }
 
@@ -76,19 +82,10 @@ public class BalanceExpiryJobConfig {
                 .build();
     }
 
-    /* 청크 writer - balance 단위 expireBalance 위임. 예외는 per-item 로그 (다음 item 계속 진행) */
+    /* 청크 writer - balance 단위 expireBalance 위임. 예외 전파 → Spring Batch skip 메커니즘이 item 단위로 집계 */
     @Bean
     public ItemWriter<VacationBalance> balanceExpiryWriter(BalanceExpiryService balanceExpiryService) {
-        return chunk -> {
-            for (VacationBalance balance : chunk.getItems()) {
-                try {
-                    balanceExpiryService.expireBalance(balance);
-                } catch (Exception e) {
-                    // REQUIRES_NEW 로 격리되어 있으므로 catch 해도 외부 chunk tx 영향 없음
-                    log.error("[BalanceExpiryBatch] balance 처리 실패 - balanceId={}, err={}",
-                            balance.getBalanceId(), e.getMessage(), e);
-                }
-            }
-        };
+        // 예외를 먹지 않고 그대로 throw → .skip(Exception.class) + skipLimit 으로 위임
+        return chunk -> chunk.getItems().forEach(balanceExpiryService::expireBalance);
     }
 }

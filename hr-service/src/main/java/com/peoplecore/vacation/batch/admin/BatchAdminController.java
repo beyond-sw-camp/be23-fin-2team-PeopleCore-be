@@ -1,0 +1,58 @@
+package com.peoplecore.vacation.batch.admin;
+
+import com.peoplecore.auth.RoleRequired;
+import com.peoplecore.vacation.batch.admin.dto.BatchExecutionResponse;
+import com.peoplecore.vacation.batch.admin.dto.BatchRerunRequest;
+import com.peoplecore.vacation.batch.admin.dto.BatchRerunResponse;
+import com.peoplecore.vacation.batch.admin.dto.DiscordTestRequest;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.List;
+
+/* 배치 실행 관리 API - HR_SUPER_ADMIN 전용 */
+@RestController
+@RequestMapping("/api/admin/batch")
+public class BatchAdminController {
+
+    private final BatchAdminService batchAdminService;
+
+    @Autowired
+    public BatchAdminController(BatchAdminService batchAdminService) {
+        this.batchAdminService = batchAdminService;
+    }
+
+    /* 최근 실행 이력 조회 - jobName 미지정 시 지원 Job 전체 통합, limit 기본 20 / 최대 200 */
+    @RoleRequired({"HR_SUPER_ADMIN"})
+    @GetMapping("/executions")
+    public ResponseEntity<List<BatchExecutionResponse>> listExecutions(
+            @RequestParam(required = false) String jobName,
+            @RequestParam(defaultValue = "20") int limit) {
+        return ResponseEntity.ok(batchAdminService.listRecent(jobName, limit));
+    }
+
+    /* 재실행 트리거 - mode 미지정 시 RESTART. 이미 COMPLETED 면 FRESH 자동 승격 */
+    @RoleRequired({"HR_SUPER_ADMIN"})
+    @PostMapping("/{jobName}/rerun")
+    public ResponseEntity<BatchRerunResponse> rerun(
+            @PathVariable String jobName,
+            @RequestBody BatchRerunRequest request) {
+        return ResponseEntity.ok(batchAdminService.rerun(jobName, request));
+    }
+
+    /* Discord 웹훅 단독 테스트 - DiscordNotifier.notifyBatchFailure 를 페이크 파라미터로 호출 */
+    /* 배치 메타 DB 오염 없음. 202 Accepted 반환(비동기 전송이라 성공 여부는 서버 로그/Discord 채널 확인) */
+    @RoleRequired({"HR_SUPER_ADMIN"})
+    @PostMapping("/test-discord")
+    public ResponseEntity<Void> testDiscord(@RequestBody(required = false) DiscordTestRequest request) {
+        batchAdminService.sendTestDiscordAlert(request != null ? request : new DiscordTestRequest());
+        return ResponseEntity.accepted().build();
+    }
+}

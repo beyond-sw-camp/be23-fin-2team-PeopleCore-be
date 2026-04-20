@@ -231,7 +231,13 @@ public enum ErrorCode {
     VACATION_TYPE_CODE_DUPLICATE(409, "이미 존재하는 휴가 유형 코드입니다."),
     VACATION_TYPE_NOT_FOUND(404, "존재하지 않는 휴가 종류입니다."),
     VACATION_TYPE_IN_USE(409, "해당 유형을 사용 중인 잔여/신청이 있어 삭제할 수 없습니다."),
-    VACATION_RULE_OVERLAP(409, "근속 구간이 기존 규칙과 겹칩니다.");
+    VACATION_RULE_OVERLAP(409, "근속 구간이 기존 규칙과 겹칩니다."),
+
+    /* 배치 관리자 */
+    BATCH_JOB_NOT_SUPPORTED(400, "지원하지 않는 배치 Job 입니다."),
+    BATCH_JOB_NOT_FOUND(404, "배치 Job Bean 을 찾을 수 없습니다."),
+    BATCH_PARAMETER_INVALID(400, "배치 재실행 파라미터가 올바르지 않습니다."),
+    BATCH_RERUN_FAILED(500, "배치 재실행에 실패했습니다.");
 
 
     private final int status;

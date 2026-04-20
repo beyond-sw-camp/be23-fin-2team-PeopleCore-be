@@ -30,14 +30,26 @@ public class BatchFailureListener implements JobExecutionListener {
         String jobName = jobExecution.getJobInstance().getJobName();
 
         if (status == BatchStatus.COMPLETED) {
-            // 성공 로그는 요약만 (read/write 카운트 포함)
             StepExecution step = jobExecution.getStepExecutions().stream().findFirst().orElse(null);
+            long readCount = step != null ? step.getReadCount() : 0;
+            long writeCount = step != null ? step.getWriteCount() : 0;
+            long skipCount = step != null ? step.getSkipCount() : 0;
+
             log.info("[BatchOK] job={}, params={}, read={}, write={}, skip={}",
-                    jobName,
-                    jobExecution.getJobParameters(),
-                    step != null ? step.getReadCount() : 0,
-                    step != null ? step.getWriteCount() : 0,
-                    step != null ? step.getSkipCount() : 0);
+                    jobName, jobExecution.getJobParameters(), readCount, writeCount, skipCount);
+
+            // 부분 실패 경고 - Step 은 성공했지만 skip 된 item 이 있는 경우 노란색 알림
+            if (skipCount > 0) {
+                try {
+                    discordNotifier.notifyBatchWarning(
+                            jobName,
+                            jobExecution.getJobParameters().toString(),
+                            readCount, writeCount, skipCount);
+                } catch (Exception e) {
+                    log.warn("[BatchFailureListener] Discord 경고 알림 트리거 중 예외 - job={}, err={}",
+                            jobName, e.getMessage());
+                }
+            }
             return;
         }
 

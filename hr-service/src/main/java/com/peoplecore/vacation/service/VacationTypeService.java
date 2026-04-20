@@ -5,6 +5,8 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.dto.VacationTypeRequest;
 import com.peoplecore.vacation.dto.VacationTypeResponse;
+import com.peoplecore.vacation.entity.GenderLimit;
+import com.peoplecore.vacation.entity.PayType;
 import com.peoplecore.vacation.entity.StatutoryVacationType;
 import com.peoplecore.vacation.entity.VacationType;
 import com.peoplecore.vacation.repository.VacationBalanceRepository;
@@ -104,6 +106,10 @@ public class VacationTypeService {
         }
 
         Integer sortOrder = request.getSortOrder() != null ? request.getSortOrder() : DEFAULT_SORT_ORDER;
+        // 회사 커스텀 유형은 기본 ALL/PAID - 요청에 명시된 경우 덮어쓰기
+        GenderLimit genderLimit = request.getGenderLimit() != null ? request.getGenderLimit() : GenderLimit.ALL;
+        PayType payType = request.getPayType() != null ? request.getPayType() : PayType.PAID;
+
         VacationType created = vacationTypeRepository.save(
                 VacationType.builder()
                         .companyId(companyId)
@@ -112,6 +118,8 @@ public class VacationTypeService {
                         .deductUnit(request.getDeductUnit())
                         .isActive(true)
                         .sortOrder(sortOrder)
+                        .genderLimit(genderLimit)
+                        .payType(payType)
                         .build()
         );
         log.info("[VacationType] 신규 생성 - companyId={}, typeId={}, code={}",

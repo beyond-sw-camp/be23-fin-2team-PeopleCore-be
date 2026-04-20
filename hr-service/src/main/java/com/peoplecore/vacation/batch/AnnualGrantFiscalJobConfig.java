@@ -39,6 +39,9 @@ public class AnnualGrantFiscalJobConfig {
     /* 청크 단위 - grantForFiscal 내부 REQUIRES_NEW 라 외부 tx 는 비어있음 */
     private static final int CHUNK_SIZE = 200;
 
+    /* 허용 skip 상한 - 초과 시 Step FAILED → Discord 빨간색 알림 */
+    private static final int SKIP_LIMIT = 30;
+
     public static final String JOB_NAME = "annualGrantFiscalJob";
 
     @Bean(JOB_NAME)
@@ -59,6 +62,9 @@ public class AnnualGrantFiscalJobConfig {
                 .<Employee, Employee>chunk(CHUNK_SIZE, transactionManager)
                 .reader(annualGrantFiscalReader)
                 .writer(annualGrantFiscalWriter)
+                .faultTolerant()
+                .skip(Exception.class)
+                .skipLimit(SKIP_LIMIT)
                 .build();
     }
 
@@ -105,14 +111,10 @@ public class AnnualGrantFiscalJobConfig {
                 .findByCompanyIdAndTypeCode(companyId, VacationType.CODE_ANNUAL)
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND));
 
+        // 예외 전파 → .skip(Exception.class) 로 item 단위 집계. 실패 원인은 Spring Batch 기본 로그 + BatchFailureListener 에서 확인
         return chunk -> {
             for (Employee emp : chunk.getItems()) {
-                try {
-                    annualGrantService.grantForFiscal(companyId, emp, annualType, policy, targetDate);
-                } catch (Exception e) {
-                    log.error("[AnnualGrantFiscalBatch] 사원 처리 실패 - companyId={}, empId={}, err={}",
-                            companyId, emp.getEmpId(), e.getMessage(), e);
-                }
+                annualGrantService.grantForFiscal(companyId, emp, annualType, policy, targetDate);
             }
         };
     }

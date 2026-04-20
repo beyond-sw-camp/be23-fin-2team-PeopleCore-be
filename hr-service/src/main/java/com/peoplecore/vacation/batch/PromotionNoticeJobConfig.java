@@ -36,6 +36,9 @@ public class PromotionNoticeJobConfig {
 
     private static final int CHUNK_SIZE = 100;
 
+    /* 허용 skip 상한 - 초과 시 Step FAILED → Discord 빨간색 알림 */
+    private static final int SKIP_LIMIT = 20;
+
     /* 잡 실패 catch-up 일수 - 최근 N일 미통지분 함께 처리 */
     private static final int CATCH_UP_DAYS = 7;
 
@@ -61,6 +64,9 @@ public class PromotionNoticeJobConfig {
                 .<VacationBalance, VacationBalance>chunk(CHUNK_SIZE, transactionManager)
                 .reader(promotionNoticeReader)
                 .writer(promotionNoticeWriter)
+                .faultTolerant()
+                .skip(Exception.class)
+                .skipLimit(SKIP_LIMIT)
                 .build();
     }
 
@@ -122,17 +128,13 @@ public class PromotionNoticeJobConfig {
             @Value("#{jobParameters['stage']}") String stage) {
 
         boolean second = STAGE_SECOND.equals(stage);
+        // 예외 전파 → .skip(Exception.class) 로 item 단위 집계. UNIQUE 제약 때문에 skip 되어도 중복 발송 없음
         return chunk -> {
             for (VacationBalance balance : chunk.getItems()) {
-                try {
-                    if (second) {
-                        promotionNoticeService.sendSecondNotice(balance);
-                    } else {
-                        promotionNoticeService.sendFirstNotice(balance);
-                    }
-                } catch (Exception e) {
-                    log.error("[PromotionNoticeBatch-{}] 발송 실패 - balanceId={}, err={}",
-                            stage, balance.getBalanceId(), e.getMessage(), e);
+                if (second) {
+                    promotionNoticeService.sendSecondNotice(balance);
+                } else {
+                    promotionNoticeService.sendFirstNotice(balance);
                 }
             }
         };

@@ -63,6 +63,33 @@ public class DiscordNotifier {
         sendAsync(payload, "FAIL:" + jobName);
     }
 
+    /* 배치 부분 실패 경고 - Step 은 COMPLETED 지만 skipCount > 0 일 때 호출. 노란색 embed */
+    /* 웹훅 미설정 시 조용히 skip */
+    public void notifyBatchWarning(String jobName, String params,
+                                   long readCount, long writeCount, long skipCount) {
+        if (webhookUrl == null || webhookUrl.isBlank()) {
+            log.debug("[DiscordNotifier] webhook URL 미설정 - skip. job={}", jobName);
+            return;
+        }
+
+        Map<String, Object> payload = Map.of(
+                "content", ":warning: **배치 부분 실패** — `" + jobName + "`",
+                "embeds", List.of(Map.of(
+                        "title", "[WARN] " + jobName,
+                        "color", COLOR_WARN,
+                        "fields", List.of(
+                                Map.of("name", "Read", "value", String.valueOf(readCount), "inline", true),
+                                Map.of("name", "Write", "value", String.valueOf(writeCount), "inline", true),
+                                Map.of("name", "Skip", "value", String.valueOf(skipCount), "inline", true),
+                                Map.of("name", "Parameters", "value", "```" + truncate(params, 900) + "```")
+                        ),
+                        "timestamp", LocalDateTime.now().format(TS_FORMAT)
+                ))
+        );
+
+        sendAsync(payload, "WARN:" + jobName);
+    }
+
     /* 비동기 전송 - .subscribe() 로 main 스레드 블록 방지 */
     /* 네트워크 일시 장애 대비 2회 재시도. 최종 실패해도 배치 상태엔 영향 없음 (로그만) */
     private void sendAsync(Map<String, Object> payload, String tag) {

@@ -65,6 +65,18 @@ public class VacationType extends BaseTimeEntity {
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
 
+    /* 성별 제한 - 신청 시 사원 성별 대비 검증 (GenderLimit.allows() 호출) */
+    /* 기본 ALL (성별 무관). 생리/출산/유산사산=FEMALE_ONLY, 배우자출산=MALE_ONLY */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender_limit", nullable = false, length = 20)
+    private GenderLimit genderLimit;
+
+    /* 유급/무급 - 급여 계산(LeaveAllowanceService) 시 차감 근거 */
+    /* 가족돌봄/생리만 UNPAID, 나머진 PAID */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pay_type", nullable = false, length = 10)
+    private PayType payType;
+
 
     /* 활성화 토글 */
     public void activate()   { this.isActive = true; }
