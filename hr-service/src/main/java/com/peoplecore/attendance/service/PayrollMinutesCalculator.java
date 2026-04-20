@@ -19,12 +19,17 @@ import java.util.List;
  * CommuteRecord 급여 연동 분 계산 유틸.
  *
  * 두 진입점:
- *  - applyCheckoutBase(record)  : 체크아웃 시. actual, overtime 만 계산. recognized_* = 0 고정.
+ *  - applyCheckoutBase(record)        : 체크아웃 시. actual, overtime 계산.
+ *                                       workGroup.groupOvertimeRecognize 에 따라 recognized_* 분기:
+ *                                         · APPROVAL → recognized_* = 0 (결재 승인 대기)
+ *                                         · ALL      → overtime 전체를 recognized_* 에 즉시 배정
  *  - applyApprovedRecognition(record) : OT 승인 이벤트 수신 시. actual/overtime 재계산 + recognized_* 산출.
+ *                                         · APPROVAL → APPROVED OT 와 overtime 교집합 배정
+ *                                         · ALL      → idempotent, overtime 전체 재배정 (체크아웃 결과와 동일)
  *
  * 정책:
- *  - 체크아웃 시점엔 "기록" 만 — 인정은 결재 승인 전까지 보류
- *  - OT 결재 APPROVED 확정 후에만 recognized_* 에 값 배정 (야간/휴일/연장 분해)
+ *  - APPROVAL: OT 결재 APPROVED 확정 후에만 recognized_* 에 값 배정 (야간/휴일/연장 분해)
+ *  - ALL:      결재 무관 체크아웃 시점에 overtime 전체 인정
  */
 @Component
 @Slf4j
@@ -42,22 +47,33 @@ public class PayrollMinutesCalculator {
 
     /**
      * 체크아웃 직후 호출.
-     * actual_work_minutes, overtime_minutes 만 계산. recognized_* 는 0.
+     * actual/overtime 계산 + workGroup 의 recognize 타입에 따른 recognized_* 배정.
+     *  · APPROVAL 그룹: recognized_* = 0 (결재 승인 대기)
+     *  · ALL 그룹: overtime 전체를 recognized_* 에 즉시 배정
      */
     public void applyCheckoutBase(CommuteRecord record) {
         if (!isReady(record)) return;
         WorkGroup wg = record.getEmployee().getWorkGroup();
         long actual = calcActualWorkMinutes(record, wg);
         long overtime = calcOvertimeMinutes(record, wg);
-        record.applyPayrollMinutes(actual, overtime, 0L, 0L, 0L);
-        log.debug("[Payroll-base] comRecId={}, actual={}, overtime={}",
-                record.getComRecId(), actual, overtime);
+
+        long recExt = 0L, recNight = 0L, recHoliday = 0L;
+        // ALL 그룹: 결재 없이도 overtime 전체 인정 — 체크아웃 시점에 바로 배정
+        if (overtime > 0 && wg.getGroupOvertimeRecognize() == WorkGroup.GroupOvertimeRecognize.ALL) {
+            long[] rec = allocateRecognizedByOvertime(record, wg, overtime);
+            recExt = rec[0]; recNight = rec[1]; recHoliday = rec[2];
+        }
+
+        record.applyPayrollMinutes(actual, overtime, recExt, recNight, recHoliday);
+        log.debug("[Payroll-base] comRecId={}, recognize={}, actual={}, ot={}, ext={}, night={}, holiday={}",
+                record.getComRecId(), wg.getGroupOvertimeRecognize(),
+                actual, overtime, recExt, recNight, recHoliday);
     }
 
     /**
-     * OT 승인 이벤트 수신 시 호출.
-     * actual/overtime 재계산 + 해당 날짜 APPROVED OT 전체와 overtime 구간 교집합으로 recognized_* 산출.
-     * 복수 APPROVED 건 합산. 휴일 여부로 extended/holiday 분배. night 은 별도 교집합.
+     * OT 승인 이벤트 수신 시 호출. actual/overtime 재계산 후 recognize 타입별 분기:
+     *  · APPROVAL 그룹: 해당 날짜 APPROVED OT 전체와 overtime 구간 교집합으로 recognized_* 산출
+     *  · ALL 그룹: overtime 전체 재배정 (체크아웃 결과와 동일 — idempotent)
      */
     public void applyApprovedRecognition(CommuteRecord record) {
         if (!isReady(record)) return;
@@ -68,45 +84,79 @@ public class PayrollMinutesCalculator {
 
         long recExt = 0L, recNight = 0L, recHoliday = 0L;
         if (overtime > 0) {
-            LocalDateTime checkIn = record.getComRecCheckIn();
-            LocalDateTime checkOut = record.getComRecCheckOut();
-            LocalDate workDate = record.getWorkDate();
-            LocalDateTime groupEndDt = workDate.atTime(wg.getGroupEndTime());
-            LocalDateTime otStart = checkIn.isAfter(groupEndDt) ? checkIn : groupEndDt;
-
-            // 해당 날짜 APPROVED OT 와 OT 구간 교집합 수집
-            List<LocalDateTime[]> segs = new ArrayList<>();
-            long recognizedTotal = 0L;
-            List<OvertimeRequest> approved = overtimeRequestRepository
-                    .findApprovedByEmpAndDateRange(
-                            record.getEmployee().getEmpId(),
-                            workDate.atStartOfDay(),
-                            workDate.atTime(LocalTime.MAX));
-            for (OvertimeRequest ot : approved) {
-                LocalDateTime segS = max(otStart, ot.getOtPlanStart());
-                LocalDateTime segE = min(checkOut, ot.getOtPlanEnd());
-                if (segE.isAfter(segS)) {
-                    segs.add(new LocalDateTime[]{segS, segE});
-                    recognizedTotal += Duration.between(segS, segE).toMinutes();
-                }
-            }
-
-            // 휴일 vs 평일 분배 (holidayReason 이 있으면 전체 휴일)
-            if (record.getHolidayReason() != null) {
-                recHoliday = recognizedTotal;
-            } else {
-                recExt = recognizedTotal;
-            }
-
-            // 야간 교집합 — 각 recognized 구간에 [22:00~익일 06:00] 교집합 합산
-            for (LocalDateTime[] seg : segs) {
-                recNight += nightOverlapMinutes(seg[0], seg[1]);
-            }
+            long[] rec = (wg.getGroupOvertimeRecognize() == WorkGroup.GroupOvertimeRecognize.ALL)
+                    ? allocateRecognizedByOvertime(record, wg, overtime)
+                    : allocateRecognizedByApprovedOt(record, wg);
+            recExt = rec[0]; recNight = rec[1]; recHoliday = rec[2];
         }
 
         record.applyPayrollMinutes(actual, overtime, recExt, recNight, recHoliday);
-        log.debug("[Payroll-recog] comRecId={}, actual={}, ot={}, ext={}, night={}, holiday={}",
-                record.getComRecId(), actual, overtime, recExt, recNight, recHoliday);
+        log.debug("[Payroll-recog] comRecId={}, recognize={}, actual={}, ot={}, ext={}, night={}, holiday={}",
+                record.getComRecId(), wg.getGroupOvertimeRecognize(),
+                actual, overtime, recExt, recNight, recHoliday);
+    }
+
+    /**
+     * ALL 그룹용 배정.
+     *  · overtime 분 전체를 휴일/평일에 따라 recHoliday/recExt 한 쪽에 배정
+     *  · recNight 은 [otStart, checkOut] 과 야간 윈도우 교집합
+     * overtimeMin 은 호출부에서 calcOvertimeMinutes 로 산출한 값 그대로 사용 (휴게 차감 반영).
+     */
+    private long[] allocateRecognizedByOvertime(CommuteRecord record, WorkGroup wg, long overtimeMin) {
+        LocalDateTime checkIn = record.getComRecCheckIn();
+        LocalDateTime checkOut = record.getComRecCheckOut();
+        LocalDate workDate = record.getWorkDate();
+        LocalDateTime groupEndDt = workDate.atTime(wg.getGroupEndTime());
+        LocalDateTime otStart = checkIn.isAfter(groupEndDt) ? checkIn : groupEndDt;
+
+        long recExt = 0L, recHoliday = 0L;
+        if (record.getHolidayReason() != null) {
+            recHoliday = overtimeMin;
+        } else {
+            recExt = overtimeMin;
+        }
+        long recNight = nightOverlapMinutes(otStart, checkOut);
+        return new long[]{recExt, recNight, recHoliday};
+    }
+
+    /**
+     * APPROVAL 그룹용 배정 (기존 로직 추출).
+     * 해당 날짜 APPROVED OT 전부 조회 → overtime 구간과 교집합 합산 → 휴일/평일 분배 + 야간 교집합.
+     */
+    private long[] allocateRecognizedByApprovedOt(CommuteRecord record, WorkGroup wg) {
+        LocalDateTime checkIn = record.getComRecCheckIn();
+        LocalDateTime checkOut = record.getComRecCheckOut();
+        LocalDate workDate = record.getWorkDate();
+        LocalDateTime groupEndDt = workDate.atTime(wg.getGroupEndTime());
+        LocalDateTime otStart = checkIn.isAfter(groupEndDt) ? checkIn : groupEndDt;
+
+        List<LocalDateTime[]> segs = new ArrayList<>();
+        long recognizedTotal = 0L;
+        List<OvertimeRequest> approved = overtimeRequestRepository
+                .findApprovedByEmpAndDateRange(
+                        record.getEmployee().getEmpId(),
+                        workDate.atStartOfDay(),
+                        workDate.atTime(LocalTime.MAX));
+        for (OvertimeRequest ot : approved) {
+            LocalDateTime segS = max(otStart, ot.getOtPlanStart());
+            LocalDateTime segE = min(checkOut, ot.getOtPlanEnd());
+            if (segE.isAfter(segS)) {
+                segs.add(new LocalDateTime[]{segS, segE});
+                recognizedTotal += Duration.between(segS, segE).toMinutes();
+            }
+        }
+
+        long recExt = 0L, recHoliday = 0L;
+        if (record.getHolidayReason() != null) {
+            recHoliday = recognizedTotal;
+        } else {
+            recExt = recognizedTotal;
+        }
+        long recNight = 0L;
+        for (LocalDateTime[] seg : segs) {
+            recNight += nightOverlapMinutes(seg[0], seg[1]);
+        }
+        return new long[]{recExt, recNight, recHoliday};
     }
 
     /* ==================== 내부 공통 ==================== */

@@ -1,6 +1,7 @@
 package com.peoplecore.attendance.dto;
 
 import com.peoplecore.attendance.entity.OtExceedAction;
+import com.peoplecore.attendance.entity.WorkGroup;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,4 +31,10 @@ public class OvertimeRemainingResDto {
 
     /** NOTIFY / BLOCK — 프론트 버튼 비활성화 판단용 */
     private OtExceedAction exceedAction;
+
+    /** 근무 그룹의 초과근로 인정 방식. APPROVAL=결재 승인분만 / ALL=체크아웃 시 자동 인정 */
+    private WorkGroup.GroupOvertimeRecognize recognizeType;
+
+    /** 결재 필요 여부. recognizeType==APPROVAL → true, ALL → false (프론트가 신청 모달 차단 판정) */
+    private Boolean approvalRequired;
 }
