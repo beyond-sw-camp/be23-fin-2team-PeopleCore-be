@@ -1,9 +1,12 @@
 package com.peoplecore.evaluation.controller;
 
 import com.peoplecore.evaluation.dto.SelfEvaluationDraftRequest;
+import com.peoplecore.evaluation.dto.SelfEvaluationRejectRequest;
 import com.peoplecore.evaluation.dto.SelfEvaluationResponse;
+import com.peoplecore.evaluation.dto.TeamMemberSelfEvaluationResponse;
 import com.peoplecore.evaluation.service.SelfEvaluationService;
 import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -11,9 +14,9 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.UUID;
 
-// 자기평가 - 사원 실적 입력/제출
+// 자기평가 - 사원 실적 입력/제출 + 팀장 검토/승인/반려
 //   - 사원: 본인 자기평가 조회 / 임시저장 / 제출 / 근거파일 업로드·삭제
-//   - 팀장용 조회/승인/반려는 별도 (추후 추가)
+//   - 팀장: 팀원 자기평가 조회 / 파일 다운로드 / 승인·반려
 @RestController
 @RequestMapping("/eval/self-evaluations")
 public class SelfEvaluationController {
@@ -71,5 +74,54 @@ public class SelfEvaluationController {
             @PathVariable Long fileId) {
         selfEvaluationService.deleteFile(companyId, empId, goalId, fileId);
         return ResponseEntity.noContent().build();
+    }
+
+//    팀장 - 자기평가 조회/파일 다운로드/승인/반려
+
+    // 6. 팀원 자기평가 목록 - 팀원별 묶음 (상단 카드 집계 -> 프론트)
+    @GetMapping("/team")
+    public ResponseEntity<List<TeamMemberSelfEvaluationResponse>> getTeamSelfEvaluations(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId) {
+        return ResponseEntity.ok(selfEvaluationService.getTeamSelfEvaluations(companyId, managerId));
+    }
+
+    // 7. 근거 파일 다운로드 - MinIO 스트리밍 (서비스 -> ResponseEntity 조립)
+    @GetMapping("/{goalId}/files/{fileId}")
+    public ResponseEntity<Resource> downloadFile(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId,
+            @PathVariable Long goalId,
+            @PathVariable Long fileId) {
+        return selfEvaluationService.downloadFile(companyId, managerId, goalId, fileId);
+    }
+
+    // 8. 단건 승인 - 대기 상태만 가능
+    @PostMapping("/{goalId}/approve")
+    public ResponseEntity<SelfEvaluationResponse> approveSelfEvaluation(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId,
+            @PathVariable Long goalId) {
+        return ResponseEntity.ok(selfEvaluationService.approveSelfEvaluation(companyId, managerId, goalId));
+    }
+
+    // 9. 단건 반려 (body에 사유)
+    @PostMapping("/{goalId}/reject")
+    public ResponseEntity<SelfEvaluationResponse> rejectSelfEvaluation(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId,
+            @PathVariable Long goalId,
+            @RequestBody @Valid SelfEvaluationRejectRequest request) {
+        return ResponseEntity.ok(
+                selfEvaluationService.rejectSelfEvaluation(companyId, managerId, goalId, request.getRejectReason()));
+    }
+
+    // 10. 팀원 자기평가 대기 건 일괄 승인
+    @PostMapping("/approve-all/{empId}")
+    public ResponseEntity<List<SelfEvaluationResponse>> approveAllPending(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId,
+            @PathVariable Long empId) {
+        return ResponseEntity.ok(selfEvaluationService.approveAllPendingSelfEvaluations(companyId, managerId, empId));
     }
 }
