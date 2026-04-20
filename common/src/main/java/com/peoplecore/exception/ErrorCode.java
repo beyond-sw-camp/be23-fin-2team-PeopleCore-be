@@ -27,6 +27,14 @@ public enum ErrorCode {
     SMS_CODE_MISMATCH(400, "인증코드가 일치하지 않습니다."),
     SMS_NOT_VERIFIED(403, "SMS 인증이 완료되지 않았습니다."),
 
+    // 이메일 인증
+    EMAIL_COOLDOWN(429, "1분 후 다시 요청해 주세요."),
+    EMAIL_BLOCKED(429, "인증 시도 횟수를 초과했습니다. 10분 후 다시 시도해 주세요."),
+    EMAIL_CODE_EXPIRED(400, "인증코드가 만료되었습니다."),
+    EMAIL_CODE_MISMATCH(400, "인증코드가 일치하지 않습니다."),
+    EMAIL_NOT_VERIFIED(403, "이메일 인증이 완료되지 않았습니다."),
+    EMAIL_SEND_FAILED(500, "이메일 발송에 실패했습니다."),
+
     // 비밀번호
     SAME_PASSWORD(400, "기존 비밀번호와 동일합니다."),
 

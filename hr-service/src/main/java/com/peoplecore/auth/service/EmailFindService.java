@@ -10,6 +10,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
+
 @Service
 @RequiredArgsConstructor
 public class
@@ -23,9 +27,11 @@ EmailFindService {
         // 1. SMS 인증 수행 (실패 시 CustomException 발생)
         smsAuthService.verify(request.getCompanyId(), request.getEmpName(), request.getEmpPhone(), request.getCode());
 
-        // 2. 사원 조회
-        Employee employee = employeeRepository.findByCompany_CompanyIdAndEmpNameAndEmpPhone(
-                request.getCompanyId(), request.getEmpName(), request.getEmpPhone())
+        // 2. 사원 조회 (생년월일까지 검증, 전화번호는 하이픈 정규화)
+        LocalDate birthDate = parseBirthDate(request.getEmpBirthDate());
+        String normalizedPhone = request.getEmpPhone() == null ? null : request.getEmpPhone().replaceAll("-", "");
+        Employee employee = employeeRepository.findByCompanyAndNameAndBirthAndNormalizedPhone(
+                request.getCompanyId(), request.getEmpName(), birthDate, normalizedPhone)
                 .orElseThrow(() -> new CustomException(ErrorCode.NOT_FOUND));
 
         // 3. 이메일 마스킹 및 반환
@@ -37,6 +43,17 @@ EmailFindService {
         return new EmailFindResponse(maskedEmail);
     }
 
+    private LocalDate parseBirthDate(String empBirthDate) {
+        if (empBirthDate == null || empBirthDate.isBlank()) {
+            throw new CustomException(ErrorCode.BAD_REQUEST);
+        }
+        try {
+            return LocalDate.parse(empBirthDate, DateTimeFormatter.ofPattern("yyyyMMdd"));
+        } catch (DateTimeParseException e) {
+            throw new CustomException(ErrorCode.BAD_REQUEST);
+        }
+    }
+
     private String maskEmail(String email) {
         if (email == null || !email.contains("@")) {
             return email;
@@ -46,12 +63,7 @@ EmailFindService {
         String id = parts[0];
         String domain = parts[1];
 
-        if (id.length() <= 3) {
-            // "abc@domain.com" -> "a**@domain.com"
-            return id.charAt(0) + "**@" + domain;
-        }
-
-        // "john@domain.com" -> "jo***@domain.com"
-        return id.substring(0, 2) + "***@" + domain;
+        int visible = Math.max(1, id.length() / 2);
+        return id.substring(0, visible) + "*".repeat(id.length() - visible) + "@" + domain;
     }
 }

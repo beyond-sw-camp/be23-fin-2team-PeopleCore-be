@@ -61,11 +61,13 @@ public class FileItemController {
     public ResponseEntity<Map<String, String>> generateDownloadUrl(
         @RequestHeader(value = "X-User-Title", required = false) Long titleId,
         @RequestHeader("X-User-Id") Long empId,
-        @PathVariable Long fileId
+        @PathVariable Long fileId,
+        @RequestParam(name = "disposition", defaultValue = "attachment") String disposition
     ) {
         FileItem file = accessPolicy.loadFile(fileId);
         accessPolicy.ensureCanReadFolder(titleId, empId, file.getFolderId());
-        String url = fileItemService.generateDownloadUrl(fileId);
+        boolean attachment = !"inline".equalsIgnoreCase(disposition);
+        String url = fileItemService.generateDownloadUrl(fileId, attachment);
         return ResponseEntity.ok(Map.of("downloadUrl", url));
     }
 
