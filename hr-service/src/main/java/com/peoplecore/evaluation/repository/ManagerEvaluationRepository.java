@@ -16,4 +16,8 @@ public interface ManagerEvaluationRepository extends JpaRepository<ManagerEvalua
 //    특정 팀원에 대한 팀장의 평가 단건 조회 - 조회/임시저장/제출 공용 (사원별 1건 원칙)
     Optional<ManagerEvaluation> findByEmployee_EmpIdAndEvaluator_EmpIdAndSeason_SeasonId(
             Long employeeEmpId, Long evaluatorEmpId, Long seasonId);
+
+
+//    15번 상세 조회용 - 특정 사원이 받은 상위자평가 단건 (등급/코멘트/피드백 추출)
+    Optional<ManagerEvaluation> findByEmployee_EmpIdAndSeason_SeasonId(Long employeeEmpId, Long seasonId);
 }

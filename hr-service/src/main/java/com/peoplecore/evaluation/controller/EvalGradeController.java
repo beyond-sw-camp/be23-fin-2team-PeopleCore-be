@@ -221,18 +221,15 @@ public class EvalGradeController {
                 gradeService.getFinalList(companyId, seasonId, deptId, keyword, unscoredOnly, sortField, pageable)
         );
     }
-//
-//
-//    // 15. 평가 결과 상세 (HR 전용)
-//    //  - 단계별 타임라인: 평가입력 -> 종합점수 -> Z-score보정 -> 등급산정 -> 보정 -> 최종확정
-//    //  - 각 단계 status: DONE | PENDING | SKIPPED
-//    //  - 시즌 확정 전에도 조회 가능 (미완료 단계는 data=null, PENDING)
-//    //  - 보정 없이 확정된 경우 5단계 SKIPPED
-//    @GetMapping("/{evalGradeId}/detail")
-//    public ResponseEntity<EvalGradeDetailDto> getDetail(
-//            @RequestHeader("X-User-Company") UUID companyId,
-//            @PathVariable Long evalGradeId) {
-//        return ResponseEntity.ok(gradeService.getDetail(companyId, evalGradeId));
-//    }
+    // 15. 평가 결과 상세 (HR 전용) - 한 사원의 단계별 타임라인 한 번에 조회
+    //  - gradeId = EvalGrade PK (결과 목록 응답의 id)
+    //  - 목표등록 / 평가입력(자기·상위자) / 종합점수 / Z-score / 등급산정 / 보정이력 / 최종확정 모두 포함
+    //  - 확정 전/후 모두 조회 가능, 미진행 단계는 null 또는 빈 배열
+    @GetMapping("/{gradeId}/detail")
+    public ResponseEntity<EvalGradeDetailDto> getDetail(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long gradeId) {
+        return ResponseEntity.ok(gradeService.getDetail(companyId, gradeId));
+    }
 
 }
