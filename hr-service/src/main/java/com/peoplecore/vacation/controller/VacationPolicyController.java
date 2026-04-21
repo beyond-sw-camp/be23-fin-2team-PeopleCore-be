@@ -1,6 +1,7 @@
 package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
+import com.peoplecore.vacation.dto.VacationAdvanceUsePolicyDto;
 import com.peoplecore.vacation.dto.VacationGrantBasisDto;
 import com.peoplecore.vacation.dto.VacationPromotionPolicyDto;
 import com.peoplecore.vacation.dto.VacationRuleCreateRequest;
@@ -96,6 +97,24 @@ public class VacationPolicyController {
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestBody VacationPromotionPolicyDto dto) {
         vacationPolicyService.updatePromotionPolicy(companyId, dto);
+        return ResponseEntity.noContent().build();
+    }
+
+    /* 미리쓰기 허용 정책 조회 - 연차/월차 잔여 부족 시 신청 허용 토글 */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @GetMapping("/advance-use")
+    public ResponseEntity<VacationAdvanceUsePolicyDto> getAdvanceUse(
+            @RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(vacationPolicyService.getAdvanceUsePolicy(companyId));
+    }
+
+    /* 미리쓰기 허용 정책 변경 */
+    @RoleRequired("HR_SUPER_ADMIN")
+    @PutMapping("/advance-use")
+    public ResponseEntity<Void> updateAdvanceUse(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestBody VacationAdvanceUsePolicyDto dto) {
+        vacationPolicyService.updateAdvanceUsePolicy(companyId, dto);
         return ResponseEntity.noContent().build();
     }
 }
