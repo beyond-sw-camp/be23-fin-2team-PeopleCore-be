@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 
 // 등급 - 사원별 시즌 최종 등급 (자동산정 + 보정)
 @Entity
-@Table(name = "grade")
+@Table(name = "eval_grade")
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
@@ -99,9 +99,12 @@ public class EvalGrade extends BaseTimeEntity {
 
     
 
-//    강제배분 결과 -autoGrade + 순위 저장(보정전)
+//    강제배분 결과 - autoGrade(불변 원본) + finalGrade(초기값=autoGrade) + 순위 저장
+//    - autoGrade: 자동 산정 시점 고정값, 5번 재산정 시에만 갱신
+//    - finalGrade: 보정 반영될 현재 등급, 보정 없으면 autoGrade와 동일 상태로 시작
     public void applyDistribution(String autoGrade, Integer rankInSeason){
         this.autoGrade = autoGrade;
+        this.finalGrade = autoGrade;
         this.rankInSeason = rankInSeason;
     }
 
@@ -136,9 +139,15 @@ public class EvalGrade extends BaseTimeEntity {
     }
 
 
-//    9번 보정등급 적용 + 이전 등급 Calibration fromGrade에 저장
+//    9번 보정등급 적용 - finalGrade 만 덮어씀 (autoGrade 는 불변 원본 유지)
+//    이전 등급은 Calibration.fromGrade 로 이력 저장
     public void applyCalibration(String newGrade){
-        this.autoGrade = newGrade;
-        this. isCalibrated = true;
+        this.finalGrade = newGrade;
+        this.isCalibrated = true;
+    }
+
+//    5번 강제배분 재실행 시 보정 플래그 리셋 (cohort 변경으로 보정 이력 무효화될 때)
+    public void resetCalibration(){
+        this.isCalibrated = false;
     }
 }

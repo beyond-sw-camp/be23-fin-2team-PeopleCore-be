@@ -1,7 +1,7 @@
 package com.peoplecore.evaluation.dto;
 
 
-
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -12,23 +12,34 @@ import java.util.List;
 
 
 // 평가 규칙 JSON 스냅샷 역직렬화용
+// Season.formSnapshot 에 박제되는 병합 JSON 을 파싱 — 하드 컬럼 값 + formValues 섹션 통합
 @Data
 @Builder
 @AllArgsConstructor
 @NoArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class FormSnapshotDto {
-    private List<Item> itemList; //가중치설정 목록들 순회
-    private List<Adjustment>adjustments; // 근태/징계 등 목록들 순회
-    private List<GradeRule>gradeRules; //등급정의 (3~8)
-    private List<RawScore>rawScoreTable; //팀장등급 ->원점수설정
-    private KpiScoring kpiScoring; //kpi달성률 환산
-    private Integer minTeamSize; //편향보정 소규모 팀 판정 기준 인원 (기본 5)
+    // ─── formValues 섹션 ───
+    private List<Item> itemList;             // 가중치설정 목록
+    private List<Adjustment> adjustments;    // 근태/징계 등 가감점
+    private List<GradeRule> gradeRules;      // 등급정의 (S/A/B/C/D)
+    private List<RawScore> rawScoreTable;    // 팀장등급 → 원점수 환산
+    private KpiScoring kpiScoring;           // KPI 달성률 환산
+
+    // ─── 하드 컬럼 스냅샷 (시즌 OPEN 시점 값) ───
+    private Integer taskWeightSang;          // 상 난이도 배수
+    private Integer taskWeightJung;          // 중 난이도 배수
+    private Integer taskWeightHa;            // 하 난이도 배수
+    private Boolean useBiasAdjustment;       // 편향보정 사용 여부
+    private BigDecimal biasWeight;           // 편향보정 강도
+    private Integer minTeamSize;             // 편향보정 소규모 팀 판정 기준 인원
 
 
     @Data
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Item {
         private String id;              // 항목 식별자 (self/manager는 시스템 고정)
         private String name;            // 표시명
@@ -41,6 +52,7 @@ public class FormSnapshotDto {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Adjustment {
         private String id;
         private String name;
@@ -52,6 +64,7 @@ public class FormSnapshotDto {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class GradeRule {
         private String id; //rawScoreTable/ManagerEval 연결 키
         private String label; //표시명(s,a)
@@ -63,6 +76,7 @@ public class FormSnapshotDto {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class RawScore {
         private String gradeId; //GradeRule.id
         private BigDecimal rawScore; // 환산 원점수
@@ -72,6 +86,7 @@ public class FormSnapshotDto {
     @Builder
     @AllArgsConstructor
     @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class KpiScoring {
         private BigDecimal cap; //달성률 상한
         private BigDecimal scaleTo; // 환산 만점

@@ -6,13 +6,20 @@ import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.vacation.batch.AnnualGrantFiscalJobConfig;
 import com.peoplecore.vacation.entity.VacationPolicy;
 import com.peoplecore.vacation.entity.VacationType;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
 import com.peoplecore.vacation.service.AnnualGrantService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -53,6 +60,8 @@ public class AnnualGrantScheduler {
     private final VacationTypeRepository vacationTypeRepository;
     private final EmployeeRepository employeeRepository;
     private final AnnualGrantService annualGrantService;
+    private final JobLauncher jobLauncher;
+    private final Job annualGrantFiscalJob;
 
     @Autowired
     public AnnualGrantScheduler(StringRedisTemplate redisTemplate,
@@ -60,17 +69,21 @@ public class AnnualGrantScheduler {
                                 VacationPolicyRepository vacationPolicyRepository,
                                 VacationTypeRepository vacationTypeRepository,
                                 EmployeeRepository employeeRepository,
-                                AnnualGrantService annualGrantService) {
+                                AnnualGrantService annualGrantService,
+                                JobLauncher jobLauncher,
+                                @Qualifier(AnnualGrantFiscalJobConfig.JOB_NAME) Job annualGrantFiscalJob) {
         this.redisTemplate = redisTemplate;
         this.companyRepository = companyRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
         this.vacationTypeRepository = vacationTypeRepository;
         this.employeeRepository = employeeRepository;
         this.annualGrantService = annualGrantService;
+        this.jobLauncher = jobLauncher;
+        this.annualGrantFiscalJob = annualGrantFiscalJob;
     }
 
-    /* 매일 00:00 KST - 분산 락 1회 후 활성 회사 순회 */
-    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    /* 매일 00:10 KST - MonthlyAccrual(00:00), AnnualTransition(00:05) 후 실행 */
+    @Scheduled(cron = "0 10 0 * * *", zone = "Asia/Seoul")
     public void run() {
         LocalDate today = LocalDate.now(ZONE_SEOUL);
         String lockKey = LOCK_KEY_PREFIX + ":" + today;
@@ -168,7 +181,9 @@ public class AnnualGrantScheduler {
         }
     }
 
-    /* FISCAL - 오늘이 회계연도 시작일일 때만 전 사원 처리 */
+    /* FISCAL - 오늘이 회계연도 시작일일 때만 Batch Job 런칭 */
+    /* 2/29 FISCAL 시작 + 비윤년 → 3/1 에 대신 fire (HIRE 와 동일 보정) */
+    /* 회사별 전사원 대상 → Spring Batch 로 위임 (청크 tx / 재시작 / dedup) */
     private void processFiscal(Company company, VacationPolicy policy, VacationType annualType, LocalDate today) {
         UUID companyId = company.getCompanyId();
         String fiscalStart = policy.getPolicyFiscalYearStart();
@@ -178,21 +193,26 @@ public class AnnualGrantScheduler {
         }
 
         String todayMmDd = String.format("%02d-%02d", today.getMonthValue(), today.getDayOfMonth());
-        if (!fiscalStart.equals(todayMmDd)) return;
+        // 2/29 FISCAL 시작인데 올해 비윤년이면 3/1 에 대신 발생 (해당 해 누락 방지)
+        boolean leapShift = "02-29".equals(fiscalStart)
+                && today.getMonthValue() == 3 && today.getDayOfMonth() == 1
+                && !today.isLeapYear();
+        if (!fiscalStart.equals(todayMmDd) && !leapShift) return;
 
-        List<Employee> emps = employeeRepository
-                .findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(
-                        companyId, List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE));
-        log.info("[AnnualGrant-FISCAL] companyId={}, fiscalStart={}, 대상={}명",
-                companyId, fiscalStart, emps.size());
-
-        for (Employee emp : emps) {
-            try {
-                annualGrantService.grantForFiscal(companyId, emp, annualType, policy, today);
-            } catch (Exception e) {
-                log.error("[AnnualGrant-FISCAL] 사원 처리 실패 - empId={}, err={}",
-                        emp.getEmpId(), e.getMessage(), e);
-            }
+        log.info("[AnnualGrant-FISCAL] Batch 런칭 - companyId={}, fiscalStart={}, today={}, leapShift={}",
+                companyId, fiscalStart, todayMmDd, leapShift);
+        try {
+            // (companyId, targetDate) 식별 파라미터 → 같은 회사 같은 날 중복 자동 차단
+            JobParameters params = new JobParametersBuilder()
+                    .addString("companyId", companyId.toString())
+                    .addString("targetDate", today.toString())
+                    .toJobParameters();
+            jobLauncher.run(annualGrantFiscalJob, params);
+        } catch (JobInstanceAlreadyCompleteException e) {
+            log.info("[AnnualGrant-FISCAL] 이미 완료 - companyId={}, date={}", companyId, today);
+        } catch (Exception e) {
+            log.error("[AnnualGrant-FISCAL] Batch 실행 실패 - companyId={}, err={}",
+                    companyId, e.getMessage(), e);
         }
     }
 }

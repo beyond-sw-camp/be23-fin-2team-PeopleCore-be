@@ -17,4 +17,10 @@ public interface CalibrationRepository extends JpaRepository<Calibration, Long> 
 //   8번 - 시즌 전체 보정 이력 (건별, 시간순)
 //    - createdAt 오름차순 -> 프론트에서 index+1 로 순번
     List<Calibration> findByGrade_Season_SeasonIdOrderByCreatedAtAsc(Long seasonId);
+
+//   5번 강제배분 재실행 - 보정 이력 개수 (프론트 확인 팝업에 표시할 N)
+    long countByGrade_Season_SeasonId(Long seasonId);
+
+//   5번 강제배분 재실행 - 보정 이력 전체 삭제 (cohort 변경 시 + confirm=true)
+    void deleteAllByGrade_Season_SeasonId(Long seasonId);
 }

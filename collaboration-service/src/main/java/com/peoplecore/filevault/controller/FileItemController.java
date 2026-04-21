@@ -4,6 +4,7 @@ import com.peoplecore.filevault.dto.*;
 import com.peoplecore.filevault.entity.FileItem;
 import com.peoplecore.filevault.security.FileVaultAccessPolicy;
 import com.peoplecore.filevault.service.FileItemService;
+import com.peoplecore.filevault.service.FileVaultFavoriteService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -20,6 +21,7 @@ public class FileItemController {
 
     private final FileItemService fileItemService;
     private final FileVaultAccessPolicy accessPolicy;
+    private final FileVaultFavoriteService favoriteService;
 
     @GetMapping
     public ResponseEntity<List<FileResponse>> listByFolder(
@@ -28,7 +30,8 @@ public class FileItemController {
         @RequestParam Long folderId
     ) {
         accessPolicy.ensureCanReadFolder(titleId, empId, folderId);
-        return ResponseEntity.ok(fileItemService.listByFolder(folderId));
+        return ResponseEntity.ok(favoriteService.markStarredFiles(empId,
+            new java.util.ArrayList<>(fileItemService.listByFolder(folderId))));
     }
 
     @PostMapping("/upload-url")
@@ -58,11 +61,13 @@ public class FileItemController {
     public ResponseEntity<Map<String, String>> generateDownloadUrl(
         @RequestHeader(value = "X-User-Title", required = false) Long titleId,
         @RequestHeader("X-User-Id") Long empId,
-        @PathVariable Long fileId
+        @PathVariable Long fileId,
+        @RequestParam(name = "disposition", defaultValue = "attachment") String disposition
     ) {
         FileItem file = accessPolicy.loadFile(fileId);
         accessPolicy.ensureCanReadFolder(titleId, empId, file.getFolderId());
-        String url = fileItemService.generateDownloadUrl(fileId);
+        boolean attachment = !"inline".equalsIgnoreCase(disposition);
+        String url = fileItemService.generateDownloadUrl(fileId, attachment);
         return ResponseEntity.ok(Map.of("downloadUrl", url));
     }
 

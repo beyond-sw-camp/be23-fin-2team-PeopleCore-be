@@ -87,9 +87,9 @@ public class AttendanceCheckService {
             LocalDate to = s.endAt().toLocalDate();
             if (from.isBefore(periodStart)) from = periodStart;
             if (to.isAfter(periodEnd)) to = periodEnd;
-            for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
-                covered.add(d);
-            }
+            if (from.isAfter(to)) continue;
+            /* LocalDate.datesUntil 은 exclusive end → to.plusDays(1) 로 inclusive 보정 */
+            from.datesUntil(to.plusDays(1)).forEach(covered::add);
         }
         return covered;
     }

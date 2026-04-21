@@ -18,8 +18,14 @@ public class FileResponse {
     private Long uploadedBy;
     private LocalDateTime createdAt;
     private LocalDateTime deletedAt;
+    /** 현재 사용자의 즐겨찾기 여부. 단건 응답이나 호출자가 모를 땐 false. */
+    private boolean starred;
 
     public static FileResponse from(FileItem file) {
+        return from(file, false);
+    }
+
+    public static FileResponse from(FileItem file, boolean starred) {
         return FileResponse.builder()
             .fileId(file.getId())
             .folderId(file.getFolderId())
@@ -29,6 +35,7 @@ public class FileResponse {
             .uploadedBy(file.getUploadedBy())
             .createdAt(file.getCreatedAt())
             .deletedAt(file.getDeletedAt())
+            .starred(starred)
             .build();
     }
 }

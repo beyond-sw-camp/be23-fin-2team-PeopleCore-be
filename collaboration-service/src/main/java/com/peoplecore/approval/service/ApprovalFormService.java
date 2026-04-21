@@ -335,7 +335,6 @@ public class ApprovalFormService {
                 .formWritePermission(request.getFormWritePermission())
                 .formIsPublic(request.getFormIsPublic() != null ? request.getFormIsPublic() : true)
                 .formRetentionYear(request.getFormRetentionYear())
-                .formMobileYn(request.getFormMobileYn() != null ? request.getFormMobileYn() : false)
                 .formPreApprovalYn(request.getFormPreApprovalYn() != null ? request.getFormPreApprovalYn() : false)
                 .folderId(folder)
                 .formSortOrder(maxSort + 1)
@@ -378,7 +377,7 @@ public class ApprovalFormService {
     public FormDetailResponse updateForm(UUID companyId, Long formId, ApprovalFormUpdateRequest request) {
         ApprovalForm form = approvalFormRepository.findDetailById(formId, companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다, ", HttpStatus.NOT_FOUND));
 
-        form.updateForm(request.getFormName(), request.getFormHtml(), request.getFormWritePermission(), request.getFormIsPublic(), request.getFormRetentionYear(), request.getFormMobileYn(), request.getFormPreApprovalYn());
+        form.updateForm(request.getFormName(), request.getFormHtml(), request.getFormWritePermission(), request.getFormIsPublic(), request.getFormRetentionYear(), request.getFormPreApprovalYn());
 
         /*minio에 Html 업뎅트 */
         String objectName = String.format("forms/%s/%s_v%d.html", companyId, form.getFormCode(), form.getFormVersion());
@@ -426,7 +425,7 @@ public class ApprovalFormService {
         }
 
         for (ApprovalForm form : forms) {
-            form.updateBatchSettings(request.getFormIsPublic(), request.getFormMobileYn(), request.getFormPreApprovalYn());
+            form.updateBatchSettings(request.getFormIsPublic(), request.getFormPreApprovalYn());
         }
         return forms.stream().map(FormListResponse::from).toList();
     }
@@ -519,7 +518,6 @@ public class ApprovalFormService {
                             .formWritePermission(FormWritePermission.ALL)
                             .formIsPublic(true)
                             .formRetentionYear(5)
-                            .formMobileYn(false)
                             .formPreApprovalYn(true)
                             .folderId(subFolder)
                             .formSortOrder(j + 1)

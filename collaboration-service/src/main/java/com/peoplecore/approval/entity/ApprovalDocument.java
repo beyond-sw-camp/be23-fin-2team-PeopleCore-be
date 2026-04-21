@@ -127,6 +127,13 @@ public class ApprovalDocument extends BaseTimeEntity {
      */
     private LocalDateTime docCompleteAt;
 
+    /**
+     * 보존 연한 스냅샷 - 결재 완료 시점의 양식 연한을 박제
+     * null = 미완결 / 값 존재 = docCompleteAt + retentionYearSnapshot 이 만료일
+     * 양식 연한 변경해도 기존 문서는 영향 없음 (정책 B - 소급 적용 X)
+     */
+    private Integer retentionYearSnapshot;
+
     @Version
     private Long version;
 
@@ -144,8 +151,11 @@ public class ApprovalDocument extends BaseTimeEntity {
         this.approvalStatus = approvalStatus;
     }
 
+    /* 결재 완료 - 완료 시점 + 양식 보존연한 박제 (정책 B 소급 X) */
+    /* formId 는 LAZY 지만 트랜잭션 내 호출이라 proxy 초기화 안전 */
     public void complete() {
         this.docCompleteAt = LocalDateTime.now();
+        this.retentionYearSnapshot = (this.formId != null) ? this.formId.getFormRetentionYear() : null;
     }
 
     public void markSubmitted() {
@@ -210,7 +220,7 @@ public class ApprovalDocument extends BaseTimeEntity {
         }
         this.docNum = null;
         this.docCompleteAt = null;
-
+        this.retentionYearSnapshot = null;   // 재기안 시 박제 초기화
     }
 
 }

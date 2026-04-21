@@ -6,9 +6,13 @@ import com.peoplecore.attendance.repository.HolidayLookupRepository;
 import com.peoplecore.entity.Holidays;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.Cursor;
+import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -20,8 +24,9 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 /* 영업일 계산기 - 주말(토/일) + 공휴일 제외 일수 산출 */
-/* 캐시: (companyId, yearMonth) → 공휴일 LocalDate Set (JSON). TTL 6시간 */
-/* 스케줄러(만근 판정, 월차 적립, 연차 발생)에서 반복 호출 → 캐시 히트율 높음 */
+/* 캐시: (companyId, yearMonth) → 공휴일 LocalDate Set (JSON). TTL 6시간 + write-through evict */
+/* 공휴일 변경 시 evictMonth/evictCompany/evictAll 로 즉시 무효화 가능 (정합성 보장) */
+/* 스케줄러(만근 판정, 월차 적립, 연차 발생) + 출퇴근 판정(CommuteService) 에서 재사용 */
 @Component
 @Slf4j
 public class BusinessDayCalculator {
@@ -62,6 +67,32 @@ public class BusinessDayCalculator {
         if (date == null) return false;
         Set<LocalDate> holidays = loadHolidaysInRange(companyId, date, date);
         return isBusinessDay(date, holidays);
+    }
+
+    /* 월 단위 공휴일 Set 외부 노출 - 출퇴근 판정(CommuteService) 등에서 캐시 공유용 */
+    /* 반복 공휴일은 호출 연도에 맞춰 날짜가 매핑된 상태로 반환 */
+    public Set<LocalDate> getHolidaysInMonth(UUID companyId, YearMonth ym) {
+        if (companyId == null || ym == null) return Set.of();
+        return loadHolidaysForMonth(companyId, ym);
+    }
+
+    /* 특정 회사의 특정 월 캐시 무효화 - 일회성 공휴일(isRepeating=false) 추가/수정/삭제 시 */
+    public void evictMonth(UUID companyId, YearMonth ym) {
+        if (companyId == null || ym == null) return;
+        redisTemplate.delete(cacheKey(companyId, ym));
+    }
+
+    /* 특정 회사 전체 캐시 무효화 - 반복 공휴일(isRepeating=true) 변경 시 모든 연/월 영향 */
+    public void evictCompany(UUID companyId) {
+        if (companyId == null) return;
+        Set<String> keys = scanKeys(CACHE_KEY_PREFIX + ":" + companyId + ":*");
+        if (!keys.isEmpty()) redisTemplate.delete(keys);
+    }
+
+    /* 전역 캐시 무효화 - NATIONAL 공휴일(전 회사 공유) 변경 시 */
+    public void evictAll() {
+        Set<String> keys = scanKeys(CACHE_KEY_PREFIX + ":*");
+        if (!keys.isEmpty()) redisTemplate.delete(keys);
     }
 
     /* 주말 + 공휴일 제외 - 내부 헬퍼 (holidays Set 이미 로드된 상태) */
@@ -133,5 +164,25 @@ public class BusinessDayCalculator {
     /* 캐시 키 - biz-holidays:{companyId}:{yyyy-MM} */
     private String cacheKey(UUID companyId, YearMonth ym) {
         return String.format("%s:%s:%s", CACHE_KEY_PREFIX, companyId, ym);
+    }
+
+    /* Redis SCAN 기반 키 조회 - KEYS 는 O(N) 블로킹이라 프로덕션 금지, SCAN 은 커서 기반 비블로킹 */
+    /* 실패 시 빈 Set 반환 → 호출부 delete 가 no-op (캐시 미삭제는 TTL 만료로 자연 복구) */
+    private Set<String> scanKeys(String pattern) {
+        Set<String> result = new HashSet<>();
+        try {
+            redisTemplate.execute((RedisCallback<Void>) connection -> {
+                ScanOptions options = ScanOptions.scanOptions().match(pattern).count(100).build();
+                try (Cursor<byte[]> cursor = connection.scan(options)) {
+                    while (cursor.hasNext()) {
+                        result.add(new String(cursor.next(), StandardCharsets.UTF_8));
+                    }
+                }
+                return null;
+            });
+        } catch (Exception e) {
+            log.warn("[BusinessDayCalculator] 캐시 SCAN 실패 - pattern={}, err={}", pattern, e.getMessage());
+        }
+        return result;
     }
 }

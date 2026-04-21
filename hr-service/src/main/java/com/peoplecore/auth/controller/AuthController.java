@@ -3,10 +3,13 @@ package com.peoplecore.auth.controller;
 import com.peoplecore.auth.dto.LoginRequest;
 import com.peoplecore.auth.dto.LoginResponse;
 import com.peoplecore.auth.dto.TokenRefreshRequest;
+import com.peoplecore.auth.dto.VerifyPasswordRequest;
 import com.peoplecore.auth.service.AuthService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
@@ -29,5 +32,14 @@ public class AuthController {
     public ResponseEntity<Void> logout(@RequestHeader("X-User-Id") Long empId) {
         authService.logout(empId);
         return ResponseEntity.ok().build();
+    }
+
+    // 현재 유저 비밀번호 재확인
+    @PostMapping("/verify-password")
+    public ResponseEntity<Map<String, Boolean>> verifyPassword(
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestBody VerifyPasswordRequest request) {
+        boolean ok = authService.verifyPassword(empId, request.getPassword());
+        return ResponseEntity.ok(Map.of("valid", ok));
     }
 }

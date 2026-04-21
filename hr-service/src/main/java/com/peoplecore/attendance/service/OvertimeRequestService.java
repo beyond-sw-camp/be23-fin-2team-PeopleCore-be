@@ -70,8 +70,16 @@ public class OvertimeRequestService {
         // 사원 + workGroup 기반 주간 기본 근로 분 계산
         Employee employee = employeeRepository.findById(empId)
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
-        int baseWorkMinutes = calcBaseWorkMinutes(employee.getWorkGroup());
+        WorkGroup wg = employee.getWorkGroup();
+        int baseWorkMinutes = calcBaseWorkMinutes(wg);
         int maxOtBuffer = Math.max(0, weeklyMaxMinutes - baseWorkMinutes);
+
+        // workGroup 미배정/필드 결측 시 안전한 기본값 APPROVAL (결재 필요)
+        WorkGroup.GroupOvertimeRecognize recognizeType =
+                (wg != null && wg.getGroupOvertimeRecognize() != null)
+                        ? wg.getGroupOvertimeRecognize()
+                        : WorkGroup.GroupOvertimeRecognize.APPROVAL;
+        boolean approvalRequired = recognizeType == WorkGroup.GroupOvertimeRecognize.APPROVAL;
 
         // weekStart 정규화 후 월~일 범위
         LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
@@ -90,6 +98,8 @@ public class OvertimeRequestService {
                 .weekUsedMinutes(usedMin)
                 .remainingMinutes(remaining)
                 .exceedAction(action)
+                .recognizeType(recognizeType)
+                .approvalRequired(approvalRequired)
                 .build();
     }
 
@@ -142,6 +152,13 @@ public class OvertimeRequestService {
         // 사원 조회 (FK)
         Employee employee = employeeRepository.findById(event.getEmpId())
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        // ALL 그룹 사원은 결재 불필요 — 프론트 우회로 들어온 케이스. INSERT 는 통과시키되 경고 로그
+        WorkGroup wg = employee.getWorkGroup();
+        if (wg != null && wg.getGroupOvertimeRecognize() == WorkGroup.GroupOvertimeRecognize.ALL) {
+            log.warn("[OvertimeRequest] ALL 그룹 사원의 결재 상신 감지 - empId={}, docId={}, workGroupId={}",
+                    employee.getEmpId(), event.getApprovalDocId(), wg.getWorkGroupId());
+        }
 
         // PENDING 으로 insert
         OvertimeRequest entity = OvertimeRequest.builder()

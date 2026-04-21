@@ -36,7 +36,6 @@ public class WorkGroupSearchRepository {
                         wg.groupStartTime,
                         wg.groupEndTime,
                         wg.groupWorkDay,
-                        wg.groupMobileCheck,
                         e.empId.count())).from(wg)
                 .leftJoin(e).on(e.workGroup.eq(wg))
                 .where(wg.company.companyId.eq(companyId)

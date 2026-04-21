@@ -34,4 +34,23 @@ public class HrAlarmPublisher {
             log.error("[HrAlarm] 알림 이벤트 발행 실패 - err={}", e.getMessage());
         }
     }
+
+
+    /*
+     * 예외 전파 버전 - 법적 효력 있는 알림(연차 촉진 통지 등)에서 실패 감지용.
+     * kafkaTemplate.send().get() 동기 대기 → 실패 시 RuntimeException 래핑해 throw.
+     * 호출부의 @Retryable 이 예외를 받아 재시도 트리거.
+     */
+    public void publisherOrThrow(AlarmEvent event) {
+        try {
+            String message = objectMapper.writeValueAsString(event);
+            kafkaTemplate.send("alarm-event", message).get();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("알림 이벤트 발행 인터럽트", e);
+        } catch (Exception e) {
+            log.error("[HrAlarm] 알림 발행 실패(throw) - err={}", e.getMessage());
+            throw new RuntimeException("알림 이벤트 발행 실패", e);
+        }
+    }
 }

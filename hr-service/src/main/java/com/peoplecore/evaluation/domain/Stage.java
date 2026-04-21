@@ -30,6 +30,10 @@ public class Stage extends BaseTimeEntity {
     @Column(name = "order_no")
     private Integer orderNo; // 순서
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "stage_type", length = 20)
+    private StageType type; // 시스템 의미 (GRADING/FINALIZATION 등 식별용)
+
     @Column(name = "start_date")
     private LocalDate startDate; // 시작일
 
@@ -44,4 +48,10 @@ public class Stage extends BaseTimeEntity {
 //    스케줄러 호출 — 상태 전이
     public void start()  { this.status = StageStatus.IN_PROGRESS; }
     public void finish() { this.status = StageStatus.FINISHED; }
+
+//    날짜 수정 — 기간 추가(endDate 연장) / SeasonDetail 직접 수정(start+end)
+    public void updateDates(LocalDate startDate, LocalDate endDate) {
+        this.startDate = startDate;
+        this.endDate = endDate;
+    }
 }

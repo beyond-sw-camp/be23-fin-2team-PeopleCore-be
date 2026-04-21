@@ -7,8 +7,8 @@ import lombok.*;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-/* 휴가 유형 - 회사별 마스터 (월차/연차/포상/여름휴가 등) */
-/* 시스템 자동 처리 식별은 type_code 로 (MONTHLY/ANNUAL 예약). 그 외는 모두 관리자 부여 */
+/* 휴가 유형 - 회사별 마스터 (월차/연차/법정휴가/포상/여름휴가 등) */
+/* 시스템 예약 코드는 StatutoryVacationType enum 에서 단일 관리 (변경/삭제 차단) */
 @Entity
 @Table(
         name = "vacation_type",
@@ -27,7 +27,10 @@ import java.util.UUID;
 @Builder
 public class VacationType extends BaseTimeEntity {
 
-    /* 시스템 예약 type_code 상수 - 회사 생성 시 자동 INSERT, 변경/삭제 차단 */
+    /* 스케줄러/배치에서 typeCode 직접 조회하는 호출부(MonthlyAccrualScheduler,           */
+    /* AnnualTransitionScheduler, AnnualGrantScheduler, PromotionNoticeJobConfig,          */
+    /* AnnualGrantFiscalJobConfig, LeaveAllowanceService) 호환을 위해 상수는 유지.         */
+    /* 전체 예약 코드 목록은 StatutoryVacationType enum 참조.                              */
     public static final String CODE_MONTHLY = "MONTHLY";
     public static final String CODE_ANNUAL  = "ANNUAL";
 
@@ -41,17 +44,16 @@ public class VacationType extends BaseTimeEntity {
     @Column(name = "company_id", nullable = false)
     private UUID companyId;
 
-    /* 회사 식별 코드 - "MONTHLY"/"ANNUAL"/"SUMMER" 등. UNIQUE per 회사 */
-    /* MONTHLY/ANNUAL 은 시스템 예약 - 변경/삭제 불가 (서비스 레이어에서 검증) */
+    /* 회사 식별 코드 - "MONTHLY"/"ANNUAL"/"MATERNITY"/"SUMMER" 등. UNIQUE per 회사 */
+    /* StatutoryVacationType enum 에 정의된 코드는 시스템 예약 - 변경/삭제 불가 */
     @Column(name = "type_code", nullable = false, length = 50)
     private String typeCode;
 
-    /* 표시명 - 화면 노출용 ("월차", "연차", "여름휴가") */
+    /* 표시명 - 화면 노출용 ("월차", "연차", "출산전후휴가", "여름휴가") */
     @Column(name = "type_name", nullable = false, length = 100)
     private String typeName;
 
     /* 1회 신청 단위 - 1.0=종일 / 0.5=반차 / 0.25=반반차 */
-    /* 신청 화면에서 사원이 선택할 수 있는 최소 단위 표시용 */
     @Column(name = "deduct_unit", nullable = false, precision = 5, scale = 2)
     private BigDecimal deductUnit;
 
@@ -63,30 +65,17 @@ public class VacationType extends BaseTimeEntity {
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder;
 
+    /* 성별 제한 - 신청 시 사원 성별 대비 검증 (GenderLimit.allows() 호출) */
+    /* 기본 ALL (성별 무관). 생리/출산/유산사산=FEMALE_ONLY, 배우자출산=MALE_ONLY */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "gender_limit", nullable = false, length = 20)
+    private GenderLimit genderLimit;
 
-    /* 회사 생성 시 자동 INSERT - 월차 (시스템 예약) */
-    public static VacationType createDefaultMonthly(UUID companyId) {
-        return VacationType.builder()
-                .companyId(companyId)
-                .typeCode(CODE_MONTHLY)
-                .typeName("월차")
-                .deductUnit(BigDecimal.ONE)
-                .isActive(true)
-                .sortOrder(1)
-                .build();
-    }
-
-    /* 회사 생성 시 자동 INSERT - 연차 (시스템 예약) */
-    public static VacationType createDefaultAnnual(UUID companyId) {
-        return VacationType.builder()
-                .companyId(companyId)
-                .typeCode(CODE_ANNUAL)
-                .typeName("연차")
-                .deductUnit(new BigDecimal("0.25"))
-                .isActive(true)
-                .sortOrder(2)
-                .build();
-    }
+    /* 유급/무급 - 급여 계산(LeaveAllowanceService) 시 차감 근거 */
+    /* 가족돌봄/생리만 UNPAID, 나머진 PAID */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "pay_type", nullable = false, length = 10)
+    private PayType payType;
 
     /* 활성화 토글 */
     public void activate()   { this.isActive = true; }
@@ -99,15 +88,14 @@ public class VacationType extends BaseTimeEntity {
         this.sortOrder = sortOrder;
     }
 
-    /* 시스템 예약 유형 여부 - typeCode 가 MONTHLY/ANNUAL 이면 변경/삭제 차단 대상 */
-    /* 스케줄러가 월차/연차 잡 돌릴 때도 이 메서드 / typeCode 직접 조회 */
+    /* 시스템 예약 유형 여부 - StatutoryVacationType enum 에 정의된 코드면 수정/삭제 차단 */
     public boolean isSystemReserved() {
-        return CODE_MONTHLY.equals(typeCode) || CODE_ANNUAL.equals(typeCode);
+        return StatutoryVacationType.isReserved(this.typeCode);
     }
 
-    /* 월차 유형 여부 */
+    /* 월차 유형 여부 - 스케줄러/배치 전용 (typeCode 동등 비교) */
     public boolean isMonthly() { return CODE_MONTHLY.equals(typeCode); }
 
-    /* 연차 유형 여부 */
+    /* 연차 유형 여부 - 스케줄러/배치 전용 (typeCode 동등 비교) */
     public boolean isAnnual()  { return CODE_ANNUAL.equals(typeCode); }
 }

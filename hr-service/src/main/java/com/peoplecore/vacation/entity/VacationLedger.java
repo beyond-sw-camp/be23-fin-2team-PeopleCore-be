@@ -154,6 +154,29 @@ public class VacationLedger extends BaseTimeEntity {
                 .build();
     }
 
+    /* 생리휴가 월별 자동 적립 - MenstrualMonthlyGrantScheduler 호출 */
+    /* 매월 1일 여성 ACTIVE 사원에게 1일 부여. ofAccrual 과 이벤트 타입 동일하나 reason 만 다름 */
+    public static VacationLedger ofMenstrualAccrual(VacationBalance balance, BigDecimal days,
+                                                    BigDecimal beforeTotal, BigDecimal afterTotal) {
+        return baseBuilder(balance, LedgerEventType.ACCRUAL, days, beforeTotal, afterTotal)
+                .refType(REF_SCHEDULER)
+                .reason("생리휴가 월 자동 적립")
+                .build();
+    }
+
+    /* 이벤트 기반 휴가 승인 시 INITIAL_GRANT 기록 - accrue 직전 ~ consumeDirectly 직후 구간의 total 변동 반영 */
+    /* refType=VAC_REQUEST, refId=requestId, managerId=결재자 */
+    public static VacationLedger ofEventGrant(VacationBalance balance, BigDecimal days,
+                                              BigDecimal beforeTotal, BigDecimal afterTotal,
+                                              Long requestId, Long managerId, String reason) {
+        return baseBuilder(balance, LedgerEventType.INITIAL_GRANT, days, beforeTotal, afterTotal)
+                .refType(REF_VAC_REQUEST)
+                .refId(requestId)
+                .managerId(managerId)
+                .reason(reason)
+                .build();
+    }
+
     /* 공통 빌더 베이스 - balance 에서 회사/사원 자동 추출 */
     private static VacationLedgerBuilder baseBuilder(VacationBalance balance, LedgerEventType eventType,
                                                      BigDecimal changeDays, BigDecimal beforeTotal, BigDecimal afterTotal) {

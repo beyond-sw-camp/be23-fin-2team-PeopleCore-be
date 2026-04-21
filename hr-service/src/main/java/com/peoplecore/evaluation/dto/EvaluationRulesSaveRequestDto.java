@@ -17,7 +17,7 @@ public class EvaluationRulesSaveRequestDto {
     private List<EvaluationRulesDto.EvalItem> itemList; //평가항목
     private List<EvaluationRulesDto.GradeItem> grades; // 등급체계
     private List<EvaluationRulesDto.AdjustItem>adjustItems; // 가감점
-    private List<EvaluationRulesDto.GradeItem>gradeItems;  //등급 -> 원점수 변환표
+    private List<EvaluationRulesDto.GradeRawScoreItem>gradeItems;  //등급 -> 원점수 변환표
     private EvaluationRulesDto.KpiScoringConfig kpiScoringConfig; // kpi달성률 -> 점수 환산 규칙
 
 //    하드로 박는 컬럼

@@ -7,7 +7,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-// 평가규칙 - 항목/등급/가감점 커스텀 규칙
+import java.util.UUID;
+
+// 평가규칙 - 회사당 1 row, 회사기준으로 자유 편집
 @RestController
 @RequestMapping("/eval/rules")
 @RequiredArgsConstructor
@@ -15,23 +17,16 @@ public class EvaluationRulesController {
 
     private final EvaluationRulesService rulesService;
 
-    // 시즌 규칙 조회 (없으면 200 + null)
-    @GetMapping("/{seasonId}")
-    public ResponseEntity<EvaluationRulesDto> get(@PathVariable Long seasonId) {
-        return ResponseEntity.ok(rulesService.getBySeasonId(seasonId));
+    // 회사 규칙 조회 — 회사 생성 시 기본값으로 초기화되므로 null 반환 케이스 없음
+    @GetMapping
+    public ResponseEntity<EvaluationRulesDto> get(@RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(rulesService.getByCompanyId(companyId));
     }
 
-    // 시즌 규칙 저장/수정 (DRAFT)
-    @PutMapping("/{seasonId}")
-    public ResponseEntity<EvaluationRulesDto> save(@PathVariable Long seasonId,
+    // 회사 규칙 저장/수정 — 시즌 상태와 무관하게 항상 편집 가능
+    @PutMapping
+    public ResponseEntity<EvaluationRulesDto> save(@RequestHeader("X-User-Company") UUID companyId,
                                                    @RequestBody EvaluationRulesSaveRequestDto request) {
-        return ResponseEntity.ok(rulesService.save(seasonId, request));
+        return ResponseEntity.ok(rulesService.save(companyId, request));
     }
-
-//    // 시즌 OPEN 시 스냅샷 동결 (시즌 상태 전이 로직에서 호출) //TODO스케줄러로 변경 -오픈 마감 생성시
-//    @PostMapping("/{seasonId}/freeze")
-//    public ResponseEntity<Void> freeze(@PathVariable Long seasonId) {
-//        rulesService.freezeSnapshot(seasonId);
-//        return ResponseEntity.noContent().build();
-//    }
 }

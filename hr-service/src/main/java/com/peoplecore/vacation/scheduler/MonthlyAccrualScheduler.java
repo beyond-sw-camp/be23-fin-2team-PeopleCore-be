@@ -18,8 +18,11 @@ import org.springframework.stereotype.Component;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /* 월차 자동 적립 스케줄러 - 매일 자정 실행 */
 /* 분산 락으로 멀티 인스턴스 중복 실행 방지 (락 키: monthly-accrual:{yyyy-MM-dd}) */
@@ -90,7 +93,8 @@ public class MonthlyAccrualScheduler {
         }
     }
 
-    /* 회사 단위 처리 - MONTHLY 유형 조회 + N=1~11 루프 */
+    /* 회사 단위 처리 - MONTHLY 유형 조회 + 1~11개월차 대상 IN 쿼리 1회로 벌크 조회 */
+    /* 기존: n마다 개별 쿼리 11회 → 개선: IN (날짜11개) 1회 + 메모리 그룹핑 */
     private void processCompany(Company company, LocalDate today) {
         UUID companyId = company.getCompanyId();
         VacationType monthlyType = vacationTypeRepository
@@ -101,12 +105,27 @@ public class MonthlyAccrualScheduler {
             return;
         }
 
+        /* 1~11개월차 대상 입사일 11개 사전 계산 */
+        List<LocalDate> targetHireDates = new ArrayList<>(MAX_ACCRUAL_MONTH);
+        for (int n = 1; n <= MAX_ACCRUAL_MONTH; n++) {
+            targetHireDates.add(today.minusMonths(n));
+        }
+
+        /* IN 쿼리 1회로 전체 대상 사원 벌크 조회 */
+        List<Employee> allTargets = employeeRepository
+                .findByCompany_CompanyIdAndEmpHireDateInAndEmpStatusInAndDeleteAtIsNull(
+                        companyId, targetHireDates,
+                        List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE));
+        if (allTargets.isEmpty()) return;
+
+        /* hireDate 기준 그룹핑 - 같은 날짜에 여러 사원이 입사한 경우 대비 */
+        Map<LocalDate, List<Employee>> byHireDate = allTargets.stream()
+                .collect(Collectors.groupingBy(Employee::getEmpHireDate));
+
+        /* n별 처리 - 기존 호출 시그니처(accrueIfEligible 에 n 전달) 유지 */
         for (int n = 1; n <= MAX_ACCRUAL_MONTH; n++) {
             LocalDate targetHireDate = today.minusMonths(n);
-            List<Employee> targets = employeeRepository
-                    .findByCompany_CompanyIdAndEmpHireDateAndEmpStatusInAndDeleteAtIsNull(
-                            companyId, targetHireDate,
-                            List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE));
+            List<Employee> targets = byHireDate.getOrDefault(targetHireDate, List.of());
             for (Employee emp : targets) {
                 try {
                     monthlyAccrualService.accrueIfEligible(companyId, emp, monthlyType, n, today);

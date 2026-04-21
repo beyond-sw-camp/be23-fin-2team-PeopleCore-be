@@ -93,6 +93,11 @@ public class ApprovalEventPublisher {
                         .vacReqUseDay(parseDecimal(docData, "vacReqUseDay"))
                         .vacReqReason(parseString(docData, "vacReqReason"))
                         .finalApproverEmpId(findFinalApproverEmpId(lines))
+                        // 이벤트 기반 휴가 메타 - 해당 유형 아닌 경우 docData 에 없어 null 파싱
+                        .proofFileUrl(parseString(docData, "proofFileUrl"))
+                        .pregnancyWeeks(parseInteger(docData, "pregnancyWeeks"))
+                        .officialLeaveReason(parseString(docData, "officialLeaveReason"))
+                        .relatedBirthDate(parseDate(docData, "relatedBirthDate"))
                         .build();
                 kafkaTemplate.send(TOPIC_VAC_DOC_CREATED, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] Vacation docCreated 발행 - docId={}, empId={}", document.getDocId(), document.getEmpId());
@@ -212,6 +217,12 @@ public class ApprovalEventPublisher {
     private Long parseLong(String docData, String field) {
         JsonNode n = readField(docData, field);
         return (n != null && n.isNumber()) ? n.asLong() : null;
+    }
+
+    /* Integer 필드 파싱 - 유산사산 주수 등. 숫자 아니면 null */
+    private Integer parseInteger(String docData, String field) {
+        JsonNode n = readField(docData, field);
+        return (n != null && n.isNumber()) ? n.asInt() : null;
     }
 
     private BigDecimal parseDecimal(String docData, String field) {
