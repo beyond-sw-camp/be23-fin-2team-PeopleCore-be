@@ -3,7 +3,6 @@ package com.peoplecore.employee.repository;
 import com.peoplecore.employee.domain.*;
 import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.dsl.BooleanExpression;
-import com.querydsl.jpa.impl.JPAQuery;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -11,6 +10,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 
@@ -59,6 +59,20 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
         return new PageImpl<>(content,pageable,total != null ? total : 0L);
     }
 
+    @Override
+    public List<Employee> findAllForPayroll(UUID companyId, YearMonth payMonth) {
+        return queryFactory
+                .selectFrom(qEmployee)
+                .join(qEmployee.dept).fetchJoin()
+                .join(qEmployee.grade).fetchJoin()
+                .leftJoin(qEmployee.title).fetchJoin()
+                .where(
+                        qEmployee.company.companyId.eq(companyId),
+                        qEmployee.empStatus.ne(EmpStatus.RESIGNED)
+                )
+                .orderBy(qEmployee.empId.asc())
+                .fetch();
+    }
 
 
     //    Enum으로 허용된 값만 정렬에 사용(SQL인젝션 방지)

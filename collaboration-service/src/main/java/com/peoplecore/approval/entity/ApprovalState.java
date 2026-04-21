@@ -11,7 +11,7 @@ public interface ApprovalState {
     void recall(ApprovalDocument document);
 
     //    현재 상태에서 제출 가능한지
-    void submit(ApprovalDocument document);
+    void submit(ApprovalDocument  document);
 
 
 }

@@ -120,9 +120,10 @@ public class PayItemsService {
                         .company(company).payItemName("기본급")
                         .payItemType(PayItemType.PAYMENT)
                         .payItemCategory(PayItemCategory.SALARY)
-                        .isTaxable(true).isFixed(false)
+                        .isTaxable(true).isFixed(true)
                         .isActive(true).sortOrder(1)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 직책수당 — 고정, 과세
                 PayItems.builder()
@@ -132,6 +133,7 @@ public class PayItemsService {
                         .isTaxable(true).isFixed(true)
                         .isActive(true).sortOrder(2)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 식대 — 고정, 비과세, 한도 200,000
                 PayItems.builder()
@@ -141,6 +143,7 @@ public class PayItemsService {
                         .isTaxable(false).isFixed(true)
                         .isActive(true).sortOrder(3)
                         .taxExemptLimit(200000)
+                        .isProtected(true)
                         .build(),
                 // 교통비 — 고정, 비과세, 한도 200,000
                 PayItems.builder()
@@ -150,6 +153,7 @@ public class PayItemsService {
                         .isTaxable(false).isFixed(true)
                         .isActive(true).sortOrder(4)
                         .taxExemptLimit(200000)
+                        .isProtected(true)
                         .build(),
                 // 연장근로수당 — 법정수당
                 PayItems.builder()
@@ -160,6 +164,7 @@ public class PayItemsService {
                         .isActive(true).sortOrder(5)
                         .isLegal(true).legalCalcType(LegalCalcType.OVERTIME)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 야간근로수당 — 법정수당
                 PayItems.builder()
@@ -170,6 +175,7 @@ public class PayItemsService {
                         .isActive(true).sortOrder(6)
                         .isLegal(true).legalCalcType(LegalCalcType.NIGHT)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 휴일근로수당 — 법정수당
                 PayItems.builder()
@@ -180,7 +186,19 @@ public class PayItemsService {
                         .isActive(true).sortOrder(7)
                         .isLegal(true).legalCalcType(LegalCalcType.HOLIDAY)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
+//                // 주휴수당 — 법정수당 -> LegalCalcType 에 주휴 WEEKLY_HOLIDAY 추가
+//                PayItems.builder()
+//                        .company(company).payItemName("주휴수당")
+//                        .payItemType(PayItemType.PAYMENT)
+//                        .payItemCategory(PayItemCategory.ALLOWANCE)
+//                        .isTaxable(true).isFixed(false)
+//                        .isActive(true).sortOrder(8)
+//                        .isLegal(true).legalCalcType(LegalCalcType.WEEKLY_HOLIDAY)
+//                        .taxExemptLimit(0)
+//                        .isProtected(true)
+//                        .build(),
                 // 연차수당 — 법정수당
                 PayItems.builder()
                         .company(company).payItemName("연차수당")
@@ -190,6 +208,7 @@ public class PayItemsService {
                         .isActive(true).sortOrder(8)
                         .isLegal(true).legalCalcType(LegalCalcType.LEAVE)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 상여금
                 PayItems.builder()
@@ -212,7 +231,7 @@ public class PayItemsService {
                 // 결근차감 — 비활성
                 PayItems.builder()
                         .company(company).payItemName("결근차감")
-                        .payItemType(PayItemType.PAYMENT)
+                        .payItemType(PayItemType.DEDUCTION)
                         .payItemCategory(PayItemCategory.SALARY)
                         .isTaxable(true).isFixed(false)
                         .isActive(false).sortOrder(11)
@@ -238,6 +257,7 @@ public class PayItemsService {
                         .isTaxable(false).isFixed(false)
                         .isActive(true).sortOrder(1)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 근로지방소득세
                 PayItems.builder()
@@ -247,6 +267,7 @@ public class PayItemsService {
                         .isTaxable(false).isFixed(false)
                         .isActive(true).sortOrder(2)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 국민연금
                 PayItems.builder()
@@ -256,6 +277,7 @@ public class PayItemsService {
                         .isTaxable(false).isFixed(false)
                         .isActive(true).sortOrder(3)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 건강보험
                 PayItems.builder()
@@ -265,6 +287,7 @@ public class PayItemsService {
                         .isTaxable(false).isFixed(false)
                         .isActive(true).sortOrder(4)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 장기요양보험
                 PayItems.builder()
@@ -274,6 +297,7 @@ public class PayItemsService {
                         .isTaxable(false).isFixed(false)
                         .isActive(true).sortOrder(5)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 고용보험
                 PayItems.builder()
@@ -283,6 +307,7 @@ public class PayItemsService {
                         .isTaxable(false).isFixed(false)
                         .isActive(true).sortOrder(6)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 학자금상환
                 PayItems.builder()
@@ -300,36 +325,48 @@ public class PayItemsService {
                         .company(company).payItemName("건강보험정산추가징수")
                         .payItemType(PayItemType.DEDUCTION)
                         .isSystem(true).isActive(true).isFixed(true)
+                        .isTaxable(false)
+                        .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(901)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("건강보험정산환급")
                         .payItemType(PayItemType.PAYMENT)
                         .isSystem(true).isActive(true).isFixed(true)
+                        .isTaxable(false)
+                        .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(902)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("장기요양정산추가징수")
                         .payItemType(PayItemType.DEDUCTION)
                         .isSystem(true).isActive(true).isFixed(true)
+                        .isTaxable(false)
+                        .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(903)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("장기요양정산환급")
                         .payItemType(PayItemType.PAYMENT)
                         .isSystem(true).isActive(true).isFixed(true)
+                        .isTaxable(false)
+                        .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(904)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("고용보험정산추가징수")
                         .payItemType(PayItemType.DEDUCTION)
                         .isSystem(true).isActive(true).isFixed(true)
+                        .isTaxable(false)
+                        .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(905)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("고용보험정산환급")
                         .payItemType(PayItemType.PAYMENT)
                         .isSystem(true).isActive(true).isFixed(true)
+                        .isTaxable(false)
+                        .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(906)
                         .build()
         );

@@ -14,7 +14,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SeveranceResDto {
-//    신규 - 목록
+//    목록용
 
     private Long sevId;
     private Long empId;

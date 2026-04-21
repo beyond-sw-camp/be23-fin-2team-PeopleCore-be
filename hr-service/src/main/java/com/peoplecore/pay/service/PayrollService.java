@@ -3,7 +3,6 @@ package com.peoplecore.pay.service;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
-import com.peoplecore.attendance.repository.WorkGroupRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.employee.domain.EmpStatus;
@@ -25,7 +24,6 @@ import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.repository.SalaryContractDetailRepository;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +31,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -127,12 +124,9 @@ public class PayrollService {
 
         Company company = companyRepository.findById(companyId).orElseThrow(() -> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
-//        재직 + 휴직 사원 목록 (퇴직 제외)
-        List<Employee> employees = employeeRepository.findAllWithFilter(companyId, null, null, null, null, null, Pageable.unpaged()).getContent()
-                .stream()
-                .filter(e -> e.getEmpStatus() != EmpStatus.RESIGNED)
-                .filter(e -> e.getCompany().getCompanyId().equals(companyId))
-                .toList();
+//        급여대상 사원(재직+휴직) 목록 (퇴직 제외)
+        YearMonth payMonth = YearMonth.parse(payYearMonth);
+        List<Employee> employees = employeeRepository.findAllForPayroll(companyId, payMonth);
 
 //        payrollRuns 생성
         PayrollRuns run = PayrollRuns.builder()
@@ -298,14 +292,7 @@ public class PayrollService {
         run.confirm();
     }
 
-
-///    전자결재 상신(급여지급결의서) - 프론트에서 approvalDocId를 받음
-    @Transactional
-    public void submitApproval(UUID companyId, Long payrollRunId, Long approvalDovId) {
-        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
-        run.submitApproval(approvalDovId);
-    }
-
+/// 전자결재 상신은 PayrollApprovalDraftService 로직에서 처리
 
 ///    전자결재 결과 처리(kafka consumer)
     @Transactional
@@ -315,6 +302,7 @@ public class PayrollService {
 //        approvalDocId 보완
         if(run.getApprovalDocId() == null && event.getApprovalDocId() != null){
             run.bindApprovalDoc(event.getApprovalDocId());
+            run.submitApproval(event.getApprovalDocId());
         }
 
         String status = event.getStatus();
@@ -326,6 +314,12 @@ public class PayrollService {
             run.rejectApproval();
             log.info("[PayrollService] 전자결재 반려 처리 - payrollRunId={}, reason={}",
                     event.getPayrollRunId(), event.getRejectReason());
+        } else if ("CANCELED".equals(status)) {
+            run.cancelApproval();
+            log.info("[PayrollService] 전자결재 회수 - payrollRunId={}", event.getPayrollRunId());
+        } else {
+            log.warn("[PayrollService] 알 수 없는 status={} - payrollRunId={}",
+                    status, event.getPayrollRunId());
         }
     }
 

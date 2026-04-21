@@ -9,22 +9,23 @@ import java.util.UUID;
 
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
 @Data
-public class PayrollApprovalResultEvent {   //급여 전자결재 결과
+@Builder
+public class SeveranceApprovalResultEvent { //퇴직금 전자결재 결과
 
     private UUID companyId;
-    private Long payrollRunId;
 
-    /*collabo 에 approvalDoc Pk */
+    private Long sevId;
+
     private Long approvalDocId;
 
-    /* 결재 결과 -> 승인, 반려 문자열로 전달 */
+//    결재 결과 : APPROVED / REJECTED
     private String status;
 
-    /*최종 승인자 id */
+//    최종승인자ID
     private Long managerId;
 
-    /*반려 사유*/
+//    반려 사유
     private String rejectReason;
+
 }
