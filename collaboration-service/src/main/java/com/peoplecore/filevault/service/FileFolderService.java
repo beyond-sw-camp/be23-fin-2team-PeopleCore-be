@@ -1,5 +1,7 @@
 package com.peoplecore.filevault.service;
 
+import com.peoplecore.client.component.HrCacheService;
+import com.peoplecore.client.dto.EmployeeSimpleResDto;
 import com.peoplecore.exception.BusinessException;
 import com.peoplecore.filevault.audit.AuditAction;
 import com.peoplecore.filevault.audit.FileVaultAuditEvent;
@@ -8,6 +10,8 @@ import com.peoplecore.filevault.dto.FolderCreateRequest;
 import com.peoplecore.filevault.dto.FolderResponse;
 import com.peoplecore.filevault.entity.FileFolder;
 import com.peoplecore.filevault.entity.FolderType;
+import com.peoplecore.filevault.permission.repository.FileBoxAclRepository;
+import com.peoplecore.filevault.permission.service.FileBoxAclService;
 import com.peoplecore.filevault.repository.FileFolderRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +33,9 @@ public class FileFolderService {
 
     private final FileFolderRepository folderRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final FileBoxAclService fileBoxAclService;
+    private final FileBoxAclRepository fileBoxAclRepository;
+    private final HrCacheService hrCacheService;
 
     public List<FolderResponse> listRootFolders(UUID companyId, FolderType type, Long empId) {
         List<FileFolder> roots = folderRepository
@@ -36,6 +43,12 @@ public class FileFolderService {
         if (type == FolderType.PERSONAL) {
             roots = roots.stream()
                 .filter(f -> empId != null && empId.equals(f.getOwnerEmpId()))
+                .toList();
+        } else {
+            // COMPANY/DEPT — ACL canRead 행이 있는 파일함만 노출 (default-locked)
+            roots = roots.stream()
+                .filter(f -> fileBoxAclRepository.findByFolderIdAndEmpId(f.getId(), empId)
+                    .map(a -> a.isCanRead()).orElse(false))
                 .toList();
         }
         return roots.stream().map(FolderResponse::from).toList();
@@ -58,11 +71,19 @@ public class FileFolderService {
     public FolderResponse createFolder(UUID companyId, Long empId, FolderCreateRequest request) {
         if (request.getParentFolderId() != null) {
             findActiveFolder(request.getParentFolderId());
-        }
-
-        if (folderRepository.existsByParentFolderIdAndNameAndDeletedAtIsNull(
-                request.getParentFolderId(), request.getName())) {
-            throw new BusinessException("같은 이름의 폴더가 이미 존재합니다.", HttpStatus.CONFLICT);
+            if (folderRepository.existsByParentFolderIdAndNameAndDeletedAtIsNull(
+                    request.getParentFolderId(), request.getName())) {
+                throw new BusinessException("같은 이름의 폴더가 이미 존재합니다.", HttpStatus.CONFLICT);
+            }
+        } else {
+            // 루트 파일함 — 같은 회사·같은 타입 내 동일명 금지 (ACL 가시성과 무관한 전역 네임스페이스)
+            folderRepository
+                .findByCompanyIdAndTypeAndParentFolderIdIsNullAndNameAndDeletedAtIsNull(
+                    companyId, request.getType(), request.getName())
+                .ifPresent(conflict -> {
+                    throw new BusinessException(
+                        buildDuplicateRootMessage(conflict), HttpStatus.CONFLICT);
+                });
         }
 
         FileFolder folder = FileFolder.builder()
@@ -76,6 +97,12 @@ public class FileFolderService {
             .build();
 
         FileFolder saved = folderRepository.save(folder);
+
+        // 파일함 루트(비-PERSONAL) 생성 시 Owner 자동 ACL — 4-플래그 모두 true
+        if (saved.getParentFolderId() == null && saved.getType() != FolderType.PERSONAL) {
+            fileBoxAclService.grantOwnerAcl(saved.getId(), empId);
+        }
+
         eventPublisher.publishEvent(FileVaultAuditEvent.builder()
             .action(AuditAction.CREATE_FOLDER)
             .resourceType(ResourceType.FOLDER)
@@ -129,6 +156,16 @@ public class FileFolderService {
         return FolderResponse.from(folder);
     }
 
+    /**
+     * 폴더/파일함 soft-delete.
+     *
+     * <p>파일함 ACL 은 의도적으로 보존한다 — 복원 시 멤버십이 유지되어야 하며,
+     * {@code listRootFolders} 는 {@code deletedAt IS NULL} 필터로 삭제된 파일함을
+     * 가시성에서 배제하므로 stale ACL 로 인한 정보 누출은 없다.</p>
+     *
+     * <p>TODO: 향후 hard-delete 경로가 생기면 {@code fileBoxAclRepository.deleteByFolderId(folderId)}
+     * 호출을 추가해 고아 ACL row 를 정리해야 한다.</p>
+     */
     @Transactional
     public void softDelete(Long folderId) {
         FileFolder folder = findActiveFolder(folderId);
@@ -209,6 +246,31 @@ public class FileFolderService {
             throw new BusinessException("삭제된 폴더입니다.", HttpStatus.GONE);
         }
         return folder;
+    }
+
+    /**
+     * 루트 파일함 이름 중복 시 Owner 이름까지 포함한 안내 메시지.
+     * ACL 상 보이지 않는 파일함과 충돌해도 사용자가 원인을 인지할 수 있게 한다.
+     * 시스템 기본 파일함(createdBy=0)은 Owner 표기 생략.
+     */
+    private String buildDuplicateRootMessage(FileFolder conflict) {
+        Long ownerEmpId = conflict.getCreatedBy();
+        if (ownerEmpId == null || ownerEmpId == 0L) {
+            return "이미 사용 중인 파일함 이름입니다. 다른 이름을 사용해 주세요.";
+        }
+        String ownerName = null;
+        try {
+            List<EmployeeSimpleResDto> emps = hrCacheService.getEmployees(List.of(ownerEmpId));
+            if (!emps.isEmpty()) ownerName = emps.get(0).getEmpName();
+        } catch (Exception e) {
+            log.warn("Owner 이름 조회 실패 empId={}, err={}", ownerEmpId, e.getMessage());
+        }
+        if (ownerName == null || ownerName.isBlank()) {
+            return "이미 사용 중인 파일함 이름입니다. 다른 이름을 사용해 주세요.";
+        }
+        return String.format(
+            "이미 사용 중인 이름입니다 (Owner: %s). 다른 이름을 사용하거나 Owner에게 접근 권한을 요청해 주세요.",
+            ownerName);
     }
 
     /**

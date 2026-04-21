@@ -2,6 +2,7 @@ package com.peoplecore.employee.service;
 
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.WorkGroupRepository;
+import com.peoplecore.auth.service.FaceAuthService;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.department.domain.Department;
@@ -52,11 +53,12 @@ public class EmployeeService {
     private final MinioService minioService;
     private final EmployeeFileRepository employeeFileRepository;
     private final WorkGroupRepository workGroupRepository;
+    private final FaceAuthService faceAuthService;
 
     public static final String DEFAULT_CODE = "DEFAULT";
 
     @Autowired
-    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository) {
+    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService) {
         this.employeeRepository = employeeRepository;
         this.companyRepository = companyRepository;
         this.departmentRepository = departmentRepository;
@@ -66,6 +68,7 @@ public class EmployeeService {
         this.minioService = minioService;
         this.employeeFileRepository = employeeFileRepository;
         this.workGroupRepository = workGroupRepository;
+        this.faceAuthService = faceAuthService;
     }
 
     private static final String EMAIL_DOMAIN = "@peoplecore.com";
@@ -278,6 +281,7 @@ public class EmployeeService {
     //    6.사원 삭제
     public void deleteEmployee(UUID companyId, Long empId) {
         Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
+        faceAuthService.cascadeUnregisterFace(empId, companyId);
         employee.softDelete();
     }
 

@@ -71,10 +71,12 @@ public class FileFolderController {
     public ResponseEntity<FolderResponse> createFolder(
         @RequestHeader("X-User-Company") UUID companyId,
         @RequestHeader("X-User-Id") Long empId,
+        @RequestHeader(value = "X-User-Grade", required = false) Long gradeId,
         @RequestHeader(value = "X-User-Title", required = false) Long titleId,
         @RequestBody FolderCreateRequest request
     ) {
-        accessPolicy.ensureCanCreateFolder(titleId, empId, request.getType(), request.getParentFolderId());
+        accessPolicy.ensureCanCreateFolder(companyId, gradeId, titleId, empId,
+            request.getType(), request.getParentFolderId());
         return ResponseEntity.status(HttpStatus.CREATED)
             .body(folderService.createFolder(companyId, empId, request));
     }
