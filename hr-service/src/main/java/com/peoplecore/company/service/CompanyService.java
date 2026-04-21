@@ -107,10 +107,10 @@ public class CompanyService {
         payItemsService.initDefault(company);
         insuranceRatesService.initDefault(company);
         paySettingsService.initDefault(company);
-        workGroupService.initDefault(company);
-        overTimePolicyService.initDefault(company);   /* 회사 기본 초과근무 정책 1 row 자동 INSERT */
-        vacationTypeService.initDefault(company);     /* ← 신규 추가 (시스템 예약 유형 2건) */
-        vacationPolicyService.initDefault(company);
+        workGroupService.initDefault(company);    /* 기본 근무 그룹 */
+        overTimePolicyService.initDefault(company);   /* 회사 기본 초과근무 정책 */
+        vacationTypeService.initDefault(company);    /*회사 기본 휴가 유형 */
+        vacationPolicyService.initDefault(company);   /*휴가 정책 */
         evaluationRulesService.createDefaultRules(company);  // 평가규칙 기본값 1 row 생성
 
 
