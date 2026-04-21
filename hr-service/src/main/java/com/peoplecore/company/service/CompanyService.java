@@ -3,6 +3,7 @@ package com.peoplecore.company.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.attendance.service.WorkGroupService;
+import com.peoplecore.auth.service.FaceAuthService;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.domain.CompanyStatus;
 import com.peoplecore.company.domain.ContractType;
@@ -54,10 +55,11 @@ public class CompanyService {
     private final VacationPolicyService vacationPolicyService;
     private final VacationTypeService vacationTypeService;
     private final EvaluationRulesService evaluationRulesService;
+    private final FaceAuthService faceAuthService;
 
 
     @Autowired
-    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, VacationPolicyService vacationPolicyService, VacationTypeService vacationTypeService, EvaluationRulesService evaluationRulesService) {
+    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, VacationPolicyService vacationPolicyService, VacationTypeService vacationTypeService, EvaluationRulesService evaluationRulesService, FaceAuthService faceAuthService) {
         this.companyRepository = companyRepository;
         this.departmentService = departmentService;
         this.gradeService = gradeService;
@@ -74,6 +76,7 @@ public class CompanyService {
         this.vacationPolicyService = vacationPolicyService;
         this.vacationTypeService = vacationTypeService;
         this.evaluationRulesService = evaluationRulesService;
+        this.faceAuthService = faceAuthService;
     }
 
     //    1. 회사 등록 + 기본데이터 세팅 + superAdmin 생성
@@ -151,6 +154,12 @@ public class CompanyService {
 
         validateStatusTransition(company.getCompanyStatus(), newStatus);
         company.changeStatus(newStatus);
+
+        // 회사가 활성 상태에서 벗어나면 해당 회사의 얼굴 벡터를 일괄 정리
+        // (추후 재활성화/재등록 시 이전 벡터로 우회 로그인되는 것을 차단)
+        if (newStatus == CompanyStatus.EXPIRED || newStatus == CompanyStatus.SUSPENDED) {
+            faceAuthService.cascadeUnregisterCompany(companyId);
+        }
 
         return CompanyResDto.fromEntity(company);
 
