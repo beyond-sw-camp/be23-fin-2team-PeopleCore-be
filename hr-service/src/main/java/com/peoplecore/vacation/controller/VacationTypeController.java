@@ -1,7 +1,7 @@
 package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
-import com.peoplecore.vacation.dto.VacationTypeReorderRequest;
+import com.peoplecore.vacation.dto.VacationTypeReorderRequestDto;
 import com.peoplecore.vacation.dto.VacationTypeRequest;
 import com.peoplecore.vacation.dto.VacationTypeResponse;
 import com.peoplecore.vacation.service.VacationTypeService;
@@ -67,7 +67,7 @@ public class VacationTypeController {
     @PutMapping("/reorder")
     public ResponseEntity<List<VacationTypeResponse>> reorder(
             @RequestHeader("X-User-Company") UUID companyId,
-            @RequestBody VacationTypeReorderRequest request) {
+            @RequestBody VacationTypeReorderRequestDto request) {
         return ResponseEntity.ok(vacationTypeService.reorder(companyId, request));
     }
 

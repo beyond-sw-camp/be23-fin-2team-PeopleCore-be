@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class VacationAdminPeriodResponse {
+public class VacationAdminPeriodResponseDto {
 
     /* 신청 ID (PK) - 상세 조회 연결용 */
     private Long requestId;
@@ -42,8 +42,8 @@ public class VacationAdminPeriodResponse {
     private String status;
 
     /* VacationRequest → DTO 변환 - VacationType fetch join 된 엔티티 기대 */
-    public static VacationAdminPeriodResponse from(VacationRequest r) {
-        return VacationAdminPeriodResponse.builder()
+    public static VacationAdminPeriodResponseDto from(VacationRequest r) {
+        return VacationAdminPeriodResponseDto.builder()
                 .requestId(r.getRequestId())
                 .empName(r.getRequestEmpName())
                 .deptName(r.getRequestEmpDeptName())

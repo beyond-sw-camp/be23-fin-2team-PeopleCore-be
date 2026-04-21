@@ -6,7 +6,7 @@ import com.peoplecore.event.VacationApprovalDocCreatedEvent;
 import com.peoplecore.event.VacationApprovalResultEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
-import com.peoplecore.vacation.dto.VacationAdminPeriodResponse;
+import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
 import com.peoplecore.vacation.entity.GrantMode;
 import com.peoplecore.vacation.entity.OfficialLeaveReason;
@@ -235,7 +235,7 @@ public class VacationRequestService {
     /* statuses null or 빈 배열 이면 상태 필터 없이 전체 */
     /* 경계 포함: startDate 00:00 ~ endDate 23:59:59 */
     @Transactional(readOnly = true)
-    public Page<VacationAdminPeriodResponse> listForAdminByPeriod(UUID companyId,
+    public Page<VacationAdminPeriodResponseDto> listForAdminByPeriod(UUID companyId,
                                                                   LocalDate startDate,
                                                                   LocalDate endDate,
                                                                   List<RequestStatus> statuses,
@@ -245,7 +245,7 @@ public class VacationRequestService {
 
         return vacationRequestQueryRepository
                 .findByCompanyAndPeriodAndStatuses(companyId, periodStart, periodEnd, statuses, pageable)
-                .map(VacationAdminPeriodResponse::from);
+                .map(VacationAdminPeriodResponseDto::from);
     }
 
     /* 관리자 상태별 조회 페이지 - Type + Employee fetch join */

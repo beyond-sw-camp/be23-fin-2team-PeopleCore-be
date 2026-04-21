@@ -3,7 +3,7 @@ package com.peoplecore.vacation.service;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
-import com.peoplecore.vacation.dto.VacationTypeReorderRequest;
+import com.peoplecore.vacation.dto.VacationTypeReorderRequestDto;
 import com.peoplecore.vacation.dto.VacationTypeRequest;
 import com.peoplecore.vacation.dto.VacationTypeResponse;
 import com.peoplecore.vacation.entity.GenderLimit;
@@ -167,15 +167,15 @@ public class VacationTypeService {
     /* 3. typeId → sortOrder map 으로 빠른 매칭 후 엔티티별 updateSortOrder 호출 */
     /* 4. 개별 save 불필요 - 영속성 컨텍스트 dirty checking 으로 TX 커밋 시 일괄 UPDATE */
     @Transactional
-    public List<VacationTypeResponse> reorder(UUID companyId, VacationTypeReorderRequest request) {
-        List<VacationTypeReorderRequest.Item> items = request.getItems();
+    public List<VacationTypeResponse> reorder(UUID companyId, VacationTypeReorderRequestDto request) {
+        List<VacationTypeReorderRequestDto.Item> items = request.getItems();
         if (items == null || items.isEmpty()) {
             return List.of();
         }
 
         // 요청 items → typeId→sortOrder map. 중복 typeId 요청 시 나중 값이 최종값
         Map<Long, Integer> targetOrderMap = new HashMap<>();
-        for (VacationTypeReorderRequest.Item item : items) {
+        for (VacationTypeReorderRequestDto.Item item : items) {
             if (item.getTypeId() == null || item.getSortOrder() == null) {
                 throw new CustomException(ErrorCode.BAD_REQUEST);
             }

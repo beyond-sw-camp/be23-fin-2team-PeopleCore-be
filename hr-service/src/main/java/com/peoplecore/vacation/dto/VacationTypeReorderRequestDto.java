@@ -13,7 +13,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class VacationTypeReorderRequest {
+public class VacationTypeReorderRequestDto {
 
     /* 재정렬 대상 목록 - 각 item 은 typeId + 새 sortOrder */
     private List<Item> items;

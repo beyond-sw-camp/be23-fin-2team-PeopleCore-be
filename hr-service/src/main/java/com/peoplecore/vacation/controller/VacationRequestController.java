@@ -2,7 +2,7 @@ package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.vacation.dto.CancelRequest;
-import com.peoplecore.vacation.dto.VacationAdminPeriodResponse;
+import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.service.VacationRequestService;
@@ -55,7 +55,7 @@ public class VacationRequestController {
     /* statuses 생략 시 전체 상태. 응답: 사원명/부서/유형/사용옵션/기간/일수/상태 */
     @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
     @GetMapping("/admin/period")
-    public ResponseEntity<Page<VacationAdminPeriodResponse>> listForAdminByPeriod(
+    public ResponseEntity<Page<VacationAdminPeriodResponseDto>> listForAdminByPeriod(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
