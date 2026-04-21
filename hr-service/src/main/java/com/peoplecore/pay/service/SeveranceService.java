@@ -61,6 +61,12 @@ public class SeveranceService {
         this.severancePaysRepository = severancePaysRepository;
     }
 
+//    사원 퇴직 이벤트 발생시 퇴직금 자동산정용 메서드
+    @Transactional
+    public void calculateByEmpId(UUID companyId, Long empId){
+        SeveranceCalcReqDto reqDto = SeveranceCalcReqDto.builder().empId(empId).build();
+        calculateSeverance(companyId,reqDto);
+    }
 
 /// 퇴직금 산정 (퇴직 확정된 사원 대상)
 /* 1. 법정 퇴직금 계산
@@ -99,7 +105,7 @@ public class SeveranceService {
 
 //        근속일수 / 근속연수
         long serviceDays = ChronoUnit.DAYS.between(hireDate, resignDate);
-        if (serviceDays < 365){
+        if (serviceDays < 365){     //근속 1년미만
             throw new CustomException(ErrorCode.SERVICE_PERIOD_TOO_SHORT);
         }
         BigDecimal serviceYears = BigDecimal.valueOf(serviceDays)
