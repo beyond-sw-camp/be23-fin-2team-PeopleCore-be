@@ -61,7 +61,7 @@ public class CompanyService {
 
 
     @Autowired
-    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, VacationPolicyService vacationPolicyService, VacationTypeService vacationTypeService, EvaluationRulesService evaluationRulesService) {
+    public CompanyService(CompanyRepository companyRepository, DepartmentService departmentService, GradeService gradeService, TitleService titleService, InsuranceJobTypesService insuranceJobTypesService, PayItemsService payItemsService, SuperAdminAccountService superAdminAccountService, InsuranceRatesService insuranceRatesService, PaySettingsService paySettingsService, CollaborationClient collaborationClient, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, WorkGroupService workGroupService, OverTimePolicyService overTimePolicyService, VacationPolicyService vacationPolicyService, VacationTypeService vacationTypeService, EvaluationRulesService evaluationRulesService, FaceAuthService faceAuthService) {
         this.companyRepository = companyRepository;
         this.departmentService = departmentService;
         this.gradeService = gradeService;
@@ -75,9 +75,11 @@ public class CompanyService {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.workGroupService = workGroupService;
+        this.overTimePolicyService = overTimePolicyService;
         this.vacationPolicyService = vacationPolicyService;
         this.vacationTypeService = vacationTypeService;
         this.evaluationRulesService = evaluationRulesService;
+        this.faceAuthService = faceAuthService;
     }
 
     //    1. 회사 등록 + 기본데이터 세팅 + superAdmin 생성
