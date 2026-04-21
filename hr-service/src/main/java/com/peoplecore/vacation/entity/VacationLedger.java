@@ -164,6 +164,19 @@ public class VacationLedger extends BaseTimeEntity {
                 .build();
     }
 
+    /* 이벤트 기반 휴가 승인 시 INITIAL_GRANT 기록 - accrue 직전 ~ consumeDirectly 직후 구간의 total 변동 반영 */
+    /* refType=VAC_REQUEST, refId=requestId, managerId=결재자 */
+    public static VacationLedger ofEventGrant(VacationBalance balance, BigDecimal days,
+                                              BigDecimal beforeTotal, BigDecimal afterTotal,
+                                              Long requestId, Long managerId, String reason) {
+        return baseBuilder(balance, LedgerEventType.INITIAL_GRANT, days, beforeTotal, afterTotal)
+                .refType(REF_VAC_REQUEST)
+                .refId(requestId)
+                .managerId(managerId)
+                .reason(reason)
+                .build();
+    }
+
     /* 공통 빌더 베이스 - balance 에서 회사/사원 자동 추출 */
     private static VacationLedgerBuilder baseBuilder(VacationBalance balance, LedgerEventType eventType,
                                                      BigDecimal changeDays, BigDecimal beforeTotal, BigDecimal afterTotal) {

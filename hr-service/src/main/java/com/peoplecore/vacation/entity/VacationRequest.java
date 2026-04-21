@@ -8,6 +8,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Objects;
 import java.util.UUID;
@@ -105,6 +106,25 @@ public class VacationRequest extends BaseTimeEntity {
     @Column(name = "approval_doc_id")
     private Long approvalDocId;
 
+    /* === 이벤트 기반 휴가 메타 (출산/배우자출산/유산사산/공가 전용, null 허용) === */
+
+    /* 증빙 파일 URL (MinIO) - 법정 휴가 증빙 첨부. 기존 연차/월차는 null */
+    @Column(name = "proof_file_url", length = 500)
+    private String proofFileUrl;
+
+    /* 임신 주수 - 유산·사산휴가 주수별 일수 산정 근거. 그 외 유형은 null */
+    @Column(name = "pregnancy_weeks")
+    private Integer pregnancyWeeks;
+
+    /* 공가 하위 사유 - 공가 신청 시 필수. 통계/증빙 구분용. 그 외 유형은 null */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "official_leave_reason", length = 30)
+    private OfficialLeaveReason officialLeaveReason;
+
+    /* 관련 출산일 - 배우자출산휴가 90일 이내 사용 검증 근거. 그 외 유형은 null */
+    @Column(name = "related_birth_date")
+    private LocalDate relatedBirthDate;
+
     /* 낙관적 락 - 동시 승인/반려/취소 충돌 방지 */
     @Version
     @Column(name = "version", nullable = false)
@@ -113,10 +133,12 @@ public class VacationRequest extends BaseTimeEntity {
 
     /* 신청 생성 - Kafka docCreated 수신 시 PENDING 으로 INSERT */
     /* 스냅샷 4개 필드는 EmployeeSnapshot record 의 compact constructor 에서 null 검증 - 호출부가 책임지고 채워야 함 */
+    /* 이벤트 기반 메타(proofFileUrl/pregnancyWeeks/officialLeaveReason/relatedBirthDate) 는 유형별 선택 세팅 */
     public static VacationRequest createPending(UUID companyId, VacationType vacationType, Employee employee,
                                                 EmployeeSnapshot snapshot,
                                                 LocalDateTime startAt, LocalDateTime endAt,
-                                                BigDecimal useDays, String reason, Long approvalDocId) {
+                                                BigDecimal useDays, String reason, Long approvalDocId,
+                                                EventMeta eventMeta) {
         return VacationRequest.builder()
                 .companyId(companyId)
                 .vacationType(vacationType)
@@ -131,6 +153,10 @@ public class VacationRequest extends BaseTimeEntity {
                 .requestReason(reason)
                 .requestStatus(RequestStatus.PENDING)
                 .approvalDocId(approvalDocId)
+                .proofFileUrl(eventMeta != null ? eventMeta.proofFileUrl() : null)
+                .pregnancyWeeks(eventMeta != null ? eventMeta.pregnancyWeeks() : null)
+                .officialLeaveReason(eventMeta != null ? eventMeta.officialLeaveReason() : null)
+                .relatedBirthDate(eventMeta != null ? eventMeta.relatedBirthDate() : null)
                 .build();
     }
 
@@ -178,4 +204,9 @@ public class VacationRequest extends BaseTimeEntity {
             Objects.requireNonNull(title, "title null 불가");
         }
     }
+
+    /* 이벤트 기반 휴가 메타 record - createPending 의 이벤트성 필드 묶음 */
+    /* 전부 nullable - SCHEDULED 유형은 null record 전달, EVENT_BASED 는 유형별 필수 필드 세팅 */
+    public record EventMeta(String proofFileUrl, Integer pregnancyWeeks,
+                            OfficialLeaveReason officialLeaveReason, LocalDate relatedBirthDate) {}
 }

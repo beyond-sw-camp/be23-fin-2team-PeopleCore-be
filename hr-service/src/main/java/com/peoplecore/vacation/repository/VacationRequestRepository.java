@@ -1,9 +1,14 @@
 package com.peoplecore.vacation.repository;
 
+import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.entity.VacationRequest;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -31,4 +36,27 @@ public interface VacationRequestRepository extends JpaRepository<VacationRequest
      * 반환: true 면 삭제 차단 (VACATION_TYPE_IN_USE)
      */
     boolean existsByVacationType_TypeId(Long typeId);
+
+    /*
+     * 특정 사원 + 유형 + 기간(연 단위) PENDING/APPROVED 누적 일수 집계
+     * 용도: 이벤트 기반 휴가 신청 시 한도 예상 검증 (기존 + 진행 중 + 이번 요청 ≤ cap)
+     * 조건: requestStartAt 이 연도 범위 안에 속하고, 상태가 지정된 것들
+     * 반환: 합계. 기존 건 없으면 0
+     */
+    @Query("""
+            SELECT COALESCE(SUM(r.requestUseDays), 0)
+              FROM VacationRequest r
+             WHERE r.companyId = :companyId
+               AND r.employee.empId = :empId
+               AND r.vacationType.typeId = :typeId
+               AND r.requestStatus IN (:statuses)
+               AND r.requestStartAt >= :yearStart
+               AND r.requestStartAt <  :nextYearStart
+            """)
+    BigDecimal sumDaysByStatuses(@Param("companyId") UUID companyId,
+                                 @Param("empId") Long empId,
+                                 @Param("typeId") Long typeId,
+                                 @Param("statuses") java.util.List<RequestStatus> statuses,
+                                 @Param("yearStart") LocalDateTime yearStart,
+                                 @Param("nextYearStart") LocalDateTime nextYearStart);
 }
