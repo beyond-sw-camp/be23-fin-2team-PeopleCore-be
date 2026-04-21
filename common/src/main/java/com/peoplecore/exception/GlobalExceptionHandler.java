@@ -1,8 +1,11 @@
 package com.peoplecore.exception;
 
+import jakarta.persistence.OptimisticLockException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.connector.ClientAbortException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
@@ -48,6 +51,23 @@ public class GlobalExceptionHandler {
                 .status(e.getStatus())
                 .body(Map.of(
                         "message", e.getMessage(),
+                        "timestamp", LocalDateTime.now()
+                ));
+    }
+
+    // @Version 충돌 — 다른 트랜잭션이 같은 엔티티를 먼저 수정/삭제. 409 로 반환해 FE가 새로고침 안내.
+    @ExceptionHandler({
+            ObjectOptimisticLockingFailureException.class,
+            OptimisticLockingFailureException.class,
+            OptimisticLockException.class
+    })
+    public ResponseEntity<Map<String, Object>> handleOptimisticLock(Exception e) {
+        log.warn("Optimistic lock conflict: {}", e.getMessage());
+        return ResponseEntity
+                .status(409)
+                .body(Map.of(
+                        "message", "다른 사용자가 방금 이 항목을 수정했습니다. 새로고침 후 다시 시도해 주세요.",
+                        "code", "OPTIMISTIC_LOCK_CONFLICT",
                         "timestamp", LocalDateTime.now()
                 ));
     }

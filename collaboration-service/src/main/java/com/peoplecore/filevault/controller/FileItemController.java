@@ -65,8 +65,12 @@ public class FileItemController {
         @RequestParam(name = "disposition", defaultValue = "attachment") String disposition
     ) {
         FileItem file = accessPolicy.loadFile(fileId);
-        accessPolicy.ensureCanReadFolder(titleId, empId, file.getFolderId());
         boolean attachment = !"inline".equalsIgnoreCase(disposition);
+        if (attachment) {
+            accessPolicy.ensureCanDownloadFile(titleId, empId, file);
+        } else {
+            accessPolicy.ensureCanReadFolder(titleId, empId, file.getFolderId());
+        }
         String url = fileItemService.generateDownloadUrl(fileId, attachment);
         return ResponseEntity.ok(Map.of("downloadUrl", url));
     }

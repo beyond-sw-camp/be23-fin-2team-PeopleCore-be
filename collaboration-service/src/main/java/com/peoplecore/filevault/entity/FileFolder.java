@@ -96,6 +96,14 @@ public class FileFolder extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    /**
+     * 낙관적 락 버전. 동시 rename/move/soft-delete 시 last-writer-wins 를 차단한다.
+     * Hibernate가 UPDATE 시 WHERE version=? 조건을 붙여 충돌을 {@link jakarta.persistence.OptimisticLockException} 으로 보고한다.
+     */
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     public void rename(String newName) {
         if (Boolean.TRUE.equals(this.isSystemDefault)) {
             throw new IllegalStateException("시스템 기본 파일함은 이름을 변경할 수 없습니다.");
