@@ -23,6 +23,8 @@ import com.peoplecore.evaluation.dto.*;
 import com.peoplecore.evaluation.domain.Stage;
 import com.peoplecore.evaluation.domain.StageStatus;
 import com.peoplecore.evaluation.domain.StageType;
+import com.peoplecore.alarm.publisher.HrAlarmPublisher;
+import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.evaluation.repository.CalibrationRepository;
 import com.peoplecore.evaluation.repository.EvalGradeRepository;
 import com.peoplecore.evaluation.repository.GoalRepository;
@@ -62,6 +64,7 @@ public class EvalGradeService {
     private final SelfEvaluationFileRepository selfEvaluationFileRepository;
     private final ManagerEvaluationRepository mgrEvalRepository;
     private final EvaluationRulesService rulesService;
+    private final HrAlarmPublisher hrAlarmPublisher;
 
     public EvalGradeService(EvalGradeRepository evalGradeRepository,
                             SeasonRepository seasonRepository,
@@ -74,7 +77,8 @@ public class EvalGradeService {
                             SelfEvaluationRepository selfEvaluationRepository,
                             SelfEvaluationFileRepository selfEvaluationFileRepository,
                             ManagerEvaluationRepository mgrEvalRepository,
-                            EvaluationRulesService rulesService) {
+                            EvaluationRulesService rulesService,
+                            HrAlarmPublisher hrAlarmPublisher) {
         this.evalGradeRepository = evalGradeRepository;
         this.seasonRepository = seasonRepository;
         this.departmentRepository = departmentRepository;
@@ -87,6 +91,7 @@ public class EvalGradeService {
         this.selfEvaluationFileRepository = selfEvaluationFileRepository;
         this.mgrEvalRepository = mgrEvalRepository;
         this.rulesService = rulesService;
+        this.hrAlarmPublisher = hrAlarmPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -1117,17 +1122,39 @@ public class EvalGradeService {
             }
         }
 
-//        확정-EvalGrade전체 잠금 + 시즌 finalizedAt세팅 + status CLOSED 전환
-//        (status=CLOSED 로 변경)
+//        확정+알림 - 수동/자동 공통 처리 (스케줄러에서도 호출)
+        int lockedCount = finalizeAndNotify(companyId, seasonId, season);
+
+        return FinalizeDto.builder()
+                .finalizedAt(season.getFinalizedAt())
+                .lockedCount(lockedCount)
+                .build();
+    }
+
+
+//    시즌 확정 + 사원 전원 알림 발행 (수동 finalize / 스케줄러 자동 확정 공통)
+//    - EvalGrade 전체 잠금 + finalizedAt + status CLOSED 전환
+//    - 시즌 대상 사원 전원에게 "최종 평가결과 공개" 알림
+    public int finalizeAndNotify(UUID companyId, Long seasonId, Season season) {
         LocalDateTime now = LocalDateTime.now();
         int lockedCount = evalGradeRepository.lockAllAssigned(seasonId, now);
         season.markFinalized(now);
         season.close();
 
-        return FinalizeDto.builder()
-                .finalizedAt(now)
-                .lockedCount(lockedCount)
-                .build();
+        List<Long> empIds = evalGradeRepository.findEmpIdsBySeason(seasonId);
+        if (!empIds.isEmpty()) {
+            hrAlarmPublisher.publisher(AlarmEvent.builder()
+                    .companyId(companyId)
+                    .empIds(empIds)
+                    .alarmType("EVAL")
+                    .alarmTitle(season.getName())
+                    .alarmContent("최종 평가결과가 공개되었습니다")
+                    .alarmLink("/eval/my/result")
+                    .alarmRefType("SEASON")
+                    .alarmRefId(seasonId)
+                    .build());
+        }
+        return lockedCount;
     }
 
 

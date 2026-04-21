@@ -40,6 +40,11 @@ public interface EvalGradeRepository extends JpaRepository<EvalGrade, Long>, Eva
     //    10번 - 배정 완료 인원 (finalGrade IS NOT NULL)
     long countBySeason_SeasonIdAndFinalGradeNotNull(Long seasonId);
 
+
+//    확정 알림 발행용 - 시즌 대상 사원 empId 전체 조회
+    @Query("SELECT g.emp.empId FROM EvalGrade g WHERE g.season.seasonId = :seasonId")
+    List<Long> findEmpIdsBySeason(@Param("seasonId") Long seasonId);
+
     //    5번 강제배분 - 현재 랭킹 대상 인원 (biasAdjustedScore 있는 사람)
     long countBySeason_SeasonIdAndBiasAdjustedScoreNotNull(Long seasonId);
 

@@ -11,6 +11,7 @@ import com.peoplecore.evaluation.domain.StageStatus;
 import com.peoplecore.evaluation.repository.EvalGradeRepository;
 import com.peoplecore.evaluation.repository.SeasonRepository;
 import com.peoplecore.evaluation.repository.StageRepository;
+import com.peoplecore.evaluation.service.EvalGradeService;
 import com.peoplecore.evaluation.service.EvaluationRulesService;
 import com.peoplecore.evaluation.service.SeasonService;
 import com.peoplecore.event.AlarmEvent;
@@ -22,7 +23,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
@@ -32,6 +32,7 @@ public class SeasonScheduler {
     private final StageRepository stageRepository;
     private final EvaluationRulesService rulesService;
     private final SeasonService seasonService;
+    private final EvalGradeService evalGradeService;
     private final EvalGradeRepository evalGradeRepository;
     private final EmployeeRepository employeeRepository;
     private final HrAlarmPublisher hrAlarmPublisher;
@@ -39,12 +40,14 @@ public class SeasonScheduler {
 
     public SeasonScheduler(SeasonRepository seasonRepository, StageRepository stageRepository,
                            EvaluationRulesService rulesService, SeasonService seasonService,
+                           EvalGradeService evalGradeService,
                            EvalGradeRepository evalGradeRepository, EmployeeRepository employeeRepository,
                            HrAlarmPublisher hrAlarmPublisher) {
         this.seasonRepository = seasonRepository;
         this.stageRepository = stageRepository;
         this.rulesService = rulesService;
         this.seasonService = seasonService;
+        this.evalGradeService = evalGradeService;
         this.evalGradeRepository = evalGradeRepository;
         this.employeeRepository = employeeRepository;
         this.hrAlarmPublisher = hrAlarmPublisher;
@@ -90,11 +93,8 @@ public class SeasonScheduler {
             List<Long> unassignedEmpIds = evalGradeRepository.findUnassignedEmpIds(s.getSeasonId());
 
             if (unassignedEmpIds.isEmpty()) {
-//                자동 확정 + 종료 (현재 보정 상태 그대로 박제)
-                LocalDateTime now = LocalDateTime.now();
-                evalGradeRepository.lockAllAssigned(s.getSeasonId(), now);
-                s.markFinalized(now);
-                s.close();
+//                자동 확정 + 종료 + 알림 (수동 확정과 동일 처리 공통 메서드 호출)
+                evalGradeService.finalizeAndNotify(s.getCompany().getCompanyId(), s.getSeasonId(), s);
                 log.info("시즌 자동 확정+종료: {} (id={})", s.getName(), s.getSeasonId());
             } else {
 //                HR 관리자 전원 알림 (매일 반복 발행, 수동 확정 시 상태 CLOSED 되어 자동 중단)
