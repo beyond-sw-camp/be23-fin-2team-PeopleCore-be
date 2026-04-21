@@ -1,11 +1,15 @@
 package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
+import com.peoplecore.vacation.dto.VacationAdjustmentHistoryResponseDto;
 import com.peoplecore.vacation.dto.VacationBalanceResponse;
 import com.peoplecore.vacation.dto.VacationGrantRequest;
 import com.peoplecore.vacation.service.VacationBalanceService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Slice;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -45,5 +49,19 @@ public class VacationBalanceController {
             @Valid @RequestBody VacationGrantRequest request) {
         vacationBalanceService.grantBulk(companyId, managerId, request);
         return ResponseEntity.ok().build();
+    }
+
+    /* 특정 사원의 관리자 수동 조정 이력 - 스크롤형 Slice */
+    /* MANUAL_GRANT / MANUAL_USED 만. year / typeId 동적 필터 */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @GetMapping("/{empId}/adjustments")
+    public ResponseEntity<Slice<VacationAdjustmentHistoryResponseDto>> listAdjustments(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long empId,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Long typeId,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(vacationBalanceService.listAdjustmentHistory(
+                companyId, empId, year, typeId, pageable));
     }
 }
