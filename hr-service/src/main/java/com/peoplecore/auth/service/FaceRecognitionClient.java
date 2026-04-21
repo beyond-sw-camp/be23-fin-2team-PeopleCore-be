@@ -13,6 +13,7 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -43,13 +44,14 @@ public class FaceRecognitionClient {
                 .block();
     }
 
-    public FaceRegisterResponse registerFace(String image, Long empId, String empName) {
+    public FaceRegisterResponse registerFace(String image, Long empId, String empName, UUID companyId) {
         return faceApiWebClient.post()
                 .uri("/register")
                 .bodyValue(Map.of(
                         "image", image,
                         "emp_id", empId,
-                        "emp_name", empName
+                        "emp_name", empName,
+                        "company_id", companyId.toString()
                 ))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response ->
@@ -62,9 +64,9 @@ public class FaceRecognitionClient {
                 .block();
     }
 
-    public void unregisterFace(Long empId) {
+    public void unregisterFace(Long empId, UUID companyId) {
         faceApiWebClient.delete()
-                .uri("/unregister/{empId}", empId)
+                .uri("/unregister/{companyId}/{empId}", companyId.toString(), empId)
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response ->
                         response.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}).flatMap(body -> {
@@ -76,10 +78,27 @@ public class FaceRecognitionClient {
                 .block();
     }
 
-    public FaceRecognizeResponse recognizeFace(String base64Image) {
+    public void unregisterCompanyFaces(UUID companyId) {
+        faceApiWebClient.delete()
+                .uri("/unregister/company/{companyId}", companyId.toString())
+                .retrieve()
+                .onStatus(HttpStatusCode::isError, response ->
+                        response.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}).flatMap(body -> {
+                            String detail = body.getOrDefault("detail", "회사 얼굴 일괄 삭제에 실패했습니다.").toString();
+                            return Mono.error(new IllegalArgumentException(detail));
+                        })
+                )
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {})
+                .block();
+    }
+
+    public FaceRecognizeResponse recognizeFace(String base64Image, UUID companyId) {
         return faceApiWebClient.post()
                 .uri("/recognize")
-                .bodyValue(Map.of("image", base64Image))
+                .bodyValue(Map.of(
+                        "image", base64Image,
+                        "company_id", companyId.toString()
+                ))
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response ->
                         response.bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {}).flatMap(body -> {

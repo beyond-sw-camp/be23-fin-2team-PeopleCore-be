@@ -7,6 +7,7 @@ import com.peoplecore.auth.repository.FaceRegistrationRepository;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class FaceAuthService {
 
@@ -57,10 +59,17 @@ public class FaceAuthService {
         Employee employee = employeeRepository.findById(request.getEmpId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원입니다."));
 
+        if (employee.getEmpStatus() == EmpStatus.RESIGNED) {
+            throw new IllegalStateException("퇴직한 사원은 얼굴을 등록할 수 없습니다.");
+        }
+
+        UUID companyId = employee.getCompany().getCompanyId();
+
         FaceRegisterResponse response = faceRecognitionClient.registerFace(
                 request.getImage(),
                 employee.getEmpId(),
-                employee.getEmpName()
+                employee.getEmpName(),
+                companyId
         );
 
         FaceRegistration registration = faceRegistrationRepository
@@ -128,29 +137,84 @@ public class FaceAuthService {
 
     @Transactional
     public void unregisterFace(Long empId) {
-        // 1. Python Chroma DB에서 벡터 삭제
-        faceRecognitionClient.unregisterFace(empId);
+        Employee employee = employeeRepository.findById(empId)
+                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원입니다."));
+        UUID companyId = employee.getCompany().getCompanyId();
+
+        // 1. Python Chroma DB에서 벡터 삭제 (회사 범위로 지정)
+        try {
+            faceRecognitionClient.unregisterFace(empId, companyId);
+        } catch (Exception e) {
+            // Python 서버 불가 등으로 실패하더라도 MySQL 이력은 정리한다.
+            log.warn("Python 얼굴 벡터 삭제 실패 (empId={}, companyId={}): {}", empId, companyId, e.getMessage());
+        }
 
         // 2. MySQL에서 등록 이력 삭제
         faceRegistrationRepository.findByEmpId(empId)
                 .ifPresent(faceRegistrationRepository::delete);
     }
 
+    /**
+     * 사원 삭제/퇴직 시 외부 서비스에서 호출하는 cascade cleanup.
+     * Python 실패 시에도 호출 측 트랜잭션을 끊지 않도록 예외를 삼킨다.
+     */
+    @Transactional
+    public void cascadeUnregisterFace(Long empId, UUID companyId) {
+        try {
+            faceRecognitionClient.unregisterFace(empId, companyId);
+        } catch (Exception e) {
+            log.warn("cascade 얼굴 벡터 삭제 실패 (empId={}, companyId={}): {}", empId, companyId, e.getMessage());
+        }
+        faceRegistrationRepository.findByEmpId(empId)
+                .ifPresent(faceRegistrationRepository::delete);
+    }
+
+    /**
+     * 회사 단위 일괄 cleanup. 회사 EXPIRED/SUSPENDED 전이 시 호출한다.
+     */
+    @Transactional
+    public void cascadeUnregisterCompany(UUID companyId) {
+        try {
+            faceRecognitionClient.unregisterCompanyFaces(companyId);
+        } catch (Exception e) {
+            log.warn("회사 얼굴 벡터 일괄 삭제 실패 (companyId={}): {}", companyId, e.getMessage());
+        }
+        List<Long> empIds = employeeRepository.findAll().stream()
+                .filter(e -> e.getCompany().getCompanyId().equals(companyId))
+                .map(Employee::getEmpId)
+                .toList();
+        if (!empIds.isEmpty()) {
+            faceRegistrationRepository.findAll().stream()
+                    .filter(r -> empIds.contains(r.getEmpId()))
+                    .forEach(faceRegistrationRepository::delete);
+        }
+    }
+
     @Transactional
     public LoginResponse faceLogin(FaceLoginRequest request) {
-        // 1. Python 서버에 얼굴 인식 요청
-        FaceRecognizeResponse recognizeResult = faceRecognitionClient.recognizeFace(request.getImage());
+        if (request.getCompanyId() == null) {
+            throw new IllegalArgumentException("회사 ID가 필요합니다.");
+        }
+
+        // 1. Python 서버에 얼굴 인식 요청 (회사 범위로 제한)
+        FaceRecognizeResponse recognizeResult =
+                faceRecognitionClient.recognizeFace(request.getImage(), request.getCompanyId());
 
         // 2. 인식된 사원 조회
         Employee employee = employeeRepository.findById(recognizeResult.getEmpId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원입니다."));
 
-        // 3. 퇴직 여부 확인
+        // 3. 회사 소속 재검증 (Python 메타데이터와 별개로 Java 레벨에서 2차 확인)
+        if (!employee.getCompany().getCompanyId().equals(request.getCompanyId())) {
+            throw new IllegalStateException("요청한 회사에 소속된 사원이 아닙니다.");
+        }
+
+        // 4. 퇴직 여부 확인
         if (employee.getEmpStatus() == EmpStatus.RESIGNED) {
             throw new IllegalStateException("퇴직한 사원입니다.");
         }
 
-        // 4. JWT 발급 (기존 AuthService.login과 동일한 로직)
+        // 5. JWT 발급 (기존 AuthService.login과 동일한 로직)
         String accessToken = jwtProvider.createAccessToken(employee);
         String refreshToken = jwtProvider.createRefreshToken(employee);
 
