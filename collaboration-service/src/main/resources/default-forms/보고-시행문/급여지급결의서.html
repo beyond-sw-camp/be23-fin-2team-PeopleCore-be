@@ -2,364 +2,232 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>급여 지급결의서</title>
-<style>
-  body {
-    font-family: "malgun gothic", dotum, arial, tahoma;
-    font-size: 10pt;
-    background: #f0f0f0;
-    margin: 0;
-    padding: 30px 0;
-  }
+<style type="text/css">
+table.tb_chit {
+  width: 800px;
+  margin-top: 1px;
+  border-collapse: collapse !important;
+  color: #000;
+  background: #fff;
+  font-size: 12px;
+  border: 0;
+  font-family: malgun gothic, dotum, arial, tahoma;
+}
+table.tb_chit table { border-collapse: collapse !important; }
+table.tb_chit tr td {
+  padding: 3px;
+  height: 20px;
+  border: 1px solid #000;
+  vertical-align: middle;
+}
+table.tb_chit table.sign_member { border: 0; }
+table.tb_chit table.sign_member tr td {
+  border: 0;
+  border-bottom: 1px solid #666;
+}
+.doc_subject {
+  height: 90px !important;
+  font-size: 24pt;
+  font-weight: bold;
+  text-align: center;
+  vertical-align: middle;
+  padding: 0;
+  border: 0 !important;
+}
+.tit { background: #ddd; text-align: center; font-weight: bold; }
+.currency { text-align: right; }
 
-  #divCustomWrapper {
-    word-break: break-all;
-    font-family: "malgun gothic", dotum, arial, tahoma;
-    width: 800px;
-    margin: 0 auto;
-    background: #fff;
-    padding: 40px;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
-  }
-
-  #divCustomWrapper * { max-width: 100%; box-sizing: border-box; }
-
-  .titleSection {
-    text-align: center;
-    font-size: 24pt;
-    font-weight: bold;
-    margin-bottom: 30px;
-    margin-top: 10px;
-  }
-
-  table { border-collapse: collapse; width: 100%; word-break: break-all; }
-
-  td.ACel {
-    font-size: 9pt;
-    height: 25px;
-    border: 1px solid black;
-    padding: 3px 6px;
-    text-align: center;
-    background: rgb(221, 221, 221);
-    font-weight: bold;
-    vertical-align: middle;
-  }
-
-  td.BCel {
-    font-size: 9pt;
-    height: 25px;
-    border: 1px solid black;
-    padding: 3px 8px;
-    vertical-align: middle;
-  }
-
-  td.BCel.center { text-align: center; }
-  td.BCel.right  { text-align: right; }
-
-  /* 결재선 박스 */
-  .approval-box {
-    display: inline-block;
-    border: 1px solid #000;
-    text-align: center;
-    vertical-align: top;
-    width: 80px;
-  }
-  .approval-box .role {
-    background: #ddd;
-    font-weight: bold;
-    font-size: 9pt;
-    border-bottom: 1px solid #000;
-    padding: 2px 0;
-  }
-  .approval-box .sign-area {
-    height: 50px;
-    font-size: 9pt;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-  }
-  .approval-box .date-area {
-    border-top: 1px solid #000;
-    font-size: 8pt;
-    padding: 2px;
-    color: #333;
-  }
-
-  /* 기안/결재 영역 flex */
-  .partition {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    margin-bottom: 20px;
-  }
-  .partition .left { flex: 0 0 auto; }
-  .partition .right { flex: 0 0 auto; display: flex; gap: 0; }
-
-  /* 신청 세로 라벨 */
-  .vertical-label {
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-    font-size: 9pt;
-    font-weight: bold;
-    background: #ddd;
-    border: 1px solid #000;
-    padding: 6px 4px;
-    text-align: center;
-  }
-
-  /* 본문 섹션 */
-  .body-text {
-    font-size: 10pt;
-    margin: 18px 0 10px 0;
-  }
-  .body-text::before { content: "■ "; }
-
-  .item-list {
-    font-size: 10pt;
-    margin: 0 0 16px 20px;
-    line-height: 2;
-  }
-  .item-list li { list-style: none; }
-  .item-list li::before { content: attr(data-num) ". "; font-weight: bold; }
-
-  /* 지급상세 / 공제상세 제목 */
-  .section-label {
-    font-size: 10pt;
-    font-weight: bold;
-    margin: 14px 0 4px 0;
-  }
-
-  /* 금액 오른쪽 정렬 */
-  td.money { text-align: right; }
-  td.total-row { font-weight: bold; background: #ddd; text-align: right; border: 1px solid black; padding: 3px 8px; }
-  td.total-label { font-weight: bold; background: #ddd; text-align: center; border: 1px solid black; padding: 3px 6px; }
-
-  /* 인쇄 버튼 */
-  .print-bar {
-    width: 800px;
-    margin: 0 auto 16px auto;
-    text-align: right;
-  }
-  .print-bar button {
-    background: #1D9E75;
-    color: #fff;
-    border: none;
-    padding: 8px 20px;
-    font-size: 10pt;
-    border-radius: 4px;
-    cursor: pointer;
-    font-family: "malgun gothic", dotum, arial, tahoma;
-  }
-  .print-bar button:hover { background: #0F6E56; }
-
-  @media print {
-    body { background: #fff; padding: 0; }
-    .print-bar { display: none; }
-    #divCustomWrapper { box-shadow: none; padding: 20px; }
-    h1,h2,h3,th,td,p,div,body {
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
-    }
-  }
+body {
+  margin: 0;
+  padding: 0;
+  font-family: malgun gothic, dotum, arial, tahoma;
+}
+@media print {
+  th, td { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
 </style>
 </head>
 <body>
 
-<div class="print-bar">
-  <button onclick="window.print()">🖨 인쇄</button>
-</div>
+<!-- ====== 헤더 ====== -->
+<table class="tb_chit">
+  <colgroup><col width="310px"><col width="490px"></colgroup>
+  <tbody>
+    <tr>
+      <td class="doc_subject" colspan="2">급여 지급결의서</td>
+    </tr>
+    <tr>
+      <td style="border:0; padding:0 !important; vertical-align:top;">
+        <table>
+          <colgroup><col width="90px"><col width="220px"></colgroup>
+          <tbody>
+            <tr>
+              <td class="tit">기 안 자</td>
+              <td data-key="drafterName" contenteditable="true"></td>
+            </tr>
+            <tr>
+              <td class="tit">소 속</td>
+              <td data-key="drafterDept" contenteditable="true"></td>
+            </tr>
+            <tr>
+              <td class="tit">기 안 일</td>
+              <td data-key="draftDate" contenteditable="true"></td>
+            </tr>
+            <tr>
+              <td class="tit">문서번호</td>
+              <td data-key="docNo" contenteditable="true"></td>
+            </tr>
+          </tbody>
+        </table>
+      </td>
+      <td data-key="approvalLineHtml" style="text-align:right; padding:0 !important; border:0 !important; vertical-align:top;"></td>
+    </tr>
+  </tbody>
+</table>
 
-<div id="divCustomWrapper">
+<!-- ====== 본문 안내 ====== -->
+<table class="tb_chit" style="margin-top:10px;">
+  <tbody>
+    <tr>
+      <td style="border-left:0; border-right:0; border-top:0; padding:8px 4px 2px 4px; font-size:10pt;">
+        ■ 급여 지급과 관련하여 아래와 같이 요청합니다.
+      </td>
+    </tr>
+    <tr>
+      <td style="border:0; text-align:center; font-size:10pt; padding:2px;">- 아 래 -</td>
+    </tr>
+  </tbody>
+</table>
 
-  <!-- 제목 -->
-  <div class="titleSection">급여 지급결의서</div>
+<!-- ====== 지급 기본 정보 ====== -->
+<table class="tb_chit" style="margin-top:4px;">
+  <colgroup><col width="120px"><col width="680px"></colgroup>
+  <tbody>
+    <tr>
+      <td class="tit">근&nbsp;무&nbsp;월</td>
+      <td data-key="payMonth" contenteditable="true"></td>
+    </tr>
+    <tr>
+      <td class="tit">지급예정일</td>
+      <td data-key="payScheduledDate" contenteditable="true"></td>
+    </tr>
+    <tr>
+      <td class="tit">지급인원</td>
+      <td data-key="payHeadcount" contenteditable="true"></td>
+    </tr>
+    <tr>
+      <td class="tit">지급금액</td>
+      <td data-key="totalPayAmount" contenteditable="true"></td>
+    </tr>
+  </tbody>
+</table>
 
-  <!-- 기안 정보 + 결재선 -->
-  <div class="partition">
+<!-- ====== 지급상세 ====== -->
+<table class="tb_chit" style="margin-top:10px;">
+  <colgroup><col width="200px"><col width="300px"><col width="300px"></colgroup>
+  <tbody>
+    <tr>
+      <td class="tit" colspan="3">5. 지급상세</td>
+    </tr>
+    <tr>
+      <td class="tit">항목명</td>
+      <td class="tit">과세금액</td>
+      <td class="tit">비과세금액</td>
+    </tr>
+    <tr>
+      <td class="tit">기본급</td>
+      <td class="currency" data-key="baseSalaryTaxable" contenteditable="true">0</td>
+      <td class="currency" data-key="baseSalaryNonTaxable" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">상여금</td>
+      <td class="currency" data-key="bonusTaxable" contenteditable="true">0</td>
+      <td class="currency" data-key="bonusNonTaxable" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">야간근로수당</td>
+      <td class="currency" data-key="nightAllowanceTaxable" contenteditable="true">0</td>
+      <td class="currency" data-key="nightAllowanceNonTaxable" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">연장근로수당</td>
+      <td class="currency" data-key="overtimeAllowanceTaxable" contenteditable="true">0</td>
+      <td class="currency" data-key="overtimeAllowanceNonTaxable" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">연차수당</td>
+      <td class="currency" data-key="annualLeaveAllowanceTaxable" contenteditable="true">0</td>
+      <td class="currency" data-key="annualLeaveAllowanceNonTaxable" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">휴일근로수당</td>
+      <td class="currency" data-key="holidayAllowanceTaxable" contenteditable="true">0</td>
+      <td class="currency" data-key="holidayAllowanceNonTaxable" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">교육비지원금</td>
+      <td class="currency" data-key="educationSupportTaxable" contenteditable="true">0</td>
+      <td class="currency" data-key="educationSupportNonTaxable" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">식대</td>
+      <td class="currency" data-key="mealAllowanceTaxable" contenteditable="true">0</td>
+      <td class="currency" data-key="mealAllowanceNonTaxable" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">소계</td>
+      <td class="currency" data-key="paymentSubtotalTaxable" contenteditable="true">0</td>
+      <td class="currency" data-key="paymentSubtotalNonTaxable" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit" style="background:#bbb;">합계</td>
+      <td class="currency" colspan="2" style="font-weight:bold;" data-key="paymentTotal" contenteditable="true">0</td>
+    </tr>
+  </tbody>
+</table>
 
-    <!-- 왼쪽: 기안자 정보 -->
-    <div class="left">
-      <table style="width:260px;">
-        <colgroup><col width="70"><col width="190"></colgroup>
-        <tbody>
-          <tr>
-            <td class="ACel">기 안 자</td>
-            <td class="BCel center" contenteditable="true">김인재</td>
-          </tr>
-          <tr>
-            <td class="ACel">소 속</td>
-            <td class="BCel center" contenteditable="true">경영</td>
-          </tr>
-          <tr>
-            <td class="ACel">기 안 일</td>
-            <td class="BCel center" contenteditable="true">2025-09-04(목)</td>
-          </tr>
-          <tr>
-            <td class="ACel">문서번호</td>
-            <td class="BCel center" contenteditable="true"></td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- 오른쪽: 결재선 -->
-    <div class="right">
-      <!-- 신청 세로 라벨 -->
-      <div class="vertical-label">신<br>청</div>
-
-      <!-- 차장 -->
-      <div class="approval-box">
-        <div class="role">차장</div>
-        <div class="sign-area" contenteditable="true">김인재</div>
-        <div class="date-area">2025/09/04</div>
-      </div>
-
-      <!-- 승인 세로 라벨 -->
-      <div class="vertical-label" style="margin-left:2px;">승<br>인</div>
-
-      <!-- 부사장 -->
-      <div class="approval-box">
-        <div class="role">부사장</div>
-        <div class="sign-area" contenteditable="true"></div>
-        <div class="date-area">&nbsp;</div>
-      </div>
-
-      <!-- 수신 세로 라벨 -->
-      <div class="vertical-label" style="margin-left:2px;">수<br>신</div>
-
-      <!-- 대표이사 -->
-      <div class="approval-box">
-        <div class="role">대표이사</div>
-        <div class="sign-area" contenteditable="true"></div>
-        <div class="date-area">&nbsp;</div>
-      </div>
-    </div>
-
-  </div><!-- /partition -->
-
-  <!-- 본문 -->
-  <p class="body-text">급여 지급과 관련하여 아래와 같이 요청합니다.</p>
-  <p style="text-align:center; font-size:10pt; margin: 4px 0 10px 0;">- 아 래 -</p>
-
-  <ul class="item-list">
-    <li data-num="1">근무월 : <span contenteditable="true">2025-09</span></li>
-    <li data-num="2">지급예정일 : <span contenteditable="true">2025-09-30</span> &nbsp;
-      <span contenteditable="true">21</span>명</li>
-    <li data-num="3">지급인원 : <span contenteditable="true">21</span>명</li>
-    <li data-num="4">지급금액 : <span contenteditable="true">113,431,760</span>원</li>
-    <li data-num="5">지급상세 :</li>
-  </ul>
-
-  <!-- 지급상세 테이블 -->
-  <table style="margin-bottom:16px;">
-    <colgroup><col width="200"><col width="300"><col width="300"></colgroup>
-    <thead>
-      <tr>
-        <td class="ACel">항목명</td>
-        <td class="ACel">과세금액</td>
-        <td class="ACel">비과세금액</td>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td class="ACel">기본급</td>
-        <td class="BCel money" contenteditable="true">135,710,000</td>
-        <td class="BCel money" contenteditable="true">0</td>
-      </tr>
-      <tr>
-        <td class="ACel">상여금</td>
-        <td class="BCel money" contenteditable="true">0</td>
-        <td class="BCel money" contenteditable="true">0</td>
-      </tr>
-      <tr>
-        <td class="ACel">야간근로수당</td>
-        <td class="BCel money" contenteditable="true">0</td>
-        <td class="BCel money" contenteditable="true">0</td>
-      </tr>
-      <tr>
-        <td class="ACel">연장근로수당</td>
-        <td class="BCel money" contenteditable="true">0</td>
-        <td class="BCel money" contenteditable="true">0</td>
-      </tr>
-      <tr>
-        <td class="ACel">연차수당</td>
-        <td class="BCel money" contenteditable="true">0</td>
-        <td class="BCel money" contenteditable="true">0</td>
-      </tr>
-      <tr>
-        <td class="ACel">휴일근로수당</td>
-        <td class="BCel money" contenteditable="true">0</td>
-        <td class="BCel money" contenteditable="true">0</td>
-      </tr>
-      <tr>
-        <td class="ACel">교육비지원금</td>
-        <td class="BCel money" contenteditable="true">0</td>
-        <td class="BCel money" contenteditable="true">0</td>
-      </tr>
-      <tr>
-        <td class="ACel">식대</td>
-        <td class="BCel money" contenteditable="true">0</td>
-        <td class="BCel money" contenteditable="true">800,000</td>
-      </tr>
-      <tr>
-        <td class="ACel">소계</td>
-        <td class="BCel money" contenteditable="true">135,710,000</td>
-        <td class="BCel money" contenteditable="true">800,000</td>
-      </tr>
-      <tr>
-        <td class="total-label">합계</td>
-        <td class="total-row" colspan="2" contenteditable="true">136,510,000</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <!-- 공제상세 라벨 -->
-  <p style="font-size:10pt; font-weight:bold; margin: 6px 0 4px 20px;">6. 공제상세 :</p>
-
-  <!-- 공제상세 테이블 -->
-  <table>
-    <colgroup><col width="200"><col width="600"></colgroup>
-    <thead>
-      <tr>
-        <td class="ACel">항목명</td>
-        <td class="ACel">금액</td>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td class="ACel">건강보험</td>
-        <td class="BCel money" contenteditable="true">4,810,870</td>
-      </tr>
-      <tr>
-        <td class="ACel">고용보험</td>
-        <td class="BCel money" contenteditable="true">1,221,390</td>
-      </tr>
-      <tr>
-        <td class="ACel">국민연금</td>
-        <td class="BCel money" contenteditable="true">5,291,100</td>
-      </tr>
-      <tr>
-        <td class="ACel">근로소득세</td>
-        <td class="BCel money" contenteditable="true">10,120,040</td>
-      </tr>
-      <tr>
-        <td class="ACel">근로지방소득세</td>
-        <td class="BCel money" contenteditable="true">1,011,900</td>
-      </tr>
-      <tr>
-        <td class="ACel">학자금상환</td>
-        <td class="BCel money" contenteditable="true">0</td>
-      </tr>
-      <tr>
-        <td class="total-label">합계</td>
-        <td class="total-row" contenteditable="true">23,078,240</td>
-      </tr>
-    </tbody>
-  </table>
-
-</div><!-- /divCustomWrapper -->
+<!-- ====== 공제상세 ====== -->
+<table class="tb_chit" style="margin-top:10px;">
+  <colgroup><col width="200px"><col width="600px"></colgroup>
+  <tbody>
+    <tr>
+      <td class="tit" colspan="2">6. 공제상세</td>
+    </tr>
+    <tr>
+      <td class="tit">항목명</td>
+      <td class="tit">금액</td>
+    </tr>
+    <tr>
+      <td class="tit">건강보험</td>
+      <td class="currency" data-key="healthInsurance" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">고용보험</td>
+      <td class="currency" data-key="employmentInsurance" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">국민연금</td>
+      <td class="currency" data-key="nationalPension" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">근로소득세</td>
+      <td class="currency" data-key="incomeTax" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">근로지방소득세</td>
+      <td class="currency" data-key="localIncomeTax" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit">학자금상환</td>
+      <td class="currency" data-key="studentLoanRepayment" contenteditable="true">0</td>
+    </tr>
+    <tr>
+      <td class="tit" style="background:#bbb;">합계</td>
+      <td class="currency" style="font-weight:bold;" data-key="deductionTotal" contenteditable="true">0</td>
+    </tr>
+  </tbody>
+</table>
 
 </body>
 </html>

@@ -3,7 +3,6 @@ package com.peoplecore.pay.service;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
-import com.peoplecore.attendance.repository.WorkGroupRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.employee.domain.EmpStatus;
@@ -26,7 +25,6 @@ import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.repository.SalaryContractDetailRepository;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +32,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -128,12 +125,9 @@ public class PayrollService {
 
         Company company = companyRepository.findById(companyId).orElseThrow(() -> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
-//        재직 + 휴직 사원 목록 (퇴직 제외)
-        List<Employee> employees = employeeRepository.findAllForPayroll(companyId, null, null, null, null, null, Pageable.unpaged()).getContent()
-                .stream()
-                .filter(e -> e.getEmpStatus() != EmpStatus.RESIGNED)
-                .filter(e -> e.getCompany().getCompanyId().equals(companyId))
-                .toList();
+//        급여대상 사원(재직+휴직) 목록 (퇴직 제외)
+        YearMonth payMonth = YearMonth.parse(payYearMonth);
+        List<Employee> employees = employeeRepository.findAllForPayroll(companyId, payMonth);
 
 //        payrollRuns 생성
         PayrollRuns run = PayrollRuns.builder()

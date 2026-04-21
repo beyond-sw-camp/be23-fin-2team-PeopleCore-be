@@ -3,7 +3,7 @@ package com.peoplecore.pay.repository;
 import java.util.List;
 import java.util.UUID;
 
-public interface SeveranceRepositoryCustom {
+public interface SeverancePaysRepositoryCustom {
 //    QueryDSL 인터페이스
 
 //    최근 3개월 급여 총액 (지급항목만)
@@ -12,13 +12,10 @@ public interface SeveranceRepositoryCustom {
 //    직전 1년 상여금 총액
     Long sumLastYearBonus(Long empId, UUID companyId, List<String> months);
 
-//    연차수당 조회
-    Long getAnnualLeaveAllowance(Long empId, UUID companyId, int year);
-
 //    DB형 기적립금 합계
     Long sumDcDepositedTotal(Long empId, UUID companyId);
 
-//    통상임금(월) 조회
+//    통상임금(월) 조회 (기본급 + 고정수당)
     Long sumOrdinaryMonthlyPay(Long empId, UUID companyId);
 
 }

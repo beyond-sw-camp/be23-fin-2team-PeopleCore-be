@@ -11,6 +11,7 @@ import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
 import com.peoplecore.common.service.MinioService;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.event.ResignApprovedEvent;
+import com.peoplecore.event.SeveranceApprovalResultEvent;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;

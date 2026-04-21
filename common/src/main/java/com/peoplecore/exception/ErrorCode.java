@@ -116,7 +116,9 @@ public enum ErrorCode {
     RESIGN_DATE_NOT_SET(404, "퇴직일이 설정되지 않았습니다."),
     SERVICE_PERIOD_TOO_SHORT(404, "근속기간이 1년 미만입니다."),
     LEAVE_ALLOWANCE_TYPE_INVALID(400, "연차수당 유형이 유효하지 않습니다."),
-    EMPLOYEE_RETIREMENT_TYPE_NOT_SET(400, "퇴직금 설정이 되어있지 않습니다."),
+    EMPLOYEE_RETIREMENT_TYPE_NOT_SET(400, "사원의 퇴직금 설정이 되어있지 않습니다."),
+    TAX_YEAR_NOT_SUPPORTED(404,"해당 연도의 퇴직소득세 계산 설정이 없습니다. TaxYearlyConfig 업데이트가 필요합니다."),
+    TAX_CALCULATION_FAILED(500,"퇴직소득세 산출 중 오류가 발생했습니다."),
 
     // 캘린더
     CALENDAR_NOT_FOUND(404, "캘린더를 찾을 수 없습니다."),
