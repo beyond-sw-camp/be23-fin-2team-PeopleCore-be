@@ -31,6 +31,8 @@ import java.time.YearMonth;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 
+import static reactor.netty.http.HttpConnectionLiveness.log;
+
 @Service
 @Transactional(readOnly = true)
 @Slf4j
@@ -420,7 +422,29 @@ public class SeveranceService {
 ///    전자결재 결과 처리 (kafka consumer에서 호출)
     @Transactional
     public void applyApprovalResult(SeveranceApprovalResultEvent event){
+        SeverancePays sev = severancePaysRepository.findBySevIdAndCompany_CompanyId(event.getSevId(), event.getCompanyId()).orElseThrow(() -> new CustomException(ErrorCode.SEVERANCE_NOT_FOUND));
 
+        if (sev.getApprovalDocId() == null && event.getApprovalDocId() != null) {
+            sev.bindApprovalDoc(event.getApprovalDocId());
+            sev.submitApproval(event.getApprovalDocId());
+        }
+
+        String status = event.getStatus();
+        if ("APPROVED".equals(status)) {
+            sev.approve();
+            log.info("[SeveranceService] 전자결재 승인 처리 완료 - severanceId={}",
+                    event.getSevId());
+        } else if ("REJECTED".equals(status)) {
+            sev.rejectApproval();
+            log.info("[SeveranceService] 전자결재 반려 처리 - severanceId={}, reason={}",
+                    event.getSevId(), event.getRejectReason());
+        } else if ("CANCELED".equals(status)) {
+            sev.cancelApproval();
+            log.info("[SeveranceService] 전자결재 회수 - severanceId={}", event.getSevId());
+        } else {
+            log.warn("[SeveranceResult] 알 수 없는 status={} - severanceId={}",
+                    status, event.getSevId());
+        }
     }
 
 }

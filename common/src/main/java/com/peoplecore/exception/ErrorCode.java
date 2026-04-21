@@ -107,6 +107,9 @@ public enum ErrorCode {
     // PayItems isSystem 보호
     SYSTEM_PAY_ITEM_NOT_EDITABLE(400, "시스템 급여항목은 수정할 수 없습니다"),
     SYSTEM_PAY_ITEM_NOT_DELETABLE(400, "시스템 급여항목은 삭제할 수 없습니다"),
+    PROTECTED_PAY_ITEM_NOT_EDITABLE(400, "보호 항목은 수정할 수 없습니다."),
+    PROTECTED_PAY_ITEM_NOT_DELETABLE(400,"법정수당 산정 기초 항목은 삭제할 수 없습니다."),
+    APPROVAL_TEMPLATE_NOT_FOUND(404, "goekd 해당 전자결재 양식을 찾을 수 없습니다."),
 
     // 연차수당
     LEAVE_ALLOWANCE_NOT_ENABLED(404, "연차수당 법정수당 항목이 설정되어 있지 않습니다."),

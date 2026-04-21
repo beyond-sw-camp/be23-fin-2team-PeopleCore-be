@@ -151,6 +151,7 @@ public class SeverancePays extends BaseTimeEntity {
 
 
 
+
 //    확정
     public void confirm(Long confirmedBy){
         if (this.sevStatus != SevStatus.CALCULATING) {
@@ -189,6 +190,15 @@ public class SeverancePays extends BaseTimeEntity {
 //    approvalDocId 보완
     public void bindApprovalDoc(Long approvalDocId){
         this.approvalDocId = approvalDocId;
+    }
+
+//    전자결재 회수
+    public void cancelApproval(){
+        if(this.sevStatus != SevStatus.PENDING_APPROVAL){
+            throw new IllegalStateException("전자결재 진행중 상태에서만 회수 가능합니다.");
+        }
+        this.sevStatus = SevStatus.CONFIRMED;
+        this.approvalDocId = null;
     }
 
 //    지급 완료

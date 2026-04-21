@@ -293,14 +293,7 @@ public class PayrollService {
         run.confirm();
     }
 
-
-///    전자결재 상신(급여지급결의서) - 프론트에서 approvalDocId를 받음
-    @Transactional
-    public void submitApproval(UUID companyId, Long payrollRunId, Long approvalDovId) {
-        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
-        run.submitApproval(approvalDovId);
-    }
-
+/// 전자결재 상신은 PayrollApprovalDraftService 로직에서 처리
 
 ///    전자결재 결과 처리(kafka consumer)
     @Transactional
@@ -310,6 +303,7 @@ public class PayrollService {
 //        approvalDocId 보완
         if(run.getApprovalDocId() == null && event.getApprovalDocId() != null){
             run.bindApprovalDoc(event.getApprovalDocId());
+            run.submitApproval(event.getApprovalDocId());
         }
 
         String status = event.getStatus();
@@ -321,6 +315,12 @@ public class PayrollService {
             run.rejectApproval();
             log.info("[PayrollService] 전자결재 반려 처리 - payrollRunId={}, reason={}",
                     event.getPayrollRunId(), event.getRejectReason());
+        } else if ("CANCELED".equals(status)) {
+            run.cancelApproval();
+            log.info("[PayrollService] 전자결재 회수 - payrollRunId={}", event.getPayrollRunId());
+        } else {
+            log.warn("[PayrollService] 알 수 없는 status={} - payrollRunId={}",
+                    status, event.getPayrollRunId());
         }
     }
 

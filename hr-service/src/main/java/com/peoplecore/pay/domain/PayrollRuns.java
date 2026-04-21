@@ -99,8 +99,22 @@ public class PayrollRuns {
         this.payrollStatus = PayrollStatus.CONFIRMED;
     }
 
-//    approvalDocId 보완 (kafka 이벤트 늦게 수신 시)
-    public  void bindApprovalDoc(Long approvalDocId){
-        this.approvalDocId = approvalDocId;
+//    kafka 이벤트 수신 시 approvalDocId 바인딩
+//    - Kafka 발행 후 collab이 INSERT한 문서 ID를 역으로 주입받는 경로
+//    - 이미 바인딩된 경우(중복 이벤트)는 무시
+    public  void bindApprovalDoc(Long approvalDocId) {
+        if (this.approvalDocId == null && approvalDocId != null) {
+            this.approvalDocId = approvalDocId;
+        }
     }
+
+//   결재 회수
+    public void cancelApproval(){
+        if (this.payrollStatus != PayrollStatus.PENDING_APPROVAL){
+            throw new IllegalStateException("전자결재 진행중 상태에서만 회수 가능합니다.");
+        }
+        this.payrollStatus = PayrollStatus.CONFIRMED;
+        this.approvalDocId = null;
+    }
+
 }

@@ -158,7 +158,7 @@ public class ApprovalEventPublisher {
                         .build();
                 kafkaTemplate.send(TOPIC_ATTEN_MODIFY_RESULT, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] AttendanceModify result 발행 - docId={}, status={}", document.getDocId(), status);
-            } else if (formName != null && formName.startsWith(FORM_NAME_PAYROLL_PREFIX)) {  // 급여
+            } else if (formName != null && formName.startsWith(FORM_NAME_PAYROLL_PREFIX)) {  // 급여 결과
                 Long payrollRunId = parseLong(document.getDocData(), "payrollRunId");
                 PayrollApprovalResultEvent event = PayrollApprovalResultEvent.builder()
                         .companyId(document.getCompanyId())
@@ -170,7 +170,7 @@ public class ApprovalEventPublisher {
                         .build();
                 kafkaTemplate.send(TOPIC_PAYROLL_RESULT, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] Payroll result 발행 - docId={}, status={}", document.getDocId(), status);
-            } else if (formName != null && formName.startsWith(FORM_NAME_SEVERANCE_PREFIX)) {  // 퇴직금
+            } else if (formName != null && formName.startsWith(FORM_NAME_SEVERANCE_PREFIX)) {  // 퇴직금 결과
                 Long sevId = parseLong(document.getDocData(), "sevId");
                 SeveranceApprovalResultEvent event = SeveranceApprovalResultEvent.builder()
                         .companyId(document.getCompanyId())
