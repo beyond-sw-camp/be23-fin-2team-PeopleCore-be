@@ -1,5 +1,6 @@
 package com.peoplecore.evaluation.dto;
 
+import com.peoplecore.evaluation.domain.KpiDirection;
 import com.peoplecore.evaluation.domain.KpiTemplate;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -24,6 +25,7 @@ public class KpiTemplateResponse {
     private String name;            // 지표명
     private String description;
     private BigDecimal baseline;    // 사내평균 (없으면 null - 집계 전 또는 미사용)
+    private KpiDirection direction; // 지표 방향성 (UP/DOWN/MAINTAIN)
 
     // Entity -> DTO 변환
     // baseline 만 nullable (집계 전에 null)
@@ -39,6 +41,7 @@ public class KpiTemplateResponse {
                 .name(t.getName())
                 .description(t.getDescription())
                 .baseline(t.getBaseline())
+                .direction(t.getDirection())
                 .build();
     }
 }

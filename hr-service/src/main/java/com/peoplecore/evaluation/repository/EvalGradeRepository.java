@@ -70,7 +70,7 @@ public interface EvalGradeRepository extends JpaRepository<EvalGrade, Long>, Eva
 
     //    12번 시즌 내 미산정자 empId목록(서버 내 ack재검증)
     @Query("""
-            SELECT g.emp.empId 
+            SELECT g.emp.empId
             FROM EvalGrade g
             WHERE g.season.seasonId = :seasonId
             AND g.finalGrade IS NULL

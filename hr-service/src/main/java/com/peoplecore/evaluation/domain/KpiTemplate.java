@@ -44,6 +44,11 @@ public class KpiTemplate extends BaseTimeEntity {
     @Column(name = "baseline", precision = 12, scale = 2)
     private BigDecimal baseline; // 사내평균(기준값)
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "direction", length = 10, nullable = false)
+    @Builder.Default
+    private KpiDirection direction = KpiDirection.UP; // 지표 방향성 (UP/DOWN/MAINTAIN)
+
     @Column(name = "is_active", nullable = false)
     @Builder.Default
     private Boolean isActive = true;
@@ -58,11 +63,13 @@ public class KpiTemplate extends BaseTimeEntity {
                        KpiOption category,
                        KpiOption unit,
                        String name,
-                       String description) {
+                       String description,
+                       KpiDirection direction) {
         this.department = department;
         this.category = category;
         this.unit = unit;
         this.name = name;
         this.description = description;
+        this.direction = direction;
     }
 }

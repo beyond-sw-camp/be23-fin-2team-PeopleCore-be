@@ -98,6 +98,7 @@ public class KpiTemplateService {
                 .unit(unit)
                 .name(req.getName())
                 .description(req.getDescription())
+                .direction(req.getDirection())
                 .build();
 
         KpiTemplate saved = kpiTemplateRepository.save(t);
@@ -141,7 +142,7 @@ public class KpiTemplateService {
         }
 
         // 도메인 메서드로 일괄 갱신 (dirty checking 으로 자동 UPDATE)
-        t.update(department, category, unit, req.getName(), req.getDescription());
+        t.update(department, category, unit, req.getName(), req.getDescription(), req.getDirection());
 
         return KpiTemplateResponse.from(t);
     }

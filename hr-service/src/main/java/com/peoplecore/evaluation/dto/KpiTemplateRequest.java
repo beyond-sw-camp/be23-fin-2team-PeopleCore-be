@@ -1,5 +1,6 @@
 package com.peoplecore.evaluation.dto;
 
+import com.peoplecore.evaluation.domain.KpiDirection;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -26,4 +27,7 @@ public class KpiTemplateRequest {
 
     @NotNull(message = "설명은 필수입니다")
     private String description;
+
+    @NotNull(message = "지표 방향성은 필수입니다")
+    private KpiDirection direction;   // UP / DOWN / MAINTAIN
 }
