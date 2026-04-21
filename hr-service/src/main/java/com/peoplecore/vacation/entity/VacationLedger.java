@@ -99,8 +99,7 @@ public class VacationLedger extends BaseTimeEntity {
     }
 
     /* 관리자 수동 부여 - 포상/리프레시/여름휴가/결혼휴가 등 */
-    public static VacationLedger ofManualGrant(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal,
-                                               Long managerId, String reason) {
+    public static VacationLedger ofManualGrant(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal, Long managerId, String reason) {
         return baseBuilder(balance, LedgerEventType.MANUAL_GRANT, days, beforeTotal, afterTotal)
                 .refType(REF_ADMIN)
                 .managerId(managerId)
@@ -109,8 +108,7 @@ public class VacationLedger extends BaseTimeEntity {
     }
 
     /* 결재 승인 차감 - Kafka APPROVED 수신 시 */
-    public static VacationLedger ofUsed(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal,
-                                        Long requestId, Long managerId) {
+    public static VacationLedger ofUsed(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal, Long requestId, Long managerId) {
         return baseBuilder(balance, LedgerEventType.USED, days.negate(), beforeTotal, afterTotal)
                 .refType(REF_VAC_REQUEST)
                 .refId(requestId)
@@ -120,8 +118,7 @@ public class VacationLedger extends BaseTimeEntity {
     }
 
     /* 승인 후 취소 복원 - APPROVED→CANCELED 시 */
-    public static VacationLedger ofRestored(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal,
-                                            Long requestId, Long managerId, String reason) {
+    public static VacationLedger ofRestored(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal, Long requestId, Long managerId, String reason) {
         return baseBuilder(balance, LedgerEventType.RESTORED, days, beforeTotal, afterTotal)
                 .refType(REF_VAC_REQUEST)
                 .refId(requestId)
@@ -131,8 +128,7 @@ public class VacationLedger extends BaseTimeEntity {
     }
 
     /* 만료 소멸 - 만료 잡 / 1년 도달 시 */
-    public static VacationLedger ofExpired(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal,
-                                           String reason) {
+    public static VacationLedger ofExpired(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal, String reason) {
         return baseBuilder(balance, LedgerEventType.EXPIRED, days.negate(), beforeTotal, afterTotal)
                 .refType(REF_SCHEDULER)
                 .reason(reason)
@@ -157,9 +153,7 @@ public class VacationLedger extends BaseTimeEntity {
     }
 
     /* 이벤트 기반 휴가 승인 시 INITIAL_GRANT 기록 - accrue 직전 ~ consumeDirectly 직후 구간의 total 변동 반영 */
-    /* refType=VAC_REQUEST, refId=requestId, managerId=결재자 */
-    public static VacationLedger ofEventGrant(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal,
-                                              Long requestId, Long managerId, String reason) {
+    public static VacationLedger ofEventGrant(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal, Long requestId, Long managerId, String reason) {
         return baseBuilder(balance, LedgerEventType.INITIAL_GRANT, days, beforeTotal, afterTotal)
                 .refType(REF_VAC_REQUEST)
                 .refId(requestId)
@@ -169,12 +163,18 @@ public class VacationLedger extends BaseTimeEntity {
     }
 
     /* 전년 미리쓴 연차 상쇄 - 차년도 연차 발생 배치에서 전년 available 음수만큼 신규 row total 에서 차감 */
-    /* allowAdvanceUse 정책 ON 회사만 생성. days 는 양수로 전달 (음수 전환은 내부 negate) */
-    /* refType=SCHEDULER, managerId=null (시스템 자동) */
-    public static VacationLedger ofAdvanceOffset(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal,
-                                                 String reason) {
+    public static VacationLedger ofAdvanceOffset(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal, String reason) {
         return baseBuilder(balance, LedgerEventType.ADVANCE_OFFSET, days.negate(), beforeTotal, afterTotal)
                 .refType(REF_SCHEDULER)
+                .reason(reason)
+                .build();
+    }
+
+    /* 관리자 수동 사용 기록 - 단체 연차 / 관리자가 쉰 걸로 처리. usedDays 증가 (totalDays 불변) */
+    public static VacationLedger ofManualUsed(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal, Long managerId, String reason) {
+        return baseBuilder(balance, LedgerEventType.MANUAL_USED, days.negate(), beforeTotal, afterTotal)
+                .refType(REF_ADMIN)
+                .managerId(managerId)
                 .reason(reason)
                 .build();
     }
@@ -192,7 +192,6 @@ public class VacationLedger extends BaseTimeEntity {
     }
 
     /* INSERT 직전 부호 검증 - 팩토리 우회 직접 builder 사용 시에도 마지막 방어선 */
-    /* credit 이벤트는 changeDays > 0, debit 이벤트는 changeDays < 0 여야 함 */
     @PrePersist
     private void validateSignContract() {
         if (eventType == null || changeDays == null) {

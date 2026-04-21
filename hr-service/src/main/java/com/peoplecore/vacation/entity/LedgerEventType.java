@@ -25,8 +25,10 @@ public enum LedgerEventType {
     ANNUAL_TRANSITION(false),
 
     /* 전년 미리쓴 연차 상쇄 - 차년도 연차 발생 시 전년 available 음수만큼 신규 row total 에서 차감 */
-    /* allowAdvanceUse 정책 ON 회사만 발생. AnnualGrantService → SCHEDULER ref */
-    ADVANCE_OFFSET(false);
+    ADVANCE_OFFSET(false),
+
+    /* 관리자 수동 기록 / 관리자가 처리*/
+    MANUAL_USED(false);
 
     /* true = 잔여 증가(+), false = 잔여 감소(-). change_days 부호 검증/UI 색상 분기에 사용 */
     private final boolean credit;
@@ -42,6 +44,7 @@ public enum LedgerEventType {
 
     /* 감소 이벤트 - change_days 음수 */
     public boolean isDebit() {
-        return this == USED || this == EXPIRED || this == ANNUAL_TRANSITION || this == ADVANCE_OFFSET;
+        return this == USED || this == EXPIRED || this == ANNUAL_TRANSITION
+                || this == ADVANCE_OFFSET || this == MANUAL_USED;
     }
 }

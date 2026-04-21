@@ -10,7 +10,6 @@ import java.time.LocalDate;
 import java.util.List;
 
 /* 관리자 휴가 부여 요청 - 다수 사원 일괄 */
-/* 화면: 유형 선택 + 사원 다중 선택 + 일수 + (선택) 만료일 + 사유 */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -23,7 +22,7 @@ public class VacationGrantRequest {
     /* 부여 대상 사원 ID 목록 */
     private List<Long> empIds;
 
-    /* 부여 일수 (양수) */
+    /* 조정 일수 - 양수=부여, 음수=차감. 0/null 은 BAD_REQUEST. 서비스에서 부호 분기 */
     private BigDecimal days;
 
     /* 회기 연도. null 이면 today.getYear() */
