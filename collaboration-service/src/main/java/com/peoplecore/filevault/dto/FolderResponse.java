@@ -16,6 +16,7 @@ public class FolderResponse {
     private FolderType type;
     private Long parentFolderId;
     private Boolean isSystemDefault;
+    private Long createdBy;
     private LocalDateTime createdAt;
     private LocalDateTime deletedAt;
     /** 현재 사용자의 즐겨찾기 여부. 단건 응답이나 호출자가 모를 땐 false. */
@@ -32,6 +33,7 @@ public class FolderResponse {
             .type(folder.getType())
             .parentFolderId(folder.getParentFolderId())
             .isSystemDefault(folder.getIsSystemDefault())
+            .createdBy(folder.getCreatedBy())
             .createdAt(folder.getCreatedAt())
             .deletedAt(folder.getDeletedAt())
             .starred(starred)
