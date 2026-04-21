@@ -1,6 +1,5 @@
 package com.peoplecore.vacation.dto;
 
-import com.peoplecore.vacation.entity.UseOption;
 import com.peoplecore.vacation.entity.VacationRequest;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,9 +29,6 @@ public class VacationAdminPeriodResponse {
     /* 휴가 유형명 - VacationType 조인 */
     private String typeName;
 
-    /* 사용 옵션 - FULL_DAY(종일) / HALF_DAY(반차) / QUARTER_DAY(반반차) */
-    private UseOption useOption;
-
     /* 휴가 시작 일시 */
     private LocalDateTime startAt;
 
@@ -52,7 +48,6 @@ public class VacationAdminPeriodResponse {
                 .empName(r.getRequestEmpName())
                 .deptName(r.getRequestEmpDeptName())
                 .typeName(r.getVacationType().getTypeName())
-                .useOption(UseOption.fromDays(r.getRequestUseDays()))
                 .startAt(r.getRequestStartAt())
                 .endAt(r.getRequestEndAt())
                 .useDays(r.getRequestUseDays())

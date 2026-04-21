@@ -35,7 +35,6 @@ public class EmpDetailResponseDto {
     // 시스템 계정 정보
     private String    empNum;
     private String    empEmail;
-    private String    empMailboxSize;
 
     // 권한 정보
     private String    empRole;
@@ -59,7 +58,6 @@ public class EmpDetailResponseDto {
                 .empStatus(emp.getEmpStatus().name())
                 .empNum(emp.getEmpNum())
                 .empEmail(emp.getEmpEmail())
-                .empMailboxSize(emp.getEmpMailboxSize())
                 .empRole(emp.getEmpRole().name())
                 .build();
     }

@@ -6,6 +6,7 @@ import com.peoplecore.event.VacationApprovalDocCreatedEvent;
 import com.peoplecore.event.VacationApprovalResultEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.vacation.dto.VacationAdminPeriodResponse;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
 import com.peoplecore.vacation.entity.GrantMode;
 import com.peoplecore.vacation.entity.OfficialLeaveReason;
@@ -227,6 +228,24 @@ public class VacationRequestService {
         return vacationRequestQueryRepository
                 .findEmployeeHistory(companyId, empId, pageable)
                 .map(VacationRequestResponse::from);
+    }
+
+    /* 전사 휴가 관리 - 기간 교집합 + 상태 복수 필터 페이지 조회 */
+    /* 사용 예: 2026-04-01 ~ 2026-04-05 기간에 걸친 PENDING/APPROVED 신청들 */
+    /* statuses null or 빈 배열 이면 상태 필터 없이 전체 */
+    /* 경계 포함: startDate 00:00 ~ endDate 23:59:59 */
+    @Transactional(readOnly = true)
+    public Page<VacationAdminPeriodResponse> listForAdminByPeriod(UUID companyId,
+                                                                  LocalDate startDate,
+                                                                  LocalDate endDate,
+                                                                  List<RequestStatus> statuses,
+                                                                  Pageable pageable) {
+        LocalDateTime periodStart = startDate.atStartOfDay();
+        LocalDateTime periodEnd = endDate.atTime(23, 59, 59);
+
+        return vacationRequestQueryRepository
+                .findByCompanyAndPeriodAndStatuses(companyId, periodStart, periodEnd, statuses, pageable)
+                .map(VacationAdminPeriodResponse::from);
     }
 
     /* 관리자 상태별 조회 페이지 - Type + Employee fetch join */
