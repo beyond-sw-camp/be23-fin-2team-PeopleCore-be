@@ -120,10 +120,18 @@ public class VacationBalance extends BaseTimeEntity {
         this.totalDays = this.totalDays.add(days);
     }
 
-    /* 신청 예약 - PENDING 시 호출. pending += days, 잔여 부족 시 예외 */
+    /* 신청 예약 - PENDING 시 호출. pending += days, 잔여 부족 시 예외 (엄격 모드) */
+    /* 기존 호출부 호환용 - 내부적으로 오버로드에 false 로 위임 */
     public void markPending(BigDecimal days) {
+        markPending(days, false);
+    }
+
+    /* 신청 예약 - allowNegative=true 면 available 검증 스킵 (미리쓰기 허용 회사의 연차/월차) */
+    /* allowAdvanceUse 정책 ON 회사의 연차/월차 신청에서만 true 로 호출 */
+    /* allowNegative=true 시 available 음수로 떨어질 수 있음 (의도된 동작) */
+    public void markPending(BigDecimal days, boolean allowNegative) {
         validatePositive(days);
-        if (getAvailableDays().compareTo(days) < 0) {
+        if (!allowNegative && getAvailableDays().compareTo(days) < 0) {
             throw new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT);
         }
         this.pendingDays = this.pendingDays.add(days);
@@ -176,6 +184,15 @@ public class VacationBalance extends BaseTimeEntity {
         if (this.totalDays.compareTo(days) < 0) {
             throw new CustomException(ErrorCode.VACATION_BALANCE_USED_INSUFFICIENT);
         }
+        this.totalDays = this.totalDays.subtract(days);
+    }
+
+    /* 전년 미리쓴 연차 상쇄 - 차년도 연차 발생 시 total 에서 직접 차감 (음수 허용) */
+    /* allowAdvanceUse 정책 ON 회사만 AnnualGrantService 가 호출. days 는 양수로 전달 */
+    /* 가드 스킵: total < days 이어도 예외 없음 (total 음수 허용 - 전년 과잉 땡겨쓰기 시 발생 가능) */
+    /* 호출 직전/직후 VacationLedger.ofAdvanceOffset 으로 이력 기록 필수 */
+    public void applyAdvanceOffset(BigDecimal days) {
+        validatePositive(days);
         this.totalDays = this.totalDays.subtract(days);
     }
 

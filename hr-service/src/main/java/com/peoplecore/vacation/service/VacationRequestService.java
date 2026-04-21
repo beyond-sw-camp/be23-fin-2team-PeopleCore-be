@@ -16,7 +16,9 @@ import com.peoplecore.vacation.entity.VacationBalance;
 import com.peoplecore.vacation.entity.VacationLedger;
 import com.peoplecore.vacation.entity.VacationRequest;
 import com.peoplecore.vacation.entity.VacationType;
+import com.peoplecore.vacation.entity.VacationPolicy;
 import com.peoplecore.vacation.repository.VacationBalanceRepository;
+import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import com.peoplecore.vacation.repository.VacationLedgerRepository;
 import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
 import com.peoplecore.vacation.repository.VacationRequestRepository;
@@ -54,6 +56,7 @@ public class VacationRequestService {
     private final EmployeeRepository employeeRepository;
     private final VacationBalanceRepository vacationBalanceRepository;
     private final VacationLedgerRepository vacationLedgerRepository;
+    private final VacationPolicyRepository vacationPolicyRepository;
 
     @Autowired
     public VacationRequestService(VacationRequestRepository vacationRequestRepository,
@@ -61,13 +64,15 @@ public class VacationRequestService {
                                   VacationTypeRepository vacationTypeRepository,
                                   EmployeeRepository employeeRepository,
                                   VacationBalanceRepository vacationBalanceRepository,
-                                  VacationLedgerRepository vacationLedgerRepository) {
+                                  VacationLedgerRepository vacationLedgerRepository,
+                                  VacationPolicyRepository vacationPolicyRepository) {
         this.vacationRequestRepository = vacationRequestRepository;
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
         this.vacationTypeRepository = vacationTypeRepository;
         this.employeeRepository = employeeRepository;
         this.vacationBalanceRepository = vacationBalanceRepository;
         this.vacationLedgerRepository = vacationLedgerRepository;
+        this.vacationPolicyRepository = vacationPolicyRepository;
     }
 
     /* Kafka(vacation-approval-doc-created) 진입 - PENDING INSERT (grantMode 분기) */
@@ -108,7 +113,9 @@ public class VacationRequestService {
             VacationBalance balance = vacationBalanceRepository
                     .findOne(event.getCompanyId(), employee.getEmpId(), vacationType.getTypeId(), balanceYear)
                     .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT));
-            balance.markPending(useDays);
+            // allowAdvanceUse 정책 + 연차/월차 동시 만족 시만 available 검증 스킵 (음수 허용)
+            boolean allowNegative = isAdvanceUseAllowed(event.getCompanyId(), vacationType);
+            balance.markPending(useDays, allowNegative);
         } else {
             // 이벤트 기반 - Balance 건드리지 않고 한도 예상 검증만
             validateEventBasedCap(event.getCompanyId(), employee.getEmpId(), vacationType,
@@ -443,5 +450,14 @@ public class VacationRequestService {
 
     private boolean isBlank(String s) {
         return s == null || s.isBlank();
+    }
+
+    /* allowAdvanceUse 정책 + 연차/월차 유형 동시 만족 시 true (available 검증 스킵 대상) */
+    /* 그 외 (법정휴가 / 정책 OFF / 정책 없음) 는 false - 기존 엄격 검증 유지 */
+    private boolean isAdvanceUseAllowed(UUID companyId, VacationType vacationType) {
+        if (!vacationType.isAnnual() && !vacationType.isMonthly()) return false;
+        return vacationPolicyRepository.findByCompanyId(companyId)
+                .map(VacationPolicy::isAdvanceUseActive)
+                .orElse(false);
     }
 }
