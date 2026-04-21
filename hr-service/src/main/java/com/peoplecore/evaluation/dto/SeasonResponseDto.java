@@ -1,6 +1,8 @@
 package com.peoplecore.evaluation.dto;
 
+import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.Season;
+import com.peoplecore.evaluation.domain.SeasonPeriod;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,10 +19,10 @@ import java.time.LocalDate;
 public class SeasonResponseDto {
     private Long id;
     private String name;
-    private String period; //상반기/하반기/연간
+    private SeasonPeriod period;       // FIRST_HALF / SECOND_HALF / ANNUAL
     private LocalDate startDate;
     private LocalDate endDate;
-    private String status; //"준비중/진행중/ 완료
+    private EvalSeasonStatus status;   // DRAFT / OPEN / CLOSED 등
 
     public static SeasonResponseDto from(Season season){
         return SeasonResponseDto.builder()
@@ -29,7 +31,7 @@ public class SeasonResponseDto {
                 .period(season.getPeriod())
                 .startDate(season.getStartDate())
                 .endDate(season.getEndDate())
-                .status(season.getStatus().name()) // enum 이름 그대로 (프론트에서 라벨 매핑)
+                .status(season.getStatus())
                 .build();
     }
 }

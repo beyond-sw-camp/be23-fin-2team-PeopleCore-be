@@ -25,8 +25,8 @@ public class KpiOptionBundleRequest {
     private String departmentLevel;   // "1".."N" 또는 "leaf"
 
     // 옵션 1건 요청 단위
-    //   - id null → 신규 추가 (INSERT)
-    //   - id 있음 → 기존 row. label 바뀌었으면 rename, 아니면 순서만 체크
+    //   - id null -> 신규 추가 (INSERT)
+    //   - id 있음 -> 기존 row. label 바뀌었으면 rename, 아니면 순서만 체크
     @Data
     @Builder
     @AllArgsConstructor

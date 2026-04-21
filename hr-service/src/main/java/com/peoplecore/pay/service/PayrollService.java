@@ -19,7 +19,6 @@ import com.peoplecore.pay.enums.PayrollStatus;
 import com.peoplecore.pay.repository.*;
 import com.peoplecore.pay.transfer.BankTransferFileFactory;
 import com.peoplecore.pay.transfer.BankTransferFileGenerator;
-import com.peoplecore.salarycontract.domain.ContractStatus;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.repository.SalaryContractDetailRepository;
@@ -146,7 +145,7 @@ public class PayrollService {
 
         for (Employee emp : employees) {
 //            최신 연봉계약 조회
-            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdAndStatusOrderByContractYearDesc(emp.getEmpId(), ContractStatus.SIGNED).orElse(null);
+            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByContractYearDesc(emp.getEmpId()).orElse(null);
 
             if (contract == null) continue;
 
@@ -397,7 +396,7 @@ public class PayrollService {
 
 //        최신 연봉계약의 통상임금
         SalaryContract contract = salaryContractRepository
-                .findTopByEmployee_EmpIdAndStatusOrderByContractYearDesc(empId, ContractStatus.SIGNED).orElseThrow(()-> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
+                .findTopByEmployee_EmpIdOrderByContractYearDesc(empId).orElseThrow(()-> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
 
         long monthlySalary = contract.getTotalAmount().divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR).longValue();
 

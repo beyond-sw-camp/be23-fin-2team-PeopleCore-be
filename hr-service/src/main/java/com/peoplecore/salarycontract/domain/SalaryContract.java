@@ -49,11 +49,6 @@ public class SalaryContract {
     @Column(name = "total_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal totalAmount;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
-    @Builder.Default
-    private ContractStatus status = ContractStatus.DRAFT; //계약 상태(draft,sent,signed)
-
     @Column(name = "apply_from")
     private LocalDate applyFrom; //계약 적용 시작일
 

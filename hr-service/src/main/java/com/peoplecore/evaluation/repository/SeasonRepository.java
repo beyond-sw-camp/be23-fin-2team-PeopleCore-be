@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 // 평가시즌 리포지토리
@@ -52,4 +53,6 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
                                  @Param("newStart") LocalDate newStart,
                                  @Param("newEnd") LocalDate newEnd,
                                  @Param("excludeSeasonId") Long excludeSeasonId);
+//    회사의  현재 진행 시즌 - 회사당 1개
+    Optional<Season>findByCompany_CompanyIdAndStatus(UUID companyId, EvalSeasonStatus status);
 }

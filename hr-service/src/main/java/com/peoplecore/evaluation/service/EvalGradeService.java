@@ -12,13 +12,28 @@ import com.peoplecore.evaluation.domain.EvalGradeSortField;
 import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.domain.Calibration;
+import com.peoplecore.evaluation.domain.Goal;
+import com.peoplecore.evaluation.domain.GoalApprovalStatus;
+import com.peoplecore.evaluation.domain.EvaluationRules;
+import com.peoplecore.evaluation.domain.KpiDirection;
+import com.peoplecore.evaluation.domain.ManagerEvaluation;
+import com.peoplecore.evaluation.domain.MyResultStatus;
+import com.peoplecore.evaluation.domain.SelfEvaluation;
+import com.peoplecore.evaluation.domain.SelfEvaluationFile;
+import com.peoplecore.evaluation.domain.TaskGrade;
 import com.peoplecore.evaluation.dto.*;
 import com.peoplecore.evaluation.domain.Stage;
 import com.peoplecore.evaluation.domain.StageStatus;
 import com.peoplecore.evaluation.domain.StageType;
+import com.peoplecore.alarm.publisher.HrAlarmPublisher;
+import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.evaluation.repository.CalibrationRepository;
 import com.peoplecore.evaluation.repository.EvalGradeRepository;
+import com.peoplecore.evaluation.repository.GoalRepository;
+import com.peoplecore.evaluation.repository.ManagerEvaluationRepository;
 import com.peoplecore.evaluation.repository.SeasonRepository;
+import com.peoplecore.evaluation.repository.SelfEvaluationFileRepository;
+import com.peoplecore.evaluation.repository.SelfEvaluationRepository;
 import com.peoplecore.evaluation.repository.StageRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -46,13 +61,26 @@ public class EvalGradeService {
     private final StageRepository stageRepository;
     private final ObjectMapper objectMapper;
     private final EmployeeRepository employeeRepository;
+    private final GoalRepository goalRepository;
+    private final SelfEvaluationRepository selfEvaluationRepository;
+    private final SelfEvaluationFileRepository selfEvaluationFileRepository;
+    private final ManagerEvaluationRepository mgrEvalRepository;
+    private final EvaluationRulesService rulesService;
+    private final HrAlarmPublisher hrAlarmPublisher;
 
     public EvalGradeService(EvalGradeRepository evalGradeRepository,
                             SeasonRepository seasonRepository,
                             DepartmentRepository departmentRepository,
                             CalibrationRepository calibrationRepository,
                             StageRepository stageRepository,
-                            ObjectMapper objectMapper, EmployeeRepository employeeRepository) {
+                            ObjectMapper objectMapper,
+                            EmployeeRepository employeeRepository,
+                            GoalRepository goalRepository,
+                            SelfEvaluationRepository selfEvaluationRepository,
+                            SelfEvaluationFileRepository selfEvaluationFileRepository,
+                            ManagerEvaluationRepository mgrEvalRepository,
+                            EvaluationRulesService rulesService,
+                            HrAlarmPublisher hrAlarmPublisher) {
         this.evalGradeRepository = evalGradeRepository;
         this.seasonRepository = seasonRepository;
         this.departmentRepository = departmentRepository;
@@ -60,6 +88,12 @@ public class EvalGradeService {
         this.stageRepository = stageRepository;
         this.objectMapper = objectMapper;
         this.employeeRepository = employeeRepository;
+        this.goalRepository = goalRepository;
+        this.selfEvaluationRepository = selfEvaluationRepository;
+        this.selfEvaluationFileRepository = selfEvaluationFileRepository;
+        this.mgrEvalRepository = mgrEvalRepository;
+        this.rulesService = rulesService;
+        this.hrAlarmPublisher = hrAlarmPublisher;
     }
 
     @Transactional(readOnly = true)
@@ -1090,17 +1124,39 @@ public class EvalGradeService {
             }
         }
 
-//        확정-EvalGrade전체 잠금 + 시즌 finalizedAt세팅 + status CLOSED 전환
-//        (status=CLOSED 로 변경)
+//        확정+알림 - 수동/자동 공통 처리 (스케줄러에서도 호출)
+        int lockedCount = finalizeAndNotify(companyId, seasonId, season);
+
+        return FinalizeDto.builder()
+                .finalizedAt(season.getFinalizedAt())
+                .lockedCount(lockedCount)
+                .build();
+    }
+
+
+//    시즌 확정 + 사원 전원 알림 발행 (수동 finalize / 스케줄러 자동 확정 공통)
+//    - EvalGrade 전체 잠금 + finalizedAt + status CLOSED 전환
+//    - 시즌 대상 사원 전원에게 "최종 평가결과 공개" 알림
+    public int finalizeAndNotify(UUID companyId, Long seasonId, Season season) {
         LocalDateTime now = LocalDateTime.now();
         int lockedCount = evalGradeRepository.lockAllAssigned(seasonId, now);
         season.markFinalized(now);
         season.close();
 
-        return FinalizeDto.builder()
-                .finalizedAt(now)
-                .lockedCount(lockedCount)
-                .build();
+        List<Long> empIds = evalGradeRepository.findEmpIdsBySeason(seasonId);
+        if (!empIds.isEmpty()) {
+            hrAlarmPublisher.publisher(AlarmEvent.builder()
+                    .companyId(companyId)
+                    .empIds(empIds)
+                    .alarmType("EVAL")
+                    .alarmTitle(season.getName())
+                    .alarmContent("최종 평가결과가 공개되었습니다")
+                    .alarmLink("/eval/my/result")
+                    .alarmRefType("SEASON")
+                    .alarmRefId(seasonId)
+                    .build());
+        }
+        return lockedCount;
     }
 
 
@@ -1128,6 +1184,329 @@ public class EvalGradeService {
 //        Impl 에서 필터 + DTO 변환까지 수행 (1번 searchDraftList 와 동일 패턴)
         return evalGradeRepository.searchFinalList(
                 companyId, seasonId, deptId, keyword, unscoredOnly, sortField, pageable);
+    }
+
+
+    //    15. 평가 결과 상세 (HR 전용) - 한 사원의 단계별 타임라인 전체
+    //       - gradeId = EvalGrade PK
+    //       - 실시간 JOIN + 스냅샷 컬럼 사용. 미진행 단계는 null/빈 배열
+    @Transactional(readOnly = true)
+    public EvalGradeDetailDto getDetail(UUID companyId, Long gradeId) {
+
+//        EvalGrade 로드 + 회사 소유권 검증
+//        조회 1 - 평가 등급 row 전체 (점수/등급/스냅샷 컬럼)
+        EvalGrade g = evalGradeRepository.findById(gradeId).orElseThrow(() -> new IllegalArgumentException("등급 정보를 찾을 수 없습니다"));
+        if (!g.getEmp().getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+        Season season = g.getSeason();
+        Long seasonId = season.getSeasonId();
+        Long empId = g.getEmp().getEmpId();
+
+//        스냅샷 파싱 (item weight 추출용)
+        FormSnapshotDto snapshot = null;
+        if (season.getFormSnapshot() != null) {
+            try {
+                snapshot = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);
+            } catch (JsonProcessingException ignored) { }
+        }
+
+//       1 - 목표등록: 승인된 목표 + 비율
+//       조회 - 승인된 목표 목록
+        List<Goal> goals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdAndApprovalStatusOrderByGoalIdDesc(empId, seasonId, GoalApprovalStatus.APPROVED);
+        List<Long> goalIds = new ArrayList<>();
+        for (Goal go : goals) {
+            goalIds.add(go.getGoalId());
+        }
+
+//        조회 - 회사 규칙 (목표 비율 계산용 taskWeight)
+        EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
+        Map<Long, BigDecimal> ratios = computeGoalRatios(goals, rules);
+
+        List<EvalGradeDetailDto.GoalEntry> goalDtos = new ArrayList<>();
+        for (Goal go : goals) {
+            goalDtos.add(EvalGradeDetailDto.GoalEntry.builder()
+                    .goalType(go.getGoalType())
+                    .category(go.getCategory())
+                    .title(go.getTitle())
+                    .grade(go.getTaskGrade())
+                    .ratio(ratios.get(go.getGoalId()))
+                    .targetValue(go.getTargetValue())
+                    .targetUnit(go.getTargetUnit())
+                    .build());
+        }
+
+//       2a - 평가입력내역: itemScores (자기/상위자 요약)
+        List<EvalGradeDetailDto.ItemScore> itemScores = new ArrayList<>();
+        if (snapshot != null && snapshot.getItemList() != null) {
+            for (FormSnapshotDto.Item it : snapshot.getItemList()) {
+                if (Boolean.TRUE.equals(it.getLocked()) && Boolean.FALSE.equals(it.getEnabled())) continue;
+                BigDecimal score = null;
+                if ("self".equals(it.getId())) score = g.getSelfScore();
+                else if ("manager".equals(it.getId())) score = g.getManagerScore();
+                itemScores.add(EvalGradeDetailDto.ItemScore.builder()
+                        .itemId(it.getId())
+                        .itemName(it.getName())
+                        .score(score)
+                        .weight(it.getWeight())
+                        .build());
+            }
+        }
+
+//         2b - 자기평가 상세 + 파일
+//         조회 - 승인된 목표들의 자기평가 일괄
+        List<SelfEvaluation> selfEvals = goalIds.isEmpty() ? new ArrayList<>() : selfEvaluationRepository.findByGoal_GoalIdIn(goalIds);
+        Map<Long, SelfEvaluation> selfByGoal = new HashMap<>();
+        List<Long> selfEvalIds = new ArrayList<>();
+        for (SelfEvaluation se : selfEvals) {
+            selfByGoal.put(se.getGoal().getGoalId(), se);
+            selfEvalIds.add(se.getSelfEvalId());
+        }
+        Map<Long, List<SelfEvaluationFile>> filesBySelfEvalId = new HashMap<>();
+        if (!selfEvalIds.isEmpty()) {
+//            조회 - 자기평가 근거 파일 일괄
+            List<SelfEvaluationFile> allFiles = selfEvaluationFileRepository.findBySelfEvaluation_SelfEvalIdIn(selfEvalIds);
+            for (SelfEvaluationFile f : allFiles) {
+                Long sid = f.getSelfEvaluation().getSelfEvalId();
+                List<SelfEvaluationFile> list = filesBySelfEvalId.get(sid);
+                if (list == null) { list = new ArrayList<>(); filesBySelfEvalId.put(sid, list); }
+                list.add(f);
+            }
+        }
+
+        List<EvalGradeDetailDto.SelfEvalEntry> selfEntries = new ArrayList<>();
+        for (Goal go : goals) {
+            SelfEvaluation se = selfByGoal.get(go.getGoalId());
+            if (se == null) continue;
+            List<SelfEvaluationFile> fs = filesBySelfEvalId.get(se.getSelfEvalId());
+            List<SelfEvaluationResponse.FileResponse> fileDtos = new ArrayList<>();
+            if (fs != null) {
+                for (SelfEvaluationFile f : fs) {
+                    fileDtos.add(SelfEvaluationResponse.FileResponse.from(f));
+                }
+            }
+            selfEntries.add(EvalGradeDetailDto.SelfEvalEntry.builder()
+                    .goalType(go.getGoalType())
+                    .title(go.getTitle())
+                    .grade(go.getTaskGrade())
+                    .targetValue(go.getTargetValue())
+                    .targetUnit(go.getTargetUnit())
+                    .actualValue(se.getActualValue())
+                    .achievementLevel(se.getAchievementLevel())
+                    .achievementDetail(se.getAchievementDetail())
+                    .files(fileDtos)
+                    .build());
+        }
+
+//       2c - 상위자평가 상세
+//       조회 - 해당 사원이 받은 팀장평가 단건
+        EvalGradeDetailDto.ManagerEvalEntry mgrDto = null;
+        ManagerEvaluation mgrEval = mgrEvalRepository.findByEmployee_EmpIdAndSeason_SeasonId(empId, seasonId).orElse(null);
+
+        if (mgrEval != null) {
+            mgrDto = EvalGradeDetailDto.ManagerEvalEntry.builder()
+                    .grade(mgrEval.getGradeLabel())
+                    .comment(mgrEval.getComment())
+                    .feedback(mgrEval.getFeedback())
+                    .build();
+        }
+
+//        2d 조정 항목 (TODO: 근태 발생건수 집계 구현 후)
+        List<EvalGradeDetailDto.AdjustmentItem> adjDtos = new ArrayList<>();
+
+//        3 - 보정 이력
+//        조회 - 해당 등급의 보정 이력 시간순 전체
+        List<Calibration> calibs = calibrationRepository.findByGrade_GradeIdInOrderByCreatedAtAsc(List.of(gradeId));
+        List<EvalGradeDetailDto.CalibrationEntry> calibDtos = new ArrayList<>();
+        for (Calibration c : calibs) {
+            calibDtos.add(EvalGradeDetailDto.CalibrationEntry.builder()
+                    .date(c.getCreatedAt())
+                    .fromGrade(c.getFromGrade())
+                    .toGrade(c.getToGrade())
+                    .reason(c.getReason())
+                    .actor(c.getActor() != null ? c.getActor().getEmpName() : null)
+                    .build());
+        }
+
+//        최종 조립
+        return EvalGradeDetailDto.builder()
+                .empNum(g.getEmp().getEmpNum())
+                .empName(g.getEmp().getEmpName())
+                .deptName(g.getDeptNameSnapshot())
+                .position(g.getPositionSnapshot())
+                .seasonName(season.getName())
+                .finalGrade(g.getFinalGrade())
+                .rankInSeason(g.getRankInSeason())
+                .goals(goalDtos)
+                .itemScores(itemScores)
+                .selfEvalEntries(selfEntries)
+                .managerEvalEntry(mgrDto)
+                .adjustments(adjDtos)
+                .rawScore(g.getTotalScore())
+                .teamAvg(g.getTeamAvg())
+                .teamStd(g.getTeamStdDev())
+                .companyAvg(g.getCompanyAvg())
+                .companyStd(g.getCompanyStdDev())
+                .adjustedScore(g.getBiasAdjustedScore())
+                .autoGrade(g.getAutoGrade())
+                .calibrations(calibDtos)
+                .lockedAt(g.getLockedAt())
+                .build();
+    }
+
+
+    //    승인된 목표 중 taskWeight 기준 백분율 계산
+    private Map<Long, BigDecimal> computeGoalRatios(List<Goal> goals, EvaluationRules rules) {
+        int total = 0;
+        for (Goal go : goals) {
+            if (go.getApprovalStatus() == GoalApprovalStatus.APPROVED) {
+                total += weightOfTaskGrade(go.getTaskGrade(), rules);
+            }
+        }
+        Map<Long, BigDecimal> result = new HashMap<>();
+        if (total == 0) return result;
+        for (Goal go : goals) {
+            if (go.getApprovalStatus() != GoalApprovalStatus.APPROVED) continue;
+            int w = weightOfTaskGrade(go.getTaskGrade(), rules);
+            BigDecimal ratio = BigDecimal.valueOf(w)
+                    .multiply(BigDecimal.valueOf(100))
+                    .divide(BigDecimal.valueOf(total), 1, RoundingMode.HALF_UP);
+            result.put(go.getGoalId(), ratio);
+        }
+        return result;
+    }
+
+    private int weightOfTaskGrade(TaskGrade grade, EvaluationRules rules) {
+        if (grade == TaskGrade.HIGH) return rules.getTaskWeightSang();
+        if (grade == TaskGrade.MID)  return rules.getTaskWeightJung();
+        if (grade == TaskGrade.LOW)  return rules.getTaskWeightHa();
+        return 0;
+    }
+
+
+    //    16. 본인이 속한 시즌 목록 (드롭다운용, 최신순)
+    @Transactional(readOnly = true)
+    public List<MySeasonOptionDto> getMySeasons(UUID companyId, Long empId) {
+        List<Season> seasons = evalGradeRepository.findSeasonsByCompanyIdAndEmpId(companyId, empId);
+        List<MySeasonOptionDto> result = new ArrayList<>();
+        for (Season s : seasons) {
+            MyResultStatus status = s.getFinalizedAt() != null ? MyResultStatus.FINALIZED : MyResultStatus.IN_PROGRESS;
+            result.add(MySeasonOptionDto.builder()
+                    .seasonId(s.getSeasonId())
+                    .name(s.getName())
+                    .status(status)
+                    .finalizedAt(s.getFinalizedAt())
+                    .build());
+        }
+        return result;
+    }
+
+
+    //    17. 본인 평가결과 상세 - 특정 시즌
+    //       - Stage 진행 상태 기반으로 일괄 공개 (개인별 공개 X)
+    //       - GRADING stage 시작/종료 후 상위자평가 결과 공개
+    //       - GRADING stage 종료 후 자동산정 등급 공개
+    //       - finalizedAt 있을 때 최종 등급 공개
+    @Transactional(readOnly = true)
+    public MyEvalResultDto getMyResult(UUID companyId, Long empId, Long seasonId) {
+
+//        EvalGrade 로드 + 회사 소유권 검증
+        EvalGrade g = evalGradeRepository.findByEmp_EmpIdAndSeason_SeasonId(empId, seasonId).orElseThrow(() -> new IllegalArgumentException("평가 정보를 찾을 수 없습니다"));
+        if (!g.getEmp().getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+        Season season = g.getSeason();
+
+//        GRADING Stage 찾기 - 공개 타이밍 판단 기준
+        List<Stage> stages = stageRepository.findBySeason_SeasonId(seasonId);
+        Stage gradingStage = null;
+        for (Stage st : stages) {
+            if (st.getType() == StageType.GRADING) {
+                gradingStage = st;
+                break;
+            }
+        }
+//        공개 단계별 2단계, 자동산정 =db조회
+//        gradingRevealed : 등급산정 및 보정(GRADING) 시작(IN_PROGRESS 또는 FINISHED) -> 상위자평가 결과/목표별 자기평가 공개
+//        finalized : 시즌 최종 확정 -> 최종 등급 공개
+//        autoGrade= DB 값 있으면 노출
+        boolean gradingRevealed = gradingStage != null && gradingStage.getStatus() != StageStatus.WAITING;
+        boolean finalized = season.getFinalizedAt() != null;
+
+//        상위자평가 (등급/피드백) - GRADING 시작 이후 공개
+        ManagerEvaluation mgrEval = mgrEvalRepository.findByEmployee_EmpIdAndSeason_SeasonId(empId, seasonId).orElse(null); //팀장평가 1건조회
+        String managerGrade = (gradingRevealed && mgrEval != null) ? mgrEval.getGradeLabel() : null;
+        String feedback = (gradingRevealed && mgrEval != null) ? mgrEval.getFeedback() : null;
+
+//        승인 목표 + 자기평가 - GRADING 시작 이후 공개
+        List<MyEvalResultDto.GoalResult> goalDtos = new ArrayList<>();
+        if (gradingRevealed) {
+            List<Goal> goals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdAndApprovalStatusOrderByGoalIdDesc(empId, seasonId, GoalApprovalStatus.APPROVED);
+            List<Long> goalIds = new ArrayList<>();
+            for (Goal go : goals) goalIds.add(go.getGoalId());
+
+            List<SelfEvaluation> selfEvals = goalIds.isEmpty() ? new ArrayList<>() : selfEvaluationRepository.findByGoal_GoalIdIn(goalIds);
+            Map<Long, SelfEvaluation> selfByGoal = new HashMap<>();
+            for (SelfEvaluation se : selfEvals) {
+                selfByGoal.put(se.getGoal().getGoalId(), se);
+            }
+
+            for (Goal go : goals) {
+                SelfEvaluation se = selfByGoal.get(go.getGoalId());
+                BigDecimal actual = se != null ? se.getActualValue() : null;
+                BigDecimal rate = null;
+                if ("KPI".equals(go.getGoalType()) && actual != null && go.getTargetValue() != null
+                        && go.getKpiTemplate() != null) {
+                    rate = computeAchievementRate(go.getKpiTemplate().getDirection(),
+                                                   go.getTargetValue(), actual);
+                }
+                goalDtos.add(MyEvalResultDto.GoalResult.builder()
+                        .goalType(go.getGoalType())
+                        .category(go.getCategory())
+                        .title(go.getTitle())
+                        .grade(go.getTaskGrade())
+                        .targetValue(go.getTargetValue())
+                        .targetUnit(go.getTargetUnit())
+                        .actualValue(actual)
+                        .achievementRate(rate)
+                        .selfLevel(se != null ? se.getAchievementLevel() : null)
+                        .build());
+            }
+        }
+
+//        상태 판단 (enum)
+        MyResultStatus status = finalized ? MyResultStatus.FINALIZED : MyResultStatus.IN_PROGRESS;
+
+        return MyEvalResultDto.builder()
+                .status(status)
+                .finalizedAt(season.getFinalizedAt())
+                .autoGrade(g.getAutoGrade()) //예정등급
+                .managerGrade(managerGrade)
+                .finalGrade(finalized ? g.getFinalGrade() : null) // 최종확정 공개 - finalized=true 일 때만
+                .feedback(feedback)
+                .goals(goalDtos)
+                .build();
+    }
+
+
+    //    KPI 달성률 계산 (direction 공식 분기)
+    private BigDecimal computeAchievementRate(KpiDirection direction, BigDecimal target, BigDecimal actual) {
+        if (direction == null || target == null || target.signum() == 0) return null;
+        if (direction == KpiDirection.UP) {
+            return actual.multiply(BigDecimal.valueOf(100))
+                    .divide(target, 1, RoundingMode.HALF_UP);
+        }
+        if (direction == KpiDirection.DOWN) {
+            if (actual.signum() == 0) return null;
+            return target.multiply(BigDecimal.valueOf(100))
+                    .divide(actual, 1, RoundingMode.HALF_UP);
+        }
+        if (direction == KpiDirection.MAINTAIN) {
+            BigDecimal diff = target.subtract(actual).abs();
+            BigDecimal ratio = java.math.BigDecimal.ONE.subtract(diff.divide(target, 4, RoundingMode.HALF_UP));
+            return ratio.multiply(BigDecimal.valueOf(100)).setScale(1, RoundingMode.HALF_UP);
+        }
+        return null;
     }
 
 }

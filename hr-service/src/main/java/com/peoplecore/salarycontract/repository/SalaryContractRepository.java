@@ -1,7 +1,6 @@
 package com.peoplecore.salarycontract.repository;
 
 
-import com.peoplecore.salarycontract.domain.ContractStatus;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -16,6 +15,6 @@ public interface SalaryContractRepository extends JpaRepository<SalaryContract, 
 
     List<SalaryContract>findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(UUID companyId, Long empId);
 
-    Optional<SalaryContract> findTopByEmployee_EmpIdAndStatusOrderByContractYearDesc(Long employeeId, ContractStatus status);
+    Optional<SalaryContract> findTopByEmployee_EmpIdOrderByContractYearDesc(Long employeeId);
 
 }
