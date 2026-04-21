@@ -157,6 +157,28 @@ public class VacationBalance extends BaseTimeEntity {
         this.usedDays = this.usedDays.subtract(days);
     }
 
+    /* 이벤트 기반 승인 직접 차감 - pending 경유 없이 used 증가 */
+    /* EVENT_BASED 휴가는 신청 시 markPending 을 타지 않고 승인 시 accrue + consumeDirectly 로 total/used 동시 증가 */
+    /* 예외: 가용 잔여 < days 이면 VACATION_BALANCE_INSUFFICIENT (accrue 가 total 을 먼저 올려놓았어야 함) */
+    public void consumeDirectly(BigDecimal days) {
+        validatePositive(days);
+        if (getAvailableDays().compareTo(days) < 0) {
+            throw new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT);
+        }
+        this.usedDays = this.usedDays.add(days);
+    }
+
+    /* accrue 롤백 - 이벤트 기반 승인 후 취소 시 total 되돌림. total -= days */
+    /* 단독 호출 금지: restore(used→available) 직후에만 호출해야 total 감소가 usedDays 와 정합 */
+    /* 예외: totalDays < days 이면 USED_INSUFFICIENT (정합성 오류, 500) */
+    public void rollbackAccrual(BigDecimal days) {
+        validatePositive(days);
+        if (this.totalDays.compareTo(days) < 0) {
+            throw new CustomException(ErrorCode.VACATION_BALANCE_USED_INSUFFICIENT);
+        }
+        this.totalDays = this.totalDays.subtract(days);
+    }
+
     /* 잔여 만료 - 만료 잡 / 1년 도달 시. 남은 잔여를 expired 로 이동 → 잔여 0 */
     /* used 와 분리됨 - LeaveAllowance 의 (total - used) 미사용량 계산이 만료 후에도 정확 */
     public BigDecimal expireRemaining() {

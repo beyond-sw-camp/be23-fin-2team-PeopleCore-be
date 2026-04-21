@@ -86,7 +86,6 @@ public class WorkGroupService {
                 .groupBreakStart(dto.getGroupBreakStart())
                 .groupBreakEnd(dto.getGroupBreakEnd())
                 .groupOvertimeRecognize(dto.getGroupOvertimeRecognize())
-                .groupMobileCheck(dto.getGroupMobileCheck())
                 .groupManagerId(managerId)
                 .groupManagerName(managerName)
                 .build();
@@ -133,7 +132,6 @@ public class WorkGroupService {
                 .groupBreakStart(LocalTime.of(12, 0))
                 .groupBreakEnd(LocalTime.of(13, 0))
                 .groupOvertimeRecognize(WorkGroup.GroupOvertimeRecognize.APPROVAL)
-                .groupMobileCheck(false)
                 .build();
 
         workGroupRepository.save(defaultGroup);

@@ -103,13 +103,6 @@ public class ApprovalForm extends BaseTimeEntity {
     private Integer formRetentionYear;
 
     /**
-     * 모바일 기안 허용 - default == false
-     */
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean formMobileYn = false;
-
-    /**
      * 전결 옵션
      */
     @Column(nullable = false)
@@ -140,14 +133,13 @@ public class ApprovalForm extends BaseTimeEntity {
     /* 양식 내용 수정 */
     public void updateForm(String formName, String formHtml, FormWritePermission formWritePermission,
                            Boolean formIsPublic, Integer formRetentionYear,
-                           Boolean formMobileYn, Boolean formPreApprovalYn) {
+                           Boolean formPreApprovalYn) {
         assertNotProtected("양식 내용");
         this.formName = formName;
         this.formHtml = formHtml;
         this.formWritePermission = formWritePermission;
         this.formIsPublic = formIsPublic;
         this.formRetentionYear = formRetentionYear;
-        this.formMobileYn = formMobileYn;
         this.formPreApprovalYn = formPreApprovalYn;
         this.formVersion += 1;
     }
@@ -162,10 +154,9 @@ public class ApprovalForm extends BaseTimeEntity {
     }
 
     /* 일괄 설정 수정 */
-    public void updateBatchSettings(Boolean formIsPublic, Boolean formMobileYn, Boolean formPreApprovalYn) {
+    public void updateBatchSettings(Boolean formIsPublic, Boolean formPreApprovalYn) {
         assertNotProtected("일괄 설정");
         if (formIsPublic != null) this.formIsPublic = formIsPublic;
-        if (formMobileYn != null) this.formMobileYn = formMobileYn;
         if (formPreApprovalYn != null) this.formPreApprovalYn = formPreApprovalYn;
     }
 

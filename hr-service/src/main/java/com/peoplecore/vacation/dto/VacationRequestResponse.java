@@ -1,5 +1,6 @@
 package com.peoplecore.vacation.dto;
 
+import com.peoplecore.vacation.entity.OfficialLeaveReason;
 import com.peoplecore.vacation.entity.VacationRequest;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,6 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /* 휴가 신청 응답 DTO - 사원 이력 / 관리자 조회 공통 */
@@ -48,6 +50,12 @@ public class VacationRequestResponse {
     /* 결재 문서 참조 */
     private Long approvalDocId;
 
+    /* 이벤트 기반 휴가 메타 - 해당 유형 아니면 null */
+    private String proofFileUrl;
+    private Integer pregnancyWeeks;
+    private OfficialLeaveReason officialLeaveReason;
+    private LocalDate relatedBirthDate;
+
     private LocalDateTime createdAt;
 
     public static VacationRequestResponse from(VacationRequest r) {
@@ -70,6 +78,10 @@ public class VacationRequestResponse {
                 .processedAt(r.getRequestProcessedAt())
                 .rejectReason(r.getRequestRejectReason())
                 .approvalDocId(r.getApprovalDocId())
+                .proofFileUrl(r.getProofFileUrl())
+                .pregnancyWeeks(r.getPregnancyWeeks())
+                .officialLeaveReason(r.getOfficialLeaveReason())
+                .relatedBirthDate(r.getRelatedBirthDate())
                 .createdAt(r.getCreatedAt())
                 .build();
     }

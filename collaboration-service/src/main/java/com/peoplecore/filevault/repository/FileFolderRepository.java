@@ -26,6 +26,12 @@ public interface FileFolderRepository extends JpaRepository<FileFolder, Long> {
 
     boolean existsByParentFolderIdAndNameAndDeletedAtIsNull(Long parentFolderId, String name);
 
+    boolean existsByCompanyIdAndTypeAndParentFolderIdIsNullAndNameAndDeletedAtIsNull(
+        UUID companyId, FolderType type, String name);
+
+    Optional<FileFolder> findByCompanyIdAndTypeAndParentFolderIdIsNullAndNameAndDeletedAtIsNull(
+        UUID companyId, FolderType type, String name);
+
     List<FileFolder> findByCompanyId(UUID companyId);
 
     List<FileFolder> findByParentFolderIdIn(List<Long> parentFolderIds);

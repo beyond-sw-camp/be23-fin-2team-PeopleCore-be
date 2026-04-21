@@ -9,6 +9,7 @@ import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
+import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQuery;
@@ -81,7 +82,21 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
             builder.and(doc.approvalStatus.eq(ApprovalStatus.valueOf(searchDto.getStatus())));
         }
 
+        /* 보존연한 만료 필터 (정책 B - 소급 X) */
+        builder.and(notExpired());
+
         return builder;
+    }
+
+    /* 보존연한 미만료 조건 - 미완결(snapshot=NULL) 통과, 완료분은 docCompleteAt + snapshot > 현재 */
+    /* snapshot 은 complete() 시점에 양식 연한을 박제한 값 */
+    private BooleanExpression notExpired() {
+        return doc.retentionYearSnapshot.isNull().or(
+                Expressions.booleanTemplate(
+                        "DATE_ADD({0}, INTERVAL {1} YEAR) > CURRENT_TIMESTAMP",
+                        doc.docCompleteAt, doc.retentionYearSnapshot
+                )
+        );
     }
 
     /*헬퍼 2 : 첨부파일 존재 여부 서브쿼리
@@ -579,7 +594,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 )
                 .from(line)
                 .join(line.docId, doc)
-                .where(line.empId.eq(empId), doc.companyId.eq(companyId))
+                .where(line.empId.eq(empId), doc.companyId.eq(companyId), notExpired())
                 .fetchOne();
 
         /* 기안자 기반: draft(!=DRAFT), temp(=DRAFT) — 별도 1회 */
@@ -593,7 +608,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                                 .then(1).otherwise(0).sum()
                 )
                 .from(doc)
-                .where(doc.companyId.eq(companyId), doc.empId.eq(empId))
+                .where(doc.companyId.eq(companyId), doc.empId.eq(empId), notExpired())
                 .fetchOne();
 
         /* 부서 문서함: 완료/수신/발신 — 별도 1회 */
@@ -619,7 +634,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                                 .then(1).otherwise(0).sum()
                 )
                 .from(doc)
-                .where(doc.companyId.eq(companyId))
+                .where(doc.companyId.eq(companyId), notExpired())
                 .fetchOne();
 
         /* 부서 폴더별 문서 개수 */
@@ -628,7 +643,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .from(doc)
                 .where(doc.companyId.eq(companyId),
                         doc.deptFolderId.isNotNull(),
-                        doc.empDeptId.eq(deptId))
+                        doc.empDeptId.eq(deptId),
+                        notExpired())
                 .groupBy(doc.deptFolderId)
                 .fetch()
                 .stream()
@@ -637,12 +653,14 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         t -> t.get(doc.count())
                 ));
 
-        /* 개인 폴더별 문서 개수 */
+        /* 개인 폴더별 문서 개수 - 만료 필터 적용 위해 doc JOIN */
         Map<Long, Long> personalFolderCounts = jpaQueryFactory
                 .select(folderDoc.personalFolderId, folderDoc.count())
                 .from(folderDoc)
+                .join(doc).on(doc.docId.eq(folderDoc.docId))
                 .where(folderDoc.companyId.eq(companyId),
-                        folderDoc.empId.eq(empId))
+                        folderDoc.empId.eq(empId),
+                        notExpired())
                 .groupBy(folderDoc.personalFolderId)
                 .fetch()
                 .stream()

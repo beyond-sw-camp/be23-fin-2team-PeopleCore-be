@@ -36,7 +36,11 @@ public class PromotionNoticeService {
     }
 
     /* 1차 통지 - 잔여 무관 (인수인계 기준). 사용 계획 제출 요구 */
-    @Retryable(/*알림 발행 일시 장애 대비재시도 */ maxAttempts = 3, backoff = @Backoff(delay = 2000, multiplier = 2), recover = "recoverNotice")
+    @Retryable(
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 2000, multiplier = 2),
+            recover = "recoverNotice"
+    )
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void sendFirstNotice(VacationBalance balance) {
         sendIfAbsent(balance, VacationPromotionNotice.STAGE_FIRST,
@@ -86,7 +90,6 @@ public class PromotionNoticeService {
             return;
         }
 
-        /* 알림 이벤트 발행 - 실패해도 예외 전파 안 함 (HrAlarmPublisher 내부에서 로그) */
         AlarmEvent alarm = AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("Hr")
@@ -97,9 +100,12 @@ public class PromotionNoticeService {
                 .alarmRefId(empId)
                 .empIds(List.of(empId))
                 .build();
-        hrAlarmPublisher.publisher(alarm);
 
-        /* 이력 INSERT - UNIQUE 제약으로 마지막 방어선 (동시 통지 경합) */
+        /* 예외 전파 버전 - 실패 시 RuntimeException → @Retryable 재시도 트리거 */
+        /* REQUIRES_NEW 트랜잭션이라 재시도마다 롤백 → 이력 INSERT 되기 전에 다시 시도 */
+        hrAlarmPublisher.publisherOrThrow(alarm);
+
+        /* 이력 INSERT - 발행 성공 시에만 여기 도달. UNIQUE 제약이 최종 방어선 */
         VacationPromotionNotice notice = VacationPromotionNotice.STAGE_FIRST.equals(stage)
                 ? VacationPromotionNotice.createFirst(balance, targetDays)
                 : VacationPromotionNotice.createSecond(balance, targetDays);

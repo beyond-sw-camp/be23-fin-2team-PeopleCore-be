@@ -81,6 +81,13 @@ public class FileItem extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    /**
+     * 낙관적 락 버전. 동시 rename/move/soft-delete 시 last-writer-wins 를 차단한다.
+     */
+    @Version
+    @Column(nullable = false)
+    private Long version;
+
     public void rename(String newName) {
         this.name = newName;
     }

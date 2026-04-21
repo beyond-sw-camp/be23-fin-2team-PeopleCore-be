@@ -31,9 +31,6 @@ public class WorkGroupResDto {
     /** 근무 요일 - 비트마스크 */
     private Integer groupWorkDay;
 
-    /** 모바일 출퇴근 허용 여부 */
-    private Boolean groupMobileCheck;
-
     /** 이 그룹에 소속된 사원 수 */
     private Long memberCount;
 }

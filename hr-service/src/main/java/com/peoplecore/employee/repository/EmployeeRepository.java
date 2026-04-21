@@ -1,5 +1,6 @@
 package com.peoplecore.employee.repository;
 
+import com.peoplecore.employee.domain.EmpGender;
 import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
@@ -14,6 +15,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -77,6 +79,12 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
 
 //    퇴직 사원 조회 (퇴직자용 - 연차수당)
     List<Employee> findByCompany_CompanyIdAndEmpStatusAndDeleteAtIsNull(UUID companyId, EmpStatus empStatus);
+
+    /* 성별 + 재직 상태 + 소프트삭제 제외 필터링 - 생리휴가 월 스케줄러 대상 사원 조회 */
+    /* 조건: 해당 회사, 해당 성별, 특정 상태(ACTIVE), delete_at IS NULL */
+    /* 반환: 여성 + ACTIVE 사원만 (휴직자·퇴사자 제외) */
+    List<Employee> findByCompany_CompanyIdAndEmpGenderAndEmpStatusAndDeleteAtIsNull(
+            UUID companyId, EmpGender empGender, EmpStatus empStatus);
 
 
     /// ////////rim 사원관리
@@ -259,6 +267,14 @@ AND e.empResignDate >= :fromDate
      */
     List<Employee> findByCompany_CompanyIdAndEmpHireDateAndEmpStatusInAndDeleteAtIsNull(
             UUID companyId, LocalDate empHireDate, List<EmpStatus> empStatuses);
+
+    /*
+     * 회사 + 입사일 IN (복수 날짜) + 재직/휴직 사원 조회 (퇴사자 제외).
+     * 용도: 월차 적립 스케줄러 - 1~11개월차 대상 날짜 11개를 1회 쿼리로 묶어 조회 (N+1 제거).
+     * 반환된 사원의 hireDate 로 n 역산은 호출부에서 Map<LocalDate, List<Employee>> 그룹핑 후 처리.
+     */
+    List<Employee> findByCompany_CompanyIdAndEmpHireDateInAndEmpStatusInAndDeleteAtIsNull(
+            UUID companyId, Collection<LocalDate> empHireDates, List<EmpStatus> empStatuses);
 
     /*
      * 회사 + 입사일 기념일 (월/일 매칭) + 재직/휴직 사원 조회.

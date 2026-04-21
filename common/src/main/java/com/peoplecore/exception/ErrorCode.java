@@ -222,6 +222,7 @@ public enum ErrorCode {
     /*휴가 */
     INVALID_REQUEST_STATUS_TRANSITION(400, "허용되지 않은 휴가 신청 상태 전이입니다."),
     VACATION_POLICY_FIRST_NOTICE_REQUIRED(400, "연차 촉진 사용 시 1차 통지 시기는 필수입니다."),
+    VACATION_POLICY_NOTICE_ORDER_INVALID(400, "2차 통지는 1차 통지보다 만료일에 가까워야 합니다."),
     VACATION_BALANCE_CAP_EXCEEDED(409, "연 최대 적립 일수를 초과했습니다."),
     VACATION_BALANCE_INSUFFICIENT(409, "휴가 잔여가 부족합니다."),
     VACATION_BALANCE_PENDING_INSUFFICIENT(500, "잔여 대기 일수 정합성 오류 — 관리자 문의 필요."),
@@ -229,7 +230,23 @@ public enum ErrorCode {
     VACATION_TYPE_SYSTEM_RESERVED(400, "시스템 예약 휴가 유형은 변경/삭제할 수 없습니다."),
     VACATION_TYPE_CODE_DUPLICATE(409, "이미 존재하는 휴가 유형 코드입니다."),
     VACATION_TYPE_NOT_FOUND(404, "존재하지 않는 휴가 종류입니다."),
-    VACATION_RULE_OVERLAP(409, "근속 구간이 기존 규칙과 겹칩니다.");
+    VACATION_TYPE_IN_USE(409, "해당 유형을 사용 중인 잔여/신청이 있어 삭제할 수 없습니다."),
+    VACATION_RULE_OVERLAP(409, "근속 구간이 기존 규칙과 겹칩니다."),
+    VACATION_TYPE_GENDER_NOT_ALLOWED(403, "해당 휴가 유형은 성별 제한으로 신청할 수 없습니다."),
+    VACATION_REQ_PREGNANCY_WEEKS_REQUIRED(400, "유산·사산휴가는 임신 주수 입력이 필요합니다."),
+    VACATION_REQ_OFFICIAL_REASON_REQUIRED(400, "공가 신청 시 하위 사유를 선택해야 합니다."),
+    VACATION_REQ_PROOF_REQUIRED(400, "증빙 파일 첨부가 필요한 휴가 유형입니다."),
+    VACATION_REQ_SPOUSE_BIRTH_EXPIRED(400, "배우자 출산휴가는 출산일 기준 90일 이내에만 사용할 수 있습니다."),
+    VACATION_REQ_BIRTH_DATE_REQUIRED(400, "배우자 출산휴가는 출산일(출산 예정일) 입력이 필요합니다."),
+    VACATION_REQ_PREGNANCY_WEEKS_INVALID(400, "임신 주수는 1 이상이어야 합니다."),
+    VACATION_REQ_DAYS_MISMATCH(400, "요청 일수와 유형별 자동 산정 일수가 일치하지 않습니다."),
+
+    /* 배치 관리자 */
+    BATCH_JOB_NOT_SUPPORTED(400, "지원하지 않는 배치 Job 입니다."),
+    BATCH_JOB_NOT_FOUND(404, "배치 Job Bean 을 찾을 수 없습니다."),
+    BATCH_PARAMETER_INVALID(400, "배치 재실행 파라미터가 올바르지 않습니다."),
+    BATCH_RERUN_FAILED(500, "배치 재실행에 실패했습니다."),
+    BATCH_TENANT_FORBIDDEN(403, "다른 회사의 배치에 접근할 수 없습니다.");
 
 
     private final int status;

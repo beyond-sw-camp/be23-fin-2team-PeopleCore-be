@@ -55,8 +55,8 @@ public class AnnualTransitionScheduler {
         this.annualTransitionService = annualTransitionService;
     }
 
-    /* 매일 00:00 KST - 분산 락 후 활성 회사 순회 */
-    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
+    /* 매일 00:05 KST - MonthlyAccrual(00:00) 직후 실행 */
+    @Scheduled(cron = "0 5 0 * * *", zone = "Asia/Seoul")
     public void run() {
         LocalDate today = LocalDate.now(ZONE_SEOUL);
         String lockKey = LOCK_KEY_PREFIX + ":" + today;

@@ -1,12 +1,12 @@
 package com.peoplecore.filevault.security;
 
 import com.peoplecore.capability.service.CapabilityService;
-import com.peoplecore.client.component.HrCacheService;
-import com.peoplecore.client.dto.TitleInfoResponse;
 import com.peoplecore.exception.BusinessException;
 import com.peoplecore.filevault.entity.FileFolder;
 import com.peoplecore.filevault.entity.FileItem;
 import com.peoplecore.filevault.entity.FolderType;
+import com.peoplecore.filevault.permission.repository.FileBoxAclRepository;
+import com.peoplecore.filevault.permission.service.AdminCapabilityService;
 import com.peoplecore.filevault.repository.FileFolderRepository;
 import com.peoplecore.filevault.repository.FileItemRepository;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
+import java.util.UUID;
 
 /**
  * 파일함 접근 정책.
@@ -23,9 +23,9 @@ import java.util.List;
  * <p>스코프별 규칙:
  * <ul>
  *   <li>PERSONAL: 소유자만 읽기/쓰기. 타인의 개인함 읽기는 VIEW_OTHERS_PERSONAL 필요.</li>
- *   <li>COMPANY: 쓰기는 WRITE_COMPANY_FOLDER. 읽기는 회사 내 전원 개방.</li>
- *   <li>DEPT 루트 생성: CREATE_DEPT_FOLDER.</li>
- *   <li>DEPT 관리(하위 생성/이름/이동/삭제): MANAGE_DEPT_FOLDER 또는 MANAGE_SUBTREE_DEPT_FOLDER.</li>
+ *   <li>COMPANY/DEPT: 생성은 Tier-1 AdminCapability, 모든 read/write/download/delete 는
+ *       Tier-2 ACL ({@link com.peoplecore.filevault.permission.entity.FileBoxAcl}) 4-플래그 기준.
+ *       ACL 행이 없으면 default-locked 로 모두 차단.</li>
  * </ul>
  */
 @Component
@@ -34,29 +34,27 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class FileVaultAccessPolicy {
 
-    public static final String FILE_CREATE_DEPT_FOLDER = "FILE_CREATE_DEPT_FOLDER";
-    public static final String FILE_MANAGE_DEPT_FOLDER = "FILE_MANAGE_DEPT_FOLDER";
-    public static final String FILE_MANAGE_SUBTREE_DEPT_FOLDER = "FILE_MANAGE_SUBTREE_DEPT_FOLDER";
-    public static final String FILE_WRITE_COMPANY_FOLDER = "FILE_WRITE_COMPANY_FOLDER";
     public static final String FILE_VIEW_OTHERS_PERSONAL = "FILE_VIEW_OTHERS_PERSONAL";
 
     private final FileFolderRepository folderRepository;
     private final FileItemRepository fileItemRepository;
     private final CapabilityService capabilityService;
-    private final HrCacheService hrCacheService;
+    private final AdminCapabilityService adminCapabilityService;
+    private final FileBoxAclRepository aclRepository;
 
-    public void ensureCanCreateFolder(Long titleId, Long empId, FolderType type, Long parentFolderId) {
+    public void ensureCanCreateFolder(UUID companyId, Long gradeId, Long titleId, Long empId,
+                                       FolderType type, Long parentFolderId) {
         if (parentFolderId == null) {
-            ensureCanCreateRoot(titleId, type);
+            ensureCanCreateRoot(companyId, gradeId, titleId, type);
             return;
         }
         FileFolder root = resolveRoot(parentFolderId);
-        ensureCanWriteScope(titleId, empId, root);
+        ensureCanWriteScope(empId, root);
     }
 
     public void ensureCanManageFolder(Long titleId, Long empId, FileFolder folder) {
         FileFolder root = folder.getParentFolderId() == null ? folder : resolveRoot(folder.getParentFolderId());
-        ensureCanWriteScope(titleId, empId, root);
+        ensureCanWriteScope(empId, root);
     }
 
     public void ensureCanReadFolder(Long titleId, Long empId, Long folderId) {
@@ -67,22 +65,40 @@ public class FileVaultAccessPolicy {
             if (!capabilityService.hasCapability(titleId, FILE_VIEW_OTHERS_PERSONAL)) {
                 throw forbidden("타인의 개인 파일함을 열람할 권한이 없습니다.");
             }
+            return;
         }
+        boolean ok = aclRepository.findByFolderIdAndEmpId(root.getId(), empId)
+            .map(a -> a.isCanRead()).orElse(false);
+        if (!ok) throw forbidden("이 파일함을 열람할 권한이 없습니다.");
     }
 
     public void ensureCanWriteFolder(Long titleId, Long empId, Long folderId) {
         FileFolder root = resolveRoot(folderId);
-        ensureCanWriteScope(titleId, empId, root);
+        ensureCanWriteScope(empId, root);
     }
 
     public void ensureCanManageFile(Long titleId, Long empId, FileItem file) {
         ensureCanWriteFolder(titleId, empId, file.getFolderId());
     }
 
+    /**
+     * 파일 다운로드 — COMPANY/DEPT 는 ACL canDownload, PERSONAL 은 read 와 동일 정책.
+     */
+    public void ensureCanDownloadFile(Long titleId, Long empId, FileItem file) {
+        FileFolder root = resolveRoot(file.getFolderId());
+        if (root.getType() == FolderType.PERSONAL) {
+            ensureCanReadFolder(titleId, empId, file.getFolderId());
+            return;
+        }
+        boolean ok = aclRepository.findByFolderIdAndEmpId(root.getId(), empId)
+            .map(a -> a.isCanDownload()).orElse(false);
+        if (!ok) throw forbidden("다운로드 권한이 없습니다.");
+    }
+
     /** 휴지통 목록 필터링용 — 예외 던지지 않는 write-scope 체커. */
     public boolean canManageRoot(Long titleId, Long empId, FileFolder root) {
         try {
-            ensureCanWriteScope(titleId, empId, root);
+            ensureCanWriteScope(empId, root);
             return true;
         } catch (BusinessException e) {
             return false;
@@ -99,16 +115,16 @@ public class FileVaultAccessPolicy {
             .orElseThrow(() -> new BusinessException("폴더를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
     }
 
-    private void ensureCanCreateRoot(Long titleId, FolderType type) {
+    /**
+     * COMPANY/DEPT 파일함 생성 권한은 새 Tier-1 (AdminCapability) 기준으로 판단한다.
+     * PERSONAL 은 사용자 직접 생성 불가 (시스템 자동 생성 only).
+     */
+    private void ensureCanCreateRoot(UUID companyId, Long gradeId, Long titleId, FolderType type) {
         switch (type) {
             case COMPANY:
-                if (!capabilityService.hasCapability(titleId, FILE_WRITE_COMPANY_FOLDER)) {
-                    throw forbidden("전사 파일함을 생성할 권한이 없습니다.");
-                }
-                break;
             case DEPT:
-                if (!capabilityService.hasCapability(titleId, FILE_CREATE_DEPT_FOLDER)) {
-                    throw forbidden("부서 파일함을 생성할 권한이 없습니다.");
+                if (!adminCapabilityService.isAdmin(companyId, gradeId, titleId)) {
+                    throw forbidden("파일함을 생성할 권한이 없습니다.");
                 }
                 break;
             case PERSONAL:
@@ -116,59 +132,16 @@ public class FileVaultAccessPolicy {
         }
     }
 
-    private void ensureCanWriteScope(Long titleId, Long empId, FileFolder root) {
-        switch (root.getType()) {
-            case PERSONAL:
-                if (empId == null || !empId.equals(root.getOwnerEmpId())) {
-                    throw forbidden("본인의 개인 파일함만 수정할 수 있습니다.");
-                }
-                break;
-            case COMPANY:
-                if (!capabilityService.hasCapability(titleId, FILE_WRITE_COMPANY_FOLDER)) {
-                    throw forbidden("전사 파일함을 수정할 권한이 없습니다.");
-                }
-                break;
-            case DEPT:
-                ensureDeptScopeMatches(titleId, root);
-                break;
+    private void ensureCanWriteScope(Long empId, FileFolder root) {
+        if (root.getType() == FolderType.PERSONAL) {
+            if (empId == null || !empId.equals(root.getOwnerEmpId())) {
+                throw forbidden("본인의 개인 파일함만 수정할 수 있습니다.");
+            }
+            return;
         }
-    }
-
-    /**
-     * DEPT 루트 폴더에 대한 쓰기 권한 검증 (capability + 부서 매칭).
-     * <ul>
-     *   <li>title.deptId == null (전사 공용 직책): 모든 부서 폴더 통과</li>
-     *   <li>MANAGE_DEPT_FOLDER: folder.deptId == title.deptId 일치 필수</li>
-     *   <li>MANAGE_SUBTREE_DEPT_FOLDER: folder.deptId의 조상 체인에 title.deptId 포함 필수</li>
-     * </ul>
-     */
-    private void ensureDeptScopeMatches(Long titleId, FileFolder root) {
-        boolean hasExact = capabilityService.hasCapability(titleId, FILE_MANAGE_DEPT_FOLDER);
-        boolean hasSubtree = capabilityService.hasCapability(titleId, FILE_MANAGE_SUBTREE_DEPT_FOLDER);
-        if (!hasExact && !hasSubtree) {
-            throw forbidden("부서 파일함을 수정할 권한이 없습니다.");
-        }
-
-        TitleInfoResponse title = titleId == null ? null : hrCacheService.getTitle(titleId);
-        if (title == null) {
-            throw forbidden("직책 정보를 확인할 수 없어 부서 파일함을 수정할 수 없습니다.");
-        }
-        // 전사 공용 직책 — 모든 부서 통과
-        if (title.getDeptId() == null) return;
-
-        Long folderDeptId = root.getDeptId();
-        if (folderDeptId == null) {
-            throw forbidden("부서 정보가 없는 부서 파일함입니다.");
-        }
-
-        if (hasExact && folderDeptId.equals(title.getDeptId())) return;
-
-        if (hasSubtree) {
-            List<Long> ancestors = hrCacheService.getDeptAncestors(folderDeptId);
-            if (ancestors.contains(title.getDeptId())) return;
-        }
-
-        throw forbidden("해당 부서의 파일함을 수정할 권한이 없습니다.");
+        boolean ok = aclRepository.findByFolderIdAndEmpId(root.getId(), empId)
+            .map(a -> a.isCanWrite()).orElse(false);
+        if (!ok) throw forbidden("이 파일함에 쓰기 권한이 없습니다.");
     }
 
     private FileFolder resolveRoot(Long folderId) {

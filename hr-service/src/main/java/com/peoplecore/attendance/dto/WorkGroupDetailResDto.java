@@ -44,9 +44,6 @@ public class WorkGroupDetailResDto {
     /** 초과 근무 인정 방식 */
     private WorkGroup.GroupOvertimeRecognize groupOvertimeRecognize;
 
-    /** 모바일 출퇴근 허용 여부 */
-    private Boolean groupMobileCheck;
-
     /** 근무 그룹 상세 조회 */
     public static WorkGroupDetailResDto from(WorkGroup entity) {
         return WorkGroupDetailResDto.builder()
@@ -60,7 +57,6 @@ public class WorkGroupDetailResDto {
                 .groupBreakStart(entity.getGroupBreakStart())
                 .groupBreakEnd(entity.getGroupBreakEnd())
                 .groupOvertimeRecognize(entity.getGroupOvertimeRecognize())
-                .groupMobileCheck(entity.getGroupMobileCheck())
                 .build();
     }
 }

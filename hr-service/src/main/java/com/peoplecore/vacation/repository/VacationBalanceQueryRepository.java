@@ -134,4 +134,50 @@ public class VacationBalanceQueryRepository {
                 )
                 .fetch();
     }
+
+    /*
+     * 1차 촉진 catch-up 조회 - expiresAt BETWEEN [from, to]
+     * 용도: 스케줄러가 하루 실패해도 다음 날 미통지분 catch-up. UNIQUE 제약으로 중복 발송 방지
+     * 인덱스: idx_vacation_balance_company_expires (회사+expires_at 범위 스캔)
+     */
+    public List<VacationBalance> findByCompanyAndTypeAndExpiresAtBetween(
+            UUID companyId, Long typeId, LocalDate from, LocalDate to) {
+        QVacationBalance b = QVacationBalance.vacationBalance;
+        QVacationType t = QVacationType.vacationType;
+        QEmployee e = QEmployee.employee;
+
+        return queryFactory
+                .selectFrom(b)
+                .join(b.vacationType, t).fetchJoin()
+                .join(b.employee, e).fetchJoin()
+                .where(
+                        b.companyId.eq(companyId),
+                        b.vacationType.typeId.eq(typeId),
+                        b.expiresAt.between(from, to)
+                )
+                .fetch();
+    }
+
+    /*
+     * 2차 촉진 catch-up 조회 - 잔여 > 0 AND expiresAt BETWEEN [from, to]
+     * 용도: 1차 통지 후 만료 임박 시점에 잔여 남은 사원만 2차 통지
+     */
+    public List<VacationBalance> findRemainingByCompanyAndTypeAndExpiresAtBetween(
+            UUID companyId, Long typeId, LocalDate from, LocalDate to) {
+        QVacationBalance b = QVacationBalance.vacationBalance;
+        QVacationType t = QVacationType.vacationType;
+        QEmployee e = QEmployee.employee;
+
+        return queryFactory
+                .selectFrom(b)
+                .join(b.vacationType, t).fetchJoin()
+                .join(b.employee, e).fetchJoin()
+                .where(
+                        b.companyId.eq(companyId),
+                        b.vacationType.typeId.eq(typeId),
+                        b.expiresAt.between(from, to),
+                        b.totalDays.subtract(b.usedDays).subtract(b.pendingDays).subtract(b.expiredDays).gt(0)
+                )
+                .fetch();
+    }
 }

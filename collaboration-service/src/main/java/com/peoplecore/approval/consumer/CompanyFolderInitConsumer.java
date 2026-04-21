@@ -5,6 +5,7 @@ import com.peoplecore.approval.service.ApprovalFormService;
 import com.peoplecore.event.CompanyCreateEvent;
 import com.peoplecore.exception.BusinessException;
 import com.peoplecore.filevault.entity.FolderType;
+import com.peoplecore.filevault.repository.FileFolderRepository;
 import com.peoplecore.filevault.service.FileFolderService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,14 +23,17 @@ public class CompanyFolderInitConsumer {
 
     private final ApprovalFormService formService;
     private final FileFolderService folderService;
+    private final FileFolderRepository folderRepository;
     private final ObjectMapper objectMapper;
 
     @Autowired
     public CompanyFolderInitConsumer(ApprovalFormService formService,
                                      FileFolderService folderService,
+                                     FileFolderRepository folderRepository,
                                      ObjectMapper objectMapper) {
         this.formService = formService;
         this.folderService = folderService;
+        this.folderRepository = folderRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -40,6 +44,17 @@ public class CompanyFolderInitConsumer {
         try {
             CompanyCreateEvent event = objectMapper.readValue(message, CompanyCreateEvent.class);
             formService.initFormFolder(event.getCompanyId());
+
+            // 멱등성 — 이미 COMPANY 루트가 있으면 스킵 (이벤트 재전달/중복 수신 대비)
+            boolean alreadyExists = !folderRepository
+                .findByCompanyIdAndTypeAndParentFolderIdIsNullAndDeletedAtIsNull(
+                    event.getCompanyId(), FolderType.COMPANY)
+                .isEmpty();
+            if (alreadyExists) {
+                log.info("[FileVault] 전사 기본 파일함 이미 존재 — 생성 스킵 companyId={}", event.getCompanyId());
+                return;
+            }
+
             folderService.createSystemDefaultFolder(
                 event.getCompanyId(), "전사 파일함", FolderType.COMPANY, null, null, 0L);
             log.info("[FileVault] 전사 기본 파일함 생성 완료 companyId={}", event.getCompanyId());
