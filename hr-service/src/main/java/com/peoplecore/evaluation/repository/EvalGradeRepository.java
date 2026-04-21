@@ -45,6 +45,23 @@ public interface EvalGradeRepository extends JpaRepository<EvalGrade, Long>, Eva
     @Query("SELECT g.emp.empId FROM EvalGrade g WHERE g.season.seasonId = :seasonId")
     List<Long> findEmpIdsBySeason(@Param("seasonId") Long seasonId);
 
+
+//    16번 본인 평가결과 드롭다운 - 사원이 속한 시즌 목록 (최신순)
+    @Query("""
+            SELECT DISTINCT g.season
+            FROM EvalGrade g
+            WHERE g.season.company.companyId = :companyId
+              AND g.emp.empId = :empId
+            ORDER BY g.season.startDate DESC
+            """)
+    List<com.peoplecore.evaluation.domain.Season> findSeasonsByCompanyIdAndEmpId(
+            @Param("companyId") java.util.UUID companyId,
+            @Param("empId") Long empId);
+
+//    17번 본인 평가결과 상세 - 사원+시즌 단건
+    java.util.Optional<EvalGrade> findByEmp_EmpIdAndSeason_SeasonId(Long empId, Long seasonId);
+
+
     //    5번 강제배분 - 현재 랭킹 대상 인원 (biasAdjustedScore 있는 사람)
     long countBySeason_SeasonIdAndBiasAdjustedScoreNotNull(Long seasonId);
 

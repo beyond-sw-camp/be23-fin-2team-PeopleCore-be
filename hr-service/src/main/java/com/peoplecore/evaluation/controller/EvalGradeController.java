@@ -221,6 +221,27 @@ public class EvalGradeController {
                 gradeService.getFinalList(companyId, seasonId, deptId, keyword, unscoredOnly, sortField, pageable)
         );
     }
+    // ─── 본인 평가결과 조회 (사원용) ─────────────────
+
+    // 16. 본인 평가결과 - 드롭다운용 시즌 목록
+    @GetMapping("/my/seasons")
+    public ResponseEntity<List<MySeasonOptionDto>> getMySeasons(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId) {
+        return ResponseEntity.ok(gradeService.getMySeasons(companyId, empId));
+    }
+
+
+    // 17. 본인 평가결과 - 특정 시즌 상세
+    @GetMapping("/my/result")
+    public ResponseEntity<MyEvalResultDto> getMyResult(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam Long seasonId) {
+        return ResponseEntity.ok(gradeService.getMyResult(companyId, empId, seasonId));
+    }
+
+
     // 15. 평가 결과 상세 (HR 전용) - 한 사원의 단계별 타임라인 한 번에 조회
     //  - gradeId = EvalGrade PK (결과 목록 응답의 id)
     //  - 목표등록 / 평가입력(자기·상위자) / 종합점수 / Z-score / 등급산정 / 보정이력 / 최종확정 모두 포함
