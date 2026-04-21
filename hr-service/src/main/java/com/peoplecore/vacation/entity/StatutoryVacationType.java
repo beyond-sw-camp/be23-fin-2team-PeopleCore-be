@@ -11,28 +11,28 @@ import java.util.stream.Collectors;
 /* 법 개정 시 이 파일만 수정 → initDefault() 재실행 시 누락 유형 자동 보충 */
 public enum StatutoryVacationType {
 
-    /* 월차 - 근기법 §60② (1년 미만 근로자 월 1일 유급, 매월 스케줄러 적립) */
+    /* 월차 - 근기법  (1년 미만 근로자 월 1일 유급, 매월 스케줄러 적립) */
     MONTHLY       ("MONTHLY",        "월차",           "1.00",  1,
                    GrantMode.SCHEDULED,   GenderLimit.ALL,         PayType.PAID,   null),
-    /* 연차 - 근기법 §60 (80% 이상 출근 시 15일, 근속 2년당 +1, 최대 25일) */
+    /* 연차 - 근기법 80% 이상 출근 시 15일, 근속 2년당 +1, 최대 25일) */
     ANNUAL        ("ANNUAL",         "연차",           "0.25",  2,
                    GrantMode.SCHEDULED,   GenderLimit.ALL,         PayType.PAID,   null),
-    /* 출산전후휴가 - 근기법 §74 (90일, 다태아 120일 / 출산 후 45일 이상 확보) */
+    /* 출산전후휴가 - 근기법  (90일, 다태아 120일 / 출산 후 45일 이상 확보) */
     MATERNITY     ("MATERNITY",      "출산전후휴가",   "1.00", 10,
                    GrantMode.EVENT_BASED, GenderLimit.FEMALE_ONLY, PayType.PAID,   90),
-    /* 유산·사산휴가 - 근기법 §74⑦ (임신주수별 5~90일, 신청 시 주수 입력) */
+    /* 유산·사산휴가 - 근기법  (임신주수별 5~90일, 신청 시 주수 입력) */
     MISCARRIAGE   ("MISCARRIAGE",    "유산사산휴가",   "1.00", 11,
                    GrantMode.EVENT_BASED, GenderLimit.FEMALE_ONLY, PayType.PAID,   null),
-    /* 배우자 출산휴가 - 남녀고용평등법 §18-2 (2025.2.23 개정: 20일 유급) */
+    /* 배우자 출산휴가 - 남녀고용평등법  (2025.2.23 개정: 20일 유급) */
     SPOUSE_BIRTH  ("SPOUSE_BIRTH",   "배우자출산휴가", "1.00", 12,
                    GrantMode.EVENT_BASED, GenderLimit.MALE_ONLY,   PayType.PAID,   20),
-    /* 가족돌봄휴가 - 남녀고용평등법 §22-2 (연 10일 무급, 첫 신청 시 전체 적립) */
+    /* 가족돌봄휴가 - 남녀고용평등법 (연 10일 무급, 첫 신청 시 전체 적립) */
     FAMILY_CARE   ("FAMILY_CARE",    "가족돌봄휴가",   "1.00", 14,
                    GrantMode.EVENT_BASED, GenderLimit.ALL,         PayType.UNPAID, 10),
-    /* 생리휴가 - 근기법 §73 (월 1일 무급, 매월 스케줄러 적립 + 전월 미사용 만료) */
+    /* 생리휴가 - 근기법  (월 1일 무급, 매월 스케줄러 적립 + 전월 미사용 만료) */
     MENSTRUAL     ("MENSTRUAL",      "생리휴가",       "1.00", 15,
                    GrantMode.SCHEDULED,   GenderLimit.FEMALE_ONLY, PayType.UNPAID, 1),
-    /* 공가 - 근기법 §10 + 예비군법 §10 + 민방위기본법 §27 (증빙별 일수, 연 누적 row 1개) */
+    /* 공가 - 근기법 + 예비군법 + 민방위기본법 (증빙별 일수, 연 누적 row 1개) */
     OFFICIAL_LEAVE("OFFICIAL_LEAVE", "공가",           "1.00", 20,
                    GrantMode.EVENT_BASED, GenderLimit.ALL,         PayType.PAID,   null);
 

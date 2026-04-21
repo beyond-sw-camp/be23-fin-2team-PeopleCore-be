@@ -77,7 +77,6 @@ public class VacationType extends BaseTimeEntity {
     @Column(name = "pay_type", nullable = false, length = 10)
     private PayType payType;
 
-
     /* 활성화 토글 */
     public void activate()   { this.isActive = true; }
     public void deactivate() { this.isActive = false; }
