@@ -102,13 +102,6 @@ public class WorkGroup extends BaseTimeEntity {
     @Column(nullable = false)
     private GroupOvertimeRecognize groupOvertimeRecognize;
 
-    /**
-     * 모바일 출퇴근 허용 여부
-     */
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean groupMobileCheck = false;
-
     /** 삭제 일시 - null일 경우 활성화 */
     private LocalDateTime groupDeleteAt;
 
@@ -135,6 +128,5 @@ public class WorkGroup extends BaseTimeEntity {
         this.groupBreakStart = dto.getGroupBreakStart();
         this.groupBreakEnd = dto.getGroupBreakEnd();
         this.groupOvertimeRecognize = dto.getGroupOvertimeRecognize();
-        this.groupMobileCheck = dto.getGroupMobileCheck();
     }
 }

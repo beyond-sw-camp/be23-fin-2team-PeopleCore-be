@@ -16,6 +16,5 @@ public class ApprovalFormUpdateRequest {
     private FormWritePermission formWritePermission;
     private Boolean formIsPublic;
     private Integer formRetentionYear;
-    private Boolean formMobileYn;
     private Boolean formPreApprovalYn;
 }

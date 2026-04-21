@@ -26,7 +26,6 @@ public class FormDetailResponse {
     private FormWritePermission formWritePermission;
     private Boolean formIsPublic;
     private Integer formRetentionYear;
-    private Boolean formMobileYn;
     private Boolean formPreApprovalYn;
     private Integer formSortOrder;
 
@@ -47,7 +46,6 @@ public class FormDetailResponse {
                 .formWritePermission(form.getFormWritePermission())
                 .formIsPublic(form.getFormIsPublic())
                 .formRetentionYear(form.getFormRetentionYear())
-                .formMobileYn(form.getFormMobileYn())
                 .formPreApprovalYn(form.getFormPreApprovalYn())
                 .formSortOrder(form.getFormSortOrder())
                 .build();

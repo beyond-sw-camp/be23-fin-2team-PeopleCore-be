@@ -40,7 +40,4 @@ public class WorkGroupReqDto {
     /** 초과 근무 인정 방식 - APPROVAL(결재 승인만), ALL(전체 인정)  */
     private WorkGroup.GroupOvertimeRecognize groupOvertimeRecognize;
 
-    /** 모바일 출퇴근 허용 여부  */
-    private Boolean groupMobileCheck;
-
 }

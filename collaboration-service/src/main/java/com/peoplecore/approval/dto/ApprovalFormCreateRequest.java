@@ -18,6 +18,5 @@ public class ApprovalFormCreateRequest {
     private FormWritePermission formWritePermission; // 작성 권한 범위
     private Boolean formIsPublic; // 양식 공개 여부
     private Integer formRetentionYear; // 문서 보존 연한 ;
-    private Boolean formMobileYn;
     private Boolean formPreApprovalYn; //사전 결재 허용 여부
 }

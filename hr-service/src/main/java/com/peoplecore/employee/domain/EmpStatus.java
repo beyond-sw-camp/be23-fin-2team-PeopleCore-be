@@ -1,7 +1,7 @@
 package com.peoplecore.employee.domain;
 
 public enum EmpStatus {
-    ACTIVE,
-    ON_LEAVE,
-    RESIGNED        //재직, 휴직, 퇴사
+    ACTIVE, //재직
+    ON_LEAVE, //휴직
+    RESIGNED  // 퇴사
 }
