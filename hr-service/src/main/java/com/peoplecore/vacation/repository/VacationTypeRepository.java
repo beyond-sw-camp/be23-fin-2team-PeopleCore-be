@@ -41,4 +41,11 @@ public interface VacationTypeRepository extends JpaRepository<VacationType, Long
      * 반환: true 면 같은 코드 존재 → 생성 차단
      */
     boolean existsByCompanyIdAndTypeCode(UUID companyId, String typeCode);
+
+    /*
+     * 회사 + typeId 목록 일괄 조회 - 일괄 재정렬 시 타 회사 소속 유형 섞여있는지 검증 용
+     * 용도: 드래그 앤 드롭 재정렬 API. 요청된 typeId 전부가 같은 회사 소속인지 체크
+     * 반환 size 와 요청 size 불일치 시 → 타 회사 유형 포함 or 존재하지 않는 ID
+     */
+    List<VacationType> findAllByCompanyIdAndTypeIdIn(UUID companyId, List<Long> typeIds);
 }

@@ -7,6 +7,7 @@ import com.peoplecore.vacation.entity.QVacationType;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.entity.VacationRequest;
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -93,6 +94,55 @@ public class VacationRequestQueryRepository {
                 .where(
                         r.companyId.eq(companyId),
                         r.requestStatus.eq(status)
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+
+    /*
+     * 전사 휴가 관리 - 기간 교집합 + 상태 복수 필터 페이지 조회
+     * 용도: 관리자 전사 휴가 현황 화면 (기간별 PENDING/APPROVED 혼합 조회)
+     * 조건: 휴가 기간 [startAt, endAt] 이 요청 [periodStart, periodEnd] 와 교집합
+     *       즉 r.startAt <= periodEnd 그리고 r.endAt >= periodStart
+     * 상태: statuses 배열에 포함된 것만. 비어있으면 전체
+     * N+1 방지: VacationType fetch join (empName/deptName 은 스냅샷 컬럼 사용 → Employee 조인 불필요)
+     * 정렬: requestStartAt 오름차순 (일정순 - 달력 보기 편함)
+     */
+    public Page<VacationRequest> findByCompanyAndPeriodAndStatuses(UUID companyId,
+                                                                   LocalDateTime periodStart,
+                                                                   LocalDateTime periodEnd,
+                                                                   List<RequestStatus> statuses,
+                                                                   Pageable pageable) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
+
+        BooleanExpression statusPredicate = (statuses == null || statuses.isEmpty())
+                ? null
+                : r.requestStatus.in(statuses);
+
+        List<VacationRequest> content = queryFactory
+                .selectFrom(r)
+                .join(r.vacationType, t).fetchJoin()
+                .where(
+                        r.companyId.eq(companyId),
+                        r.requestStartAt.loe(periodEnd),
+                        r.requestEndAt.goe(periodStart),
+                        statusPredicate
+                )
+                .orderBy(r.requestStartAt.asc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(r.count())
+                .from(r)
+                .where(
+                        r.companyId.eq(companyId),
+                        r.requestStartAt.loe(periodEnd),
+                        r.requestEndAt.goe(periodStart),
+                        statusPredicate
                 )
                 .fetchOne();
 
