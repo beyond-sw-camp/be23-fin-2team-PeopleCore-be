@@ -43,10 +43,12 @@ class RegisterRequest(BaseModel):
     image: str
     emp_id: int
     emp_name: str
+    company_id: str
 
 
 class RecognizeRequest(BaseModel):
     image: str
+    company_id: str
 
 
 # 얼굴 크기 임계값 (픽셀 기준)
@@ -112,24 +114,30 @@ def extract_embedding(request: ExtractRequest):
     }
 
 
+def _make_doc_id(company_id: str, emp_id: int) -> str:
+    # 회사-사원 복합키. 회사 삭제/재생성 시 과거 벡터와 충돌하지 않도록 한다.
+    return f"{company_id}:{emp_id}"
+
+
 @app.post("/register")
 def register_face(request: RegisterRequest):
     embedding = extract_face_vector(request.image)
 
-    doc_id = str(request.emp_id)
+    doc_id = _make_doc_id(request.company_id, request.emp_id)
+    company_filter = {"company_id": request.company_id}
 
-    # 동일인 중복 등록 검사 (본인 재등록은 허용)
+    # 동일 회사 내 동일인 중복 등록 검사 (본인 재등록은 허용)
     if face_collection.count() > 0:
         results = face_collection.query(
             query_embeddings=[embedding],
             n_results=1,
+            where=company_filter,
         )
         if results["ids"] and results["ids"][0]:
             matched_id = results["ids"][0][0]
             matched_distance = results["distances"][0][0]
             matched_name = results["metadatas"][0][0].get("emp_name", "")
 
-            # 유사도가 임계값 이하이고, 다른 사원인 경우 → 중복 차단
             if matched_distance <= DUPLICATE_THRESHOLD and matched_id != doc_id:
                 raise HTTPException(
                     status_code=409,
@@ -143,7 +151,11 @@ def register_face(request: RegisterRequest):
     face_collection.add(
         ids=[doc_id],
         embeddings=[embedding],
-        metadatas=[{"emp_id": request.emp_id, "emp_name": request.emp_name}],
+        metadatas=[{
+            "emp_id": request.emp_id,
+            "emp_name": request.emp_name,
+            "company_id": request.company_id,
+        }],
     )
 
     return {
@@ -156,29 +168,29 @@ def register_face(request: RegisterRequest):
 
 @app.post("/recognize")
 def recognize_face(request: RecognizeRequest):
-    # 1. 등록된 얼굴이 있는지 확인
-    if face_collection.count() == 0:
-        raise HTTPException(status_code=404, detail="등록된 얼굴이 없습니다.")
-
-    # 2. 벡터 추출
+    # 1. 벡터 추출
     embedding = extract_face_vector(request.image)
 
-    # 3. Chroma에서 가장 유사한 벡터 검색
+    # 2. 해당 회사 범위 내에서만 최근접 벡터 검색 (크로스테넌트 매칭 차단)
     results = face_collection.query(
         query_embeddings=[embedding],
         n_results=1,
+        where={"company_id": request.company_id},
     )
 
-    # 4. 결과 확인
+    # 3. 결과 확인
     if not results["ids"] or not results["ids"][0]:
         raise HTTPException(status_code=404, detail="일치하는 얼굴을 찾을 수 없습니다.")
 
     distance = results["distances"][0][0]
     metadata = results["metadatas"][0][0]
 
-    print(f"[DEBUG] 인증 시도 → 매칭 대상: {metadata['emp_name']}(ID:{metadata['emp_id']}), distance: {distance:.6f}")
+    print(
+        f"[DEBUG] 인증 시도 → company={request.company_id}, "
+        f"매칭 대상: {metadata['emp_name']}(ID:{metadata['emp_id']}), distance: {distance:.6f}"
+    )
 
-    # 5. 임계값 확인 (코사인 거리: 0에 가까울수록 유사)
+    # 4. 임계값 확인 (코사인 거리: 0에 가까울수록 유사)
     if distance > SIMILARITY_THRESHOLD:
         raise HTTPException(
             status_code=401,
@@ -193,9 +205,9 @@ def recognize_face(request: RecognizeRequest):
     }
 
 
-@app.delete("/unregister/{emp_id}")
-def unregister_face(emp_id: int):
-    doc_id = str(emp_id)
+@app.delete("/unregister/{company_id}/{emp_id}")
+def unregister_face(company_id: str, emp_id: int):
+    doc_id = _make_doc_id(company_id, emp_id)
 
     existing = face_collection.get(ids=[doc_id])
     if not existing["ids"]:
@@ -206,7 +218,27 @@ def unregister_face(emp_id: int):
     return {
         "status": "deleted",
         "emp_id": emp_id,
+        "company_id": company_id,
         "message": "얼굴 정보가 삭제되었습니다.",
+    }
+
+
+@app.delete("/unregister/company/{company_id}")
+def unregister_company_faces(company_id: str):
+    # 회사 단위 일괄 삭제 (회사 EXPIRED/SUSPENDED 전이 시 호출)
+    existing = face_collection.get(where={"company_id": company_id})
+    count = len(existing["ids"]) if existing and existing.get("ids") else 0
+
+    if count == 0:
+        return {"status": "noop", "company_id": company_id, "deleted_count": 0}
+
+    face_collection.delete(where={"company_id": company_id})
+
+    return {
+        "status": "deleted",
+        "company_id": company_id,
+        "deleted_count": count,
+        "message": f"{count}건의 얼굴 정보가 삭제되었습니다.",
     }
 
 

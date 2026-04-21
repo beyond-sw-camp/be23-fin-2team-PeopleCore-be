@@ -40,6 +40,8 @@ public class FileItemService {
     }
 
     public UploadUrlResponse generateUploadUrl(UUID companyId, Long folderId, UploadUrlRequest request) {
+        // 1차 방어: presign 시점에 폴더가 이미 삭제됐는지 확인. 이후 confirm 사이에 삭제될 수 있으므로 confirmUpload 에서 재검증.
+        findActiveFolder(folderId);
         String storageKey = String.format("c%s/f%d/%s-%s",
             companyId, folderId, UUID.randomUUID(), request.getFileName());
 
@@ -53,6 +55,19 @@ public class FileItemService {
 
     @Transactional
     public FileResponse confirmUpload(Long empId, FileUploadConfirmRequest request) {
+        // 2차 방어: presign ~ confirm 사이 race. 폴더가 삭제됐다면 FileItem 을 꽂지 않고 410 으로 실패 + MinIO 고아 객체 cleanup 시도.
+        try {
+            findActiveFolder(request.getFolderId());
+        } catch (BusinessException e) {
+            try {
+                minioService.deleteObject(request.getStorageKey());
+            } catch (Exception cleanup) {
+                log.warn("업로드된 MinIO 객체 cleanup 실패 key={}, err={}",
+                    request.getStorageKey(), cleanup.getMessage());
+            }
+            throw e;
+        }
+
         long actualSize = minioService.headObject(request.getStorageKey());
         if (actualSize < 0) {
             throw new BusinessException("MinIO에 파일이 존재하지 않습니다. 업로드를 다시 시도해주세요.",
@@ -90,15 +105,19 @@ public class FileItemService {
         String url = attachment
             ? minioService.generatePresignedGetUrl(file.getStorageKey(), 5, file.getName())
             : minioService.generatePresignedGetUrl(file.getStorageKey(), 5);
-        eventPublisher.publishEvent(FileVaultAuditEvent.builder()
-            .action(AuditAction.DOWNLOAD_FILE)
-            .resourceType(ResourceType.FILE)
-            .resourceId(file.getId())
-            .resourceName(file.getName())
-            .parentFolderId(file.getFolderId())
-            .parentName(lookupFolderName(file.getFolderId()))
-            .metadata(Map.of("expiresInMinutes", 5))
-            .build());
+        // inline(미리보기) 요청은 열람일 뿐 다운로드가 아니므로 감사 로그에 남기지 않는다.
+        // FE에서 PDF/이미지 미리보기 모달을 열면 inline 으로 URL을 받아가며, 실제 다운로드 버튼을 누를 때만 attachment=true.
+        if (attachment) {
+            eventPublisher.publishEvent(FileVaultAuditEvent.builder()
+                .action(AuditAction.DOWNLOAD_FILE)
+                .resourceType(ResourceType.FILE)
+                .resourceId(file.getId())
+                .resourceName(file.getName())
+                .parentFolderId(file.getFolderId())
+                .parentName(lookupFolderName(file.getFolderId()))
+                .metadata(Map.of("expiresInMinutes", 5))
+                .build());
+        }
         return url;
     }
 
@@ -202,5 +221,14 @@ public class FileItemService {
             throw new BusinessException("삭제된 파일입니다.", HttpStatus.GONE);
         }
         return file;
+    }
+
+    private FileFolder findActiveFolder(Long folderId) {
+        FileFolder folder = folderRepository.findById(folderId)
+            .orElseThrow(() -> new BusinessException("폴더를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        if (folder.isDeleted()) {
+            throw new BusinessException("삭제된 폴더입니다.", HttpStatus.GONE);
+        }
+        return folder;
     }
 }

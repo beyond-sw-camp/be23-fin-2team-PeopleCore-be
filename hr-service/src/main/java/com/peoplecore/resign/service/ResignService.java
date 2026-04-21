@@ -1,6 +1,7 @@
 package com.peoplecore.resign.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.auth.service.FaceAuthService;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
@@ -33,12 +34,14 @@ public class ResignService {
     private final ResignRepository resignRepository;
     private final EmployeeRepository employeeRepository;
     private final ObjectMapper objectMapper;
+    private final FaceAuthService faceAuthService;
 
 
-    public ResignService(ResignRepository resignRepository, EmployeeRepository employeeRepository, ObjectMapper objectMapper) {
+    public ResignService(ResignRepository resignRepository, EmployeeRepository employeeRepository, ObjectMapper objectMapper, FaceAuthService faceAuthService) {
         this.resignRepository = resignRepository;
         this.employeeRepository = employeeRepository;
         this.objectMapper = objectMapper;
+        this.faceAuthService = faceAuthService;
     }
 
 
@@ -90,6 +93,7 @@ public class ResignService {
             Employee employee = resign.getEmployee();
             employee.updateStatus(EmpStatus.RESIGNED);
             employee.updateResignDate(resign.getResignDate());
+            faceAuthService.cascadeUnregisterFace(employee.getEmpId(), employee.getCompany().getCompanyId());
         }
     }
 
