@@ -19,7 +19,6 @@ import com.peoplecore.pay.repository.LeaveAllowanceRepository;
 import com.peoplecore.pay.repository.PayItemsRepository;
 import com.peoplecore.pay.repository.PayrollDetailsRepository;
 import com.peoplecore.pay.repository.PayrollRunsRepository;
-import com.peoplecore.salarycontract.domain.ContractStatus;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
 import com.peoplecore.vacation.entity.VacationBalance;
@@ -100,7 +99,7 @@ public class LeaveAllowanceService {
             }
 
 //            통상임금(월) = 연봉 / 12
-            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdAndStatusOrderByContractYearDesc(empId, ContractStatus.SIGNED).orElse(null);
+            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByContractYearDesc(empId).orElse(null);
             if (contract == null) continue;
 
             long monthlySalary = contract.getTotalAmount().divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR).longValue();

@@ -44,4 +44,19 @@ public class ManagerEvaluation extends BaseTimeEntity {
 
     @Column(name = "submitted_at")
     private LocalDateTime submittedAt; // 제출 시각
+
+//    팀장-팀원평가 임시저장 - submittedAt X(미평가/제출 상태 유지)
+    public void saveDraft(String gradeLabel, String comment, String feedback) {
+        this.gradeLabel = gradeLabel;
+        this.comment = comment;
+        this.feedback = feedback;
+    }
+
+//    팀장-팀원평가 최종 제출 - submittedAt 기록 (평가 완료 상태)
+    public void submit(String gradeLabel, String comment, String feedback) {
+        this.gradeLabel = gradeLabel;
+        this.comment = comment;
+        this.feedback = feedback;
+        this.submittedAt = LocalDateTime.now();
+    }
 }
