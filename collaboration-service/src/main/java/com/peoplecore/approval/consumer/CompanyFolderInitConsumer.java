@@ -2,6 +2,7 @@ package com.peoplecore.approval.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.approval.service.ApprovalFormService;
+import com.peoplecore.approval.service.ApprovalNumberRuleService;
 import com.peoplecore.event.CompanyCreateEvent;
 import com.peoplecore.exception.BusinessException;
 import com.peoplecore.filevault.entity.FolderType;
@@ -22,16 +23,19 @@ import java.util.UUID;
 public class CompanyFolderInitConsumer {
 
     private final ApprovalFormService formService;
+    private final ApprovalNumberRuleService numberRuleService;
     private final FileFolderService folderService;
     private final FileFolderRepository folderRepository;
     private final ObjectMapper objectMapper;
 
     @Autowired
     public CompanyFolderInitConsumer(ApprovalFormService formService,
+                                     ApprovalNumberRuleService numberRuleService,
                                      FileFolderService folderService,
                                      FileFolderRepository folderRepository,
                                      ObjectMapper objectMapper) {
         this.formService = formService;
+        this.numberRuleService = numberRuleService;
         this.folderService = folderService;
         this.folderRepository = folderRepository;
         this.objectMapper = objectMapper;
@@ -44,6 +48,7 @@ public class CompanyFolderInitConsumer {
         try {
             CompanyCreateEvent event = objectMapper.readValue(message, CompanyCreateEvent.class);
             formService.initFormFolder(event.getCompanyId());
+            numberRuleService.initDefault(event.getCompanyId());  // 기본 채번 규칙 주입
 
             // 멱등성 — 이미 COMPANY 루트가 있으면 스킵 (이벤트 재전달/중복 수신 대비)
             boolean alreadyExists = !folderRepository

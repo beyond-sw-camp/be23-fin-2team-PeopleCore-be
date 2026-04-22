@@ -69,8 +69,9 @@ public class ApprovalDocumentService {
     @Transactional
     public Long createDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request) {
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        /* 근태 정정 양식이면 결재선에 HR 사원 포함 여부 검증 */
-        if ("ATTENDANCE_MODIFY".equals(form.getFormCode())) {
+        /* 근태 정정 / 휴가 부여 신청 양식이면 결재선에 HR 사원 포함 여부 검증 */
+        String formCode = form.getFormCode();
+        if ("ATTENDANCE_MODIFY".equals(formCode) || "VACATION_GRANT_REQUEST".equals(formCode)) {
             validateHrApproverIncluded(companyId, request.getApprovalLines());
         }
         CompanyInfoResponse companyInfoResponse = hrCacheService.getCompany(companyId);
@@ -501,7 +502,7 @@ public class ApprovalDocumentService {
 
         lineRepository.saveAll(lines);
     }
-    /* 근태 정정 상신 시 결재선에 HR_ADMIN 또는 HR_SUPER_ADMIN 사원이 1명 이상 포함되었는지 검증 */
+    /* 근태 정정 / 휴가 부여 신청 상신 시 결재선에 HR_ADMIN 또는 HR_SUPER_ADMIN 사원이 1명 이상 포함되었는지 검증 */
     private void validateHrApproverIncluded(UUID companyId, List<DocumentCreateRequest.ApprovalLineRequest> approvalLines) {
         AttendanceModifyHrMemberResDto hrMembersDto = hrServiceClient.getHrMembers(companyId);
         Set<Long> hrEmpIds = hrMembersDto.getHrMembers().stream()

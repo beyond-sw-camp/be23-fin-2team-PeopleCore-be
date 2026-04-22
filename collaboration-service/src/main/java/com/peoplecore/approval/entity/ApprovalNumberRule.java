@@ -124,4 +124,24 @@ public class ApprovalNumberRule extends BaseTimeEntity {
         this.numberRuleSeparator = separator;
         this.numberRuleSeqResetCycle = ruleSeqResetCycle;
     }
+
+    /**
+     * 회사 생성 시 주입되는 기본 채번 규칙.
+     * 패턴: 부서코드-양식코드-YYMMDD-순번(3자리), 연 단위 리셋.
+     * empId=0L → 시스템 생성 (FileFolderService.createSystemDefaultFolder 와 동일 컨벤션)
+     */
+    public static ApprovalNumberRule createDefault(UUID companyId) {
+        return ApprovalNumberRule.builder()
+                .numberRuleCompanyId(companyId)
+                .numberRuleEmpId(0L)
+                .numberRuleCurrentSeq(0)
+                .numberRuleSlot1Type("DEPT_CODE")
+                .numberRuleSlot2Type("FORM_CODE")
+                .numberRuleSlot3Type("NONE")
+                .numberRuleDateFormat("yyMMdd")
+                .numberRuleSeqDigits(3)
+                .numberRuleSeparator("-")
+                .numberRuleSeqResetCycle(NumberRuleSeqResetCycle.YEAR)
+                .build();
+    }
 }
