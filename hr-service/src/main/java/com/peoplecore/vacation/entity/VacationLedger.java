@@ -26,6 +26,7 @@ public class VacationLedger extends BaseTimeEntity {
 
     /* ref_type 상수 - String 으로 처리 (enum 안 만듦) */
     public static final String REF_VAC_REQUEST = "VAC_REQUEST";
+    public static final String REF_VAC_GRANT_REQUEST = "VAC_GRANT_REQUEST";
     public static final String REF_SCHEDULER = "SCHEDULER";
     public static final String REF_ADMIN = "ADMIN";
 
@@ -175,6 +176,28 @@ public class VacationLedger extends BaseTimeEntity {
         return baseBuilder(balance, LedgerEventType.MANUAL_USED, days.negate(), beforeTotal, afterTotal)
                 .refType(REF_ADMIN)
                 .managerId(managerId)
+                .reason(reason)
+                .build();
+    }
+
+    /* 부여 신청 결재 승인 적립 - 사원의 법정휴가 부여 신청이 결재 승인되어 Balance.total 증가 */
+    /* refType=VAC_GRANT_REQUEST 로 USE 와 구분. eventType=MANUAL_GRANT (관리자 결재 승인 거친 부여) */
+    public static VacationLedger ofGrantApproved(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal, Long grantRequestId, Long managerId, String reason) {
+        return baseBuilder(balance, LedgerEventType.MANUAL_GRANT, days, beforeTotal, afterTotal)
+                .refType(REF_VAC_GRANT_REQUEST)
+                .refId(grantRequestId)
+                .managerId(managerId)
+                .reason(reason)
+                .build();
+    }
+
+    /* 부여 신청 취소 롤백 - APPROVED→CANCELED 전이 시 Balance.total 차감 (해당 부여분 회수) */
+    /* eventType=GRANT_REVOKED (debit). 호출부에서 잔여 사용 발생분은 별도 차단 검증 필수 */
+    public static VacationLedger ofGrantRollback(VacationBalance balance, BigDecimal days, BigDecimal beforeTotal, BigDecimal afterTotal, Long grantRequestId, Long actorId, String reason) {
+        return baseBuilder(balance, LedgerEventType.GRANT_REVOKED, days.negate(), beforeTotal, afterTotal)
+                .refType(REF_VAC_GRANT_REQUEST)
+                .refId(grantRequestId)
+                .managerId(actorId)
                 .reason(reason)
                 .build();
     }

@@ -1,6 +1,6 @@
 package com.peoplecore.vacation.dto;
 
-import com.peoplecore.vacation.entity.VacationRequest;
+import com.peoplecore.vacation.entity.VacationGrantRequest;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -9,13 +9,13 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-/* 휴가 사용 신청 응답 DTO - 사원 이력 / 관리자 조회 공통 */
+/* 휴가 부여 신청 응답 DTO - 사원 이력 / 관리자 조회 공통 */
 /* 스냅샷 필드 사용 (조직개편 후에도 신청 당시 정보 보존) */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class VacationRequestResponse {
+public class VacationGrantRequestResponse {
 
     private Long requestId;
 
@@ -31,16 +31,14 @@ public class VacationRequestResponse {
     private String empGrade;
     private String empTitle;
 
-    /* 휴가 기간 */
-    private LocalDateTime startAt;
-    private LocalDateTime endAt;
+    /* 부여 요청 일수 / 사유 */
     private BigDecimal useDays;
-
-    /* 사유 / 상태 */
     private String reason;
+
+    /* 상태 */
     private String status;
 
-    /* 처리 정보 (승인/반려/취소) */
+    /* 처리 정보 */
     private Long managerId;
     private LocalDateTime processedAt;
     private String rejectReason;
@@ -48,10 +46,13 @@ public class VacationRequestResponse {
     /* 결재 문서 참조 */
     private Long approvalDocId;
 
+    /* MISCARRIAGE 전용 메타 - 그 외 유형은 null */
+    private Integer pregnancyWeeks;
+
     private LocalDateTime createdAt;
 
-    public static VacationRequestResponse from(VacationRequest r) {
-        return VacationRequestResponse.builder()
+    public static VacationGrantRequestResponse from(VacationGrantRequest r) {
+        return VacationGrantRequestResponse.builder()
                 .requestId(r.getRequestId())
                 .typeId(r.getVacationType().getTypeId())
                 .typeCode(r.getVacationType().getTypeCode())
@@ -61,8 +62,6 @@ public class VacationRequestResponse {
                 .empDeptName(r.getRequestEmpDeptName())
                 .empGrade(r.getRequestEmpGrade())
                 .empTitle(r.getRequestEmpTitle())
-                .startAt(r.getRequestStartAt())
-                .endAt(r.getRequestEndAt())
                 .useDays(r.getRequestUseDays())
                 .reason(r.getRequestReason())
                 .status(r.getRequestStatus().name())
@@ -70,6 +69,7 @@ public class VacationRequestResponse {
                 .processedAt(r.getRequestProcessedAt())
                 .rejectReason(r.getRequestRejectReason())
                 .approvalDocId(r.getApprovalDocId())
+                .pregnancyWeeks(r.getPregnancyWeeks())
                 .createdAt(r.getCreatedAt())
                 .build();
     }
