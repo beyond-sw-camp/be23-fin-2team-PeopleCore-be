@@ -89,11 +89,11 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
     }
 
     /* 보존연한 미만료 조건 - 미완결(snapshot=NULL) 통과, 완료분은 docCompleteAt + snapshot > 현재 */
-    /* snapshot 은 complete() 시점에 양식 연한을 박제한 값 */
+    /* HQL 은 INTERVAL <expr> YEAR 미지원 → Hibernate 표준 function timestampadd 사용 (year 단위 정수 더하기) */
     private BooleanExpression notExpired() {
         return doc.retentionYearSnapshot.isNull().or(
                 Expressions.booleanTemplate(
-                        "DATE_ADD({0}, INTERVAL {1} YEAR) > CURRENT_TIMESTAMP",
+                        "function('timestampadd', year, {1}, {0}) > current_timestamp",
                         doc.docCompleteAt, doc.retentionYearSnapshot
                 )
         );

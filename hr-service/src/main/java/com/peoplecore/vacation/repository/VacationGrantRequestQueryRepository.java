@@ -103,14 +103,14 @@ public class VacationGrantRequestQueryRepository {
     }
 
     /* 성별별 허용 GenderLimit 매핑 */
-    /* MALE → ALL + MALE_ONLY / FEMALE → ALL + FEMALE_ONLY */
+    /* MALE → ALL + MALE_ONLY / FEMALE → ALL + FEMALE_ONLY / null → ALL 만 (성별 미등록 사원 방어) */
     private BooleanExpression genderCondition(EmpGender empGender, QVacationType t) {
         if (empGender == EmpGender.MALE) {
             return t.genderLimit.in(GenderLimit.ALL, GenderLimit.MALE_ONLY);
         } else if (empGender == EmpGender.FEMALE) {
             return t.genderLimit.in(GenderLimit.ALL, GenderLimit.FEMALE_ONLY);
         }
-        // EmpGender 는 MALE/FEMALE 만 존재 - 여기 도달 시 데이터 이상
-        throw new IllegalStateException("Unknown EmpGender: " + empGender);
+        // 성별 미등록 사원 - 성별 무관 유형만 노출
+        return t.genderLimit.eq(GenderLimit.ALL);
     }
 }
