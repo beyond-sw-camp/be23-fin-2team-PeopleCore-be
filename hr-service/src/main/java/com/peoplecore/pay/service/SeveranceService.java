@@ -176,11 +176,11 @@ public class SeveranceService {
 
 //        DC형: 기적립금 차감
         Long dcDepositedTotal = 0L; //DC형 기적립금 합계
-        Long dvDiffAmount = 0L;     //DC형 차액(퇴직금-기적립금 = 실제 추가 지급해야할 금액)
+        Long dcDiffAmount = 0L;     //DC형 차액(퇴직금-기적립금 = 실제 추가 지급해야할 금액)
 
         if (retirementType == RetirementType.DC){
             dcDepositedTotal = severancePaysRepository.sumDcDepositedTotal(empId, companyId);
-            dvDiffAmount = Math.max(0, severanceAmount - dcDepositedTotal);
+            dcDiffAmount = Math.max(0, severanceAmount - dcDepositedTotal);
         }
 
 //        퇴직소득세/지방소득세 자동산출
@@ -206,7 +206,7 @@ public class SeveranceService {
 
         if (existing.isPresent()){
             sev = existing.get();
-            sev.recalculate(last3MonthPay, lastYearBonus, annualLeaveForAvgWage, annualLeaveOnRetirement, last3MonthDays, avgDailyWage, severanceAmount, dcDepositedTotal, dcDepositedTotal);
+            sev.recalculate(last3MonthPay, lastYearBonus, annualLeaveForAvgWage, annualLeaveOnRetirement, last3MonthDays, avgDailyWage, severanceAmount, dcDepositedTotal, dcDiffAmount);
 //            재산정시 세금도 최신 데이터로 재적용
             sev.applyTax(retirementIncomeTax, localIncomeTax, taxYear, irpTransfer);
         } else {
@@ -231,7 +231,7 @@ public class SeveranceService {
                     //실지급액 = (퇴직금 - 세금 - 지방세) + 퇴직정산 연차수당 별도지급
                     .netAmount(netAmount)
                     .dcDepositedTotal(dcDepositedTotal)
-                    .dcDiffAmount(dvDiffAmount)
+                    .dcDiffAmount(dcDiffAmount)
                     .company(company)
                     .empName(empName)
                     .deptName(deptName)
@@ -242,7 +242,7 @@ public class SeveranceService {
         severancePaysRepository.save(sev);
         }
 
-        log.info("[SeveranceService 퇴직금 산정 완료 - empId:{}, amount={}, type:{}", empId, dvDiffAmount, retirementType);
+        log.info("[SeveranceService 퇴직금 산정 완료 - empId:{}, amount={}, type:{}", empId, dcDiffAmount, retirementType);
 
         return SeveranceDetailResDto.fromEntity(sev);
     }
