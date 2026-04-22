@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>휴가 부여 신청서</title>
+<style>
+  body {
+    font-family: '맑은 고딕', 'Malgun Gothic', sans-serif;
+    font-size: 14px;
+    color: #000;
+    margin: 0;
+    padding: 20px;
+    background: #fff;
+  }
+  .approval-document {
+    width: 720px;
+    margin: 0 auto;
+    background: #fff;
+  }
+  .doc-title {
+    text-align: center;
+    font-size: 28px;
+    font-weight: bold;
+    letter-spacing: 10px;
+    padding: 20px 0 30px 0;
+    border-bottom: 2px solid #000;
+    margin-bottom: 0;
+  }
+  table.form-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+  }
+  table.form-table th,
+  table.form-table td {
+    border: 1px solid #333;
+    padding: 8px 12px;
+    vertical-align: middle;
+    font-size: 14px;
+  }
+  table.form-table th {
+    background: #f2f2f2;
+    text-align: center;
+    font-weight: bold;
+    width: 130px;
+  }
+  table.form-table td {
+    background: #fff;
+  }
+  .grant-row th {
+    background: #eaf5ef;
+  }
+  .grant-cell {
+    text-align: center;
+    font-weight: bold;
+    color: #1D9E75;
+  }
+  .reason-cell {
+    height: 120px;
+    vertical-align: top;
+  }
+  .attach-cell {
+    min-height: 40px;
+  }
+  .notice {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+    line-height: 1.6;
+  }
+  .notice ul {
+    margin: 5px 0 0 20px;
+    padding: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="approval-document">
+
+  <div class="doc-title">휴 가 부 여 신 청 서</div>
+
+  <!-- 제목 -->
+  <table class="form-table">
+    <tr>
+      <th>제&nbsp;&nbsp;&nbsp;&nbsp;목</th>
+      <td colspan="3" data-dsl="text">{{text:title}}</td>
+    </tr>
+  </table>
+
+  <!-- 신청자 정보 -->
+  <table class="form-table">
+    <tr>
+      <th>신 청 자</th>
+      <td data-dsl="text">{{text:emp_name}}</td>
+      <th>부&nbsp;&nbsp;&nbsp;&nbsp;서</th>
+      <td data-dsl="text">{{text:emp_dept_name}}</td>
+    </tr>
+    <tr>
+      <th>직&nbsp;&nbsp;&nbsp;&nbsp;급</th>
+      <td data-dsl="text">{{text:emp_grade_name}}</td>
+      <th>직&nbsp;&nbsp;&nbsp;&nbsp;책</th>
+      <td data-dsl="text">{{text:emp_title_name}}</td>
+    </tr>
+    <tr>
+      <th>신 청 일</th>
+      <td colspan="3" data-dsl="calendar">{{calendar:request_date}}</td>
+    </tr>
+  </table>
+
+  <!-- 부여 요청 정보 -->
+  <table class="form-table">
+    <tr class="grant-row">
+      <th>휴가 종류</th>
+      <td colspan="3" data-dsl="label">{{label:vacationTypeName}}</td>
+    </tr>
+    <tr class="grant-row">
+      <th>부여 요청 일수</th>
+      <td colspan="3" class="grant-cell" data-dsl="label">{{label:vacReqUseDay}} 일</td>
+    </tr>
+    <tr class="grant-row">
+      <th>임신 주수</th>
+      <td colspan="3" class="grant-cell" data-dsl="label">{{label:pregnancyWeeks}} 주</td>
+    </tr>
+  </table>
+
+  <!-- 사유 -->
+  <table class="form-table">
+    <tr>
+      <th>사&nbsp;&nbsp;&nbsp;&nbsp;유</th>
+      <td class="reason-cell" data-dsl="editor">{{editor:vacReqReason}}</td>
+    </tr>
+  </table>
+
+  <!-- 첨부파일 -->
+  <table class="form-table">
+    <tr>
+      <th>첨부파일</th>
+      <td class="attach-cell" data-dsl="attach">{{attach:attachments}}</td>
+    </tr>
+  </table>
+
+  <div class="notice">
+    ※ 유의사항
+    <ul>
+      <li>법정 근로 휴가(출산전후/유산·사산/배우자출산/가족돌봄/공가)는 증빙 자료를 반드시 첨부하세요.</li>
+      <li>유산·사산 휴가는 임신 주수 기준으로 부여 일수가 자동 산정되어 입력값과 다를 수 있습니다.</li>
+      <li>임신 주수 행은 유산·사산 휴가에만 해당합니다 (모달에서 자동 노출/숨김).</li>
+      <li>승인 후 사용은 별도의 휴가 신청서로 진행해 주세요.</li>
+    </ul>
+  </div>
+
+  <p style="text-align:center; margin-top:30px; font-size:15px;">
+    위와 같이 휴가 부여를 신청합니다.
+  </p>
+
+</div>
+
+</body>
+</html>

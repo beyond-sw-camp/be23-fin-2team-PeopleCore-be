@@ -70,7 +70,6 @@ public class VacationGrantRequestService {
     }
 
     /* Kafka(vacation-grant-approval-doc-created) 진입 - PENDING INSERT (Balance 무변경 + cap 검증) */
-    /* 1층 방어: Redis 분산 락으로 같은 (회사,사원,유형) 동시 신청 race 원천 차단 */
     public void createFromApproval(VacationGrantApprovalDocCreatedEvent event) {
         String lockKey = LOCK_KEY_PREFIX + ":" + event.getCompanyId()
                 + ":" + event.getEmpId() + ":" + event.getInfoId();
