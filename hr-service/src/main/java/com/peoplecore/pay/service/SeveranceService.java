@@ -274,7 +274,7 @@ public class SeveranceService {
 //        2. 회사 퇴직제도 설정
 //        -> 회사가 DB_DC 둘다 운영하는데 개인설정이 없으면 판단 불가 -> 사원설정 필수 -> 예외
 //           회사가 단일제도면 그걸 적용
-    private RetirementType resolveRetirementType(Employee emp, UUID companyId){
+    RetirementType resolveRetirementType(Employee emp, UUID companyId){
 
         if(emp.getRetirementType() != null){
             return emp.getRetirementType();
