@@ -11,7 +11,7 @@ import org.springframework.data.domain.Page;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SeveranceListResDto {
-//    신규 - 목록 + 요약
+//   목록 + 요약
 
     private long totalCount;                // 전체 건수
     private long calculatingCount;          // 산정중

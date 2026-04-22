@@ -1,8 +1,10 @@
 package com.peoplecore.evaluation.dto;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.Season;
+import com.peoplecore.evaluation.domain.SeasonPeriod;
 import com.peoplecore.evaluation.domain.Stage;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -21,10 +23,10 @@ import java.util.List;
 public class SeasonDetailDto {
     private Long id;
     private String name;
-    private String period;                // 상반기/하반기/연간
+    private SeasonPeriod period;          // FIRST_HALF / SECOND_HALF / ANNUAL
     private LocalDate startDate;
     private LocalDate endDate;
-    private String status;                // 준비중/진행중/완료 (조회 시점 기준)
+    private EvalSeasonStatus status;      // DRAFT / OPEN / CLOSED 등
     private List<StageDto> stages;
     private EvaluationRulesDto rules;     // 시즌에 적용된 평가 규칙 (formSnapshot 기반)
 
@@ -43,7 +45,7 @@ public class SeasonDetailDto {
                 .period(s.getPeriod())
                 .startDate(s.getStartDate())
                 .endDate(s.getEndDate())
-                .status(s.getStatus().name())          // enum 이름 그대로 (프론트에서 라벨 매핑)
+                .status(s.getStatus())
                 .stages(stageDtos)
                 .rules(rulesDto)
                 .build();

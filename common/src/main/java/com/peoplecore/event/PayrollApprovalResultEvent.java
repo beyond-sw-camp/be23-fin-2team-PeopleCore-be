@@ -11,7 +11,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @Builder
 @Data
-public class PayrollApprovalResultEvent {
+public class PayrollApprovalResultEvent {   //급여 전자결재 결과
 
     private UUID companyId;
     private Long payrollRunId;

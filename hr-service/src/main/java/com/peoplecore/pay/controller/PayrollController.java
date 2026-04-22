@@ -1,8 +1,12 @@
 package com.peoplecore.pay.controller;
 
 import com.peoplecore.auth.RoleRequired;
+import com.peoplecore.pay.approval.ApprovalDraftResDto;
+import com.peoplecore.pay.approval.ApprovalSubmitReqDto;
+import com.peoplecore.pay.approval.PayrollApprovalDraftService;
 import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.service.PayrollService;
+import jakarta.validation.Valid;
 import jakarta.ws.rs.Path;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
@@ -22,10 +26,12 @@ import java.util.UUID;
 public class PayrollController {
 
     private final PayrollService payrollService;
+    private final PayrollApprovalDraftService payrollApprovalDraftService;
 
     @Autowired
-    public PayrollController(PayrollService payrollService) {
+    public PayrollController(PayrollService payrollService, PayrollApprovalDraftService payrollApprovalDraftService) {
         this.payrollService = payrollService;
+        this.payrollApprovalDraftService = payrollApprovalDraftService;
     }
 
 //    급여대장 조회
@@ -70,13 +76,23 @@ public class PayrollController {
         return ResponseEntity.ok().build();
     }
 
-//    전자결재 상신
+///    전자결재
+//  1. 전자결재 미리보기 데이터 조회 (모달 열때 호출)
+    @GetMapping("/{payrollRunId}/approval/draft")
+    public ResponseEntity<ApprovalDraftResDto> draftDtos(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long userId,
+            @PathVariable Long payrollRunId){
+        return ResponseEntity.ok(payrollApprovalDraftService.draft(companyId, userId, payrollRunId));
+    }
+//  2. 전자결재 상신
     @PostMapping("/{payrollRunId}/submit-approval")
     public ResponseEntity<Void> submitApproval(
             @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long userId,
             @PathVariable Long payrollRunId,
-            @RequestParam Long approvalDocId){  //?? 프론트에서 받아오기
-        payrollService.submitApproval(companyId, payrollRunId, approvalDocId);
+            @RequestBody @Valid ApprovalSubmitReqDto reqDto){
+        payrollApprovalDraftService.submit(companyId, userId, reqDto);
         return ResponseEntity.ok().build();
     }
 

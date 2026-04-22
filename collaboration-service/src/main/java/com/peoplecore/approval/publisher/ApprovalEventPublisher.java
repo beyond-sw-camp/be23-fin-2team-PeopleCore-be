@@ -44,6 +44,10 @@ public class ApprovalEventPublisher {
     private static final String TOPIC_VAC_GRANT_RESULT = "vacation-grant-approval-result";
     private static final String TOPIC_ATTEN_MODIFY_DOC_CREATED = "attendance-modify-doc-created";
     private static final String TOPIC_ATTEN_MODIFY_RESULT = "attendance-modify-result";
+    private static final String FORM_NAME_SEVERANCE_PREFIX = "퇴직금지급결의서";
+    private static final String FORM_NAME_PAYROLL_PREFIX   = "급여지급결의서";
+    private static final String TOPIC_SEVERANCE_RESULT     = "severance-approval-result";
+    private static final String TOPIC_PAYROLL_RESULT       = "payroll-approval-result";
 
 
     private final KafkaTemplate<String, String> kafkaTemplate;
@@ -185,6 +189,30 @@ public class ApprovalEventPublisher {
                         .build();
                 kafkaTemplate.send(TOPIC_ATTEN_MODIFY_RESULT, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] AttendanceModify result 발행 - docId={}, status={}", document.getDocId(), status);
+            } else if (formName != null && formName.startsWith(FORM_NAME_PAYROLL_PREFIX)) {  // 급여 결과
+                Long payrollRunId = parseLong(document.getDocData(), "payrollRunId");
+                PayrollApprovalResultEvent event = PayrollApprovalResultEvent.builder()
+                        .companyId(document.getCompanyId())
+                        .payrollRunId(payrollRunId)
+                        .approvalDocId(document.getDocId())
+                        .status(status)
+                        .managerId(managerId)
+                        .rejectReason(rejectReason)
+                        .build();
+                kafkaTemplate.send(TOPIC_PAYROLL_RESULT, objectMapper.writeValueAsString(event));
+                log.info("[Kafka] Payroll result 발행 - docId={}, status={}", document.getDocId(), status);
+            } else if (formName != null && formName.startsWith(FORM_NAME_SEVERANCE_PREFIX)) {  // 퇴직금 결과
+                Long sevId = parseLong(document.getDocData(), "sevId");
+                SeveranceApprovalResultEvent event = SeveranceApprovalResultEvent.builder()
+                        .companyId(document.getCompanyId())
+                        .sevId(sevId)
+                        .approvalDocId(document.getDocId())
+                        .status(status)
+                        .managerId(managerId)
+                        .rejectReason(rejectReason)
+                        .build();
+                kafkaTemplate.send(TOPIC_SEVERANCE_RESULT, objectMapper.writeValueAsString(event));
+                log.info("[Kafka] Severance result 발행 - docId={}, status={}", document.getDocId(), status);
             }
         } catch (Exception e) {
             log.error("[Kafka] result 발행 실패 - docId={}, err={}", document.getDocId(), e.getMessage());

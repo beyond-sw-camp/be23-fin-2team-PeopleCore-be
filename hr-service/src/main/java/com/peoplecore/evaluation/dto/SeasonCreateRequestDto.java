@@ -1,5 +1,6 @@
 package com.peoplecore.evaluation.dto;
 
+import com.peoplecore.evaluation.domain.SeasonPeriod;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -22,8 +23,8 @@ public class SeasonCreateRequestDto {
     @NotBlank(message = "시즌명은 필수입니다")
     private String name;
 
-    @NotBlank(message = "기간 구분은 필수입니다") // 상반기/하반기/연간
-    private String period;
+    @NotNull(message = "기간 구분은 필수입니다") // FIRST_HALF/SECOND_HALF/ANNUAL
+    private SeasonPeriod period;
 
     @NotNull(message = "시작일은 필수입니다")
     private LocalDate startDate;

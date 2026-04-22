@@ -41,7 +41,7 @@ public class PayItems {
     @Builder.Default
     private Boolean isTaxable = true;
 
-//    고정항목여부
+//    고정항목 여부 (금액이 고정)
     @Builder.Default
     private Boolean isFixed = true;
 
@@ -77,10 +77,17 @@ public class PayItems {
     @Builder.Default
     private Boolean isSystem = false;
 
+//    시스템 보호항목 (수정/삭제 불가)
+    @Builder.Default
+    private Boolean isProtected = false;
+
 
     public void update(String payItemName, Boolean isFixed, Boolean isTaxable, Integer taxExemptLimit, PayItemCategory payItemCategory){
         if(Boolean.TRUE.equals(this.isSystem)){
             throw new CustomException(ErrorCode.SYSTEM_PAY_ITEM_NOT_EDITABLE);
+        }
+        if (Boolean.TRUE.equals(this.isProtected)) {
+            throw new CustomException(ErrorCode.PROTECTED_PAY_ITEM_NOT_EDITABLE);
         }
         this.payItemName = payItemName;
         this.isFixed = isFixed;
@@ -97,6 +104,9 @@ public class PayItems {
     public void softDelete(){
         if(Boolean.TRUE.equals(this.isSystem)){
             throw new CustomException(ErrorCode.SYSTEM_PAY_ITEM_NOT_DELETABLE);
+        }
+        if (Boolean.TRUE.equals(this.isProtected)) {
+            throw new CustomException(ErrorCode.PROTECTED_PAY_ITEM_NOT_DELETABLE);
         }
         this.isDeleted = true;
         this.isActive = false;

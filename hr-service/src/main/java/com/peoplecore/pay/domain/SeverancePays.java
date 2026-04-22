@@ -43,7 +43,7 @@ public class SeverancePays extends BaseTimeEntity {
 
 //    퇴직제도유형
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable  = false)
     private RetirementType retirementType;
 
 //    근속연수
@@ -62,8 +62,11 @@ public class SeverancePays extends BaseTimeEntity {
 //    직전1년 상여금 총액
     private Long lastYearBonus;
 
-//    연차수당
-    private Long annualLeaveAllowance;
+    ///    연차수당 (평균임금 반영분 과 퇴직정산 별도지급분 분리)
+//    평균임금 산정용역 연차수당
+    private Long annualLeaveForAvgWage;
+//    퇴직정산 별도지급 연차수당
+    private Long annualLeaveOnRetirement = 0L;
 
 //    직전 3개월 총 일수
     @Column(nullable = false)
@@ -81,6 +84,21 @@ public class SeverancePays extends BaseTimeEntity {
     @Column(nullable = false)
     @Builder.Default
     private Long taxAmount = 0L;
+
+//    지방소득세 (퇴직소득세 * 10%)
+    @Column(nullable = false)
+    @Builder.Default
+    private Long localIncomeTax = 0L;
+
+//    세액산출에 사용된 귀속연도
+    @Column(nullable = false)
+    @Builder.Default
+    private Integer taxYear = 0;
+
+//    IRP 이전여부 - true시 과세이연(세액 0원)
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean irpTransfer = false;
 
 //    실지급액 (산정액 - 세금)
     @Column(nullable = false)
@@ -133,6 +151,7 @@ public class SeverancePays extends BaseTimeEntity {
 
 
 
+
 //    확정
     public void confirm(Long confirmedBy){
         if (this.sevStatus != SevStatus.CALCULATING) {
@@ -173,6 +192,15 @@ public class SeverancePays extends BaseTimeEntity {
         this.approvalDocId = approvalDocId;
     }
 
+//    전자결재 회수
+    public void cancelApproval(){
+        if(this.sevStatus != SevStatus.PENDING_APPROVAL){
+            throw new IllegalStateException("전자결재 진행중 상태에서만 회수 가능합니다.");
+        }
+        this.sevStatus = SevStatus.CONFIRMED;
+        this.approvalDocId = null;
+    }
+
 //    지급 완료
     public void markPaid(Long paidBy, LocalDate transferDate){
         if (this.sevStatus != SevStatus.APPROVED){
@@ -185,23 +213,30 @@ public class SeverancePays extends BaseTimeEntity {
     }
 
 //    세금 설정
-    public void applyTax(Long taxAmount){
+// netAmount = (퇴직금 산정액 − 퇴직소득세 − 지방소득세) + 퇴직정산 연차수당 별도지급분
+//    별도지급 연차수당은 근로소득으로 처리되므로 여기서 과세 X
+    public void applyTax(Long taxAmount, Long localIncomeTax, Integer taxYear, Boolean irpTransfer){
         this.taxAmount = taxAmount;
-        this.netAmount = this.severanceAmount - taxAmount;
+        this.localIncomeTax = localIncomeTax;
+        this.taxYear = taxYear;
+        this.irpTransfer = irpTransfer;
+        this.netAmount = this.severanceAmount - taxAmount - localIncomeTax + this.annualLeaveOnRetirement;
     }
 
 //    재산정 (CALCULATING)
-    public void recalculate(Long last3monthPay, Long lastYearBonus, Long annualLeaveAllowance, Integer last3MonthDays, BigDecimal avgDailyWage, Long severanceAmount, Long dcDepositedTotal, Long dcDiffAmount){
+    public void recalculate(Long last3MonthPay, Long lastYearBonus, Long annualLeaveForAvgWage, Long annualLeaveOnRetirement, Integer last3MonthDays, BigDecimal avgDailyWage, Long severanceAmount, Long dcDepositedTotal, Long dcDiffAmount){
         if (this.sevStatus != SevStatus.CALCULATING){
             throw new IllegalStateException("산정중 상태에서만 재산정 가능합니다.");
         }
         this.last3MonthPay = last3MonthPay;
         this.lastYearBonus = lastYearBonus;
-        this.annualLeaveAllowance = annualLeaveAllowance;
+        this.annualLeaveForAvgWage = annualLeaveForAvgWage;
+        this.annualLeaveOnRetirement = annualLeaveOnRetirement;
         this.last3MonthDays = last3MonthDays;
         this.avgDailyWage = avgDailyWage;
         this.severanceAmount = severanceAmount;
-        this.netAmount = severanceAmount - this.taxAmount;
+//        실지급 netAmount = (퇴직금 - 세금) + 퇴직정산 연차수당 별도지급분
+        this.netAmount = severanceAmount - this.taxAmount + annualLeaveOnRetirement;
         this.dcDepositedTotal = dcDepositedTotal;
         this.dcDiffAmount = dcDiffAmount;
     }
