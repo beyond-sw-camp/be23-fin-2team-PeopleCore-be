@@ -223,7 +223,7 @@ public class EvalGradeController {
     }
     // ─── 본인 평가결과 조회 (사원용) ─────────────────
 
-    // 16. 본인 평가결과 - 드롭다운용 시즌 목록
+    // 15. 본인 평가결과 - 드롭다운용 시즌 목록
     @GetMapping("/my/seasons")
     public ResponseEntity<List<MySeasonOptionDto>> getMySeasons(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -232,7 +232,7 @@ public class EvalGradeController {
     }
 
 
-    // 17. 본인 평가결과 - 특정 시즌 상세
+    // 16. 본인 평가결과 - 특정 시즌 상세
     @GetMapping("/my/result")
     public ResponseEntity<MyEvalResultDto> getMyResult(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -242,15 +242,21 @@ public class EvalGradeController {
     }
 
 
-    // 15. 평가 결과 상세 (HR 전용) - 한 사원의 단계별 타임라인 한 번에 조회
-    //  - gradeId = EvalGrade PK (결과 목록 응답의 id)
-    //  - 목표등록 / 평가입력(자기·상위자) / 종합점수 / Z-score / 등급산정 / 보정이력 / 최종확정 모두 포함
-    //  - 확정 전/후 모두 조회 가능, 미진행 단계는 null 또는 빈 배열
+    // 17. 평가 결과 상세  - 한 사원의 단계별 타임라인 한 번에 조회
+    //  - 목표등록 / 평가입력(자기·상위자) / 종합점수 / Z-score / 등급산정 / 보정이력 / 최종확정
     @GetMapping("/{gradeId}/detail")
     public ResponseEntity<EvalGradeDetailDto> getDetail(
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long gradeId) {
         return ResponseEntity.ok(gradeService.getDetail(companyId, gradeId));
     }
+
+    // 18. HR 전체 결과 조회 드롭다운 - 회사 전체 시즌 목록 (최신순, CLOSED 포함)
+    @GetMapping("/seasons")
+    public ResponseEntity<List<MySeasonOptionDto>> getAllSeasons(
+            @RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(gradeService.getAllSeasons(companyId));
+    }
+
 
 }

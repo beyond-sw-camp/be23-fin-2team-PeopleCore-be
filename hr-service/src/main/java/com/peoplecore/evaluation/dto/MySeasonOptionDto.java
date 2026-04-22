@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
-// 본인 평가결과 - 드롭다운용 시즌 옵션
+// 본인/팀장쪽 평가결과 - 드롭다운용 시즌 옵션
 @Getter
 @Builder
 @AllArgsConstructor

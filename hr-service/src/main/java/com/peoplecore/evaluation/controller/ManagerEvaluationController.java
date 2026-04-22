@@ -3,7 +3,9 @@ package com.peoplecore.evaluation.controller;
 import com.peoplecore.evaluation.dto.ManagerEvalAchievementDto;
 import com.peoplecore.evaluation.dto.ManagerEvalDetailDto;
 import com.peoplecore.evaluation.dto.ManagerEvalRequest;
+import com.peoplecore.evaluation.dto.MySeasonOptionDto;
 import com.peoplecore.evaluation.dto.TeamMemberEvalListDto;
+import com.peoplecore.evaluation.dto.TeamMemberResultDto;
 import com.peoplecore.evaluation.service.ManagerEvaluationService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -73,5 +75,28 @@ public class ManagerEvaluationController {
             @RequestBody ManagerEvalRequest request) {
         mgrEvalService.submit(companyId, managerEmpId, empId, request);
         return ResponseEntity.noContent().build();
+    }
+
+
+    // 6. 팀원 최종 평가결과 일괄 조회 - 팀장이 본인 팀원 확정 등급 + 코멘트/피드백 확인
+    //    autoGrade/finalGrade (EvalGrade) + gradeLabel/comment/feedback (ManagerEvaluation) 결합
+    //    seasonId 로 과거 시즌까지 조회 가능
+    //    gradeFilter 로 최종등급 필터 (null=전체, S/A/B/C/D 등)
+    @GetMapping("/team-results")
+    public ResponseEntity<List<TeamMemberResultDto>> getTeamResults(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerEmpId,
+            @RequestParam Long seasonId,
+            @RequestParam(required = false) String gradeFilter) {
+        return ResponseEntity.ok(mgrEvalService.getTeamResults(companyId, managerEmpId, seasonId, gradeFilter));
+    }
+
+
+    // 7. 팀장 평가 결과 드롭다운 - 팀장이 평가자로 참여한 시즌 목록 (최신순, 과거 포함)
+    @GetMapping("/team-results/seasons")
+    public ResponseEntity<List<MySeasonOptionDto>> getTeamResultSeasons(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerEmpId) {
+        return ResponseEntity.ok(mgrEvalService.getTeamResultSeasons(companyId, managerEmpId));
     }
 }

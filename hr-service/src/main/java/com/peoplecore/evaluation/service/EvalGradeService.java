@@ -1489,6 +1489,24 @@ public class EvalGradeService {
     }
 
 
+    //    18. HR 전체 결과 조회 드롭다운 - 회사 전체 시즌 목록 (최신순, CLOSED 포함)
+    @Transactional(readOnly = true)
+    public List<MySeasonOptionDto> getAllSeasons(UUID companyId) {
+        List<Season> seasons = seasonRepository.findAllByCompany(companyId);
+        List<MySeasonOptionDto> result = new ArrayList<>();
+        for (Season s : seasons) {
+            MyResultStatus status = s.getFinalizedAt() != null ? MyResultStatus.FINALIZED : MyResultStatus.IN_PROGRESS;
+            result.add(MySeasonOptionDto.builder()
+                    .seasonId(s.getSeasonId())
+                    .name(s.getName())
+                    .status(status)
+                    .finalizedAt(s.getFinalizedAt())
+                    .build());
+        }
+        return result;
+    }
+
+
     //    KPI 달성률 계산 (direction 공식 분기)
     private BigDecimal computeAchievementRate(KpiDirection direction, BigDecimal target, BigDecimal actual) {
         if (direction == null || target == null || target.signum() == 0) return null;
