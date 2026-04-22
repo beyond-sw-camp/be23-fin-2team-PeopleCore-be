@@ -622,7 +622,7 @@ public class PayrollService {
 //            DC형만
             if(emp.getRetirementType() != RetirementType.DC) continue;
 //            중복방지
-            if (depositRepository.existsByPayrollRunIdAndEmpId(run.getPayrollRunId(), empId)) continue;
+            if (depositRepository.existsByPayrollRun_PayrollRunIdAndEmployee_EmpId(run.getPayrollRunId(), empId)) continue;
 
 //            적립기준임금 = 해당 월지급합계(과세지급 총액)
             long baseAmount = entry.getValue().stream()
@@ -634,13 +634,13 @@ public class PayrollService {
             long depositAmount = baseAmount / 12;
 
             RetirementPensionDeposits deposits = RetirementPensionDeposits.builder()
-                    .empId(empId)
+                    .employee(emp)
                     .baseAmount(baseAmount)
                     .depositAmount(depositAmount)
                     .depositDate(LocalDateTime.now())
                     .depStatus(DepStatus.COMPLETED)
                     .company(company)
-                    .payrollRunId(run.getPayrollRunId())
+                    .payrollRun(run)
                     .build();
 
             depositRepository.save(deposits);

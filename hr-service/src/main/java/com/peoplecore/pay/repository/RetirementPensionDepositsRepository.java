@@ -6,13 +6,18 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-@Repository
-public interface RetirementPensionDepositsRepository extends JpaRepository<RetirementPensionDeposits, Long> {
+public interface RetirementPensionDepositsRepository extends JpaRepository<RetirementPensionDeposits, Long>, PensionDepositQueryRepository {
 
 //    급여대장에 이미 적립된 내역 존재 여부(중복 산입 방지)
-    boolean existsByPayrollRunIdAndEmpId(Long payrollRunId, Long empId);
+    boolean existsByPayrollRun_PayrollRunIdAndEmployee_EmpId(Long payrollRunId, Long empId);
 
     List<RetirementPensionDeposits> findByEmpIdAndCompany_CompanyIdAndDepStatus(Long empId, UUID companyId, DepStatus depStatus);
+
+    boolean existsByEmployee_EmpIdAndPayYearMonthAndDepStatus(
+            Long empId, String payYearMonth, com.peoplecore.pay.enums.DepStatus depStatus);
+
+    Optional<RetirementPensionDeposits> findByDepIdAndCompany_CompanyId(Long depId, UUID companyId);
 }

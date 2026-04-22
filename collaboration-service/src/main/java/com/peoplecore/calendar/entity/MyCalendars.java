@@ -38,6 +38,11 @@ public class MyCalendars extends BaseTimeEntity {
     @Builder.Default
     private Boolean isDefault = false;
 
+    //일정 공개 여부
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isPublic = true;
+
 
     public void updateName(String calendarName){
         this.calendarName = calendarName;

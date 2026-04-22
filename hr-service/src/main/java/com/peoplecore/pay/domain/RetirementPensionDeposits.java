@@ -1,6 +1,7 @@
 package com.peoplecore.pay.domain;
 
 import com.peoplecore.company.domain.Company;
+import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.pay.enums.DepStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -22,8 +23,9 @@ public class RetirementPensionDeposits {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long depId;
 
-    @Column(nullable = false)
-    private Long empId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "emp_id", nullable = false)
+    private Employee employee;
 
 //    적립기준임금
     @Column(nullable = false)
@@ -44,7 +46,43 @@ public class RetirementPensionDeposits {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "payroll_run_id")
+    private PayrollRuns payrollRun;
+
+//    수동등록여부
     @Column(nullable = false)
-    private Long payrollRunId;
+    @Builder.Default
+    private Boolean isManual = false;
+
+//    적립기준 월(YYYY-MM)
+    @Column(nullable = false, length = 7)
+    private String payYearMonth;
+
+//    수정등록시 / 취소시 사유
+    @Column(length = 500)
+    private String reason;
+
+//    수동등록한 관리자 ID
+    private Long createdBy;
+
+//    취소일시
+    private LocalDateTime canceledAt;
+
+//    취소한 관리자 ID
+    private Long canceledBy;
+
+
+
+//    상태 전이 메서드
+    public void cancel(Long adminEmpId, String cancelReason){
+        if (this.depStatus == DepStatus.CANCELED) {
+            throw new IllegalStateException("이미 취소된 적립입니다.");
+        }
+        this.depStatus = DepStatus.CANCELED;
+        this.canceledAt = LocalDateTime.now();
+        this.canceledBy = adminEmpId;
+        this.reason = cancelReason;
+    }
 
 }

@@ -2,7 +2,6 @@ package com.peoplecore.calendar.service;
 
 import com.peoplecore.calendar.dtos.AnnualLeaveSettingReqDto;
 import com.peoplecore.calendar.dtos.AnnualLeaveSettingResDto;
-import com.peoplecore.calendar.entity.AnnualLeaveSetting;
 import com.peoplecore.calendar.entity.MyCalendars;
 import com.peoplecore.calendar.repository.AnnualLeaveSettingRepository;
 import com.peoplecore.calendar.repository.MyCalendarsRepository;

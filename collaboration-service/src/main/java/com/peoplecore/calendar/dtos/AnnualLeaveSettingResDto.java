@@ -1,6 +1,5 @@
 package com.peoplecore.calendar.dtos;
 
-import com.peoplecore.calendar.entity.AnnualLeaveSetting;
 import lombok.*;
 
 import java.util.List;
