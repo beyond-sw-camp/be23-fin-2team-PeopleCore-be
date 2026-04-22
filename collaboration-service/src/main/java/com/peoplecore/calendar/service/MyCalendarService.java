@@ -22,6 +22,9 @@ public class MyCalendarService {
 
     private static final String DEFAULT_CALENDAR_NAME = "내 일정(기본)";
     private static final String DEFAULT_CALENDAR_COLOR = "#1A73E8";
+    /* 휴가 전용 캘린더 - 휴가 승인 시 자동으로 이벤트 생성됨. 이름/색 고정 */
+    private static final String VACATION_CALENDAR_NAME  = "휴가 캘린더";
+    private static final String VACATION_CALENDAR_COLOR = "#E57373";
 
 
     private final MyCalendarsRepository myCalendarsRepository;
@@ -48,6 +51,23 @@ public class MyCalendarService {
                     .build();
             myCalendarsRepository.save(defaultMyCal);
             calendars = List.of(defaultMyCal);
+        }
+
+        // 휴가 캘린더 없으면 생성 - 기존 사원/신규 사원 모두 한 번만 추가됨
+        boolean hasVacationCalendar = calendars.stream()
+                .anyMatch(c -> VACATION_CALENDAR_NAME.equals(c.getCalendarName()));
+        if (!hasVacationCalendar) {
+            MyCalendars vacationCal = MyCalendars.builder()
+                    .empId(empId)
+                    .calendarName(VACATION_CALENDAR_NAME)
+                    .myDisplayColor(VACATION_CALENDAR_COLOR)
+                    .isVisible(true)
+                    .isDefault(true)      // 시스템 예약 - 이름 변경/삭제 차단
+                    .sortOrder(calendars.size())
+                    .companyId(companyId)
+                    .build();
+            myCalendarsRepository.save(vacationCal);
+            calendars = myCalendarsRepository.findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId);
         }
 
         return calendars.stream()
