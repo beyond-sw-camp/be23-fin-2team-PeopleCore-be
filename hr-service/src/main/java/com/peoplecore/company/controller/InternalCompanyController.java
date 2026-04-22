@@ -1,9 +1,12 @@
 package com.peoplecore.company.controller;
 
+import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.company.domain.CompanyStatus;
 import com.peoplecore.company.domain.ContractType;
 import com.peoplecore.company.dtos.CompanyCreateReqDto;
 import com.peoplecore.company.dtos.CompanyResDto;
+import com.peoplecore.company.dtos.CopilotContextResDto;
+import com.peoplecore.company.dtos.CopilotContextUpdateReqDto;
 import com.peoplecore.company.service.CompanyService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,5 +63,21 @@ public class InternalCompanyController {
             @RequestParam(required = false) Integer maxEmployees,
             @RequestParam(required = false) ContractType contractType) {
         return ResponseEntity.ok(companyService.extendContract(companyId, newEndDate, maxEmployees, contractType));
+    }
+
+    // AI Copilot 컨텍스트 조회 (회사 개요 + 용어 사전 + 운영 정책)
+    @RoleRequired({"HR_ADMIN", "HR_SUPER_ADMIN"})
+    @GetMapping("/{companyId}/copilot-context")
+    public ResponseEntity<CopilotContextResDto> getCopilotContext(@PathVariable UUID companyId) {
+        return ResponseEntity.ok(companyService.getCopilotContext(companyId));
+    }
+
+    // AI Copilot 컨텍스트 수정 (슈퍼관리자만)
+    @RoleRequired({"HR_SUPER_ADMIN"})
+    @PutMapping("/{companyId}/copilot-context")
+    public ResponseEntity<CopilotContextResDto> updateCopilotContext(
+            @PathVariable UUID companyId,
+            @RequestBody @Valid CopilotContextUpdateReqDto reqDto) {
+        return ResponseEntity.ok(companyService.updateCopilotContext(companyId, reqDto));
     }
 }
