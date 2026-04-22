@@ -6,8 +6,11 @@ import com.peoplecore.event.VacationApprovalResultEvent;
 import com.peoplecore.event.VacationGrantApprovalDocCreatedEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.vacation.dto.GrantableTypeQueryDto;
 import com.peoplecore.vacation.dto.VacationGrantRequestResponse;
+import com.peoplecore.vacation.dto.VacationGrantableTypeResponse;
 import com.peoplecore.vacation.entity.AbstractApprovalBoundRequest;
+import com.peoplecore.vacation.entity.GrantMode;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.entity.StatutoryVacationType;
 import com.peoplecore.vacation.entity.VacationBalance;
@@ -15,6 +18,7 @@ import com.peoplecore.vacation.entity.VacationGrantRequest;
 import com.peoplecore.vacation.entity.VacationLedger;
 import com.peoplecore.vacation.entity.VacationType;
 import com.peoplecore.vacation.repository.VacationBalanceRepository;
+import com.peoplecore.vacation.repository.VacationGrantRequestQueryRepository;
 import com.peoplecore.vacation.repository.VacationGrantRequestRepository;
 import com.peoplecore.vacation.repository.VacationLedgerRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
@@ -31,6 +35,8 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,6 +54,7 @@ public class VacationGrantRequestService {
     private static final Duration LOCK_TTL = Duration.ofSeconds(10);
 
     private final VacationGrantRequestRepository vacationGrantRequestRepository;
+    private final VacationGrantRequestQueryRepository vacationGrantRequestQueryRepository;
     private final VacationTypeRepository vacationTypeRepository;
     private final EmployeeRepository employeeRepository;
     private final VacationBalanceRepository vacationBalanceRepository;
@@ -56,12 +63,14 @@ public class VacationGrantRequestService {
 
     @Autowired
     public VacationGrantRequestService(VacationGrantRequestRepository vacationGrantRequestRepository,
+                                       VacationGrantRequestQueryRepository vacationGrantRequestQueryRepository,
                                        VacationTypeRepository vacationTypeRepository,
                                        EmployeeRepository employeeRepository,
                                        VacationBalanceRepository vacationBalanceRepository,
                                        VacationLedgerRepository vacationLedgerRepository,
                                        StringRedisTemplate stringRedisTemplate) {
         this.vacationGrantRequestRepository = vacationGrantRequestRepository;
+        this.vacationGrantRequestQueryRepository = vacationGrantRequestQueryRepository;
         this.vacationTypeRepository = vacationTypeRepository;
         this.employeeRepository = employeeRepository;
         this.vacationBalanceRepository = vacationBalanceRepository;
@@ -177,6 +186,58 @@ public class VacationGrantRequestService {
     public Page<VacationGrantRequestResponse> listMine(UUID companyId, Long empId, Pageable pageable) {
         return vacationGrantRequestRepository.findEmployeeHistory(companyId, empId, pageable)
                 .map(VacationGrantRequestResponse::from);
+    }
+
+    /* 부여 신청 가능한 법정 휴가 유형 + 현재 잔여 + 한도 + 추가 신청 가능 일수 */
+    @Transactional(readOnly = true)
+    public List<VacationGrantableTypeResponse> listGrantableTypes(UUID companyId, Long empId) {
+        Employee employee = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        int year = LocalDate.now().getYear();
+        LocalDateTime yearStart = LocalDateTime.of(year, 1, 1, 0, 0);
+        LocalDateTime nextYearStart = yearStart.plusYears(1);
+
+        // EVENT_BASED typeCode 수집 (enum → 문자열). 커스텀 유형은 제외
+        List<String> eventBasedCodes = Arrays.stream(StatutoryVacationType.values())
+                .filter(t -> t.getGrantMode() == GrantMode.EVENT_BASED)
+                .map(StatutoryVacationType::getCode)
+                .toList();
+
+        // 단일 쿼리 - LEFT JOIN Balance + 상관 서브쿼리 pendingGrantSum + 동적 성별 필터
+        List<GrantableTypeQueryDto> rows = vacationGrantRequestQueryRepository
+                .findGrantableTypesForEmp(companyId, empId, year, employee.getEmpGender(),
+                        eventBasedCodes, yearStart, nextYearStart);
+
+        // 후처리 - cap / grantableDays 산출 (enum.defaultDays 기반)
+        List<VacationGrantableTypeResponse> result = new ArrayList<>(rows.size());
+        for (GrantableTypeQueryDto row : rows) {
+            StatutoryVacationType statutoryType = StatutoryVacationType.fromCode(row.getTypeCode());
+            BigDecimal cap = (statutoryType != null && statutoryType.getDefaultDays() != null)
+                    ? BigDecimal.valueOf(statutoryType.getDefaultDays()) : null;
+
+            // grantableDays = cap - total - pendingGrant (cap null 이면 null, 음수면 0 클램프)
+            BigDecimal grantableDays = null;
+            if (cap != null) {
+                grantableDays = cap.subtract(row.getTotalDays()).subtract(row.getPendingGrantDays());
+                if (grantableDays.signum() < 0) grantableDays = BigDecimal.ZERO;
+            }
+
+            result.add(VacationGrantableTypeResponse.builder()
+                    .typeId(row.getTypeId())
+                    .typeCode(row.getTypeCode())
+                    .typeName(row.getTypeName())
+                    .cap(cap)
+                    .balanceYear(year)
+                    .totalDays(row.getTotalDays())
+                    .usedDays(row.getUsedDays())
+                    .pendingUseDays(row.getPendingUseDays())
+                    .pendingGrantDays(row.getPendingGrantDays())
+                    .availableDays(row.getAvailableDays())
+                    .grantableDays(grantableDays)
+                    .build());
+        }
+        return result;
     }
 
 

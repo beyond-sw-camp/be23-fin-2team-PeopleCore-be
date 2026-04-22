@@ -1,8 +1,5 @@
 package com.peoplecore.exception;
 
-import com.peoplecore.exception.CustomException;
-import com.peoplecore.exception.BusinessException;
-import com.peoplecore.exception.ErrorResponse;
 import jakarta.persistence.OptimisticLockException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.catalina.connector.ClientAbortException;

@@ -57,7 +57,7 @@ public class SeveranceApprovalDraftService {
         Employee drafter = employeeRepository.findById(userId).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         Employee target = sev.getEmployee();
 
-        String htmlTemplate = templateLoader.load(ApprovalFormType.RETIREMENT);
+        String htmlTemplate = templateLoader.load(companyId, ApprovalFormType.RETIREMENT);
         Map<String, String> dataMap = buildDataMap(sev, drafter, target);
 
         return ApprovalDraftResDto.builder()

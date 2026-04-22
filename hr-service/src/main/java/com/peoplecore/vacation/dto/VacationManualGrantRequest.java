@@ -9,12 +9,13 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 
-/* 관리자 휴가 부여 요청 - 다수 사원 일괄 */
+/* 관리자 휴가 수동 부여/차감 Request - 다수 사원 일괄 처리 */
+/* 사원의 법정휴가 부여 신청 엔티티(VacationGrantRequest) 와 구분하기 위한 네이밍 */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class VacationGrantRequest {
+public class VacationManualGrantRequest {
 
     /* 부여할 휴가 유형 ID */
     private Long typeId;

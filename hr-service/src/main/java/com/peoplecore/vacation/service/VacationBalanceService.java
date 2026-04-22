@@ -6,7 +6,7 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.dto.VacationAdjustmentHistoryResponseDto;
 import com.peoplecore.vacation.dto.VacationBalanceResponse;
-import com.peoplecore.vacation.dto.VacationGrantRequest;
+import com.peoplecore.vacation.dto.VacationManualGrantRequest;
 import com.peoplecore.vacation.entity.VacationBalance;
 import com.peoplecore.vacation.entity.VacationLedger;
 import com.peoplecore.vacation.entity.VacationPolicy;
@@ -64,21 +64,10 @@ public class VacationBalanceService {
         this.vacationPolicyRepository = vacationPolicyRepository;
     }
 
-    /* 내 잔여 목록 - 해당 연도 모든 유형. Type fetch join 으로 N+1 방지 */
-    /* year 생략 시 오늘의 달력 연도 */
-    public List<VacationBalanceResponse> listMine(UUID companyId, Long empId, Integer year) {
-        Integer targetYear = (year != null) ? year : LocalDate.now().getYear();
-        return vacationBalanceQueryRepository
-                .findAllByEmpYearFetchType(companyId, empId, targetYear)
-                .stream()
-                .map(VacationBalanceResponse::from)
-                .toList();
-    }
-
     /* 관리자 연차 조정 - 다수 사원 일괄. days 양수=부여, 음수=차감 */
     /* 단일 트랜잭션: 한 사원 실패 시 전체 롤백 (관리자 재시도) */
     @Transactional
-    public void grantBulk(UUID companyId, Long managerId, VacationGrantRequest request) {
+    public void grantBulk(UUID companyId, Long managerId, VacationManualGrantRequest request) {
         VacationType type = vacationTypeRepository.findById(request.getTypeId())
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND));
         /* 타 회사 typeId 차단 */

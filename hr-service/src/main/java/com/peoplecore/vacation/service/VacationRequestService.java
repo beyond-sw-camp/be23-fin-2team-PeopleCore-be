@@ -141,14 +141,6 @@ public class VacationRequestService {
                 request.getRequestId(), newStatus, event.getManagerId());
     }
 
-    /* 내 신청 이력 페이지 조회 - Type fetch join */
-    @Transactional(readOnly = true)
-    public Page<VacationRequestResponse> listMine(UUID companyId, Long empId, Pageable pageable) {
-        return vacationRequestQueryRepository
-                .findEmployeeHistory(companyId, empId, pageable)
-                .map(VacationRequestResponse::from);
-    }
-
     /* 전사 휴가 관리 - 기간 교집합 + 상태 복수 필터 페이지 */
     /* statuses null or 빈 배열 이면 상태 필터 없이 전체. 경계 포함: startDate 00:00 ~ endDate 23:59:59 */
     @Transactional(readOnly = true)
@@ -171,15 +163,6 @@ public class VacationRequestService {
         return vacationRequestQueryRepository
                 .findByCompanyAndStatus(companyId, status, pageable)
                 .map(VacationRequestResponse::from);
-    }
-
-    /* 사원 셀프 취소 - 본인 request 검증 + 정상 전이 규칙 */
-    public void cancelByEmployee(UUID companyId, Long empId, Long requestId, String reason) {
-        VacationRequest request = loadRequestForCompany(companyId, requestId);
-        if (!request.getEmployee().getEmpId().equals(empId)) {
-            throw new CustomException(ErrorCode.FORBIDDEN);
-        }
-        cancelInternal(request, empId, reason, false);
     }
 
     /* 관리자 직권 취소 - 규칙 우회 (applyByAdmin) */

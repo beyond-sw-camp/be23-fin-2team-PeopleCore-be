@@ -15,16 +15,8 @@ import java.util.UUID;
 
 /**
  * 출퇴근 기록 (월별 파티션).
- * <p>
- * PK 전략 (Hibernate 6 + MySQL 파티션 호환):
- * - JPA 매핑은 단일 PK(comRecId) 만 사용. @IdClass 를 쓰면 Hibernate 가 auto_increment 컬럼을
- * PK 뒤로 밀어 MySQL "auto_increment 는 key 첫 컬럼" 제약과 충돌함.
- * - DB 레벨에서는 CommuteRecordPartitionInitializer 가 ALTER 로 (com_rec_id, work_date)
- * 복합 PK 로 재정의 → 이 상태에서 RANGE COLUMNS(work_date) 파티션 적용.
- * <p>
  * 비즈니스 유일성:
  * - UNIQUE(company_id, emp_id, work_date) — 중복 체크인/race condition 차단.
- * <p>
  * 인덱스:
  * - (company_id, emp_id, work_date) 회사 범위 사원별 조회
  * - (emp_id, work_date) 개인 근태 조회
