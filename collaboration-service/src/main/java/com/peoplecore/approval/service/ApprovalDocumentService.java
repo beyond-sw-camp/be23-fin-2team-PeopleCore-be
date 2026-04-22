@@ -41,6 +41,7 @@ public class ApprovalDocumentService {
     private final HrCacheService hrCacheService;
     private final ApprovalStatusHistoryRepository historyRepository;
     private final ApprovalAttachmentService attachmentService;
+    private final ApprovalAttachmentRepository attachmentRepository;   // 재기안 시 첨부 row 복제용
     private final AlarmEventPublisher alarmEventPublisher;
     private final AutoClassifyExecutor autoClassifyExecutor;
     private final ApprovalSignatureRepository signatureRepository;
@@ -49,7 +50,7 @@ public class ApprovalDocumentService {
     private final HrServiceClient hrServiceClient;
 
     @Autowired
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -57,6 +58,7 @@ public class ApprovalDocumentService {
         this.hrCacheService = hrCacheService;
         this.historyRepository = historyRepository;
         this.attachmentService = attachmentService;
+        this.attachmentRepository = attachmentRepository;
         this.alarmEventPublisher = alarmEventPublisher;
         this.autoClassifyExecutor = autoClassifyExecutor;
         this.signatureRepository = signatureRepository;
@@ -324,94 +326,161 @@ public class ApprovalDocumentService {
     }
 
     /**
-     * 반려 문서 재기안 — REJECTED → PENDING (문서 수정 + 새 채번 + 결재선 초기화 + 상태 전환)
-     * DRAFT를 거치지 않고 한 번의 API 호출로 재제출 완료
+     * 반려 문서 재기안 — 이전 문서(REJECTED)는 보존하고 새 문서 row를 INSERT
+     * 새 docId, 새 채번, 결재선/첨부 복제, previousDocId 로 체인 연결
      */
     @Transactional
-    public void resubmitDocument(UUID companyId, Long empId, Long deptId,
+    public Long resubmitDocument(UUID companyId, Long empId, Long deptId,
                                  Long docId, DocumentUpdateRequest request) {
-        ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId)
+        ApprovalDocument prev = documentRepository.findByDocIdAndCompanyId(docId, companyId)
                 .orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
-        /* 본인 문서인지 확인 */
-        if (!document.getEmpId().equals(empId)) {
+        /* 본인 문서만 재기안 가능 */
+        if (!prev.getEmpId().equals(empId)) {
             throw new BusinessException("본인의 문서만 재기안할 수 있습니다.", HttpStatus.FORBIDDEN);
         }
-
-        /* 반려 상태인지 확인 (상태 패턴에서도 막지만 명시적 검증) */
-        if (document.getApprovalStatus() != ApprovalStatus.REJECTED) {
+        /* REJECTED 상태에서만 재기안 */
+        if (prev.getApprovalStatus() != ApprovalStatus.REJECTED) {
             throw new BusinessException("반려된 문서만 재기안할 수 있습니다.");
         }
 
-        /* 상태 변경 이력 저장 (반려 사유는 결재선에서 가져옴) */
-        List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
-        String rejectReason = lines.stream().map(ApprovalLine::getLineRejectReason).filter(Objects::nonNull).findFirst().orElse(null);
-
-        historyRepository.save(ApprovalStatusHistory.builder()
-                .docId(docId)
-                .companyId(companyId)
-                .previousStatus(ApprovalStatus.REJECTED)
-                .changedStatus(ApprovalStatus.PENDING)
-                .changedBy(empId)
-                .changeByName(document.getEmpName())
-                .changeByDeptName(document.getEmpDeptName())
-                .changeByGrade(document.getEmpGrade())
-                .changeReason("재기안" + (rejectReason != null ? " (이전 반려 사유: " + rejectReason + ")" : ""))
-                .changedAt(LocalDateTime.now())
-                .build());
-        /* 문서 내용 수정 + 이전 채번/완료일시 초기화 */
-        document.updateForReSubmit(request.getDocTitle(), request.getDocData(), request.getIsEmergency(), request.getDocOpinion());
+        /* 이전 문서는 손대지 않음 - REJECTED/docNum/docCompleteAt 그대로 보존 */
 
         /* 새 채번 생성 */
         DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
         CompanyInfoResponse companyInfo = hrCacheService.getCompany(companyId);
-
         SlotContextDto contextDto = SlotContextDto.builder()
                 .companyName(companyInfo.getCompanyName())
                 .deptCode(deptInfo.getDeptCode())
                 .deptName(deptInfo.getDeptName())
-                .formCode(document.getFormId().getFormCode())
-                .formName(document.getFormId().getFormName())
+                .formCode(prev.getFormId().getFormCode())
+                .formName(prev.getFormId().getFormName())
                 .build();
-
         String docNum = numberService.generateDocNum(companyId, contextDto);
-        document.assignDocNum(docNum);
 
-        /* 상태 패턴: REJECTED → PENDING (RejectedState.submit() 호출) */
-        document.submit();
+        /* 새 문서 INSERT - 이전 스냅샷 복사 + 재기안 입력값 반영 */
+        ApprovalDocument newDoc = ApprovalDocument.builder()
+                .companyId(companyId)
+                .formId(prev.getFormId())
+                .empId(prev.getEmpId())
+                .empName(prev.getEmpName())
+                .empDeptId(prev.getEmpDeptId())
+                .empDeptName(prev.getEmpDeptName())
+                .empGrade(prev.getEmpGrade())
+                .empTitle(prev.getEmpTitle())
+                .docType(prev.getDocType())
+                .docTitle(request.getDocTitle())   // 수정된 제목
+                .docData(request.getDocData())     // 수정된 내용
+                .docOpinion(request.getDocOpinion() != null ? request.getDocOpinion() : prev.getDocOpinion())
+                .isEmergency(request.getIsEmergency() != null ? request.getIsEmergency() : prev.getIsEmergency())
+                .approvalStatus(ApprovalStatus.PENDING)
+                .personalFolderId(prev.getPersonalFolderId())
+                .deptFolderId(prev.getDeptFolderId())
+                .previousDocId(prev.getDocId())   // 체인 링크
+                .build();
+        newDoc.assignDocNum(docNum);
+        newDoc.markSubmitted();
+        documentRepository.save(newDoc);
 
-        /*기안자 자동분류 (SENT) */
-        autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, document);
+        /* 이전 반려 사유 조회 (history reason 용) */
+        List<ApprovalLine> prevLines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
+        String rejectReason = prevLines.stream()
+                .map(ApprovalLine::getLineRejectReason)
+                .filter(Objects::nonNull)
+                .findFirst().orElse(null);
 
-        /* 결재선 교체가 필요한 경우 */
-        /* (INBOX 자동분류는 결재선 교체 후 아래에서 실행) */
-        if (request.getApprovalLines() != null) {
-            lineRepository.deleteByDocId_DocId(docId);
-            saveApprovalLine(companyId, document, request.getApprovalLines());
+        /* 이전 문서에 "재기안으로 대체됨" 이력 남김 (추적용) */
+        historyRepository.save(ApprovalStatusHistory.builder()
+                .docId(prev.getDocId())
+                .companyId(companyId)
+                .previousStatus(ApprovalStatus.REJECTED)
+                .changedStatus(ApprovalStatus.REJECTED)
+                .changedBy(empId)
+                .changeByName(prev.getEmpName())
+                .changeByDeptName(prev.getEmpDeptName())
+                .changeByGrade(prev.getEmpGrade())
+                .changeReason("재기안으로 대체됨 (새 docId=" + newDoc.getDocId() + ")")
+                .changedAt(LocalDateTime.now())
+                .build());
+
+        /* 새 문서에 "재기안 기안" 이력 INSERT */
+        historyRepository.save(ApprovalStatusHistory.builder()
+                .docId(newDoc.getDocId())
+                .companyId(companyId)
+                .previousStatus(ApprovalStatus.PENDING)
+                .changedStatus(ApprovalStatus.PENDING)
+                .changedBy(empId)
+                .changeByName(newDoc.getEmpName())
+                .changeByDeptName(newDoc.getEmpDeptName())
+                .changeByGrade(newDoc.getEmpGrade())
+                .changeReason("재기안 (이전 docId=" + prev.getDocId()
+                        + (rejectReason != null ? ", 이전 반려 사유: " + rejectReason : "") + ")")
+                .changedAt(LocalDateTime.now())
+                .build());
+
+        /* 결재선: 요청에 있으면 그걸, 없으면 이전 결재선을 새 docId 로 복제 */
+        if (request.getApprovalLines() != null && !request.getApprovalLines().isEmpty()) {
+            saveApprovalLine(companyId, newDoc, request.getApprovalLines());
         } else {
-            /* 기존 결재선 유지 시 상태만 초기화 */
-            lines.forEach(ApprovalLine::resetStatus);
+            List<ApprovalLine> copied = prevLines.stream()
+                    .map(src -> ApprovalLine.builder()
+                            .companyId(companyId)
+                            .docId(newDoc)
+                            .empId(src.getEmpId())
+                            .empName(src.getEmpName())
+                            .empGrade(src.getEmpGrade())
+                            .empDeptId(src.getEmpDeptId())
+                            .empDeptName(src.getEmpDeptName())
+                            .empTitle(src.getEmpTitle())
+                            .approvalRole(src.getApprovalRole())
+                            .lineStep(src.getLineStep())
+                            .build())
+                    .toList();
+            lineRepository.saveAll(copied);
         }
-        /*결재선 전원 자동분류 (INBOX) */
-        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
-                .stream()
-                .map(ApprovalLine::getEmpId)
-                .toList();
-        receiverIds.forEach(receiverId ->
-                autoClassifyExecutor.classify(companyId, receiverId, SourceBoxType.INBOX, document));
 
-        /*결재 라인 전원에게 알림 발행 */
+        /* 첨부파일 복제 - row 만 새 docId 로 복사, MinIO objectName 은 공유 */
+        List<ApprovalAttachment> copiedAttachments = attachmentRepository.findByDocId_DocId(docId).stream()
+                .map(src -> ApprovalAttachment.builder()
+                        .docId(newDoc)
+                        .companyId(companyId)
+                        .fileName(src.getFileName())
+                        .fileSize(src.getFileSize())
+                        .objectName(src.getObjectName())
+                        .contentType(src.getContentType())
+                        .build())
+                .toList();
+        if (!copiedAttachments.isEmpty()) {
+            attachmentRepository.saveAll(copiedAttachments);
+        }
+
+        /* 기안자 자동분류 (SENT) - 새 문서 기준 */
+        autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, newDoc);
+
+        /* 결재선 전원 자동분류 (INBOX) - 새 문서 기준 */
+        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(newDoc.getDocId())
+                .stream().map(ApprovalLine::getEmpId).toList();
+        receiverIds.forEach(receiverId ->
+                autoClassifyExecutor.classify(companyId, receiverId, SourceBoxType.INBOX, newDoc));
+
+        /* 결재라인 전원에게 재기안 알림 */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(receiverIds)
                 .alarmType("APPROVAL")
-                .alarmTitle(document.getEmpDeptName() + " " + document.getEmpName() + " " + document.getEmpGrade() + "이(가) 결재 문서를 재기안하였습니다.")
-                .alarmContent("[" + document.getDocNum() + "] " + document.getDocTitle())
+                .alarmTitle(newDoc.getEmpDeptName() + " " + newDoc.getEmpName() + " "
+                        + newDoc.getEmpGrade() + "이(가) 결재 문서를 재기안하였습니다.")
+                .alarmContent("[" + newDoc.getDocNum() + "] " + newDoc.getDocTitle())
                 .alarmLink("/approval")
                 .alarmRefType("APPROVAL_DOCUMENT")
-                .alarmRefId(document.getDocId())
+                .alarmRefId(newDoc.getDocId())
                 .build());
-        // @Version 낙관적 락: 동시 수정 시 OptimisticLockingFailureException 발생
+
+        /* hr-service 에 docCreated 이벤트 발행 — 새 문서를 새 기안처럼 전파 */
+        List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(newDoc.getDocId());
+        approvalEventPublisher.publishDocCreated(newDoc, savedLines);
+
+        return newDoc.getDocId();
     }
 
     /**

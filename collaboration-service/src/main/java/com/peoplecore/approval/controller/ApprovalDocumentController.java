@@ -103,16 +103,16 @@ public class ApprovalDocumentController {
         return ResponseEntity.ok().build();
     }
 
-    /** 반려 문서 재기안 - REJECTED → PENDING (수정 + 새 채번 + 결재선 초기화) */
+    /** 반려 문서 재기안 - 새 문서 row INSERT (새 docId 반환, 이전 문서는 REJECTED 로 보존) */
     @PostMapping("/{docId}/resubmit")
-    public ResponseEntity<Void> resubmitDocument(
+    public ResponseEntity<Long> resubmitDocument(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestHeader("X-User-Department") Long deptId,
             @PathVariable Long docId,
             @RequestBody DocumentUpdateRequest request) {
-        approvalDocumentService.resubmitDocument(companyId, empId, deptId, docId, request);
-        return ResponseEntity.ok().build();
+        Long newDocId = approvalDocumentService.resubmitDocument(companyId, empId, deptId, docId, request);
+        return ResponseEntity.ok(newDocId);
     }
 
     /** 상신 취소(회수) - PENDING → CANCELED */
