@@ -76,6 +76,28 @@ public class MyCalendarService {
     }
 
 
+    /* 휴가 캘린더 조회 - 없으면 생성해 반환. 휴가 승인 시점에 호출됨 */
+    @Transactional
+    public MyCalendars ensureVacationCalendar(UUID companyId, Long empId) {
+        return myCalendarsRepository
+                .findByCompanyIdAndEmpIdAndCalendarName(companyId, empId, VACATION_CALENDAR_NAME)
+                .orElseGet(() -> {
+                    int nextOrder = myCalendarsRepository
+                            .findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId).size();
+                    MyCalendars vacationCal = MyCalendars.builder()
+                            .empId(empId)
+                            .calendarName(VACATION_CALENDAR_NAME)
+                            .myDisplayColor(VACATION_CALENDAR_COLOR)
+                            .isVisible(true)
+                            .isDefault(true)    // 시스템 예약 - 이름 변경/삭제 차단
+                            .sortOrder(nextOrder)
+                            .companyId(companyId)
+                            .build();
+                    return myCalendarsRepository.save(vacationCal);
+                });
+    }
+
+
 //    내 캘린더 추가
     @Transactional
     public MyCalendarResDto createMyCalendar(UUID companyId, Long empId, MyCalendarCreateReqDto reqDto){
