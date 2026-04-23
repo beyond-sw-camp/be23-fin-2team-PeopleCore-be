@@ -8,8 +8,11 @@ import com.peoplecore.auth.service.FaceAuthService;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.domain.CompanyStatus;
 import com.peoplecore.company.domain.ContractType;
+import com.peoplecore.company.domain.copilot.CopilotConfig;
 import com.peoplecore.company.dtos.CompanyCreateReqDto;
 import com.peoplecore.company.dtos.CompanyResDto;
+import com.peoplecore.company.dtos.CopilotContextResDto;
+import com.peoplecore.company.dtos.CopilotContextUpdateReqDto;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.department.service.DepartmentService;
 import com.peoplecore.evaluation.service.EvaluationRulesService;
@@ -31,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -101,6 +105,10 @@ public class CompanyService {
                 .build();
 
         companyRepository.save(company);
+
+        // AI Copilot 기본값 주입 (빈 용어 사전 + 기본 운영 정책)
+        company.updateGlossary(new HashMap<>());
+        company.updateCopilotConfig(CopilotConfig.defaults());
 
         // 각 도메인 기본 데이터 세팅
         departmentService.initDefault(company);
@@ -177,6 +185,33 @@ public class CompanyService {
         company.extendContract(newEndDate, maxEmployees, contractType);
 
         return CompanyResDto.fromEntity(company);
+    }
+
+
+    //    5. AI Copilot 컨텍스트 조회
+    public CopilotContextResDto getCopilotContext(UUID companyId) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
+        return CopilotContextResDto.fromEntity(company);
+    }
+
+    //    6. AI Copilot 컨텍스트 수정 (부분 수정: null 필드는 변경하지 않음)
+    @Transactional
+    public CopilotContextResDto updateCopilotContext(UUID companyId, CopilotContextUpdateReqDto reqDto) {
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
+
+        if (reqDto.getOrgSummary() != null) {
+            company.updateOrgSummary(reqDto.getOrgSummary());
+        }
+        if (reqDto.getGlossary() != null) {
+            company.updateGlossary(reqDto.getGlossary());
+        }
+        if (reqDto.getCopilotConfig() != null) {
+            company.updateCopilotConfig(reqDto.getCopilotConfig());
+        }
+
+        return CopilotContextResDto.fromEntity(company);
     }
 
 

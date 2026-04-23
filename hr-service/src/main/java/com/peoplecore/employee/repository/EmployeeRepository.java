@@ -295,4 +295,16 @@ AND e.empResignDate >= :fromDate
             @Param("day") int day,
             @Param("statuses") List<EmpStatus> statuses);
 
+//    재직중(ACTIVE/ON_LEAVE)이고 기준일(baseDate) 기준 근속 1년이상인 사원 전원 조회
+//    hireDate <= cutoffDate    근속 >= 1년
+    @Query("""
+            SELECT e FROM Employee e
+            WHERE e.company.companyId = :companyId
+              AND e.empStatus IN :statuses
+              AND e.empHireDate <= :cutoffDate
+            """)
+    List<Employee> findAllActiveOverOneYear(
+            @Param("companyId") UUID companyId,
+            @Param("statuses") List<EmpStatus> statuses,
+            @Param("cutoffDate") LocalDate cutoffDate);
 }

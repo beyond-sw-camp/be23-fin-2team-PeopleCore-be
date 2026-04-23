@@ -80,7 +80,7 @@ public class ApprovalDocumentService {
         }
         CompanyInfoResponse companyInfoResponse = hrCacheService.getCompany(companyId);
         DeptInfoResponse deptInfoResponse = hrCacheService.getDept(deptId);
-        /*slotCOntext 조립*/
+        /*slotContext 조립*/
         SlotContextDto contextDto = SlotContextDto.builder()
                 .companyName(companyInfoResponse.getCompanyName())
                 .deptCode(deptInfoResponse.getDeptCode())

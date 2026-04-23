@@ -95,7 +95,6 @@ public enum ErrorCode {
 
     OVERTIME_ALREADY_APPLIED(400, "이미 초과근무 수당이 적용되어있는 건입니다."),
 
-
     // ── 정산보험료 ──
     INSURANCE_SETTLEMENT_NOT_FOUND(404, "정산보험료 데이터가 존재하지 않습니다."),
     INSURANCE_PAY_ITEM_NOT_FOUND(404, "보험 공제항목(국민연금/건강보험/장기요양/고용보험)이 등록되지 않았습니다."),
@@ -118,10 +117,10 @@ public enum ErrorCode {
     LEAVE_ALLOWANCE_ALREADY_APPLIED(400, "이미 급여대장에 반영된 건입니다."),
     LEAVE_ALLOWANCE_NO_RESIGN_DATE(404, "퇴직일이 설정되지 않은 사원입니다."),
 
-    // ── 연차수당 (입사일 기준) ──
+    // 연차수당 (입사일 기준)
     EMPLOYEE_HIRE_DATE_NOT_FOUND(404, "사원의 입사일 정보가 없습니다."),
 
-    // -- 퇴직금
+    // 퇴직금
     SEVERANCE_NOT_FOUND(404, "퇴직금 대장을 찾을 수 없습니다."),
     SEVERANCE_STATUS_INVALID(400, "퇴직금 상태가 유효하지 않습니다."),
     RESIGN_DATE_NOT_SET(404, "퇴직일이 설정되지 않았습니다."),
@@ -130,6 +129,12 @@ public enum ErrorCode {
     EMPLOYEE_RETIREMENT_TYPE_NOT_SET(400, "사원의 퇴직금 설정이 되어있지 않습니다."),
     TAX_YEAR_NOT_SUPPORTED(404,"해당 연도의 퇴직소득세 계산 설정이 없습니다. TaxYearlyConfig 업데이트가 필요합니다."),
     TAX_CALCULATION_FAILED(500,"퇴직소득세 산출 중 오류가 발생했습니다."),
+
+//    퇴직연금DC형 적립
+    EMPLOYEE_NOT_DC(400, "DC형 사원만 수동 적립 등록이 가능합니다."),
+    DEPOSIT_ALREADY_EXISTS(409, "동일 사원·동일 월에 이미 적립된 건이 있습니다."),
+    DEPOSIT_NOT_FOUND(404, "적립 내역을 찾을 수 없습니다."),
+    DEPOSIT_ALREADY_CANCELED(400, "이미 취소된 적립입니다."),
 
     // 캘린더
     CALENDAR_NOT_FOUND(404, "캘린더를 찾을 수 없습니다."),
