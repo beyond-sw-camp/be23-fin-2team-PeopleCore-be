@@ -39,6 +39,7 @@ import com.peoplecore.evaluation.repository.StageRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,8 +101,8 @@ public class EvalGradeService {
     @Transactional(readOnly = true)
     // 1. 자동 산정 대상 목록 조회 //DB totalScore + autoGrade 그대로 반환 // - totalScore/autoGrade 가 null일시 미산정 -> 프론트 "-" 렌더
     //  부서/직급 시즌 오픈 시점 스냅샷 (조직개편 무관)
-    public Page<DraftListItemDto> getDraftList(UUID companyId, Long seasonId, Long deptId, String keyword, EvalGradeSortField sortField, Pageable pageable) {
-        return evalGradeRepository.searchDraftList(companyId, seasonId, deptId, keyword, sortField, pageable);
+    public Page<DraftListItemDto> getDraftList(UUID companyId, Long seasonId, Long deptId, String keyword, EvalGradeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
+        return evalGradeRepository.searchDraftList(companyId, seasonId, deptId, keyword, sortField, sortDirection, pageable);
     }
 
 
@@ -909,11 +910,11 @@ public class EvalGradeService {
     @Transactional(readOnly = true)
     public Page<CalibrationListItemDto> getCalibrationList(UUID companyId, Long seasonId,
                                                            Long deptId, String keyword,
-                                                           EvalGradeSortField sortField, Pageable pageable) {
+                                                           EvalGradeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
 
 //        a. 보정 대상 사원 페이지 조회 (autoGrade != null 만)
         Page<EvalGrade> gradePage = evalGradeRepository.searchCalibrationGrades(
-                companyId, seasonId, deptId, keyword, sortField, pageable);
+                companyId, seasonId, deptId, keyword, sortField, sortDirection, pageable);
 
 //        b. 보정된 row 의 gradeId 수집 -> Calibration 이력 batch 조회 (사유/수행자만 추출)
         List<Long> calibratedIds = new ArrayList<>();
@@ -1220,8 +1221,9 @@ public class EvalGradeService {
     public Page<UnassignedEmployeeDto> getUnassignedList(UUID companyId, Long seasonId,
                                                           Long deptId,
                                                           EvalGradeSortField sortField,
+                                                          Sort.Direction sortDirection,
                                                           Pageable pageable) {
-        return evalGradeRepository.searchUnassigned(companyId, seasonId, deptId, sortField, pageable);
+        return evalGradeRepository.searchUnassigned(companyId, seasonId, deptId, sortField, sortDirection, pageable);
     }
 
     
@@ -1295,7 +1297,7 @@ public class EvalGradeService {
     public Page<FinalGradeListItemDto> getFinalList(UUID companyId, Long seasonId,
                                                     Long deptId, String keyword,
                                                     Boolean unscoredOnly,
-                                                    EvalGradeSortField sortField, Pageable pageable) {
+                                                    EvalGradeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
 
 //        시즌 로드 + 회사 소유권 검증 (멀티테넌시)
         Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
@@ -1310,7 +1312,7 @@ public class EvalGradeService {
 
 //        Impl 에서 필터 + DTO 변환까지 수행 (1번 searchDraftList 와 동일 패턴)
         return evalGradeRepository.searchFinalList(
-                companyId, seasonId, deptId, keyword, unscoredOnly, sortField, pageable);
+                companyId, seasonId, deptId, keyword, unscoredOnly, sortField, sortDirection, pageable);
     }
 
 
@@ -1523,6 +1525,7 @@ public class EvalGradeService {
                     .name(s.getName())
                     .status(status)
                     .finalizedAt(s.getFinalizedAt())
+                    .startDate(s.getStartDate())
                     .build());
         }
         return result;
@@ -1631,18 +1634,20 @@ public class EvalGradeService {
     }
 
 
-    //    18. HR 전체 결과 조회 드롭다운 - 회사 전체 시즌 목록 (최신순, CLOSED 포함)
+    //    18. HR 전체 결과 조회 드롭다운 - 회사 시즌 목록 (최신순, OPEN 이후만 — DRAFT 제외)
     @Transactional(readOnly = true)
     public List<MySeasonOptionDto> getAllSeasons(UUID companyId) {
         List<Season> seasons = seasonRepository.findAllByCompany(companyId);
         List<MySeasonOptionDto> result = new ArrayList<>();
         for (Season s : seasons) {
+            if (s.getStatus() == EvalSeasonStatus.DRAFT) continue;
             MyResultStatus status = s.getFinalizedAt() != null ? MyResultStatus.FINALIZED : MyResultStatus.IN_PROGRESS;
             result.add(MySeasonOptionDto.builder()
                     .seasonId(s.getSeasonId())
                     .name(s.getName())
                     .status(status)
                     .finalizedAt(s.getFinalizedAt())
+                    .startDate(s.getStartDate())
                     .build());
         }
         return result;

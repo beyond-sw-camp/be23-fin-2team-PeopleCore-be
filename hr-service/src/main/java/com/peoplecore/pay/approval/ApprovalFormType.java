@@ -1,7 +1,5 @@
 package com.peoplecore.pay.approval;
 
-import org.springframework.beans.factory.annotation.Autowired;
-
 public enum ApprovalFormType {
     SALARY("급여지급결의서.html", "PAYROLL_PAYMENT"),
     RETIREMENT("퇴직급여지급결의서.html", "RETIREMENT_SEVERANCE");

@@ -10,6 +10,7 @@ import com.peoplecore.formsetup.dto.FormFieldSetupRequest;
 import com.peoplecore.formsetup.dto.FormFieldSetupResponse;
 import com.peoplecore.formsetup.repository.FormFieldSetupRepository;
 import com.peoplecore.pay.domain.PayItems;
+import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
 import com.peoplecore.pay.repository.PayItemsRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -57,9 +58,10 @@ public class FormFieldSetupService {
             result.add(FormFieldSetupResponse.from(entity));
         }
 
-//        급여부분 동적생성
+//        급여부분 동적생성 - 수당(ALLOWANCE) 만 연동 (기본급/상여는 연봉계약 폼에서 제외)
         if (formType == FormType.SALARY_CONTRACT) {
-            List<PayItems> payItems = payItemsRepository.findByCompany_CompanyIdAndPayItemTypeAndIsActiveTrueOrderBySortOrderAsc(companyId, PayItemType.PAYMENT);
+            List<PayItems> payItems = payItemsRepository.findByCompany_CompanyIdAndPayItemTypeAndPayItemCategoryAndIsActiveTrueOrderBySortOrderAsc(
+                    companyId, PayItemType.PAYMENT, PayItemCategory.ALLOWANCE);
             int order = 1;
             for (PayItems items : payItems) {
                 result.add(FormFieldSetupResponse.builder()
@@ -239,9 +241,7 @@ public class FormFieldSetupService {
         list.add(field(companyId, FormType.SALARY_CONTRACT, "contractYear", "계약 연도", "계약기간", FieldType.SELECT, true, true, 1, "[\"2026\",\"2025\",\"2024\"]", null));
         list.add(field(companyId, FormType.SALARY_CONTRACT, "contractStart", "계약 시작일", "계약기간", FieldType.DATE, true, true, 2, null, null));
         list.add(field(companyId, FormType.SALARY_CONTRACT, "contractEnd", "계약 종료일", "계약기간", FieldType.DATE, true, false, 3, null, null));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "probation", "수습 기간", "계약기간", FieldType.SELECT, true, false, 4, "[\"없음\",\"1개월\",\"2개월\",\"3개월\"]", null));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "weeklyHours", "주당 근로시간", "계약기간", FieldType.SELECT, true, true, 5, "[\"40시간 (주 5일)\",\"35시간\",\"30시간\",\"20시간 (시간제)\",\"15시간 (단시간)\"]", null));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "contractType", "계약서 유형", "계약기간", FieldType.SELECT, true, true, 6, "[\"연봉계약서\",\"근로계약서\"]", null));
+        list.add(field(companyId, FormType.SALARY_CONTRACT, "weeklyHours", "주당 근로시간", "계약기간", FieldType.SELECT, true, true, 4, "[\"40시간 (주 5일)\",\"35시간\",\"30시간\",\"20시간 (시간제)\",\"15시간 (단시간)\"]", null));
 
         // 기타사항
         list.add(field(companyId, FormType.SALARY_CONTRACT, "memo", "특약사항 / 메모", "기타사항", FieldType.TEXTAREA, true, false, 1, null, null));

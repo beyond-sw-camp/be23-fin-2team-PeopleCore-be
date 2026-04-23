@@ -49,6 +49,15 @@ public class SeasonScheduler {
         transitionStages(today);
         log.info("시작 시 상태 전이 완료 (today={})", today);
     }
+
+//    TODO: 지우기
+//    수동 실행 (임시/개발용) — 프론트에서 즉시 전이가 필요할 때 호출
+    public void runNow(){
+        LocalDate today = LocalDate.now();
+        transitionSeasons(today);
+        transitionStages(today);
+        log.info("수동 스케줄러 실행 완료 (today={})", today);
+    }
 //시즌상태 전이 — 1건 실패가 다른 건을 막지 않도록 try/catch 로 격리
     private void transitionSeasons(LocalDate today){
 //        준비중 -> 오픈 (상태전이 + 규칙동결 + 사원 row 생성, SeasonService 자체 @Transactional)

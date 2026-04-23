@@ -4,23 +4,26 @@ import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.event.VacationApprovalDocCreatedEvent;
 import com.peoplecore.event.VacationApprovalResultEvent;
+import com.peoplecore.event.VacationSlotItem;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
+import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
-import com.peoplecore.vacation.entity.GrantMode;
-import com.peoplecore.vacation.entity.OfficialLeaveReason;
+import com.peoplecore.vacation.entity.AbstractApprovalBoundRequest;
 import com.peoplecore.vacation.entity.RequestStatus;
-import com.peoplecore.vacation.entity.StatutoryVacationType;
 import com.peoplecore.vacation.entity.VacationBalance;
 import com.peoplecore.vacation.entity.VacationLedger;
+import com.peoplecore.vacation.entity.VacationPolicy;
 import com.peoplecore.vacation.entity.VacationRequest;
 import com.peoplecore.vacation.entity.VacationType;
+import com.peoplecore.vacation.repository.VacationBalanceQueryRepository;
 import com.peoplecore.vacation.repository.VacationBalanceRepository;
 import com.peoplecore.vacation.repository.VacationLedgerRepository;
+import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
 import com.peoplecore.vacation.repository.VacationRequestRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
-import com.peoplecore.vacation.util.MiscarriageLeaveRule;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -35,17 +38,13 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/* 휴가 신청 서비스 - Kafka 진입 + 조회 + 취소 */
-/* 휴가 유형 grantMode(SCHEDULED / EVENT_BASED) 에 따라 Balance 취급 분기 */
-/*   SCHEDULED (연차/월차/생리): 기존 markPending→consume→restore 플로우 (상태 패턴 RequestStatus 위임) */
-/*   EVENT_BASED (출산/배우자출산/유산사산/가족돌봄/공가): 신청 시 Balance 무변경, 승인 시 accrue+consumeDirectly */
+/* 휴가 사용 신청 서비스 - Kafka 진입 + 조회 + 취소 */
+/* 보유 잔여(VacationBalance) 에서 markPending → consume 플로우 (RequestStatus 상태 패턴 위임) */
+/* 법정 부여 신청(GRANT) 은 VacationGrantRequestService 에서 별도 처리 */
 @Service
 @Slf4j
 @Transactional
 public class VacationRequestService {
-
-    /* 배우자출산휴가 사용 가능 기한 - 출산일 기준 90일 */
-    private static final int SPOUSE_BIRTH_WINDOW_DAYS = 90;
 
     private final VacationRequestRepository vacationRequestRepository;
     private final VacationRequestQueryRepository vacationRequestQueryRepository;
@@ -53,6 +52,8 @@ public class VacationRequestService {
     private final EmployeeRepository employeeRepository;
     private final VacationBalanceRepository vacationBalanceRepository;
     private final VacationLedgerRepository vacationLedgerRepository;
+    private final VacationPolicyRepository vacationPolicyRepository;
+    private final VacationBalanceQueryRepository vacationBalanceQueryRepository;
 
     @Autowired
     public VacationRequestService(VacationRequestRepository vacationRequestRepository,
@@ -60,24 +61,34 @@ public class VacationRequestService {
                                   VacationTypeRepository vacationTypeRepository,
                                   EmployeeRepository employeeRepository,
                                   VacationBalanceRepository vacationBalanceRepository,
-                                  VacationLedgerRepository vacationLedgerRepository) {
+                                  VacationLedgerRepository vacationLedgerRepository,
+                                  VacationPolicyRepository vacationPolicyRepository,
+                                  VacationBalanceQueryRepository vacationBalanceQueryRepository) {
         this.vacationRequestRepository = vacationRequestRepository;
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
         this.vacationTypeRepository = vacationTypeRepository;
         this.employeeRepository = employeeRepository;
         this.vacationBalanceRepository = vacationBalanceRepository;
         this.vacationLedgerRepository = vacationLedgerRepository;
+        this.vacationPolicyRepository = vacationPolicyRepository;
+        this.vacationBalanceQueryRepository = vacationBalanceQueryRepository;
     }
 
-    /* Kafka(vacation-approval-doc-created) 진입 - PENDING INSERT (grantMode 분기) */
+    /* Kafka(vacation-approval-doc-created) 진입 - PENDING row N건 INSERT + Balance markPending 합계 */
     public void createFromApproval(VacationApprovalDocCreatedEvent event) {
-        // 중복 수신 방어 - 같은 결재 문서 재처리 시 no-op
-        Optional<VacationRequest> existing = vacationRequestRepository
+        // 중복 수신 방어 - 같은 approvalDocId 그룹이 이미 존재하면 no-op
+        List<VacationRequest> existing = vacationRequestRepository
                 .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId());
-        if (existing.isPresent()) {
-            log.info("[VacationRequest] docCreated 중복 수신 - 기존 requestId={}, docId={}",
-                    existing.get().getRequestId(), event.getApprovalDocId());
+        if (!existing.isEmpty()) {
+            log.info("[VacationRequest] docCreated 중복 수신 skip - docId={}, groupSize={}",
+                    event.getApprovalDocId(), existing.size());
             return;
+        }
+
+        // items 필수 - 비어있으면 즉시 실패 (Consumer @RetryableTopic excludes 에 CustomException 포함)
+        List<VacationSlotItem> items = event.getItems();
+        if (items == null || items.isEmpty()) {
+            throw new CustomException(ErrorCode.VACATION_REQ_ITEMS_EMPTY);
         }
 
         Employee employee = employeeRepository.findById(event.getEmpId())
@@ -85,148 +96,126 @@ public class VacationRequestService {
         VacationType vacationType = vacationTypeRepository.findById(event.getInfoId())
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND));
 
-        // 성별 제한 검증 - GenderLimit.allows() 로 통과 여부 판정
+        // 성별 제한 검증 - 임신/출산 등 성별 한정 유형 조기 차단
         if (!vacationType.getGenderLimit().allows(employee.getEmpGender())) {
             throw new CustomException(ErrorCode.VACATION_TYPE_GENDER_NOT_ALLOWED);
         }
 
-        // StatutoryVacationType 매핑 - 커스텀 유형(null) 은 SCHEDULED 취급 (기존 로직 호환)
-        StatutoryVacationType statutoryType = StatutoryVacationType.fromCode(vacationType.getTypeCode());
-        GrantMode grantMode = (statutoryType != null) ? statutoryType.getGrantMode() : GrantMode.SCHEDULED;
+        // 그룹 합계 - Balance 차감/Ledger 기록 단위
+        BigDecimal totalDays = items.stream()
+                .map(VacationSlotItem::getUseDay)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        // 이벤트 기반 메타 검증 + 일수 보정 (유산사산 주수별 자동 산정 등)
-        BigDecimal useDays = event.getVacReqUseDay();
-        if (grantMode == GrantMode.EVENT_BASED) {
-            useDays = validateAndResolveEventMeta(statutoryType, event, useDays);
-        }
+        // Balance 조회 - 첫 슬롯 기준 연도. 없으면 미리쓰기 정책에 따라 자동 생성 or 엄격 차단
+        Integer balanceYear = items.get(0).getStartAt().toLocalDate().getYear();
+        boolean allowNegative = isAdvanceUseAllowed(event.getCompanyId(), vacationType);
+        VacationBalance balance = vacationBalanceRepository
+                .findOne(event.getCompanyId(), employee.getEmpId(), vacationType.getTypeId(), balanceYear)
+                .orElseGet(() -> {
+                    // 미리쓰기 비허용(법정휴가 / 정책 OFF) → 기존 엄격 모드 유지
+                    if (!allowNegative) {
+                        throw new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT);
+                    }
+                    LocalDate today = LocalDate.now();
+                    // 월차: hireDate+1년 / 연차: today+1년-1일 (스케줄러 규칙과 동일)
+                    LocalDate expiresAt = vacationType.isMonthly()
+                            ? employee.getEmpHireDate().plusYears(1)
+                            : today.plusYears(1).minusDays(1);
+                    log.info("[VacationRequest] Balance 자동 생성(미리쓰기) - empId={}, typeId={}, year={}, expiresAt={}",
+                            employee.getEmpId(), vacationType.getTypeId(), balanceYear, expiresAt);
+                    return vacationBalanceRepository.save(
+                            VacationBalance.createNew(
+                                    event.getCompanyId(), vacationType, employee,
+                                    balanceYear, today, expiresAt));
+                });
 
-        // grantMode 별 Balance 처리
-        if (grantMode == GrantMode.SCHEDULED) {
-            // 스케줄러형 - 기존 Balance 에서 markPending (Balance 없으면 INSUFFICIENT)
-            Integer balanceYear = event.getVacReqStartat().toLocalDate().getYear();
-            VacationBalance balance = vacationBalanceRepository
-                    .findOne(event.getCompanyId(), employee.getEmpId(), vacationType.getTypeId(), balanceYear)
-                    .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT));
-            balance.markPending(useDays);
-        } else {
-            // 이벤트 기반 - Balance 건드리지 않고 한도 예상 검증만
-            validateEventBasedCap(event.getCompanyId(), employee.getEmpId(), vacationType,
-                    statutoryType, event.getVacReqStartat(), useDays);
-        }
+        // 합계로 한 번만 markPending - 그룹 불변식(모든 슬롯 동일 상태) 유지
+        balance.markPending(totalDays, allowNegative);
 
-        VacationRequest.EmployeeSnapshot snapshot = new VacationRequest.EmployeeSnapshot(
+        AbstractApprovalBoundRequest.EmployeeSnapshot snapshot = new AbstractApprovalBoundRequest.EmployeeSnapshot(
                 event.getEmpName(), event.getDeptName(), event.getEmpGrade(), event.getEmpTitle());
 
-        VacationRequest.EventMeta eventMeta = new VacationRequest.EventMeta(
-                event.getProofFileUrl(),
-                event.getPregnancyWeeks(),
-                event.getOfficialLeaveReason() != null ? OfficialLeaveReason.valueOf(event.getOfficialLeaveReason()) : null,
-                event.getRelatedBirthDate());
+        // 슬롯별 row insert - 같은 approvalDocId 로 그룹핑 (findByCompanyIdAndApprovalDocId 그룹키)
+        items.forEach(item -> {
+            VacationRequest request = VacationRequest.createPending(
+                    event.getCompanyId(), vacationType, employee, snapshot,
+                    item.getStartAt(), item.getEndAt(),
+                    item.getUseDay(), event.getVacReqReason(), event.getApprovalDocId());
+            vacationRequestRepository.save(request);
+        });
 
-        VacationRequest request = VacationRequest.createPending(
-                event.getCompanyId(), vacationType, employee, snapshot,
-                event.getVacReqStartat(), event.getVacReqEndat(), useDays, event.getVacReqReason(),
-                event.getApprovalDocId(), eventMeta);
-        VacationRequest saved = vacationRequestRepository.save(request);
-
-        log.info("[VacationRequest] docCreated → INSERT - requestId={}, docId={}, empId={}, typeId={}, grantMode={}, useDays={}",
-                saved.getRequestId(), saved.getApprovalDocId(), employee.getEmpId(),
-                vacationType.getTypeId(), grantMode, useDays);
+        log.info("[VacationRequest] docCreated → INSERT - docId={}, empId={}, typeId={}, slotCount={}, totalDays={}",
+                event.getApprovalDocId(), employee.getEmpId(),
+                vacationType.getTypeId(), items.size(), totalDays);
     }
 
-    /* Kafka(vacation-approval-result) 진입 - 상태 전이 + Balance 반영 (grantMode 분기) */
+    /* Kafka(vacation-approval-result) 진입 - 그룹 전체 상태 전이 + Balance 그룹 합계 반영 */
+    /* 멱등: 이미 newStatus 로 전이된 그룹은 no-op (첫 처리 결과 보존) */
+    /* CANCELED 는 기안자 회수 경로. PENDING 에서만 수신 가정 (APPROVED→CANCELED 는 관리자 직권 API) */
     public void applyApprovalResult(VacationApprovalResultEvent event) {
-        VacationRequest request = vacationRequestRepository
-                .findByCompanyIdAndRequestId(event.getCompanyId(), event.getVacReqId())
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND));
+        List<VacationRequest> group = vacationRequestRepository
+                .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId());
+        if (group.isEmpty()) {
+            throw new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND);
+        }
 
         RequestStatus newStatus = RequestStatus.valueOf(event.getStatus());
+        RequestStatus currentStatus = group.get(0).getRequestStatus();   // 그룹 불변식: 전원 동일 상태
+
+        // 멱등 가드: 이미 같은 상태면 첫 처리 결과 보존하고 no-op
+        if (currentStatus == newStatus) {
+            log.info("[VacationRequest] applyApprovalResult 중복 수신 skip - docId={}, status={}",
+                    event.getApprovalDocId(), newStatus);
+            return;
+        }
+
         Employee manager = (event.getManagerId() != null)
                 ? employeeRepository.findById(event.getManagerId())
                     .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND))
                 : null;
 
-        request.apply(newStatus, manager, event.getRejectReason());
-
-        StatutoryVacationType statutoryType = StatutoryVacationType.fromCode(request.getVacationType().getTypeCode());
-        GrantMode grantMode = (statutoryType != null) ? statutoryType.getGrantMode() : GrantMode.SCHEDULED;
-
-        if (grantMode == GrantMode.SCHEDULED) {
-            // 스케줄러형 - 상태 패턴 위임 (pending→used or releasePending)
-            applyScheduledResult(request, newStatus, event.getManagerId());
-        } else {
-            // 이벤트 기반 - APPROVED 시 accrue+consumeDirectly, REJECTED 는 no-op
-            applyEventBasedResult(request, newStatus, event.getManagerId(), statutoryType);
-        }
-
-        log.info("[VacationRequest] 결재 결과 반영 - requestId={}, status={}, grantMode={}, managerId={}",
-                request.getRequestId(), newStatus, grantMode, event.getManagerId());
-    }
-
-    /* 스케줄러형 결재 결과 - 기존 상태 패턴 그대로 */
-    private void applyScheduledResult(VacationRequest request, RequestStatus newStatus, Long managerId) {
-        Integer balanceYear = request.getRequestStartAt().toLocalDate().getYear();
+        // Balance 조회 - 그룹 대표(첫 row) 기준. 모든 row 가 같은 empId/typeId/year 공유
+        VacationRequest first = group.get(0);
+        Integer balanceYear = first.getRequestStartAt().toLocalDate().getYear();
         VacationBalance balance = vacationBalanceRepository
-                .findOne(request.getCompanyId(),
-                         request.getEmployee().getEmpId(),
-                         request.getVacationType().getTypeId(),
+                .findOne(first.getCompanyId(),
+                         first.getEmployee().getEmpId(),
+                         first.getVacationType().getTypeId(),
                          balanceYear)
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT));
+                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_NOT_FOUND));
 
-        Optional<VacationLedger> ledgerToSave = newStatus.applyKafkaResult(
-                balance, request.getRequestUseDays(), request.getRequestId(), managerId);
+        // 그룹 합계 - Balance/Ledger 반영 단위
+        BigDecimal totalDays = group.stream()
+                .map(VacationRequest::getRequestUseDays)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 상태 패턴: 합계로 한 번만 transition. Ledger 참조는 그룹 대표 requestId
+        Optional<VacationLedger> ledgerToSave = currentStatus.kafkaTransitionTo(
+                newStatus, balance, totalDays,
+                first.getRequestId(), event.getManagerId(), event.getRejectReason());
+
+        // 모든 슬롯 row 일괄 전이 (그룹 불변식 유지)
+        group.forEach(r -> r.apply(newStatus, manager, event.getRejectReason()));
         ledgerToSave.ifPresent(vacationLedgerRepository::save);
+
+        log.info("[VacationRequest] 결재 결과 반영 - docId={}, slots={}, {}→{}, managerId={}",
+                event.getApprovalDocId(), group.size(), currentStatus, newStatus, event.getManagerId());
     }
 
-    /* 이벤트 기반 결재 결과 - APPROVED 시 Balance 신규 적립+소비, REJECTED 는 상태만 변경 */
-    /* accrue 의 cap 인자는 enum.defaultDays (null 허용) - 동시 요청 race 방지 이중 검증 */
-    private void applyEventBasedResult(VacationRequest request, RequestStatus newStatus,
-                                       Long managerId, StatutoryVacationType statutoryType) {
-        if (newStatus != RequestStatus.APPROVED) {
-            // REJECTED 는 Balance 건드린 적 없으니 no-op. 상태 전이만으로 종료
-            return;
-        }
-
-        Integer balanceYear = request.getRequestStartAt().toLocalDate().getYear();
-        LocalDate startDate = request.getRequestStartAt().toLocalDate();
-        // 가족돌봄만 연말 만료 대상 - 기존 BalanceExpiryScheduler(expires_at <= 오늘) 가 자동 처리
-        // 나머지 이벤트 유형은 기간 단위 소진이라 expiresAt null (만료 스케줄러가 건드리지 않음)
-        LocalDate expiresAt = (statutoryType == StatutoryVacationType.FAMILY_CARE)
-                ? LocalDate.of(balanceYear, 12, 31) : null;
-
-        VacationBalance balance = vacationBalanceRepository
-                .findOne(request.getCompanyId(),
-                         request.getEmployee().getEmpId(),
-                         request.getVacationType().getTypeId(),
-                         balanceYear)
-                .orElseGet(() -> vacationBalanceRepository.save(
-                        VacationBalance.createNew(request.getCompanyId(), request.getVacationType(),
-                                request.getEmployee(), balanceYear, startDate, expiresAt)));
-
-        BigDecimal useDays = request.getRequestUseDays();
-        BigDecimal cap = resolveCap(statutoryType);
-
-        BigDecimal beforeTotal = balance.getTotalDays();
-        balance.accrue(useDays, cap);          // total += useDays (cap 초과 시 예외)
-        balance.consumeDirectly(useDays);      // used += useDays (pending 경유 없이 바로 확정)
-        BigDecimal afterTotal = balance.getTotalDays();
-
-        // INITIAL_GRANT 이벤트로 기록 - EVENT_BASED 승인 구간의 total 변동 기록
-        vacationLedgerRepository.save(VacationLedger.ofEventGrant(
-                balance, useDays, beforeTotal, afterTotal,
-                request.getRequestId(), managerId, "이벤트 기반 휴가 승인 적립"));
-        // used 이동 기록 - ofUsed 는 debit(- 부호) 이벤트
-        vacationLedgerRepository.save(VacationLedger.ofUsed(
-                balance, useDays, afterTotal, afterTotal,
-                request.getRequestId(), managerId));
-    }
-
-    /* 내 신청 이력 페이지 조회 - Type fetch join */
+    /* 전사 휴가 관리 - 기간 교집합 + 상태 필터 / 사원별 요약 페이지 */
+    /* 페이지 단위 = 사원(중복 제거). totalElements = 기간 내 휴가자 수 */
+    /* statuses null or 빈 배열 이면 상태 필터 없이 전체. 경계 포함: startDate 00:00 ~ endDate 23:59:59 */
     @Transactional(readOnly = true)
-    public Page<VacationRequestResponse> listMine(UUID companyId, Long empId, Pageable pageable) {
+    public Page<VacationAdminPeriodResponseDto> listForAdminByPeriod(UUID companyId,
+                                                                  LocalDate startDate,
+                                                                  LocalDate endDate,
+                                                                  List<RequestStatus> statuses,
+                                                                  Pageable pageable) {
+        LocalDateTime periodStart = startDate.atStartOfDay();
+        LocalDateTime periodEnd = endDate.atTime(23, 59, 59);
+
         return vacationRequestQueryRepository
-                .findEmployeeHistory(companyId, empId, pageable)
-                .map(VacationRequestResponse::from);
+                .findByCompanyAndPeriodAndStatuses(companyId, periodStart, periodEnd, statuses, pageable);
     }
 
     /* 관리자 상태별 조회 페이지 - Type + Employee fetch join */
@@ -237,91 +226,57 @@ public class VacationRequestService {
                 .map(VacationRequestResponse::from);
     }
 
-    /* 사원 셀프 취소 - 본인 request 검증 + 정상 전이 규칙 적용 */
-    public void cancelByEmployee(UUID companyId, Long empId, Long requestId, String reason) {
-        VacationRequest request = loadRequestForCompany(companyId, requestId);
-        if (!request.getEmployee().getEmpId().equals(empId)) {
-            throw new CustomException(ErrorCode.FORBIDDEN);
-        }
-        cancelInternal(request, empId, reason, false);
-    }
-
     /* 관리자 직권 취소 - 규칙 우회 (applyByAdmin) */
     public void cancelByAdmin(UUID companyId, Long managerId, Long requestId, String reason) {
         VacationRequest request = loadRequestForCompany(companyId, requestId);
         cancelInternal(request, managerId, reason, true);
     }
 
-    /* 공통 취소 로직 - grantMode 분기 */
-    /*   SCHEDULED: 상태 패턴 cancelFrom 위임 (releasePending or restore) */
-    /*   EVENT_BASED: PENDING→CANCELED no-op / APPROVED→CANCELED restore + rollbackAccrual */
+    /* 공통 취소 로직 - 그룹 일괄 취소. 상태 패턴 cancelFrom 위임 (releasePending or restore) */
     private void cancelInternal(VacationRequest request, Long actorId, String reason, boolean isAdmin) {
-        RequestStatus currentStatus = request.getRequestStatus();   // apply 호출 전 캡처 - cancelFrom 호출 위해 원본 필요
+        // 그룹 전체 로드 - 불변식: 같은 approvalDocId 의 모든 slot 은 같은 상태
+        List<VacationRequest> group = vacationRequestRepository
+                .findByCompanyIdAndApprovalDocId(request.getCompanyId(), request.getApprovalDocId());
+        if (group.isEmpty()) {
+            throw new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND);
+        }
 
-        Employee actor = employeeRepository.findById(actorId)
+        RequestStatus currentStatus = group.get(0).getRequestStatus();   // apply 전 캡처
+
+        // 회사 스코프 내 actor 조회 - 타 회사 empId 탈취 방어 (Gateway 보장 이중 방어)
+        Employee actor = employeeRepository.findByEmpIdAndCompany_CompanyId(actorId, request.getCompanyId())
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-        if (isAdmin) {
-            request.applyByAdmin(RequestStatus.CANCELED, actor, reason);
-        } else {
-            request.apply(RequestStatus.CANCELED, actor, reason);
-        }
+        // 모든 슬롯 일괄 전이
+        group.forEach(r -> {
+            if (isAdmin) {
+                r.applyByAdmin(RequestStatus.CANCELED, actor, reason);
+            } else {
+                r.apply(RequestStatus.CANCELED, actor, reason);
+            }
+        });
 
-        StatutoryVacationType statutoryType = StatutoryVacationType.fromCode(request.getVacationType().getTypeCode());
-        GrantMode grantMode = (statutoryType != null) ? statutoryType.getGrantMode() : GrantMode.SCHEDULED;
-
-        if (grantMode == GrantMode.SCHEDULED) {
-            cancelScheduled(request, currentStatus, actorId, reason);
-        } else {
-            cancelEventBased(request, currentStatus, actorId, reason);
-        }
-
-        log.info("[VacationRequest] 취소 완료 - requestId={}, from={}, actorId={}, isAdmin={}, grantMode={}",
-                request.getRequestId(), currentStatus, actorId, isAdmin, grantMode);
-    }
-
-    /* 스케줄러형 취소 - 상태 패턴 cancelFrom 위임 */
-    private void cancelScheduled(VacationRequest request, RequestStatus from, Long actorId, String reason) {
-        Integer balanceYear = request.getRequestStartAt().toLocalDate().getYear();
+        // Balance 조회 - 그룹 대표 기준
+        VacationRequest first = group.get(0);
+        Integer balanceYear = first.getRequestStartAt().toLocalDate().getYear();
         VacationBalance balance = vacationBalanceRepository
-                .findOne(request.getCompanyId(),
-                         request.getEmployee().getEmpId(),
-                         request.getVacationType().getTypeId(),
+                .findOne(first.getCompanyId(),
+                         first.getEmployee().getEmpId(),
+                         first.getVacationType().getTypeId(),
                          balanceYear)
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT));
+                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_NOT_FOUND));
 
-        Optional<VacationLedger> ledgerToSave = from.cancelFrom(
-                balance, request.getRequestUseDays(), request.getRequestId(), actorId, reason);
+        // 그룹 합계로 한 번만 cancelFrom (markPending 이 합계였으므로 대칭)
+        BigDecimal totalDays = group.stream()
+                .map(VacationRequest::getRequestUseDays)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        Optional<VacationLedger> ledgerToSave = currentStatus.cancelFrom(
+                balance, totalDays, first.getRequestId(), actorId, reason);
         ledgerToSave.ifPresent(vacationLedgerRepository::save);
-    }
 
-    /* 이벤트 기반 취소 - PENDING 은 no-op, APPROVED 는 restore + rollbackAccrual */
-    private void cancelEventBased(VacationRequest request, RequestStatus from, Long actorId, String reason) {
-        if (from == RequestStatus.PENDING) {
-            // 신청 시 Balance 건드린 적 없음 → 취소도 무변경
-            return;
-        }
-        if (from != RequestStatus.APPROVED) {
-            // 종결 상태(REJECTED/CANCELED) 에서 호출되면 request.apply 단계에서 이미 차단됨 (이중 방어)
-            return;
-        }
-
-        Integer balanceYear = request.getRequestStartAt().toLocalDate().getYear();
-        VacationBalance balance = vacationBalanceRepository
-                .findOne(request.getCompanyId(),
-                         request.getEmployee().getEmpId(),
-                         request.getVacationType().getTypeId(),
-                         balanceYear)
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT));
-
-        BigDecimal useDays = request.getRequestUseDays();
-        BigDecimal beforeTotal = balance.getTotalDays();
-        balance.restore(useDays);           // used -= days (가용으로 복귀)
-        balance.rollbackAccrual(useDays);   // total -= days (적립분 롤백)
-        BigDecimal afterTotal = balance.getTotalDays();
-
-        vacationLedgerRepository.save(VacationLedger.ofRestored(
-                balance, useDays, beforeTotal, afterTotal, request.getRequestId(), actorId, reason));
+        log.info("[VacationRequest] 취소 완료 - docId={}, slots={}, from={}, actorId={}, isAdmin={}",
+                first.getApprovalDocId(), group.size(), currentStatus, actorId, isAdmin);
     }
 
     /* 회사 + requestId 단건 조회 - 타 회사 차단 */
@@ -330,99 +285,58 @@ public class VacationRequestService {
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND));
     }
 
-    /* ====== 이벤트 기반 메타 검증 & 보정 ====== */
+    /* allowAdvanceUse 정책 + 연차/월차 유형 동시 만족 시 true (available 검증 스킵 대상) */
+    /* 그 외 (법정휴가 / 정책 OFF / 정책 없음) 는 false - 기존 엄격 검증 유지 */
+    private boolean isAdvanceUseAllowed(UUID companyId, VacationType vacationType) {
+        if (!vacationType.isAnnual() && !vacationType.isMonthly()) return false;
+        return vacationPolicyRepository.findByCompanyId(companyId)
+                .map(VacationPolicy::isAdvanceUseActive)
+                .orElse(false);
+    }
 
-    /* 이벤트 기반 유형별 필수 메타 검증 + 일수 보정 */
-    /* 유산사산: 주수 필수 + 주수→일수 자동 산정 (event.useDay 무시하고 계산값 사용) */
-    /* 배우자출산: 출산일 필수 + 90일 이내 검증 + 증빙 필수 */
-    /* 출산전후: 증빙 필수 */
-    /* 공가: 사유 필수 + 증빙 필수 */
-    /* 가족돌봄: 별도 필수 메타 없음 */
-    /* 반환: 보정된 useDays (유산사산만 변경, 나머진 입력값 그대로) */
-    private BigDecimal validateAndResolveEventMeta(StatutoryVacationType type,
-                                                   VacationApprovalDocCreatedEvent event,
-                                                   BigDecimal useDays) {
-        switch (type) {
-            case MISCARRIAGE -> {
-                if (event.getPregnancyWeeks() == null) {
-                    throw new CustomException(ErrorCode.VACATION_REQ_PREGNANCY_WEEKS_REQUIRED);
-                }
-                // 주수→일수 자동 산정. 요청 일수와 다르면 산정값 우선 (UI 편의성)
-                return MiscarriageLeaveRule.daysForWeeks(event.getPregnancyWeeks());
-            }
-            case SPOUSE_BIRTH -> {
-                if (event.getRelatedBirthDate() == null) {
-                    throw new CustomException(ErrorCode.VACATION_REQ_BIRTH_DATE_REQUIRED);
-                }
-                if (isBlank(event.getProofFileUrl())) {
-                    throw new CustomException(ErrorCode.VACATION_REQ_PROOF_REQUIRED);
-                }
-                // 출산일 기준 90일 이내 사용 검증 (휴가 시작일 기준)
-                LocalDate startDate = event.getVacReqStartat().toLocalDate();
-                LocalDate deadline = event.getRelatedBirthDate().plusDays(SPOUSE_BIRTH_WINDOW_DAYS);
-                if (startDate.isAfter(deadline)) {
-                    throw new CustomException(ErrorCode.VACATION_REQ_SPOUSE_BIRTH_EXPIRED);
-                }
-            }
-            case MATERNITY -> {
-                if (isBlank(event.getProofFileUrl())) {
-                    throw new CustomException(ErrorCode.VACATION_REQ_PROOF_REQUIRED);
-                }
-            }
-            case OFFICIAL_LEAVE -> {
-                if (isBlank(event.getOfficialLeaveReason())) {
-                    throw new CustomException(ErrorCode.VACATION_REQ_OFFICIAL_REASON_REQUIRED);
-                }
-                if (isBlank(event.getProofFileUrl())) {
-                    throw new CustomException(ErrorCode.VACATION_REQ_PROOF_REQUIRED);
-                }
-            }
-            case FAMILY_CARE -> { /* 증빙 여부 회사 재량 - 서버 강제 검증 없음 */ }
-            default -> { /* EVENT_BASED 외 유형은 진입 불가 */ }
+    /* 본인 현시점 유효 Balance + 드롭다운 누락 보강 - 휴가 사용 신청 모달 드롭다운 */
+    /* 보유 Balance (expires_at 유효 + isActive=true) 는 기존대로 반환 */
+    /* 입사 1년 경과 → 연차, 미만 → 월차 중 누락된 유형 1개를 remaining=0 으로 추가 노출 */
+    /* (적립 스케줄러 실행 전·신입 4일차처럼 Balance row 가 아직 없는 케이스 커버) */
+    /* allowAdvance: 회사정책 ON + 연차/월차일 때 true - 프론트 사전 검증용 */
+    /* 실제 음수 차감 차단은 submit 시점(createFromApproval) 에서 수행 */
+    @Transactional(readOnly = true)
+    public List<MyVacationTypeResponseDto> listMyVacationTypes(UUID companyId, Long empId) {
+        LocalDate today = LocalDate.now();
+        /* 회사 정책 한 번만 조회 - 유형마다 반복 조회 방지 */
+        boolean companyAdvanceActive = vacationPolicyRepository.findByCompanyId(companyId)
+                .map(VacationPolicy::isAdvanceUseActive)
+                .orElse(false);
+
+        /* 기존 보유 Balance 기반 목록 (정렬: VacationType.sortOrder ASC) */
+        List<VacationBalance> balances = vacationBalanceQueryRepository
+                .findActiveByEmpFetchType(companyId, empId, today);
+
+        List<MyVacationTypeResponseDto> result = new java.util.ArrayList<>();
+        balances.forEach(b -> result.add(MyVacationTypeResponseDto.from(
+                b,
+                companyAdvanceActive && (b.getVacationType().isAnnual() || b.getVacationType().isMonthly()))));
+
+        /* 드롭다운 보강 - 입사 1년 경과 여부에 따라 연차/월차 중 누락된 유형 1개만 추가 */
+        Employee employee = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+        boolean overOneYear = !employee.getEmpHireDate().plusYears(1).isAfter(today);
+        String targetCode = overOneYear ? VacationType.CODE_ANNUAL : VacationType.CODE_MONTHLY;
+
+        boolean alreadyPresent = balances.stream()
+                .anyMatch(b -> targetCode.equals(b.getVacationType().getTypeCode()));
+        if (!alreadyPresent) {
+            /* 유형이 회사에 등록/활성화돼 있을 때만 보강. 없으면 skip */
+            vacationTypeRepository.findByCompanyIdAndTypeCode(companyId, targetCode)
+                    .filter(t -> Boolean.TRUE.equals(t.getIsActive()))
+                    .ifPresent(type -> result.add(
+                            MyVacationTypeResponseDto.ofEmpty(type, today.getYear(), companyAdvanceActive)));
         }
-        return useDays;
-    }
 
-    /* 이벤트 기반 한도 예상 검증 (B안) */
-    /* (기존 Balance total) + (PENDING/APPROVED 누적 일수) + (이번 요청) ≤ cap */
-    /* cap 이 null (유산사산/공가) 이면 검증 skip */
-    private void validateEventBasedCap(UUID companyId, Long empId, VacationType vacationType,
-                                       StatutoryVacationType statutoryType,
-                                       LocalDateTime startAt, BigDecimal useDays) {
-        BigDecimal cap = resolveCap(statutoryType);
-        if (cap == null) return;
-
-        int year = startAt.toLocalDate().getYear();
-        LocalDateTime yearStart = LocalDateTime.of(year, 1, 1, 0, 0);
-        LocalDateTime nextYearStart = yearStart.plusYears(1);
-
-        // 기존 Balance total (없으면 0) - accrue 된 모든 적립 이력 합
-        BigDecimal currentTotal = vacationBalanceRepository
-                .findOne(companyId, empId, vacationType.getTypeId(), year)
-                .map(VacationBalance::getTotalDays)
-                .orElse(BigDecimal.ZERO);
-
-        // 같은 연도 진행 중(PENDING) + 이미 승인(APPROVED) 요청 일수 합
-        // APPROVED 는 이미 Balance.total 에 반영됐으므로 중복되지만, PENDING 은 Balance 미반영이라 별도 집계 필요
-        // 간단히: PENDING 만 집계 (APPROVED 는 currentTotal 에 포함되므로 중복 방지)
-        BigDecimal pendingSum = vacationRequestRepository.sumDaysByStatuses(
-                companyId, empId, vacationType.getTypeId(),
-                List.of(RequestStatus.PENDING), yearStart, nextYearStart);
-        if (pendingSum == null) pendingSum = BigDecimal.ZERO;
-
-        BigDecimal projected = currentTotal.add(pendingSum).add(useDays);
-        if (projected.compareTo(cap) > 0) {
-            throw new CustomException(ErrorCode.VACATION_BALANCE_CAP_EXCEEDED);
-        }
-    }
-
-    /* enum.defaultDays → BigDecimal cap (없으면 null). 유산사산/공가 는 null 반환되어 cap 검증 skip */
-    private BigDecimal resolveCap(StatutoryVacationType type) {
-        if (type == null || type.getDefaultDays() == null) return null;
-        return BigDecimal.valueOf(type.getDefaultDays());
-    }
-
-    private boolean isBlank(String s) {
-        return s == null || s.isBlank();
+        /* 보강분까지 포함해 sortOrder ASC 재정렬 */
+        result.sort(java.util.Comparator.comparing(
+                MyVacationTypeResponseDto::getSortOrder,
+                java.util.Comparator.nullsLast(Integer::compareTo)));
+        return result;
     }
 }

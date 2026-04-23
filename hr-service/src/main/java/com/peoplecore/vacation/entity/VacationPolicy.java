@@ -9,9 +9,8 @@ import lombok.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
-/* 연차 전용 정책 - 회사당 1건. 발생 기준(HIRE/FISCAL) + 연차 촉진 통지 정책 */
+/* 회사별 휴가 정책 - 회사당 1건. 발생 기준(HIRE/FISCAL) + 연차 촉진 통지 정책 */
 @Entity
 @Table(
         name = "vacation_policy",
@@ -26,28 +25,26 @@ import java.util.regex.Pattern;
 @Builder
 public class VacationPolicy extends BaseTimeEntity {
 
-    /* 회계연도 시작일 포맷 (mm-dd) */
-    private static final Pattern FISCAL_DATE_PATTERN =
-            Pattern.compile("^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$");
+    /* FISCAL 정책 공통 회계연도 시작일 - 1월 1일 고정 (회사별 커스텀 폐지) */
+    public static final String FIXED_FISCAL_START = "01-01";
 
-    /* 연차 발생 기준 타입 - 상태 패턴으로 fiscalYearStart 검증 분기 */
+    /* 연차 발생 기준 타입 - 상태 패턴으로 fiscalYearStart 처리 분기 */
     public enum PolicyBaseType {
         HIRE {
             /* 입사일 기준 - fiscalYearStart 무시 (null 저장) */
-            @Override public String resolveFiscalStart(String input) { return null; }
+            @Override
+            public String resolveFiscalStart(String input) {
+                return null;
+            }
         },
         FISCAL {
-            /* 회계연도 기준 - fiscalYearStart 필수 (mm-dd 형식 검증) */
-            @Override public String resolveFiscalStart(String input) {
-                if (input == null || input.isBlank()) {
-                    throw new CustomException(ErrorCode.VACATION_POLICY_FISCAL_START_REQUIRED);
-                }
-                if (!FISCAL_DATE_PATTERN.matcher(input).matches()) {
-                    throw new CustomException(ErrorCode.VACATION_POLICY_FISCAL_START_INVALID);
-                }
-                return input;
+            /* 회계연도 기준 - 회사 공통 01-01 고정. 입력값 무시 */
+            @Override
+            public String resolveFiscalStart(String input) {
+                return FIXED_FISCAL_START;
             }
         };
+
         public abstract String resolveFiscalStart(String input);
     }
 
@@ -86,6 +83,12 @@ public class VacationPolicy extends BaseTimeEntity {
     /* 2차 촉진 통지 시기 - 만료 N개월 전. NULL = 2차 비활성. 화면 셀렉트 (1/2/3개월) */
     @Column(name = "second_notice_months_before")
     private Integer secondNoticeMonthsBefore;
+
+    /* 연월차 미리쓰기 허용 여부 -> true면 잔여 부족해도 신청 가능 스케줄러로 연차 생성 시 해당년도 availible이 음수면 그만큼 차감햇서 적립
+     * 법정 휴가는 아님 */
+    @Column(name = "allow_advance_use", nullable = false)
+    @Builder.Default
+    private Boolean allowAdvanceUse = false;
 
     /* 낙관적 락 - 관리자 동시 수정 방지 */
     @Version
@@ -128,6 +131,16 @@ public class VacationPolicy extends BaseTimeEntity {
         this.secondNoticeMonthsBefore = secondMonthsBefore;
     }
 
+    /* 미리쓰기 허용 토글 변경 - 관리자 화면 저장 시 호출 */
+    public void updateAdvanceUse(boolean allowed) {
+        this.allowAdvanceUse = allowed;
+    }
+
+    /* 미리쓰기 활성 여부 - VacationRequestService.markPending / AnnualGrantService.grantAndRecord 참조 */
+    public boolean isAdvanceUseActive() {
+        return Boolean.TRUE.equals(allowAdvanceUse);
+    }
+
     /* 1차 촉진 활성 여부 - 컬럼이 NULL 이 아니고 전체 토글이 ON 일 때만 */
     public boolean isFirstNoticeActive() {
         return Boolean.TRUE.equals(isPromotionActive) && firstNoticeMonthsBefore != null;
@@ -146,7 +159,6 @@ public class VacationPolicy extends BaseTimeEntity {
 
     /* 회사 생성 시 기본 정책 - HIRE 기준, 촉진 비활성, 규칙 11건 부착은 호출부에서 */
     /* HIRE 기준, 촉진 비활성, 규칙 부착은 호출부가 별도 처리 */
-    /* creatorEmpId null 이면 SYSTEM_EMP_ID 로 대체 - 레거시 0L 도 허용 */
     public static VacationPolicy createDefault(UUID companyId, Long creatorEmpId) {
         Long effectiveCreator = (creatorEmpId != null) ? creatorEmpId : SYSTEM_EMP_ID;
         return VacationPolicy.builder()
@@ -157,6 +169,7 @@ public class VacationPolicy extends BaseTimeEntity {
                 .isPromotionActive(false)
                 .firstNoticeMonthsBefore(null)
                 .secondNoticeMonthsBefore(null)
+                .allowAdvanceUse(false)
                 .build();
     }
 

@@ -2,11 +2,13 @@ package com.peoplecore.vacation.repository;
 
 import com.peoplecore.attendance.dto.VacationSlice;
 import com.peoplecore.employee.domain.QEmployee;
+import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
 import com.peoplecore.vacation.entity.QVacationRequest;
 import com.peoplecore.vacation.entity.QVacationType;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.entity.VacationRequest;
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -97,6 +99,96 @@ public class VacationRequestQueryRepository {
                 .fetchOne();
 
         return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+
+    /*
+     * 전사 휴가 관리 - 기간 교집합 + 상태 복수 필터 페이지 조회
+     * 용도: 관리자 전사 휴가 현황 화면 (기간별 PENDING/APPROVED 혼합 조회)
+     * 조건: 휴가 기간 [startAt, endAt] 이 요청 [periodStart, periodEnd] 와 교집합
+     *       즉 r.startAt <= periodEnd 그리고 r.endAt >= periodStart
+     * 상태: statuses 배열에 포함된 것만. 비어있으면 전체
+     * N+1 방지: VacationType fetch join (empName/deptName 은 스냅샷 컬럼 사용 → Employee 조인 불필요)
+     * 정렬: requestStartAt 오름차순 (일정순 - 달력 보기 편함)
+     */
+    /*
+     * 전사 휴가 관리 기간 조회 - 사원별 요약 (GROUP BY emp_id)
+     * 같은 사원이 기간 내 여러 슬롯/결재 있어도 1 entry 로 묶음 ("몇 명이 휴가인가" UX)
+     * 정렬: 사원의 MIN(requestStartAt) 오름차순
+     * totalElements = 기간 내 휴가자 distinct 수
+     */
+    public Page<VacationAdminPeriodResponseDto> findByCompanyAndPeriodAndStatuses(UUID companyId,
+                                                                                  LocalDateTime periodStart,
+                                                                                  LocalDateTime periodEnd,
+                                                                                  List<RequestStatus> statuses,
+                                                                                  Pageable pageable) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+
+        BooleanExpression statusPredicate = (statuses == null || statuses.isEmpty())
+                ? null
+                : r.requestStatus.in(statuses);
+
+        // 1단계: 사원별 요약 페이지 - 합계/시점 범위/건수를 GROUP BY 로 한 번에 집계
+        List<VacationAdminPeriodResponseDto> content = queryFactory
+                .select(Projections.constructor(VacationAdminPeriodResponseDto.class,
+                        r.employee.empId,
+                        r.requestEmpName.min(),           // 스냅샷 중 하나 (동일 empId 면 동일)
+                        r.requestEmpDeptName.min(),       // 스냅샷 중 하나
+                        r.requestUseDays.sum(),           // 기간 내 총 사용일수
+                        r.requestStartAt.min(),           // 최초 시작
+                        r.requestEndAt.max(),             // 최종 종료
+                        r.count()))                       // 기간 내 슬롯 건수
+                .from(r)
+                .where(
+                        r.companyId.eq(companyId),
+                        r.requestStartAt.loe(periodEnd),
+                        r.requestEndAt.goe(periodStart),
+                        statusPredicate
+                )
+                .groupBy(r.employee.empId)
+                .orderBy(r.requestStartAt.min().asc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        // 2단계: 총 휴가자 수 (distinct empId) - "몇 명" count 제공
+        Long total = queryFactory
+                .select(r.employee.empId.countDistinct())
+                .from(r)
+                .where(
+                        r.companyId.eq(companyId),
+                        r.requestStartAt.loe(periodEnd),
+                        r.requestEndAt.goe(periodStart),
+                        statusPredicate
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+
+    /*
+     * 사원 + 연도 구간 교집합 신청 전체 + VacationType fetch join
+     * 용도: 내 휴가 현황 페이지 (예정/지난 분류용 원천)
+     * 조건: 휴가기간 [startAt,endAt] 이 [year-01-01 00:00, year-12-31 23:59:59] 와 교집합
+     * N+1 방지: VacationType fetch join
+     * 정렬: requestStartAt ASC (지난 리스트는 서비스에서 재정렬)
+     */
+    public List<VacationRequest> findByEmpAndYearOverlapFetchType(UUID companyId, Long empId,
+                                                                  LocalDateTime yearStart,
+                                                                  LocalDateTime yearEnd) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
+
+        return queryFactory
+                .selectFrom(r)
+                .join(r.vacationType, t).fetchJoin()
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart)
+                )
+                .orderBy(r.requestStartAt.asc())
+                .fetch();
     }
 
     /*

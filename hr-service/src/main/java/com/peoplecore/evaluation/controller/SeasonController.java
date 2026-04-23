@@ -1,6 +1,7 @@
 package com.peoplecore.evaluation.controller;
 
 import com.peoplecore.evaluation.dto.*;
+import com.peoplecore.evaluation.seasonscheduler.SeasonScheduler;
 import com.peoplecore.evaluation.service.SeasonService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -15,9 +16,12 @@ import java.util.UUID;
 public class SeasonController {
 
     private final SeasonService seasonService;
+    // TODO: 지우기 — 수동 스케줄러 실행용 (임시/개발)
+    private final SeasonScheduler seasonScheduler;
 
-    public SeasonController(SeasonService seasonService) {
+    public SeasonController(SeasonService seasonService, SeasonScheduler seasonScheduler) {
         this.seasonService = seasonService;
+        this.seasonScheduler = seasonScheduler;
     }
 
     // 1. 시즌 목록 (회사별)
@@ -66,6 +70,14 @@ public class SeasonController {
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long seasonId) {
         seasonService.deleteSeason(companyId, seasonId);
+        return ResponseEntity.ok().build();
+    }
+
+    // TODO: 지우기
+    // 7. 스케줄러 수동 실행 (임시/개발용) — 자정 전이를 기다리지 않고 즉시 전이
+    @PostMapping("/run-scheduler")
+    public ResponseEntity<Void> runScheduler() {
+        seasonScheduler.runNow();
         return ResponseEntity.ok().build();
     }
 }

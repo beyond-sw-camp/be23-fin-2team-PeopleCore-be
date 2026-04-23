@@ -92,7 +92,7 @@ public class GoalService {
         Goal goal = Goal.builder()
                 .emp(employee)
                 .season(openSeason)
-                .approvalStatus(GoalApprovalStatus.PENDING)
+                .approvalStatus(GoalApprovalStatus.DRAFT)
                 .build();
         applyRequestToGoal(goal, companyId, request, request.getGrade());
 
@@ -325,9 +325,11 @@ public class GoalService {
             if (memberGoals == null) memberGoals = new ArrayList<>();
 
             // 가장 늦은 submittedAt 찾으면서 DTO 변환까지 한 번에
+            // DRAFT(작성중/미제출) 은 평가자 화면에 노출하지 않음 - PENDING/APPROVED/REJECTED 만
             LocalDateTime latestSubmitted = null;
             List<GoalResponse> goalDtos = new ArrayList<>();
             for (Goal g : memberGoals) {
+                if (g.getApprovalStatus() == GoalApprovalStatus.DRAFT) continue;
                 goalDtos.add(GoalResponse.from(g));
                 if (g.getSubmittedAt() != null && (latestSubmitted == null || g.getSubmittedAt().isAfter(latestSubmitted))) {
                     latestSubmitted = g.getSubmittedAt();
@@ -442,13 +444,14 @@ public class GoalService {
     }
 
 
-    // 승인된 목표 중 taskWeight 합 기준 백분율 계산
-    //   미승인 목표는 결과 Map 에 키 없음 -> DTO 에서 null
+    // 승인된 KPI 목표 중 taskWeight 합 기준 백분율 계산
+    //   OKR 및 미승인 목표는 결과 Map 에 키 없음 -> DTO 에서 null
     private Map<Long, BigDecimal> computeRatios(List<Goal> goals, EvaluationRules rules) {
-        // 승인된 목표만 수집
+        // 승인된 KPI 목표만 수집 (OKR 은 비율 산정 대상 아님)
         List<Goal> approved = new ArrayList<>();
         for (Goal g : goals) {
-            if (g.getApprovalStatus() == GoalApprovalStatus.APPROVED) {
+            if (g.getApprovalStatus() == GoalApprovalStatus.APPROVED
+                    && g.getGoalType() == GoalType.KPI) {
                 approved.add(g);
             }
         }

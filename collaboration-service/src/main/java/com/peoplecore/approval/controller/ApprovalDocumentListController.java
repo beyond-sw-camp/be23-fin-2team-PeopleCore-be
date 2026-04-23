@@ -109,30 +109,12 @@ public class ApprovalDocumentListController {
 
     /* === 부서 문서함 === */
 
-    @GetMapping("/dept/completed")
-    public ResponseEntity<Page<DocumentListResponseDto>> getDeptCompletedDocuments(
+    @GetMapping("/dept")
+    public ResponseEntity<Page<DocumentListResponseDto>> getDeptDocuments(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Department") Long deptId,
             @ModelAttribute DocumentListSearchDto searchDto,
             Pageable pageable) {
-        return ResponseEntity.ok(listService.getDeptCompletedDocuments(companyId, deptId, searchDto, pageable));
-    }
-
-    @GetMapping("/dept/received")
-    public ResponseEntity<Page<DocumentListResponseDto>> getDeptReceivedDocuments(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Department") Long deptId,
-            @ModelAttribute DocumentListSearchDto searchDto,
-            Pageable pageable) {
-        return ResponseEntity.ok(listService.getDeptReceivedDocuments(companyId, deptId, searchDto, pageable));
-    }
-
-    @GetMapping("/dept/sent")
-    public ResponseEntity<Page<DocumentListResponseDto>> getDeptSentDocuments(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Department") Long deptId,
-            @ModelAttribute DocumentListSearchDto searchDto,
-            Pageable pageable) {
-        return ResponseEntity.ok(listService.getDeptSentDocuments(companyId, deptId, searchDto, pageable));
+        return ResponseEntity.ok(listService.getDeptDocuments(companyId, deptId, searchDto, pageable));
     }
 }

@@ -58,7 +58,7 @@ public class EmpSalaryService {
     public Page<EmpSalaryResDto> getEmpSalaryList(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, Pageable pageable) {
 
 //        1. Employee 페이징 조회
-        Page<Employee> employees = employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, null, pageable);
+        Page<Employee> employees = employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, null, null, pageable);
 
         if (employees.isEmpty()) {
             return employees.map(emp -> EmpSalaryResDto.fromEmployee(emp, null, null, null, null));

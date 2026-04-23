@@ -335,6 +335,9 @@ public class ManagerEvaluationService {
 //        GRADING 시작 전이면 빈 리스트 ("결과공개기간 아닙니다" 표시)
         if (!isGradingRevealed(seasonId)) return new ArrayList<>();
 
+//        finalGrade 는 시즌 확정 후에만 공개 (autoGrade / managerGrade 는 조건부 자동 노출)
+        boolean finalized = season.getFinalizedAt() != null;
+
 //        해당 시즌 팀장이 평가한 팀원 목록 (그 시즌의 팀 소속 박제)
         List<ManagerEvaluation> mgrEvals = mgrEvalRepository.findByEvaluator_EmpIdAndSeason_SeasonId(managerEmpId, seasonId);
         if (mgrEvals.isEmpty()) return new ArrayList<>();
@@ -350,12 +353,12 @@ public class ManagerEvaluationService {
             }
         }
 
-//        DTO 조립 (finalGrade 필터 적용)
+//        DTO 조립 (finalGrade 필터는 finalized 이후에만 유의미)
         List<TeamMemberResultDto> result = new ArrayList<>();
         for (ManagerEvaluation me : mgrEvals) {
             Employee emp = me.getEmployee();
             EvalGrade g = gradeByEmp.get(emp.getEmpId());
-            String finalGrade = g != null ? g.getFinalGrade() : null;
+            String finalGrade = finalized && g != null ? g.getFinalGrade() : null;
 
 //            gradeFilter 지정 시 최종등급 일치만 포함 (대소문자 무시)
             if (gradeFilter != null && !gradeFilter.isBlank()
@@ -390,6 +393,7 @@ public class ManagerEvaluationService {
                     .name(s.getName())
                     .status(status)
                     .finalizedAt(s.getFinalizedAt())
+                    .startDate(s.getStartDate())
                     .build());
         }
         return result;

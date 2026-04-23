@@ -19,6 +19,7 @@ import java.util.Map;
 public class DocumentDetailResponse {
 
     private Long docId;
+    private Long previousDocId;   // 재기안으로 생성된 경우 이전 문서 docId, 아니면 null
     private String docNum;
     private String docTitle;
     private String docType;
@@ -95,6 +96,7 @@ public class DocumentDetailResponse {
 
         return DocumentDetailResponse.builder()
                 .docId(doc.getDocId())
+                .previousDocId(doc.getPreviousDocId())
                 .docNum(doc.getDocNum())
                 .docTitle(doc.getDocTitle())
                 .docData(doc.getDocData())

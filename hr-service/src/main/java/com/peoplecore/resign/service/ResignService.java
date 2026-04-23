@@ -117,7 +117,7 @@ public class ResignService {
 
 
 //    kafka
-    public void createResignfromApprocal(ResignApprovedEvent event){
+    public void createResignFromApprocal(ResignApprovedEvent event){
         Employee employee =employeeRepository.findById(event.getEmpId()).orElseThrow(()-> new IllegalArgumentException("사원을 찾을 수 없습니다"));
 
 //        docData(json)에서 퇴직예정일 추출

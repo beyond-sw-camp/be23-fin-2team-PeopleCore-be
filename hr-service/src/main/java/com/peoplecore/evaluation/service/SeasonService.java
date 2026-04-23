@@ -223,10 +223,38 @@ public class SeasonService {
         // 시즌 간 기간 겹침 금지 (자기 자신 제외)
         validateNoOverlap(companyId, req.getStartDate(), req.getEndDate(), seasonId);
 
+        // 기존 단계 일정과 정합성 검증 - 단계 먼저 조정 후 시즌 수정하도록 유도
+        validateStagesAgainstSeasonRange(seasonId, req.getStartDate(), req.getEndDate());
+
         // 기본정보 갱신 (dirty checking 으로 UPDATE 발행)
         season.updateBasicInfo(req.getName(), req.getPeriod(), req.getStartDate(), req.getEndDate());
 
         return SeasonResponseDto.from(season);
+    }
+
+    // 시즌 수정 시 기존 단계 일정과 새 날짜 범위 정합성 검증
+    private void validateStagesAgainstSeasonRange(Long seasonId, java.time.LocalDate newStart, java.time.LocalDate newEnd) {
+        List<Stage> stages = stageRepository.findBySeason_SeasonId(seasonId);
+        if (stages.isEmpty()) return;
+        stages.sort(java.util.Comparator.comparing(s -> s.getOrderNo() == null ? 0 : s.getOrderNo()));
+
+        Stage first = stages.get(0);
+        Stage last = stages.get(stages.size() - 1);
+
+        if (first.getStartDate() != null && !first.getStartDate().equals(newStart)) {
+            throw new IllegalArgumentException("첫 단계 시작일(" + first.getStartDate() + ")과 시즌 시작일이 다릅니다. 단계 일정부터 조정하세요");
+        }
+        if (last.getEndDate() != null && !last.getEndDate().equals(newEnd)) {
+            throw new IllegalArgumentException("마지막 단계 종료일(" + last.getEndDate() + ")과 시즌 종료일이 다릅니다. 단계 일정부터 조정하세요");
+        }
+        for (Stage s : stages) {
+            if (s.getStartDate() != null && s.getStartDate().isBefore(newStart)) {
+                throw new IllegalArgumentException("단계 시작일이 시즌 기간을 벗어납니다. 단계 일정부터 조정하세요");
+            }
+            if (s.getEndDate() != null && s.getEndDate().isAfter(newEnd)) {
+                throw new IllegalArgumentException("단계 종료일이 시즌 기간을 벗어납니다. 단계 일정부터 조정하세요");
+            }
+        }
     }
 
     // 시즌 간 기간 겹침 검증 — 같은 회사 다른 시즌과 날짜 범위가 겹치면 예외
@@ -285,9 +313,10 @@ public class SeasonService {
         String mergedJson = rulesService.buildMergedSnapshotJson(rules);
         season.freezeSnapshot(mergedJson, rules.getFormVersion());
 
-        // 3) 전 사원 EvalGrade row 일괄 INSERT — 점수/등급 컬럼은 NULL 로 시작
-        //    dept/title 은 스냅샷 컬럼에 박제 (이후 조직개편/이동해도 그 시즌은 고정)
-        List<Employee> employees = employeeRepository.findActiveEmployeesWithDeptAndGrade(companyId);
+        // 3) 평가 대상자 EvalGrade row 일괄 INSERT — 점수/등급 컬럼은 NULL 로 시작
+        //    재직중(ACTIVE) + 일반 사원(EMPLOYEE) + 평가자로 지정되지 않은 사람
+        //    dept/title 은 스냅샷 컬럼에 박제
+        List<Employee> employees = employeeRepository.findEvalTargetsByCompany(companyId);
 
         List<EvalGrade> rows = new ArrayList<>();
         for (Employee emp : employees) {

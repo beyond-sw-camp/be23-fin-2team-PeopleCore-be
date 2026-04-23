@@ -6,6 +6,7 @@ import com.peoplecore.evaluation.service.EvalGradeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -38,9 +39,10 @@ public class EvalGradeController {
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) EvalGradeSortField sortField,
+            @RequestParam(required = false) Sort.Direction sortDirection,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(
-                gradeService.getDraftList(companyId, seasonId, deptId, keyword, sortField, pageable)
+                gradeService.getDraftList(companyId, seasonId, deptId, keyword, sortField, sortDirection, pageable)
         );
     }
 
@@ -129,9 +131,10 @@ public class EvalGradeController {
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) EvalGradeSortField sortField,
+            @RequestParam(required = false) Sort.Direction sortDirection,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(
-                gradeService.getCalibrationList(companyId, seasonId, deptId, keyword, sortField, pageable)
+                gradeService.getCalibrationList(companyId, seasonId, deptId, keyword, sortField, sortDirection, pageable)
         );
     }
 
@@ -180,9 +183,10 @@ public class EvalGradeController {
             @PathVariable Long seasonId,
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) EvalGradeSortField sortField,
+            @RequestParam(required = false) Sort.Direction sortDirection,
             @PageableDefault(size = 10) Pageable pageable) {
         return ResponseEntity.ok(
-                gradeService.getUnassignedList(companyId, seasonId, deptId, sortField, pageable)
+                gradeService.getUnassignedList(companyId, seasonId, deptId, sortField, sortDirection, pageable)
         );
     }
 
@@ -214,9 +218,10 @@ public class EvalGradeController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean unscoredOnly,
             @RequestParam(required = false) EvalGradeSortField sortField,
+            @RequestParam(required = false) Sort.Direction sortDirection,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(
-                gradeService.getFinalList(companyId, seasonId, deptId, keyword, unscoredOnly, sortField, pageable)
+                gradeService.getFinalList(companyId, seasonId, deptId, keyword, unscoredOnly, sortField, sortDirection, pageable)
         );
     }
     // ─── 본인 평가결과 조회 (사원용) ─────────────────

@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
 import java.time.YearMonth;
@@ -24,7 +25,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
 
 
     @Override
-    public Page<Employee> findAllWithFilter(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField sortField, Pageable pageable) {
+    public Page<Employee> findAllWithFilter(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
         // 실제 데이터 조회 (fetch join으로 N+1 방지)
         List<Employee> content = queryFactory
                 .selectFrom(qEmployee)                      // Employee 테이블 조회
@@ -38,7 +39,7 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
                         empTypeEq(empType),                 // 고용형태 필터 (null이면 조건 무시)
                         empStatusEq(empStatus)              // 재직상태 필터 (null이면 조건 무시)
                 )
-                .orderBy(getOrderSpecifier(sortField))      // Enum으로 검증된 값만 정렬에 사용 (SQL 인젝션 방지-enum사용)
+                .orderBy(getOrderSpecifier(sortField, sortDirection))      // Enum으로 검증된 값만 정렬에 사용 (SQL 인젝션 방지-enum사용)
                 .offset(pageable.getOffset())               // 시작 위치
                 .limit(pageable.getPageSize())              // 한 페이지 개수
                 .fetch();
@@ -76,11 +77,12 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
 
 
     //    Enum으로 허용된 값만 정렬에 사용(SQL인젝션 방지)
-    private OrderSpecifier<?> getOrderSpecifier(EmployeeSortField sortField) {
+    private OrderSpecifier<?> getOrderSpecifier(EmployeeSortField sortField, Sort.Direction direction) {
         if (sortField == null) return qEmployee.empId.asc(); // 기본 정렬
+        boolean desc = direction == Sort.Direction.DESC;
         return switch (sortField) {
-            case EMP_NUM -> qEmployee.empNum.asc(); //사번 오름차순
-            case EMP_NAME -> qEmployee.empName.asc(); //이름 오름차순
+            case EMP_NUM -> desc ? qEmployee.empNum.desc() : qEmployee.empNum.asc();   // 사번
+            case EMP_NAME -> desc ? qEmployee.empName.desc() : qEmployee.empName.asc(); // 이름
         };
     }
     //    회사 id 일치 여부

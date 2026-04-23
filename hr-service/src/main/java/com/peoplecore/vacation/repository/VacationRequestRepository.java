@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -24,11 +25,12 @@ public interface VacationRequestRepository extends JpaRepository<VacationRequest
     Optional<VacationRequest> findByCompanyIdAndRequestId(UUID companyId, Long requestId);
 
     /*
-     * 회사 + approvalDocId 단건 조회
-     * 용도: Kafka docCreated 중복 수신 방어 (같은 결재 문서 두 번 INSERT 방지)
+     * 회사 + approvalDocId 그룹 조회 - 한 결재문서에 묶인 모든 슬롯 반환
+     * 용도: Kafka docCreated 중복 수신 방어 / 결재 결과 반영 / 취소 시 그룹 일괄 처리
      * 인덱스: idx_vacation_request_approval_doc
+     * 반환: 비어있으면 중복수신 아님 (insert 진행), 비어있지 않으면 기존 그룹 존재
      */
-    Optional<VacationRequest> findByCompanyIdAndApprovalDocId(UUID companyId, Long approvalDocId);
+    List<VacationRequest> findByCompanyIdAndApprovalDocId(UUID companyId, Long approvalDocId);
 
     /*
      * 특정 휴가 유형을 참조하는 신청 존재 여부
