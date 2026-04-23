@@ -2,12 +2,17 @@ package com.peoplecore.approval.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.alarm.publisher.AlarmEventPublisher;
+import com.peoplecore.approval.dto.docdata.VacationUseDocData;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.publisher.ApprovalEventPublisher;
 import com.peoplecore.approval.repository.ApprovalDocumentRepository;
 import com.peoplecore.approval.repository.ApprovalLineRepository;
 import com.peoplecore.approval.repository.ApprovalSignatureRepository;
 import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
+import com.peoplecore.calendar.entity.Events;
+import com.peoplecore.calendar.entity.MyCalendars;
+import com.peoplecore.calendar.repository.EventsRepository;
+import com.peoplecore.calendar.service.MyCalendarService;
 import com.peoplecore.common.service.MinioService;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.event.ResignApprovedEvent;
@@ -20,6 +25,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -39,10 +45,12 @@ public class ApprovalLineService {
     private final KafkaTemplate<String, String>kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final ApprovalEventPublisher approvalEventPublisher;
+    private final MyCalendarService myCalendarService;
+    private final EventsRepository eventsRepository;
 
 
     @Autowired
-    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, ApprovalEventPublisher approvalEventPublisher) {
+    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, ApprovalEventPublisher approvalEventPublisher, MyCalendarService myCalendarService, EventsRepository eventsRepository) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.historyRepository = historyRepository;
@@ -52,6 +60,8 @@ public class ApprovalLineService {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.approvalEventPublisher = approvalEventPublisher;
+        this.myCalendarService = myCalendarService;
+        this.eventsRepository = eventsRepository;
     }
 
     /* 승인 처리 / 순차 처리(이전 단계가 approved여야만 승인 가능) / 마지막 결재자가 승인 해야만 문서상태 approved*/
@@ -123,8 +133,14 @@ public class ApprovalLineService {
                     .build());
 
 
-//        사직서 승인 시 hr-service로 이벤트 발행 (계약 formCode = "RESIGNATION")
             String formCode = document.getFormId().getFormCode();
+
+            // 휴가 사용 최종 승인 → 본인 휴가 캘린더에 이벤트 생성
+            if ("VACATION_REQUEST".equals(formCode)) {
+                createVacationCalendarEvent(document);
+            }
+
+//        사직서 승인 시 hr-service로 이벤트 발행 (계약 formCode = "RESIGNATION")
             if ("RESIGNATION".equals(formCode)) {
                 try {
                     ResignApprovedEvent resignApprovedEvent = ResignApprovedEvent.builder()
@@ -199,6 +215,13 @@ public class ApprovalLineService {
         myLine.reject(reason);
         myLine.markRead();
         document.reject();
+
+        /* 내가 반려했으니 아직 PENDING 인 다른 결재자 라인들(같은 step 병렬합의자 + 뒷 step)은 모두 취소 처리 */
+        lineRepository.findByDocId_DocIdOrderByLineStep(docId).stream()
+                .filter(l -> !l.getLineId().equals(myLine.getLineId())
+                        && l.getApprovalRole() == ApprovalRole.APPROVER
+                        && l.getApprovalLineStatus() == ApprovalLineStatus.PENDING)
+                .forEach(ApprovalLine::cancel);
 
         /* 초과근무/휴가 반려 이벤트 발행 — Publisher 내부에서 formName 분기 */
         approvalEventPublisher.publishResult(document, "REJECTED", empId, reason);
@@ -387,6 +410,40 @@ public class ApprovalLineService {
 
         html.append("</body></html>");
         return html.toString();
+    }
+
+    /* 휴가 사용 최종 승인 시 본인 휴가 캘린더에 이벤트 생성 */
+    /* useDay 정수 → 종일 / 0.5(반차), 0.25(반반차) → 시간 지정 */
+    /* docData 파싱 실패 시 로그만 남기고 승인 플로우는 계속 진행 (롤백 X) */
+    private void createVacationCalendarEvent(ApprovalDocument document) {
+        try {
+            VacationUseDocData data = objectMapper.readValue(document.getDocData(), VacationUseDocData.class);
+            MyCalendars vacationCalendar = myCalendarService.ensureVacationCalendar(
+                    document.getCompanyId(), document.getEmpId());
+
+            // 소수부 없으면 종일, 0.5/0.25 면 시간 단위 이벤트
+            BigDecimal useDay = data.getVacReqUseDay();
+            boolean isAllDay = useDay != null && useDay.stripTrailingZeros().scale() <= 0;
+
+            Events event = Events.builder()
+                    .empId(document.getEmpId())
+                    .title("[휴가] " + document.getDocTitle())
+                    .description(data.getVacReqReason())
+                    .startAt(data.getVacReqStartat())
+                    .endAt(data.getVacReqEndat())
+                    .isAllDay(isAllDay)
+                    .isPublic(true)
+                    .isAllEmployees(false)
+                    .companyId(document.getCompanyId())
+                    .myCalendars(vacationCalendar)
+                    .build();
+            eventsRepository.save(event);
+            log.info("[CalendarEvent] 휴가 이벤트 생성 - docId={}, empId={}, eventsId={}, isAllDay={}",
+                    document.getDocId(), document.getEmpId(), event.getEventsId(), isAllDay);
+        } catch (Exception e) {
+            log.error("[CalendarEvent] 휴가 이벤트 생성 실패 - docId={}, err={}",
+                    document.getDocId(), e.getMessage(), e);
+        }
     }
 
 }

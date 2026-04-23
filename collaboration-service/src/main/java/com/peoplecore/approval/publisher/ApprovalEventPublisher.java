@@ -2,6 +2,10 @@ package com.peoplecore.approval.publisher;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.approval.dto.docdata.AttendanceModifyDocData;
+import com.peoplecore.approval.dto.docdata.OvertimeDocData;
+import com.peoplecore.approval.dto.docdata.VacationGrantDocData;
+import com.peoplecore.approval.dto.docdata.VacationUseDocData;
 import com.peoplecore.approval.entity.ApprovalDocument;
 import com.peoplecore.approval.entity.ApprovalLine;
 import com.peoplecore.approval.entity.ApprovalRole;
@@ -11,12 +15,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
 
+/*TODO : 상태패턴으로 바꿀 것 */
 /*
  * 초과근무/휴가 결재 이벤트 Kafka 발행 통합 컴포넌트.
  *
@@ -32,12 +34,15 @@ import java.util.List;
 public class ApprovalEventPublisher {
 
     private static final String FORM_NAME_OVERTIME = "초과근로신청서";
-    private static final String FORM_NAME_VACATION_PREFIX = "휴가원";
     private static final String FORM_CODE_ATTENDANCE_MODIFY = "ATTENDANCE_MODIFY"; // formCode 기반 분기
+    private static final String FORM_CODE_VACATION_REQUEST = "VACATION_REQUEST"; // 휴가 사용 신청 (USE)
+    private static final String FORM_CODE_VACATION_GRANT_REQUEST = "VACATION_GRANT_REQUEST"; // 휴가 부여 신청 (GRANT)
     private static final String TOPIC_OT_DOC_CREATED = "overtime-approval-doc-created";
     private static final String TOPIC_OT_RESULT = "overtime-approval-result";
     private static final String TOPIC_VAC_DOC_CREATED = "vacation-approval-doc-created";
     private static final String TOPIC_VAC_RESULT = "vacation-approval-result";
+    private static final String TOPIC_VAC_GRANT_DOC_CREATED = "vacation-grant-approval-doc-created";
+    private static final String TOPIC_VAC_GRANT_RESULT = "vacation-grant-approval-result";
     private static final String TOPIC_ATTEN_MODIFY_DOC_CREATED = "attendance-modify-doc-created";
     private static final String TOPIC_ATTEN_MODIFY_RESULT = "attendance-modify-result";
     private static final String FORM_NAME_SEVERANCE_PREFIX = "퇴직금지급결의서";
@@ -56,7 +61,7 @@ public class ApprovalEventPublisher {
         this.objectMapper = objectMapper;
     }
 
-    /* 문서 생성 직후 — 양식 본문(docData) + 결재선에서 정보 파싱해 이벤트 발행 */
+    /* 문서 생성 직후 — docData 를 폼별 DTO 로 역직렬화 후 이벤트 발행 */
     public void publishDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {
         String formName = document.getFormId().getFormName();
         String docData = document.getDocData();
@@ -64,20 +69,43 @@ public class ApprovalEventPublisher {
 
         try {
             if (FORM_NAME_OVERTIME.equals(formName)) {
+                OvertimeDocData data = objectMapper.readValue(docData, OvertimeDocData.class);
                 OvertimeApprovalDocCreatedEvent event = OvertimeApprovalDocCreatedEvent.builder()
                         .companyId(document.getCompanyId())
                         .approvalDocId(document.getDocId())
                         .empId(document.getEmpId())
                         .deptId(document.getEmpDeptId())
-                        .otDate(parseDateTime(docData, "otDate"))
-                        .otPlanStart(parseDateTime(docData, "otPlanStart"))
-                        .otPlanEnd(parseDateTime(docData, "otPlanEnd"))
-                        .otReason(parseString(docData, "otReason"))
+                        .otDate(data.getOtDate())
+                        .otPlanStart(data.getOtPlanStart())
+                        .otPlanEnd(data.getOtPlanEnd())
+                        .otReason(data.getOtReason())
                         .finalApproverEmpId(findFinalApproverEmpId(lines))
                         .build();
                 kafkaTemplate.send(TOPIC_OT_DOC_CREATED, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] OT docCreated 발행 - docId={}, empId={}", document.getDocId(), document.getEmpId());
-            } else if (formName != null && formName.startsWith(FORM_NAME_VACATION_PREFIX)) {
+            } else if (FORM_CODE_VACATION_GRANT_REQUEST.equals(formCode)) {
+                // 휴가 부여 신청 (GRANT) - 기간 없음, pregnancyWeeks 만 별도
+                VacationGrantDocData data = objectMapper.readValue(docData, VacationGrantDocData.class);
+                VacationGrantApprovalDocCreatedEvent event = VacationGrantApprovalDocCreatedEvent.builder()
+                        .companyId(document.getCompanyId())
+                        .approvalDocId(document.getDocId())
+                        .empId(document.getEmpId())
+                        .empName(document.getEmpName())
+                        .deptId(document.getEmpDeptId())
+                        .deptName(document.getEmpDeptName())
+                        .empGrade(document.getEmpGrade())
+                        .empTitle(document.getEmpTitle())
+                        .infoId(data.getInfoId())
+                        .vacReqUseDay(data.getVacReqUseDay())
+                        .vacReqReason(data.getVacReqReason())
+                        .pregnancyWeeks(data.getPregnancyWeeks())
+                        .finalApproverEmpId(findFinalApproverEmpId(lines))
+                        .build();
+                kafkaTemplate.send(TOPIC_VAC_GRANT_DOC_CREATED, objectMapper.writeValueAsString(event));
+                log.info("[Kafka] VacationGrant docCreated 발행 - docId={}, empId={}", document.getDocId(), document.getEmpId());
+            } else if (FORM_CODE_VACATION_REQUEST.equals(formCode)) {
+                // 휴가 사용 신청 (USE)
+                VacationUseDocData data = objectMapper.readValue(docData, VacationUseDocData.class);
                 VacationApprovalDocCreatedEvent event = VacationApprovalDocCreatedEvent.builder()
                         .companyId(document.getCompanyId())
                         .approvalDocId(document.getDocId())
@@ -87,30 +115,26 @@ public class ApprovalEventPublisher {
                         .deptName(document.getEmpDeptName())
                         .empGrade(document.getEmpGrade())
                         .empTitle(document.getEmpTitle())
-                        .infoId(parseLong(docData, "infoId"))
-                        .vacReqStartat(parseDateTime(docData, "vacReqStartat"))
-                        .vacReqEndat(parseDateTime(docData, "vacReqEndat"))
-                        .vacReqUseDay(parseDecimal(docData, "vacReqUseDay"))
-                        .vacReqReason(parseString(docData, "vacReqReason"))
+                        .infoId(data.getInfoId())
+                        .vacReqStartat(data.getVacReqStartat())
+                        .vacReqEndat(data.getVacReqEndat())
+                        .vacReqUseDay(data.getVacReqUseDay())
+                        .vacReqReason(data.getVacReqReason())
                         .finalApproverEmpId(findFinalApproverEmpId(lines))
-                        // 이벤트 기반 휴가 메타 - 해당 유형 아닌 경우 docData 에 없어 null 파싱
-                        .proofFileUrl(parseString(docData, "proofFileUrl"))
-                        .pregnancyWeeks(parseInteger(docData, "pregnancyWeeks"))
-                        .officialLeaveReason(parseString(docData, "officialLeaveReason"))
-                        .relatedBirthDate(parseDate(docData, "relatedBirthDate"))
                         .build();
                 kafkaTemplate.send(TOPIC_VAC_DOC_CREATED, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] Vacation docCreated 발행 - docId={}, empId={}", document.getDocId(), document.getEmpId());
             } else if (FORM_CODE_ATTENDANCE_MODIFY.equals(formCode)) { // 근태 정정 — formCode 기반 분기
+                AttendanceModifyDocData data = objectMapper.readValue(docData, AttendanceModifyDocData.class);
                 AttendanceModifyDocCreatedEvent event = AttendanceModifyDocCreatedEvent.builder()
                         .companyId(document.getCompanyId())
                         .approvalDocId(document.getDocId())
                         .empId(document.getEmpId())
-                        .comRecId(parseLong(docData, "comRecId"))
-                        .workDate(parseDate(docData, "workDate"))
-                        .attenReqCheckIn(parseDateTime(docData, "attenReqCheckIn"))
-                        .attenReqCheckOut(parseDateTime(docData, "attenReqCheckOut"))
-                        .attenReason(parseString(docData, "attenReason"))
+                        .comRecId(data.getComRecId())
+                        .workDate(data.getWorkDate())
+                        .attenReqCheckIn(data.getAttenReqCheckIn())
+                        .attenReqCheckOut(data.getAttenReqCheckOut())
+                        .attenReason(data.getAttenReason())
                         .build();
                 kafkaTemplate.send(TOPIC_ATTEN_MODIFY_DOC_CREATED, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] AttendanceModify docCreated 발행 - docId={}, empId={}", document.getDocId(), document.getEmpId());
@@ -137,10 +161,22 @@ public class ApprovalEventPublisher {
                         .build();
                 kafkaTemplate.send(TOPIC_OT_RESULT, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] OT result 발행 - docId={}, status={}", document.getDocId(), status);
-            } else if (formName != null && formName.startsWith(FORM_NAME_VACATION_PREFIX)) {
+            } else if (FORM_CODE_VACATION_GRANT_REQUEST.equals(formCode)) {
+                // 휴가 부여 신청 (GRANT) 결과 - VacationApprovalResultEvent DTO 재사용, 토픽만 분리
+                // vacReqId 는 USE 전용 식별자라 GRANT 발행에서는 세팅하지 않음 (hr 측은 approvalDocId 로 조회)
                 VacationApprovalResultEvent event = VacationApprovalResultEvent.builder()
                         .companyId(document.getCompanyId())
-                        .vacReqId(extractVacReqId(document))
+                        .approvalDocId(document.getDocId())
+                        .status(status)
+                        .managerId(managerId)
+                        .rejectReason(rejectReason)
+                        .build();
+                kafkaTemplate.send(TOPIC_VAC_GRANT_RESULT, objectMapper.writeValueAsString(event));
+                log.info("[Kafka] VacationGrant result 발행 - docId={}, status={}", document.getDocId(), status);
+            } else if (FORM_CODE_VACATION_REQUEST.equals(formCode)) {
+                // vacReqId 는 docData 에 기록되지 않아 null 로 내려가므로 세팅하지 않음 (hr 측은 approvalDocId 로 조회)
+                VacationApprovalResultEvent event = VacationApprovalResultEvent.builder()
+                        .companyId(document.getCompanyId())
                         .approvalDocId(document.getDocId())
                         .status(status)
                         .managerId(managerId)
@@ -205,46 +241,10 @@ public class ApprovalEventPublisher {
         return parseLong(document.getDocData(), "otId");
     }
 
-    private Long extractVacReqId(ApprovalDocument document) {
-        return parseLong(document.getDocData(), "vacReqId");
-    }
-
-    private String parseString(String docData, String field) {
-        JsonNode n = readField(docData, field);
-        return (n == null || n.isNull()) ? null : n.asText();
-    }
-
+    /* result 발행 경로 전용 - 단일 id 필드 파싱. docCreated 경로는 폼별 DTO 로 대체됨 */
     private Long parseLong(String docData, String field) {
         JsonNode n = readField(docData, field);
         return (n != null && n.isNumber()) ? n.asLong() : null;
-    }
-
-    /* Integer 필드 파싱 - 유산사산 주수 등. 숫자 아니면 null */
-    private Integer parseInteger(String docData, String field) {
-        JsonNode n = readField(docData, field);
-        return (n != null && n.isNumber()) ? n.asInt() : null;
-    }
-
-    private BigDecimal parseDecimal(String docData, String field) {
-        JsonNode n = readField(docData, field);
-        if (n == null || n.isNull()) return null;
-        try {
-            return new BigDecimal(n.asText());
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /* ISO-8601 datetime 파싱. 문자열 or null */
-    private LocalDateTime parseDateTime(String docData, String field) {
-        JsonNode n = readField(docData, field);
-        if (n == null || n.isNull()) return null;
-        try {
-            return LocalDateTime.parse(n.asText());
-        } catch (Exception e) {
-            log.warn("[Publisher] datetime 파싱 실패 - field={}, val={}", field, n.asText());
-            return null;
-        }
     }
 
     private JsonNode readField(String docData, String field) {
@@ -252,18 +252,6 @@ public class ApprovalEventPublisher {
         try {
             return objectMapper.readTree(docData).get(field);
         } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /* ISO-8601 date 파싱 (yyyy-MM-dd). 문자열 or null */
-    private LocalDate parseDate(String docData, String field) {
-        JsonNode n = readField(docData, field);
-        if (n == null || n.isNull()) return null;
-        try {
-            return LocalDate.parse(n.asText());
-        } catch (Exception e) {
-            log.warn("[Publisher] date 파싱 실패 - field={}, val={}", field, n.asText());
             return null;
         }
     }

@@ -47,6 +47,10 @@ public class AnnualTransitionService {
         this.vacationGrantRuleRepository = vacationGrantRuleRepository;
     }
 
+    /* 월차 만료 처리 결과 - totalExpired: 정상 소멸 총량, totalNegative: 음수 available 누적(양수로 저장) */
+    /* totalNegative 는 미리쓰기 허용 정책일 때 연차 발생 시 applyAdvanceOffset 대상 */
+    private record MonthlyExpiryResult(BigDecimal totalExpired, BigDecimal totalNegative) {}
+
     /* 사원 1명 전환 처리 */
     /* 월차 소멸 → (HIRE 면 연차 발생 + 전환 표식). 정책별 분기는 내부 if */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
@@ -58,30 +62,42 @@ public class AnnualTransitionService {
             return;
         }
 
-        /* 1. 월차 잔여 소멸 - hireDate.year ~ today.year 순회 (최대 2~3 year) */
-        BigDecimal totalExpired = expireMonthlyBalances(companyId, emp, monthlyType, hireDate, today);
+        /* 1. 월차 잔여 소멸 + 음수 누적 집계 - hireDate.year ~ today.year 순회 (최대 2~3 year) */
+        MonthlyExpiryResult expiryResult = expireMonthlyBalances(companyId, emp, monthlyType, hireDate, today);
 
         /* 2. HIRE 정책 - 1년차 연차 신규 발생 */
         if (policy.getPolicyBaseType() == VacationPolicy.PolicyBaseType.HIRE) {
-            grantFirstYearAnnual(companyId, emp, policy, annualType, today, totalExpired);
+            grantFirstYearAnnual(companyId, emp, policy, annualType, today, expiryResult);
         } else {
-            log.info("[AnnualTransition] FISCAL 정책 - 월차 소멸만 수행. empId={}, expired={}",
-                    emp.getEmpId(), totalExpired);
+            log.info("[AnnualTransition] FISCAL 정책 - 월차 소멸만 수행. empId={}, expired={}, negative={}",
+                    emp.getEmpId(), expiryResult.totalExpired(), expiryResult.totalNegative());
         }
     }
 
-    /* 월차 balance 전체 year 순회하며 expireRemaining + ofExpired. 소멸 총량 반환 */
-    private BigDecimal expireMonthlyBalances(UUID companyId, Employee emp, VacationType monthlyType, LocalDate hireDate, LocalDate today) {
+    /* 월차 balance 전체 year 순회하며 expireRemaining + ofExpired. 양수는 소멸, 음수는 집계만 */
+    /* available 음수(미리쓴 월차) 는 expireRemaining() 내부에서 no-op 되므로 별도로 합산 */
+    private MonthlyExpiryResult expireMonthlyBalances(UUID companyId, Employee emp, VacationType monthlyType, LocalDate hireDate, LocalDate today) {
         int startYear = hireDate.getYear();
         int endYear = today.getYear();
 
         List<VacationBalance> balances = vacationBalanceRepository
                 .findAllByYearRange(companyId, emp.getEmpId(), monthlyType.getTypeId(), startYear, endYear);
-        if (balances.isEmpty()) return BigDecimal.ZERO;
+        if (balances.isEmpty()) return new MonthlyExpiryResult(BigDecimal.ZERO, BigDecimal.ZERO);
 
         BigDecimal totalExpired = BigDecimal.ZERO;
+        BigDecimal totalNegative = BigDecimal.ZERO;
 
         for (VacationBalance mb : balances) {
+            BigDecimal avail = mb.getAvailableDays();
+
+            // 음수 available = 미리쓴 월차. expireRemaining no-op 대상이므로 직접 누적
+            if (avail.signum() < 0) {
+                totalNegative = totalNegative.add(avail.negate());
+                log.info("[AnnualTransition] 월차 음수 누적 - empId={}, year={}, avail={}",
+                        emp.getEmpId(), mb.getBalanceYear(), avail);
+                continue;
+            }
+
             BigDecimal before = mb.getTotalDays();
             BigDecimal expired = mb.expireRemaining();
             if (expired.compareTo(BigDecimal.ZERO) <= 0) continue;
@@ -94,12 +110,13 @@ public class AnnualTransitionService {
             log.info("[AnnualTransition] 월차 소멸 - empId={}, year={}, expired={}",
                     emp.getEmpId(), mb.getBalanceYear(), expired);
         }
-        return totalExpired;
+        return new MonthlyExpiryResult(totalExpired, totalNegative);
     }
 
     /* HIRE 정책 1년차 연차 발생 - 1년차 규칙 grantDays 전액 + InitialGrant + AnnualTransition 표식 */
+    /* 미리쓰기 허용 정책 ON 이면 월차 음수 누적만큼 연차 total 에서 applyAdvanceOffset + ADVANCE_OFFSET Ledger */
     private void grantFirstYearAnnual(UUID companyId, Employee emp, VacationPolicy policy,
-                                      VacationType annualType, LocalDate today, BigDecimal expiredMonthlyDays) {
+                                      VacationType annualType, LocalDate today, MonthlyExpiryResult expiryResult) {
         VacationGrantRule rule = vacationGrantRuleRepository
                 .findMatchingRule(policy.getPolicyId(), FIRST_YEAR_RULE_YEARS)
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_RULE_NOT_FOUND));
@@ -117,21 +134,37 @@ public class AnnualTransitionService {
 
         BigDecimal before = annualBalance.getTotalDays();
         /*1년차 연차 규칙 */
-        annualBalance.accrue(grantDays,grantDays);
+        annualBalance.accrue(grantDays, grantDays);
         BigDecimal after = annualBalance.getTotalDays();
 
         /* InitialGrant - 연차 신규 발생 기록 */
         vacationLedgerRepository.save(VacationLedger.ofInitialGrant(
                 annualBalance, grantDays, before, after));
 
-        /* AnnualTransition - 전환 표식 (change_days = 소멸된 월차량, 음수 부호는 팩토리가 처리) */
-        /* before/after 는 accrue 후 동일 시점 값 (전환 표식은 잔여 변동 아님, 표식용) */
-        if (expiredMonthlyDays.compareTo(BigDecimal.ZERO) > 0) {
-            vacationLedgerRepository.save(VacationLedger.ofAnnualTransition(
-                    annualBalance, expiredMonthlyDays, after, after));
+        // 미리쓰기 허용 회사: 월차 음수 누적량을 첫 연차 total 에서 상쇄
+        if (policy.isAdvanceUseActive() && expiryResult.totalNegative().signum() > 0) {
+            BigDecimal offset = expiryResult.totalNegative();
+            BigDecimal offBefore = annualBalance.getTotalDays();
+            annualBalance.applyAdvanceOffset(offset);
+            BigDecimal offAfter = annualBalance.getTotalDays();
+            vacationLedgerRepository.save(VacationLedger.ofAdvanceOffset(
+                    annualBalance, offset, offBefore, offAfter,
+                    "전년 월차 미리쓴 " + offset + "일 상쇄"));
+
+            log.info("[AnnualTransition-Offset] empId={}, offset={}, afterTotal={}",
+                    emp.getEmpId(), offset, offAfter);
         }
 
-        log.info("[AnnualTransition] HIRE 1년차 연차 발생 - empId={}, grantDays={}, expired={}, total={}",
-                emp.getEmpId(), grantDays, expiredMonthlyDays, after);
+        /* AnnualTransition - 전환 표식 (change_days = 소멸된 월차량, 음수 부호는 팩토리가 처리) */
+        /* before/after 는 표식 시점 total (잔여 변동 아님) */
+        if (expiryResult.totalExpired().compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal markTotal = annualBalance.getTotalDays();
+            vacationLedgerRepository.save(VacationLedger.ofAnnualTransition(
+                    annualBalance, expiryResult.totalExpired(), markTotal, markTotal));
+        }
+
+        log.info("[AnnualTransition] HIRE 1년차 연차 발생 - empId={}, grantDays={}, expired={}, negative={}, total={}",
+                emp.getEmpId(), grantDays, expiryResult.totalExpired(), expiryResult.totalNegative(),
+                annualBalance.getTotalDays());
     }
 }

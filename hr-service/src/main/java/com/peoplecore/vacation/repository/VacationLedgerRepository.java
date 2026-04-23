@@ -1,5 +1,6 @@
 package com.peoplecore.vacation.repository;
 
+import com.peoplecore.vacation.dto.ManualGrantSumQueryDto;
 import com.peoplecore.vacation.entity.LedgerEventType;
 import com.peoplecore.vacation.entity.VacationLedger;
 import org.springframework.data.domain.Page;
@@ -10,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,4 +59,21 @@ public interface VacationLedgerRepository extends JpaRepository<VacationLedger, 
     BigDecimal sumChangeDaysByBalanceAndEvent(@Param("companyId") UUID companyId,
                                               @Param("balanceId") Long balanceId,
                                               @Param("eventType") LedgerEventType eventType);
+
+    /*
+     * 사원 단위 MANUAL_GRANT 합계 일괄 집계 (연도 필터)
+     */
+    @Query("""
+            SELECT new com.peoplecore.vacation.dto.ManualGrantSumQueryDto(l.empId, SUM(l.changeDays))
+              FROM VacationLedger l
+              JOIN l.vacationBalance b
+             WHERE l.companyId = :companyId
+               AND l.empId IN :empIds
+               AND l.eventType = com.peoplecore.vacation.entity.LedgerEventType.MANUAL_GRANT
+               AND b.balanceYear = :year
+             GROUP BY l.empId
+            """)
+    List<ManualGrantSumQueryDto> sumManualGrantByEmpsAndYear(@Param("companyId") UUID companyId,
+                                                             @Param("empIds") Collection<Long> empIds,
+                                                             @Param("year") Integer year);
 }

@@ -55,6 +55,19 @@ public class WorkGroupService {
         return WorkGroupDetailResDto.from(workGroup);
     }
 
+    /* 본인 근무그룹 조회 - 휴가 사용 신청 모달 시간 계산/근무요일 판정용 */
+    /* 미배정 사원은 EMPLOYEE_WORK_GROUP_NOT_ASSIGNED 예외 (휴가 신청 전 배정 선행 필요) */
+    @Transactional(readOnly = true)
+    public MyWorkGroupResponseDto getMyWorkGroup(Long empId) {
+        Employee emp = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+        WorkGroup wg = emp.getWorkGroup();
+        if (wg == null) {
+            throw new CustomException(ErrorCode.EMPLOYEE_WORK_GROUP_NOT_ASSIGNED);
+        }
+        return MyWorkGroupResponseDto.from(wg);
+    }
+
 
     /* 근무 그룹 소속 사원 조회 */
     @Transactional(readOnly = true)

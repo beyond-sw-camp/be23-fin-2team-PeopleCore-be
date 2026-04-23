@@ -2,6 +2,8 @@ package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.vacation.dto.CancelRequest;
+import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
+import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.service.VacationRequestService;
@@ -10,9 +12,12 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 /* 휴가 신청 Controller - 사원/관리자 조회 + 취소 */
@@ -27,15 +32,6 @@ public class VacationRequestController {
         this.vacationRequestService = vacationRequestService;
     }
 
-    /* 내 신청 이력 (페이지) - createdAt 내림차순 기본 */
-    @GetMapping("/me")
-    public ResponseEntity<Page<VacationRequestResponse>> listMine(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long empId,
-            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        return ResponseEntity.ok(vacationRequestService.listMine(companyId, empId, pageable));
-    }
-
     /* 관리자 상태별 조회 (페이지) - status = PENDING/APPROVED/REJECTED/CANCELED */
     @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
     @GetMapping("/admin")
@@ -46,17 +42,19 @@ public class VacationRequestController {
         return ResponseEntity.ok(vacationRequestService.listForAdmin(companyId, status, pageable));
     }
 
-    /* 사원 셀프 취소 - PENDING/APPROVED 에서만 가능 (정상 전이) */
-    /* 본인 request 검증은 Service 에서. body 는 optional (reason 없으면 null) */
-    @PostMapping("/{requestId}/cancel")
-    public ResponseEntity<Void> cancelMine(
+    /* 전사 휴가 관리 - 기간 + 상태 복수 필터 페이지 조회 */
+    /* 예: GET /vacation/requests/admin/period?startDate=2026-04-01&endDate=2026-04-05&statuses=PENDING,APPROVED&page=0&size=20 */
+    /* statuses 생략 시 전체 상태. 응답: 사원명/부서/유형/사용옵션/기간/일수/상태 */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @GetMapping("/admin/period")
+    public ResponseEntity<Page<VacationAdminPeriodResponseDto>> listForAdminByPeriod(
             @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long empId,
-            @PathVariable Long requestId,
-            @RequestBody(required = false) CancelRequest body) {
-        String reason = body != null ? body.getReason() : null;
-        vacationRequestService.cancelByEmployee(companyId, empId, requestId, reason);
-        return ResponseEntity.noContent().build();
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(required = false) List<RequestStatus> statuses,
+            @PageableDefault(size = 20) Pageable pageable) {
+        return ResponseEntity.ok(
+                vacationRequestService.listForAdminByPeriod(companyId, startDate, endDate, statuses, pageable));
     }
 
     /* 관리자 직권 취소 - 상태 전이 규칙 우회 (applyByAdmin) */
@@ -69,5 +67,14 @@ public class VacationRequestController {
             @RequestBody CancelRequest body) {
         vacationRequestService.cancelByAdmin(companyId, managerId, requestId, body.getReason());
         return ResponseEntity.noContent().build();
+    }
+
+    /* 본인 보유 휴가 유형 - 휴가 사용 신청 모달 드롭다운 */
+    /* Balance 존재 + isActive 유형만. 잔여량/선사용 가능 판단은 프론트 */
+    @GetMapping("/my-vacation-types")
+    public ResponseEntity<List<MyVacationTypeResponseDto>> listMyVacationTypes(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId) {
+        return ResponseEntity.ok(vacationRequestService.listMyVacationTypes(companyId, empId));
     }
 }

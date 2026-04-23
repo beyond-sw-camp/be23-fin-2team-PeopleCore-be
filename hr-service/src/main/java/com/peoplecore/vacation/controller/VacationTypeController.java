@@ -1,6 +1,7 @@
 package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
+import com.peoplecore.vacation.dto.VacationTypeReorderRequestDto;
 import com.peoplecore.vacation.dto.VacationTypeRequest;
 import com.peoplecore.vacation.dto.VacationTypeResponse;
 import com.peoplecore.vacation.service.VacationTypeService;
@@ -57,6 +58,17 @@ public class VacationTypeController {
             @PathVariable Long typeId,
             @RequestBody VacationTypeRequest request) {
         return ResponseEntity.ok(vacationTypeService.updateDisplay(companyId, typeId, request));
+    }
+
+    /* 일괄 재정렬 - 드래그 앤 드롭 결과 반영. 시스템 예약 유형도 순서 변경 가능 */
+    /* Body: { "items": [{ "typeId": 5, "sortOrder": 1 }, ...] } */
+    /* 응답: 재정렬 적용된 전체 유형 목록 (sortOrder 오름차순) */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @PutMapping("/reorder")
+    public ResponseEntity<List<VacationTypeResponse>> reorder(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestBody VacationTypeReorderRequestDto request) {
+        return ResponseEntity.ok(vacationTypeService.reorder(companyId, request));
     }
 
     /* 비활성화 - 기존 잔여는 사용 가능, 신규 신청만 막음 */

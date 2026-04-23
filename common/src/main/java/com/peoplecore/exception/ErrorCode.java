@@ -202,8 +202,6 @@ public enum ErrorCode {
     /* 연차 정책 */
     VACATION_POLICY_NOT_FOUND(404, "연차 정책이 존재하지 않습니다."),
     VACATION_POLICY_DUPLICATED(409, "연차 정책이 중복 존재합니다. 관리자에게 문의하세요."),
-    VACATION_POLICY_FISCAL_START_REQUIRED(400, "회계연도 시작일(mm-dd)을 지정해 주세요."),
-    VACATION_POLICY_FISCAL_START_INVALID(400, "회계연도 시작일 형식이 올바르지 않습니다. (예: 01-01)"),
     VACATION_RULE_NOT_FOUND(404, "연차 발생 규칙이 존재하지 않습니다."),
 
     OVERTIME_REQUEST_NOT_FOUND(404, "초과근무 신청을 찾을 수 없습니다"),
@@ -235,6 +233,7 @@ public enum ErrorCode {
     VACATION_POLICY_NOTICE_ORDER_INVALID(400, "2차 통지는 1차 통지보다 만료일에 가까워야 합니다."),
     VACATION_BALANCE_CAP_EXCEEDED(409, "연 최대 적립 일수를 초과했습니다."),
     VACATION_BALANCE_INSUFFICIENT(409, "휴가 잔여가 부족합니다."),
+    VACATION_BALANCE_NOT_FOUND(404, "휴가 잔여 정보를 찾을 수 없습니다."),
     VACATION_BALANCE_PENDING_INSUFFICIENT(500, "잔여 대기 일수 정합성 오류 — 관리자 문의 필요."),
     VACATION_BALANCE_USED_INSUFFICIENT(500, "잔여 사용 일수 정합성 오류 — 관리자 문의 필요."),
     VACATION_TYPE_SYSTEM_RESERVED(400, "시스템 예약 휴가 유형은 변경/삭제할 수 없습니다."),
@@ -250,6 +249,7 @@ public enum ErrorCode {
     VACATION_REQ_BIRTH_DATE_REQUIRED(400, "배우자 출산휴가는 출산일(출산 예정일) 입력이 필요합니다."),
     VACATION_REQ_PREGNANCY_WEEKS_INVALID(400, "임신 주수는 1 이상이어야 합니다."),
     VACATION_REQ_DAYS_MISMATCH(400, "요청 일수와 유형별 자동 산정 일수가 일치하지 않습니다."),
+    CONCURRENT_REQUEST_LOCK_FAILED(409, "동시 요청 처리 중입니다. 잠시 후 다시 시도해주세요."),
 
     /* 배치 관리자 */
     BATCH_JOB_NOT_SUPPORTED(400, "지원하지 않는 배치 Job 입니다."),

@@ -3,6 +3,7 @@ package com.peoplecore.vacation.service;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.vacation.dto.VacationTypeReorderRequestDto;
 import com.peoplecore.vacation.dto.VacationTypeRequest;
 import com.peoplecore.vacation.dto.VacationTypeResponse;
 import com.peoplecore.vacation.entity.GenderLimit;
@@ -18,7 +19,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -156,6 +159,50 @@ public class VacationTypeService {
         VacationType type = loadWithCompanyCheck(companyId, typeId);
         type.activate();
         log.info("[VacationType] 활성화 - typeId={}", typeId);
+    }
+
+    /* 일괄 재정렬 - 드래그 앤 드롭 결과 반영. 시스템 예약 유형도 순서 변경 허용 */
+    /* 1. 요청 items 비어있으면 no-op */
+    /* 2. typeIds 일괄 조회 → 타 회사 소속/존재하지 않는 ID 포함 시 VACATION_TYPE_NOT_FOUND */
+    /* 3. typeId → sortOrder map 으로 빠른 매칭 후 엔티티별 updateSortOrder 호출 */
+    /* 4. 개별 save 불필요 - 영속성 컨텍스트 dirty checking 으로 TX 커밋 시 일괄 UPDATE */
+    @Transactional
+    public List<VacationTypeResponse> reorder(UUID companyId, VacationTypeReorderRequestDto request) {
+        List<VacationTypeReorderRequestDto.Item> items = request.getItems();
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+
+        // 요청 items → typeId→sortOrder map. 중복 typeId 요청 시 나중 값이 최종값
+        Map<Long, Integer> targetOrderMap = new HashMap<>();
+        for (VacationTypeReorderRequestDto.Item item : items) {
+            if (item.getTypeId() == null || item.getSortOrder() == null) {
+                throw new CustomException(ErrorCode.BAD_REQUEST);
+            }
+            targetOrderMap.put(item.getTypeId(), item.getSortOrder());
+        }
+
+        // 회사 소속 + 요청 typeId 에 속하는 엔티티 일괄 조회 (IN 쿼리 1회)
+        List<VacationType> types = vacationTypeRepository
+                .findAllByCompanyIdAndTypeIdIn(companyId, List.copyOf(targetOrderMap.keySet()));
+        if (types.size() != targetOrderMap.size()) {
+            // 존재하지 않거나 타 회사 소속인 typeId 가 포함됨 → 일관된 NOT_FOUND 로 통일 (권한 누수 방지)
+            log.warn("[VacationType] 재정렬 - 존재하지 않거나 타 회사 typeId 포함. company={}, requested={}, found={}",
+                    companyId, targetOrderMap.keySet(), types.stream().map(VacationType::getTypeId).toList());
+            throw new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND);
+        }
+
+        // 엔티티별 sortOrder 적용. 시스템 예약 차단 없음 (순서 변경은 허용)
+        for (VacationType type : types) {
+            type.updateSortOrder(targetOrderMap.get(type.getTypeId()));
+        }
+        log.info("[VacationType] 일괄 재정렬 - companyId={}, count={}", companyId, types.size());
+
+        // 응답은 sortOrder 적용 후 재정렬된 전체 목록 반환 (프론트가 즉시 재렌더 가능)
+        return vacationTypeRepository.findAllByCompanyIdOrderBySortOrderAsc(companyId)
+                .stream()
+                .map(VacationTypeResponse::from)
+                .toList();
     }
 
     /* 물리 삭제 - 완전한 DELETE. 잔여/신청 이력 0 건일 때만 허용 */

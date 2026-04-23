@@ -152,7 +152,6 @@ public class EmployeeService {
                 .empEmail(fullEmail)
                 .empRole(requestDto.getEmpRole())
                 .empPassword(passwordEncoder.encode(rawPassword))
-                .empMailboxSize(requestDto.getEmpMailboxSize()) //사용. 5gb고정 하드 코딩// 커스��� 고려
                 .empStatus(EmpStatus.ACTIVE)
                 .workGroup(workGroup)
                 .workGroupAssignedAt(LocalDateTime.now())
@@ -273,8 +272,7 @@ public class EmployeeService {
                 dept,
                 grade,
                 title,
-                requestDto.getEmpRole(),
-                requestDto.getEmpMailboxSize()
+                requestDto.getEmpRole()
         );
 
         return EmpDetailResponseDto.from(employee);

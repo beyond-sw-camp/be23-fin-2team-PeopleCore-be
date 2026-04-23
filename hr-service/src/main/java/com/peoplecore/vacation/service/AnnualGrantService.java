@@ -65,7 +65,7 @@ public class AnnualGrantService {
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_RULE_NOT_FOUND));
 
         BigDecimal grantDays = BigDecimal.valueOf(rule.getGrantDays());
-        grantAndRecord(companyId, emp, annualType, today, grantDays, "HIRE 근속 " + yearsOfService + "년");
+        grantAndRecord(companyId, emp, annualType, policy, today, grantDays, "HIRE 근속 " + yearsOfService + "년");
     }
 
     /* FISCAL 정책 - 회계연도 시작일 당일 전 사원 처리 */
@@ -136,7 +136,7 @@ public class AnnualGrantService {
         log.info("[AnnualGrant-FISCAL-FIRST] empId={}, hireDate={}, covered={}/{}={}, grantDays={}",
                 emp.getEmpId(), hireDate, coveredDays, totalBizDays, ratio, grantDays);
 
-        grantAndRecord(companyId, emp, annualType, today, grantDays,
+        grantAndRecord(companyId, emp, annualType, policy, today, grantDays,
                 "FISCAL 첫해 비례 (" + coveredDays + "/" + totalBizDays + ")");
     }
 
@@ -148,14 +148,16 @@ public class AnnualGrantService {
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_RULE_NOT_FOUND));
 
         BigDecimal grantDays = BigDecimal.valueOf(rule.getGrantDays());
-        grantAndRecord(companyId, emp, annualType, today, grantDays,
+        grantAndRecord(companyId, emp, annualType, policy, today, grantDays,
                 "FISCAL 근속 " + yearsOfService + "년");
     }
 
     /* 공통 - Balance createNew 또는 기존 + accrue + INITIAL_GRANT Ledger */
     /* balance_year = today.getYear(), expires_at = today + 1년 - 1일 (만료 잡이 사용) */
+    /* 미리쓰기 허용 정책 ON 회사는 전년 available 음수만큼 당해 total 에서 상쇄 (applyAdvanceOffset + ADVANCE_OFFSET Ledger) */
     private void grantAndRecord(UUID companyId, Employee emp, VacationType annualType,
-                                LocalDate today, BigDecimal grantDays, String reason) {
+                                VacationPolicy policy, LocalDate today,
+                                BigDecimal grantDays, String reason) {
         Integer balanceYear = today.getYear();
         LocalDate expiresAt = today.plusYears(1).minusDays(1);
 
@@ -166,11 +168,40 @@ public class AnnualGrantService {
                                 companyId, annualType, emp, balanceYear, today, expiresAt)));
 
         BigDecimal before = balance.getTotalDays();
-        balance.accrue(grantDays,grantDays);
+        balance.accrue(grantDays, grantDays);
         BigDecimal after = balance.getTotalDays();
         vacationLedgerRepository.save(VacationLedger.ofInitialGrant(balance, grantDays, before, after));
 
+        // 미리쓰기 허용 회사: 전년 available 음수분을 당해 balance total 에서 차감
+        if (policy.isAdvanceUseActive()) {
+            applyPrevYearAdvanceOffset(companyId, emp, annualType, balanceYear, balance);
+        }
+
         log.info("[AnnualGrant] 연차 발생 - empId={}, days={}, total={}, reason={}",
-                emp.getEmpId(), grantDays, after, reason);
+                emp.getEmpId(), grantDays, balance.getTotalDays(), reason);
+    }
+
+    /* 전년도 동일 유형 balance 의 available 음수분을 당해 balance total 에서 차감 */
+    /* 전년 row 없거나 available >= 0 이면 no-op (땡겨쓴 기록 없음) */
+    /* applyAdvanceOffset 은 total < days 이어도 예외 없이 음수 허용 → total 음수 가능 */
+    private void applyPrevYearAdvanceOffset(UUID companyId, Employee emp, VacationType annualType,
+                                            Integer currentYear, VacationBalance current) {
+        vacationBalanceRepository
+                .findOne(companyId, emp.getEmpId(), annualType.getTypeId(), currentYear - 1)
+                .ifPresent(prev -> {
+                    BigDecimal prevAvail = prev.getAvailableDays();
+                    if (prevAvail.signum() >= 0) return; // 양수/0 이면 이월 없음 (정책 "이월 X")
+
+                    BigDecimal offset = prevAvail.negate(); // 음수 → 양수 (차감량)
+                    BigDecimal before = current.getTotalDays();
+                    current.applyAdvanceOffset(offset);
+                    BigDecimal after = current.getTotalDays();
+                    vacationLedgerRepository.save(VacationLedger.ofAdvanceOffset(
+                            current, offset, before, after,
+                            "전년 미리쓴 연차 " + offset + "일 상쇄"));
+
+                    log.info("[AnnualGrant-Offset] empId={}, prevAvail={}, offset={}, afterTotal={}",
+                            emp.getEmpId(), prevAvail, offset, after);
+                });
     }
 }

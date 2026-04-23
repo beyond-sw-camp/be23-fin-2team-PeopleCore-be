@@ -44,6 +44,8 @@ public class ApprovalAttachmentService {
      */
     @Transactional
     public List<AttachmentResponse> uploadAttachments(UUID companyId, Long empId, Long docId, List<MultipartFile> files) {
+        log.info("[첨부 업로드 시작] docId={}, empId={}, fileCount={}", docId, empId, files.size());
+
         ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId)
                 .orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
@@ -61,6 +63,8 @@ public class ApprovalAttachmentService {
 
             /* MinIO에 파일 업로드 */
             minioService.uploadAttachment(objectName, file);
+            log.info("[MinIO 업로드 완료] objectName={}, fileName={}, size={}",
+                    objectName, file.getOriginalFilename(), file.getSize());
 
             /* DB에 메타데이터 저장 */
             ApprovalAttachment attachment = ApprovalAttachment.builder()
@@ -73,12 +77,14 @@ public class ApprovalAttachmentService {
                     .build();
 
             attachmentRepository.save(attachment);
+            log.info("[DB 저장 완료] attachId={}, docId={}", attachment.getAttachId(), docId);
 
             /* Pre-signed URL 포함하여 응답 */
             String fileUrl = minioService.getPresignedUrl(objectName);
             responses.add(AttachmentResponse.from(attachment, fileUrl));
         }
 
+        log.info("[첨부 업로드 전체 완료] docId={}, savedCount={}", docId, responses.size());
         return responses;
     }
 
