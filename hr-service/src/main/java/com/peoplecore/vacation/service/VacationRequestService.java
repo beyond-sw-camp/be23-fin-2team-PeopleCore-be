@@ -202,7 +202,8 @@ public class VacationRequestService {
                 event.getApprovalDocId(), group.size(), currentStatus, newStatus, event.getManagerId());
     }
 
-    /* 전사 휴가 관리 - 기간 교집합 + 상태 복수 필터 페이지 */
+    /* 전사 휴가 관리 - 기간 교집합 + 상태 필터 / 사원별 요약 페이지 */
+    /* 페이지 단위 = 사원(중복 제거). totalElements = 기간 내 휴가자 수 */
     /* statuses null or 빈 배열 이면 상태 필터 없이 전체. 경계 포함: startDate 00:00 ~ endDate 23:59:59 */
     @Transactional(readOnly = true)
     public Page<VacationAdminPeriodResponseDto> listForAdminByPeriod(UUID companyId,
@@ -214,8 +215,7 @@ public class VacationRequestService {
         LocalDateTime periodEnd = endDate.atTime(23, 59, 59);
 
         return vacationRequestQueryRepository
-                .findByCompanyAndPeriodAndStatuses(companyId, periodStart, periodEnd, statuses, pageable)
-                .map(VacationAdminPeriodResponseDto::from);
+                .findByCompanyAndPeriodAndStatuses(companyId, periodStart, periodEnd, statuses, pageable);
     }
 
     /* 관리자 상태별 조회 페이지 - Type + Employee fetch join */

@@ -2,6 +2,7 @@ package com.peoplecore.vacation.repository;
 
 import com.peoplecore.attendance.dto.VacationSlice;
 import com.peoplecore.employee.domain.QEmployee;
+import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
 import com.peoplecore.vacation.entity.QVacationRequest;
 import com.peoplecore.vacation.entity.QVacationType;
 import com.peoplecore.vacation.entity.RequestStatus;
@@ -109,34 +110,49 @@ public class VacationRequestQueryRepository {
      * N+1 방지: VacationType fetch join (empName/deptName 은 스냅샷 컬럼 사용 → Employee 조인 불필요)
      * 정렬: requestStartAt 오름차순 (일정순 - 달력 보기 편함)
      */
-    public Page<VacationRequest> findByCompanyAndPeriodAndStatuses(UUID companyId,
-                                                                   LocalDateTime periodStart,
-                                                                   LocalDateTime periodEnd,
-                                                                   List<RequestStatus> statuses,
-                                                                   Pageable pageable) {
+    /*
+     * 전사 휴가 관리 기간 조회 - 사원별 요약 (GROUP BY emp_id)
+     * 같은 사원이 기간 내 여러 슬롯/결재 있어도 1 entry 로 묶음 ("몇 명이 휴가인가" UX)
+     * 정렬: 사원의 MIN(requestStartAt) 오름차순
+     * totalElements = 기간 내 휴가자 distinct 수
+     */
+    public Page<VacationAdminPeriodResponseDto> findByCompanyAndPeriodAndStatuses(UUID companyId,
+                                                                                  LocalDateTime periodStart,
+                                                                                  LocalDateTime periodEnd,
+                                                                                  List<RequestStatus> statuses,
+                                                                                  Pageable pageable) {
         QVacationRequest r = QVacationRequest.vacationRequest;
-        QVacationType t = QVacationType.vacationType;
 
         BooleanExpression statusPredicate = (statuses == null || statuses.isEmpty())
                 ? null
                 : r.requestStatus.in(statuses);
 
-        List<VacationRequest> content = queryFactory
-                .selectFrom(r)
-                .join(r.vacationType, t).fetchJoin()
+        // 1단계: 사원별 요약 페이지 - 합계/시점 범위/건수를 GROUP BY 로 한 번에 집계
+        List<VacationAdminPeriodResponseDto> content = queryFactory
+                .select(Projections.constructor(VacationAdminPeriodResponseDto.class,
+                        r.employee.empId,
+                        r.requestEmpName.min(),           // 스냅샷 중 하나 (동일 empId 면 동일)
+                        r.requestEmpDeptName.min(),       // 스냅샷 중 하나
+                        r.requestUseDays.sum(),           // 기간 내 총 사용일수
+                        r.requestStartAt.min(),           // 최초 시작
+                        r.requestEndAt.max(),             // 최종 종료
+                        r.count()))                       // 기간 내 슬롯 건수
+                .from(r)
                 .where(
                         r.companyId.eq(companyId),
                         r.requestStartAt.loe(periodEnd),
                         r.requestEndAt.goe(periodStart),
                         statusPredicate
                 )
-                .orderBy(r.requestStartAt.asc())
+                .groupBy(r.employee.empId)
+                .orderBy(r.requestStartAt.min().asc())
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
                 .fetch();
 
+        // 2단계: 총 휴가자 수 (distinct empId) - "몇 명" count 제공
         Long total = queryFactory
-                .select(r.count())
+                .select(r.employee.empId.countDistinct())
                 .from(r)
                 .where(
                         r.companyId.eq(companyId),

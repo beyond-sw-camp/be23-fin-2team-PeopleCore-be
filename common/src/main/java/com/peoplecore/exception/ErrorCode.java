@@ -108,7 +108,12 @@ public enum ErrorCode {
     SYSTEM_PAY_ITEM_NOT_DELETABLE(400, "시스템 급여항목은 삭제할 수 없습니다"),
     PROTECTED_PAY_ITEM_NOT_EDITABLE(400, "보호 항목은 수정할 수 없습니다."),
     PROTECTED_PAY_ITEM_NOT_DELETABLE(400,"법정수당 산정 기초 항목은 삭제할 수 없습니다."),
-    APPROVAL_TEMPLATE_NOT_FOUND(404, "goekd 해당 전자결재 양식을 찾을 수 없습니다."),
+    APPROVAL_TEMPLATE_NOT_FOUND(404, "해당 전자결재 양식을 찾을 수 없습니다."),
+    APPROVAL_ACCESS_DENIED(403,"결재 권한이 없습니다."),
+    APPROVAL_NOT_ROLE(403,"결재자만 승인 가능합니다."),
+    APPROVAL_ALREADY_APPROVED(403,"이미 승인된 결재선입니다."),
+    APPROVAL_PRE_APPROVAL_NOT_ALLOWED(403, "이 양식은 전결이 허용되지 않습니다."),
+
 
     // 연차수당
     LEAVE_ALLOWANCE_NOT_ENABLED(404, "연차수당 법정수당 항목이 설정되어 있지 않습니다."),
