@@ -6,7 +6,6 @@ import com.peoplecore.approval.dto.DocumentUpdateRequest;
 import com.peoplecore.approval.service.ApprovalDocumentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,7 +25,7 @@ public class ApprovalDocumentController {
     }
 
     /* 문서 기안 - 문서 생성 + 결재선 + 채번 + 첨부 업로드 (한 요청) */
-    @PostMapping(consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PostMapping
     public ResponseEntity<Long> createDocument(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
@@ -50,7 +49,7 @@ public class ApprovalDocumentController {
     }
 
     /* 문서 수정 (임시저장 문서) + 신규 첨부 추가 */
-    @PutMapping(value = "/{docId}", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PutMapping("/{docId}")
     public ResponseEntity<Void> updateDocument(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
@@ -72,7 +71,7 @@ public class ApprovalDocumentController {
     }
 
     /* 임시 저장 - Draft + 첨부 업로드 */
-    @PostMapping(value = "/temp", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PostMapping("/temp")
     public ResponseEntity<Long> saveTempDocument(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
@@ -87,7 +86,7 @@ public class ApprovalDocumentController {
     }
 
     /* 임시저장 수정 + 신규 첨부 추가 */
-    @PutMapping(value = "/temp/{docId}", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PutMapping("/temp/{docId}")
     public ResponseEntity<Void> updateTempDocument(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
@@ -110,7 +109,7 @@ public class ApprovalDocumentController {
     }
 
     /** 반려 문서 재기안 - 새 문서 row INSERT + 신규 추가 첨부 업로드 */
-    @PostMapping(value = "/{docId}/resubmit", consumes = {MediaType.MULTIPART_FORM_DATA_VALUE})
+    @PostMapping("/{docId}/resubmit")
     public ResponseEntity<Long> resubmitDocument(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
