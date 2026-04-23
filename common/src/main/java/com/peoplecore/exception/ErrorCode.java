@@ -249,6 +249,7 @@ public enum ErrorCode {
     VACATION_REQ_BIRTH_DATE_REQUIRED(400, "배우자 출산휴가는 출산일(출산 예정일) 입력이 필요합니다."),
     VACATION_REQ_PREGNANCY_WEEKS_INVALID(400, "임신 주수는 1 이상이어야 합니다."),
     VACATION_REQ_DAYS_MISMATCH(400, "요청 일수와 유형별 자동 산정 일수가 일치하지 않습니다."),
+    VACATION_REQ_ITEMS_EMPTY(400, "휴가 슬롯(vacReqItems)이 비어있습니다."),
     CONCURRENT_REQUEST_LOCK_FAILED(409, "동시 요청 처리 중입니다. 잠시 후 다시 시도해주세요."),
 
     /* 배치 관리자 */

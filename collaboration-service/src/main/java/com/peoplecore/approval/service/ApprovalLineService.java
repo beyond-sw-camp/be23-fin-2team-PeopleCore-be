@@ -17,6 +17,7 @@ import com.peoplecore.common.service.MinioService;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.event.ResignApprovedEvent;
 import com.peoplecore.event.SeveranceApprovalResultEvent;
+import com.peoplecore.event.VacationSlotItem;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -413,33 +414,42 @@ public class ApprovalLineService {
     }
 
     /* 휴가 사용 최종 승인 시 본인 휴가 캘린더에 이벤트 생성 */
-    /* useDay 정수 → 종일 / 0.5(반차), 0.25(반반차) → 시간 지정 */
-    /* docData 파싱 실패 시 로그만 남기고 승인 플로우는 계속 진행 (롤백 X) */
+    /* items 배열 순회 → 슬롯 1건당 캘린더 이벤트 1건. 중간 반차가 있어도 연속으로 이어붙지 않음 */
+    /* 각 슬롯: useDay 정수면 종일, 0.5/0.25 면 시간 지정 이벤트 */
+    /* docData 파싱 실패 or items 비어있으면 로그만 남기고 승인 플로우는 계속 진행 (롤백 X) */
     private void createVacationCalendarEvent(ApprovalDocument document) {
         try {
             VacationUseDocData data = objectMapper.readValue(document.getDocData(), VacationUseDocData.class);
+            List<VacationSlotItem> items = data.getVacReqItems();
+            if (items == null || items.isEmpty()) {
+                log.warn("[CalendarEvent] 휴가 슬롯 비어있음 - docId={} 이벤트 생성 skip", document.getDocId());
+                return;
+            }
+
             MyCalendars vacationCalendar = myCalendarService.ensureVacationCalendar(
                     document.getCompanyId(), document.getEmpId());
 
-            // 소수부 없으면 종일, 0.5/0.25 면 시간 단위 이벤트
-            BigDecimal useDay = data.getVacReqUseDay();
-            boolean isAllDay = useDay != null && useDay.stripTrailingZeros().scale() <= 0;
+            // 슬롯별 독립 이벤트 - 연속 머지 여부는 프론트 렌더 단계에서 판단
+            items.forEach(item -> {
+                BigDecimal useDay = item.getUseDay();
+                boolean isAllDay = useDay != null && useDay.stripTrailingZeros().scale() <= 0;
 
-            Events event = Events.builder()
-                    .empId(document.getEmpId())
-                    .title("[휴가] " + document.getDocTitle())
-                    .description(data.getVacReqReason())
-                    .startAt(data.getVacReqStartat())
-                    .endAt(data.getVacReqEndat())
-                    .isAllDay(isAllDay)
-                    .isPublic(true)
-                    .isAllEmployees(false)
-                    .companyId(document.getCompanyId())
-                    .myCalendars(vacationCalendar)
-                    .build();
-            eventsRepository.save(event);
-            log.info("[CalendarEvent] 휴가 이벤트 생성 - docId={}, empId={}, eventsId={}, isAllDay={}",
-                    document.getDocId(), document.getEmpId(), event.getEventsId(), isAllDay);
+                Events event = Events.builder()
+                        .empId(document.getEmpId())
+                        .title("[휴가] " + document.getDocTitle())
+                        .description(data.getVacReqReason())
+                        .startAt(item.getStartAt())
+                        .endAt(item.getEndAt())
+                        .isAllDay(isAllDay)
+                        .isPublic(true)
+                        .isAllEmployees(false)
+                        .companyId(document.getCompanyId())
+                        .myCalendars(vacationCalendar)
+                        .build();
+                eventsRepository.save(event);
+                log.info("[CalendarEvent] 휴가 슬롯 이벤트 생성 - docId={}, empId={}, eventsId={}, start={}, isAllDay={}",
+                        document.getDocId(), document.getEmpId(), event.getEventsId(), item.getStartAt(), isAllDay);
+            });
         } catch (Exception e) {
             log.error("[CalendarEvent] 휴가 이벤트 생성 실패 - docId={}, err={}",
                     document.getDocId(), e.getMessage(), e);

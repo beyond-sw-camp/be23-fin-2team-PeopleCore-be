@@ -4,6 +4,7 @@ import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.event.VacationApprovalDocCreatedEvent;
 import com.peoplecore.event.VacationApprovalResultEvent;
+import com.peoplecore.event.VacationSlotItem;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
@@ -30,6 +31,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -72,15 +74,21 @@ public class VacationRequestService {
         this.vacationBalanceQueryRepository = vacationBalanceQueryRepository;
     }
 
-    /* Kafka(vacation-approval-doc-created) 진입 - PENDING INSERT + Balance markPending */
+    /* Kafka(vacation-approval-doc-created) 진입 - PENDING row N건 INSERT + Balance markPending 합계 */
     public void createFromApproval(VacationApprovalDocCreatedEvent event) {
-        // 중복 수신 방어 - 같은 결재 문서 재처리 시 no-op
-        Optional<VacationRequest> existing = vacationRequestRepository
+        // 중복 수신 방어 - 같은 approvalDocId 그룹이 이미 존재하면 no-op
+        List<VacationRequest> existing = vacationRequestRepository
                 .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId());
-        if (existing.isPresent()) {
-            log.info("[VacationRequest] docCreated 중복 수신 - 기존 requestId={}, docId={}",
-                    existing.get().getRequestId(), event.getApprovalDocId());
+        if (!existing.isEmpty()) {
+            log.info("[VacationRequest] docCreated 중복 수신 skip - docId={}, groupSize={}",
+                    event.getApprovalDocId(), existing.size());
             return;
+        }
+
+        // items 필수 - 비어있으면 즉시 실패 (Consumer @RetryableTopic excludes 에 CustomException 포함)
+        List<VacationSlotItem> items = event.getItems();
+        if (items == null || items.isEmpty()) {
+            throw new CustomException(ErrorCode.VACATION_REQ_ITEMS_EMPTY);
         }
 
         Employee employee = employeeRepository.findById(event.getEmpId())
@@ -88,24 +96,28 @@ public class VacationRequestService {
         VacationType vacationType = vacationTypeRepository.findById(event.getInfoId())
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND));
 
-        // 성별 제한 검증
+        // 성별 제한 검증 - 임신/출산 등 성별 한정 유형 조기 차단
         if (!vacationType.getGenderLimit().allows(employee.getEmpGender())) {
             throw new CustomException(ErrorCode.VACATION_TYPE_GENDER_NOT_ALLOWED);
         }
 
-        /* Balance 조회 - 없고 미리쓰기 허용이면 자동 생성, 비허용이면 기존대로 INSUFFICIENT */
-        /* 자동 생성 시 expiresAt 패턴은 기존 MonthlyAccrual/AnnualGrant 의 createNew 와 동일 */
-        Integer balanceYear = event.getVacReqStartat().toLocalDate().getYear();
+        // 그룹 합계 - Balance 차감/Ledger 기록 단위
+        BigDecimal totalDays = items.stream()
+                .map(VacationSlotItem::getUseDay)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // Balance 조회 - 첫 슬롯 기준 연도. 없으면 미리쓰기 정책에 따라 자동 생성 or 엄격 차단
+        Integer balanceYear = items.get(0).getStartAt().toLocalDate().getYear();
         boolean allowNegative = isAdvanceUseAllowed(event.getCompanyId(), vacationType);
         VacationBalance balance = vacationBalanceRepository
                 .findOne(event.getCompanyId(), employee.getEmpId(), vacationType.getTypeId(), balanceYear)
                 .orElseGet(() -> {
-                    /* 미리쓰기 비허용(법정휴가 / 정책 OFF) → 기존 엄격 모드 유지 */
+                    // 미리쓰기 비허용(법정휴가 / 정책 OFF) → 기존 엄격 모드 유지
                     if (!allowNegative) {
                         throw new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT);
                     }
                     LocalDate today = LocalDate.now();
-                    /* 월차: hireDate + 1년 / 연차: today + 1년 - 1일 (기존 스케줄러 규칙과 동일) */
+                    // 월차: hireDate+1년 / 연차: today+1년-1일 (스케줄러 규칙과 동일)
                     LocalDate expiresAt = vacationType.isMonthly()
                             ? employee.getEmpHireDate().plusYears(1)
                             : today.plusYears(1).minusDays(1);
@@ -116,64 +128,78 @@ public class VacationRequestService {
                                     event.getCompanyId(), vacationType, employee,
                                     balanceYear, today, expiresAt));
                 });
-        balance.markPending(event.getVacReqUseDay(), allowNegative);
+
+        // 합계로 한 번만 markPending - 그룹 불변식(모든 슬롯 동일 상태) 유지
+        balance.markPending(totalDays, allowNegative);
 
         AbstractApprovalBoundRequest.EmployeeSnapshot snapshot = new AbstractApprovalBoundRequest.EmployeeSnapshot(
                 event.getEmpName(), event.getDeptName(), event.getEmpGrade(), event.getEmpTitle());
 
-        VacationRequest request = VacationRequest.createPending(
-                event.getCompanyId(), vacationType, employee, snapshot,
-                event.getVacReqStartat(), event.getVacReqEndat(),
-                event.getVacReqUseDay(), event.getVacReqReason(), event.getApprovalDocId());
-        VacationRequest saved = vacationRequestRepository.save(request);
+        // 슬롯별 row insert - 같은 approvalDocId 로 그룹핑 (findByCompanyIdAndApprovalDocId 그룹키)
+        items.forEach(item -> {
+            VacationRequest request = VacationRequest.createPending(
+                    event.getCompanyId(), vacationType, employee, snapshot,
+                    item.getStartAt(), item.getEndAt(),
+                    item.getUseDay(), event.getVacReqReason(), event.getApprovalDocId());
+            vacationRequestRepository.save(request);
+        });
 
-        log.info("[VacationRequest] docCreated → INSERT - requestId={}, docId={}, empId={}, typeId={}, useDays={}",
-                saved.getRequestId(), saved.getApprovalDocId(), employee.getEmpId(),
-                vacationType.getTypeId(), event.getVacReqUseDay());
+        log.info("[VacationRequest] docCreated → INSERT - docId={}, empId={}, typeId={}, slotCount={}, totalDays={}",
+                event.getApprovalDocId(), employee.getEmpId(),
+                vacationType.getTypeId(), items.size(), totalDays);
     }
 
-    /* Kafka(vacation-approval-result) 진입 - 상태 전이 + Balance 반영 */
-    /* 멱등: 이미 newStatus 로 전이된 건 조용히 skip (재수신 방어) — 첫 처리 결과(manager/processedAt/rejectReason) 보존 */
-    /* CANCELED 는 기안자 회수 경로. PENDING 에서만 수신 가정 (APPROVED→CANCELED 는 관리자 직권 API 로만 처리) */
+    /* Kafka(vacation-approval-result) 진입 - 그룹 전체 상태 전이 + Balance 그룹 합계 반영 */
+    /* 멱등: 이미 newStatus 로 전이된 그룹은 no-op (첫 처리 결과 보존) */
+    /* CANCELED 는 기안자 회수 경로. PENDING 에서만 수신 가정 (APPROVED→CANCELED 는 관리자 직권 API) */
     public void applyApprovalResult(VacationApprovalResultEvent event) {
-        // 조회 키는 approvalDocId - publisher 가 vacReqId 를 채우지 못해 NULL 로 들어옴
-        VacationRequest request = vacationRequestRepository
-                .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId())
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND));
+        List<VacationRequest> group = vacationRequestRepository
+                .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId());
+        if (group.isEmpty()) {
+            throw new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND);
+        }
 
         RequestStatus newStatus = RequestStatus.valueOf(event.getStatus());
+        RequestStatus currentStatus = group.get(0).getRequestStatus();   // 그룹 불변식: 전원 동일 상태
 
         // 멱등 가드: 이미 같은 상태면 첫 처리 결과 보존하고 no-op
-        if (request.getRequestStatus() == newStatus) {
-            log.info("[VacationRequest] applyApprovalResult 중복 수신 skip - requestId={}, status={}",
-                    request.getRequestId(), newStatus);
+        if (currentStatus == newStatus) {
+            log.info("[VacationRequest] applyApprovalResult 중복 수신 skip - docId={}, status={}",
+                    event.getApprovalDocId(), newStatus);
             return;
         }
 
-        RequestStatus currentStatus = request.getRequestStatus();     // apply 전 캡처 (balance 처리 분기 근거)
         Employee manager = (event.getManagerId() != null)
                 ? employeeRepository.findById(event.getManagerId())
                     .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND))
                 : null;
 
-        Integer balanceYear = request.getRequestStartAt().toLocalDate().getYear();
+        // Balance 조회 - 그룹 대표(첫 row) 기준. 모든 row 가 같은 empId/typeId/year 공유
+        VacationRequest first = group.get(0);
+        Integer balanceYear = first.getRequestStartAt().toLocalDate().getYear();
         VacationBalance balance = vacationBalanceRepository
-                .findOne(request.getCompanyId(),
-                         request.getEmployee().getEmpId(),
-                         request.getVacationType().getTypeId(),
+                .findOne(first.getCompanyId(),
+                         first.getEmployee().getEmpId(),
+                         first.getVacationType().getTypeId(),
                          balanceYear)
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_NOT_FOUND));
 
-        // 상태 패턴 위임: currentStatus 가 newStatus 로의 전이 책임. PENDING 만 override, 그 외는 멱등 가드로 이미 걸러짐
-        Optional<VacationLedger> ledgerToSave = currentStatus.kafkaTransitionTo(
-                newStatus, balance, request.getRequestUseDays(),
-                request.getRequestId(), event.getManagerId(), event.getRejectReason());
+        // 그룹 합계 - Balance/Ledger 반영 단위
+        BigDecimal totalDays = group.stream()
+                .map(VacationRequest::getRequestUseDays)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        request.apply(newStatus, manager, event.getRejectReason());  // 상태 전이 커밋
+        // 상태 패턴: 합계로 한 번만 transition. Ledger 참조는 그룹 대표 requestId
+        Optional<VacationLedger> ledgerToSave = currentStatus.kafkaTransitionTo(
+                newStatus, balance, totalDays,
+                first.getRequestId(), event.getManagerId(), event.getRejectReason());
+
+        // 모든 슬롯 row 일괄 전이 (그룹 불변식 유지)
+        group.forEach(r -> r.apply(newStatus, manager, event.getRejectReason()));
         ledgerToSave.ifPresent(vacationLedgerRepository::save);
 
-        log.info("[VacationRequest] 결재 결과 반영 - requestId={}, {}→{}, managerId={}",
-                request.getRequestId(), currentStatus, newStatus, event.getManagerId());
+        log.info("[VacationRequest] 결재 결과 반영 - docId={}, slots={}, {}→{}, managerId={}",
+                event.getApprovalDocId(), group.size(), currentStatus, newStatus, event.getManagerId());
     }
 
     /* 전사 휴가 관리 - 기간 교집합 + 상태 복수 필터 페이지 */
@@ -206,34 +232,51 @@ public class VacationRequestService {
         cancelInternal(request, managerId, reason, true);
     }
 
-    /* 공통 취소 로직 - 상태 패턴 cancelFrom 위임 (releasePending or restore) */
+    /* 공통 취소 로직 - 그룹 일괄 취소. 상태 패턴 cancelFrom 위임 (releasePending or restore) */
     private void cancelInternal(VacationRequest request, Long actorId, String reason, boolean isAdmin) {
-        RequestStatus currentStatus = request.getRequestStatus();   // apply 전 캡처
+        // 그룹 전체 로드 - 불변식: 같은 approvalDocId 의 모든 slot 은 같은 상태
+        List<VacationRequest> group = vacationRequestRepository
+                .findByCompanyIdAndApprovalDocId(request.getCompanyId(), request.getApprovalDocId());
+        if (group.isEmpty()) {
+            throw new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND);
+        }
+
+        RequestStatus currentStatus = group.get(0).getRequestStatus();   // apply 전 캡처
 
         // 회사 스코프 내 actor 조회 - 타 회사 empId 탈취 방어 (Gateway 보장 이중 방어)
         Employee actor = employeeRepository.findByEmpIdAndCompany_CompanyId(actorId, request.getCompanyId())
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-        if (isAdmin) {
-            request.applyByAdmin(RequestStatus.CANCELED, actor, reason);
-        } else {
-            request.apply(RequestStatus.CANCELED, actor, reason);
-        }
+        // 모든 슬롯 일괄 전이
+        group.forEach(r -> {
+            if (isAdmin) {
+                r.applyByAdmin(RequestStatus.CANCELED, actor, reason);
+            } else {
+                r.apply(RequestStatus.CANCELED, actor, reason);
+            }
+        });
 
-        Integer balanceYear = request.getRequestStartAt().toLocalDate().getYear();
+        // Balance 조회 - 그룹 대표 기준
+        VacationRequest first = group.get(0);
+        Integer balanceYear = first.getRequestStartAt().toLocalDate().getYear();
         VacationBalance balance = vacationBalanceRepository
-                .findOne(request.getCompanyId(),
-                         request.getEmployee().getEmpId(),
-                         request.getVacationType().getTypeId(),
+                .findOne(first.getCompanyId(),
+                         first.getEmployee().getEmpId(),
+                         first.getVacationType().getTypeId(),
                          balanceYear)
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_NOT_FOUND));
 
+        // 그룹 합계로 한 번만 cancelFrom (markPending 이 합계였으므로 대칭)
+        BigDecimal totalDays = group.stream()
+                .map(VacationRequest::getRequestUseDays)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
         Optional<VacationLedger> ledgerToSave = currentStatus.cancelFrom(
-                balance, request.getRequestUseDays(), request.getRequestId(), actorId, reason);
+                balance, totalDays, first.getRequestId(), actorId, reason);
         ledgerToSave.ifPresent(vacationLedgerRepository::save);
 
-        log.info("[VacationRequest] 취소 완료 - requestId={}, from={}, actorId={}, isAdmin={}",
-                request.getRequestId(), currentStatus, actorId, isAdmin);
+        log.info("[VacationRequest] 취소 완료 - docId={}, slots={}, from={}, actorId={}, isAdmin={}",
+                first.getApprovalDocId(), group.size(), currentStatus, actorId, isAdmin);
     }
 
     /* 회사 + requestId 단건 조회 - 타 회사 차단 */
