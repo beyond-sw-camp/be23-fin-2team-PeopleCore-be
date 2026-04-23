@@ -1,6 +1,7 @@
 package com.peoplecore.calendar.repository;
 
 import com.peoplecore.calendar.entity.Events;
+import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDateTime;
 import java.util.List;

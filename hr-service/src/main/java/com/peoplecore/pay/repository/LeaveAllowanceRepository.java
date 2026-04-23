@@ -42,4 +42,14 @@ public interface LeaveAllowanceRepository extends JpaRepository<LeaveAllowance, 
             @Param("status") AllowanceStatus status
     );
 
+//    퇴직금 정산을 위한 상태값(CALCULATED/APPLIED)으로 가져와서 service에서 기간 필터링에 사용
+    @Query("SELECT la FROM LeaveAllowance la " +
+            "JOIN FETCH la.employee e " +
+            "WHERE la.company.companyId = :companyId " +
+            "AND la.employee.empId = :empId " +
+            "AND la.status IN (:statuses)")
+    List<LeaveAllowance> findForSeverance(
+            @Param("companyId") UUID companyId,
+            @Param("empId") Long empID,
+            @Param("statuses") List<AllowanceStatus> statuses);
 }

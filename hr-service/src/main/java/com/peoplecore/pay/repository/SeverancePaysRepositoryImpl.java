@@ -8,15 +8,18 @@ import com.peoplecore.pay.enums.DepStatus;
 import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
 import com.peoplecore.pay.enums.PayrollStatus;
+import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
-public class SeveranceRepositoryImpl implements SeveranceRepositoryCustom {
+public class SeverancePaysRepositoryImpl implements SeverancePaysRepositoryCustom {
 //    퇴직금 산정시 필요한 급여데이터를 PayrollDetails + LeaveAllowance 에서 합산 조회
 
     private final JPAQueryFactory queryFactory;
@@ -26,12 +29,12 @@ public class SeveranceRepositoryImpl implements SeveranceRepositoryCustom {
     private final QRetirementPensionDeposits rpd = QRetirementPensionDeposits.retirementPensionDeposits;
 
     @Autowired
-    public SeveranceRepositoryImpl(JPAQueryFactory queryFactory) {
+    public SeverancePaysRepositoryImpl(JPAQueryFactory queryFactory) {
         this.queryFactory = queryFactory;
     }
 
 
-    //    최근 3개월 급여 총액 (지급항목만)
+//    최근 3개월 급여 총액 (지급항목만)
 //    payrollDetails에서 해당 사원 + 해당 월 범위 + PAYMENT타입의 amount 합산 - 공제항목은 제외
     @Override
     public Long sumLast3MonthPay(Long empId, UUID companyId, List<String> months) {
@@ -50,9 +53,13 @@ public class SeveranceRepositoryImpl implements SeveranceRepositoryCustom {
         return result != null ? result : 0L;
     }
 
-    //    직전 1년 상여금 총액
+
+//    직전 1년 상여금 총액
 //    payrollDetails에서 해당 사원 + 12개월(1년) + BONUS 카테고리의 amount 합산
 //    payItemCategory.BONUS 로 필터링
+//    => 법적으로는 정기/고정적으로 지급되는 상여금만 평균임금에 산입 가능하며,
+//    경영/개인성과급 같은 변동성 지급은 제외 대상이 된다.
+//    Bonus의 카테고리를 구분해야 맞지만, 프로젝트 특성상 이를 세분화하지않고 단일 카테고리로 관리.
     @Override
     public Long sumLastYearBonus(Long empId, UUID companyId, List<String> months) {
         Long result = queryFactory
@@ -70,24 +77,9 @@ public class SeveranceRepositoryImpl implements SeveranceRepositoryCustom {
         return result != null ? result : 0L;
     }
 
-    //    연차수당 조회 //TODO : 삭제??
-//    LeaveAllowance에서 해당 사원의 해당 연도 산정금액
-//    퇴직시
-    @Override
-    public Long getAnnualLeaveAllowance(Long empId, UUID companyId, int year) {
-        Long result = queryFactory
-                .select(la.allowanceAmount)
-                .from(la)
-                .where(
-                        la.employee.empId.eq(empId),
-                        la.company.companyId.eq(companyId),
-                        la.year.eq(year)
-                )
-                .fetchOne();
-        return result != null ? result : 0L;
-    }
 
 //    통상임금(월) 조회
+//    통상임금 : 고정/일률/정기적으로 지급되는 임금
     @Override
     public Long sumOrdinaryMonthlyPay(Long empId, UUID companyId){
 //        최근 확정 급여월 조회
@@ -119,15 +111,83 @@ public class SeveranceRepositoryImpl implements SeveranceRepositoryCustom {
         return result != null ? result : 0L;
     }
 
-//    DB형 기적립금 합계
-//    retirementPensionDeposits에서 COMPLETED 상태의 depositAmount합산
+    //  3개월급여총액, 1년상여금총액, DC형적립급합계
+    @Override
+    public Map<Long, Long> sumLast3MonthPayByEmpIds(UUID companyId, List<Long> empIds, List<String> months) {
+        List<Tuple> rows = queryFactory
+                .select(pd.employee.empId, pd.amount.sum())     // empId별 합계
+                .from(pd)
+                .join(pd.payrollRuns, pr)
+                .where(
+                        pd.employee.empId.in(empIds),
+                        pd.company.companyId.eq(companyId),
+                        pr.payYearMonth.in(months),
+                        pd.payItemType.eq(PayItemType.PAYMENT)
+
+                )
+                .groupBy(pd.employee.empId)
+                .fetch();
+
+        return rows.stream().collect(Collectors.toMap(
+                t -> t.get(pd.employee.empId),
+                t -> t.get(pd.amount.sum()) != null ? t.get(pd.amount.sum()) : 0L
+        ));
+    }
+
+    @Override
+    public Map<Long, Long> sumLastYearBonusByEmpIds(UUID companyId, List<Long> empIds, List<String> months) {
+        List<Tuple> rows = queryFactory
+                .select(pd.employee.empId, pd.amount.sum())
+                .from(pd)
+                .join(pd.payrollRuns, pr)
+                .where(
+                        pd.employee.empId.in(empIds),
+                        pd.company.companyId.eq(companyId),
+                        pr.payYearMonth.in(months),
+                        pd.payItemType.eq(PayItemType.PAYMENT),
+                        pd.payItems.payItemCategory.eq(PayItemCategory.BONUS)
+                )
+                .groupBy(pd.employee.empId)
+                .fetch();
+
+        return rows.stream().collect(Collectors.toMap(
+                t -> t.get(pd.employee.empId),
+                t -> t.get(pd.amount.sum()) != null ? t.get(pd.amount.sum()) : 0L
+        ));
+    }
+
+    @Override
+    public Map<Long, Long> sumDcDepositedTotalByEmpIds(UUID companyId, List<Long> empIds) {
+        List<Tuple> rows = queryFactory
+                .select(rpd.employee.empId, rpd.depositAmount.sum())
+                .from(rpd)
+                .where(
+                        rpd.employee.empId.in(empIds),
+                        rpd.company.companyId.eq(companyId),
+                        rpd.depStatus.eq(DepStatus.COMPLETED)
+                )
+                .groupBy(rpd.employee.empId)
+                .fetch();
+
+        return rows.stream().collect(java.util.stream.Collectors.toMap(
+                t -> t.get(rpd.employee.empId),
+                t -> {
+                    Long v = t.get(rpd.depositAmount.sum());
+                    return v != null ? v : 0L;
+                }
+        ));
+    }
+
+
+    //    DB형 기적립금 합계
+//    RetirementPensionDeposits에서 COMPLETED 상태의 depositAmount합산
     @Override
     public Long sumDcDepositedTotal(Long empId, UUID companyId) {
         Long result = queryFactory
                 .select(rpd.depositAmount.sum())
                 .from(rpd)
                 .where(
-                        rpd.empId.eq(empId),
+                        rpd.employee.empId.eq(empId),
                         rpd.company.companyId.eq(companyId),
                         rpd.depStatus.eq(DepStatus.COMPLETED)
                 )

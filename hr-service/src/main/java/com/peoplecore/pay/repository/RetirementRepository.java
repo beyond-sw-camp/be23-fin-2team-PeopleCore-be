@@ -7,7 +7,6 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 import java.util.UUID;
 
-@Repository
 public interface RetirementRepository extends JpaRepository<RetirementSettings, Long> {
     Optional<RetirementSettings> findByCompany_CompanyId(UUID companyId);
 }

@@ -3,7 +3,6 @@ package com.peoplecore.pay.service;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
-import com.peoplecore.attendance.repository.WorkGroupRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.employee.domain.EmpStatus;
@@ -14,9 +13,7 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.*;
 import com.peoplecore.pay.dtos.*;
-import com.peoplecore.pay.enums.LegalCalcType;
-import com.peoplecore.pay.enums.PayItemType;
-import com.peoplecore.pay.enums.PayrollStatus;
+import com.peoplecore.pay.enums.*;
 import com.peoplecore.pay.repository.*;
 import com.peoplecore.pay.transfer.BankTransferFileFactory;
 import com.peoplecore.pay.transfer.BankTransferFileGenerator;
@@ -25,7 +22,6 @@ import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.repository.SalaryContractDetailRepository;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,7 +29,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.LocalTime;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -59,10 +55,11 @@ public class PayrollService {
     private final CommuteRecordRepository commuteRecordRepository;
     private final InsuranceRatesRepository insuranceRatesRepository;
     private final TaxWithholdingService taxWithholdingService;
+    private final RetirementPensionDepositsRepository depositRepository;
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -76,6 +73,7 @@ public class PayrollService {
         this.commuteRecordRepository = commuteRecordRepository;
         this.insuranceRatesRepository = insuranceRatesRepository;
         this.taxWithholdingService = taxWithholdingService;
+        this.depositRepository = depositRepository;
     }
 
 ///       급여대장 조회(특정 월)
@@ -127,12 +125,9 @@ public class PayrollService {
 
         Company company = companyRepository.findById(companyId).orElseThrow(() -> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
-//        재직 + 휴직 사원 목록 (퇴직 제외)
-        List<Employee> employees = employeeRepository.findAllWithFilter(companyId, null, null, null, null, null, Pageable.unpaged()).getContent()
-                .stream()
-                .filter(e -> e.getEmpStatus() != EmpStatus.RESIGNED)
-                .filter(e -> e.getCompany().getCompanyId().equals(companyId))
-                .toList();
+//        급여대상 사원(재직+휴직) 목록 (퇴직 제외)
+        YearMonth payMonth = YearMonth.parse(payYearMonth);
+        List<Employee> employees = employeeRepository.findAllForPayroll(companyId, payMonth);
 
 //        payrollRuns 생성
         PayrollRuns run = PayrollRuns.builder()
@@ -298,14 +293,7 @@ public class PayrollService {
         run.confirm();
     }
 
-
-///    전자결재 상신(급여지급결의서) - 프론트에서 approvalDocId를 받음
-    @Transactional
-    public void submitApproval(UUID companyId, Long payrollRunId, Long approvalDovId) {
-        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
-        run.submitApproval(approvalDovId);
-    }
-
+/// 전자결재 상신은 PayrollApprovalDraftService 로직에서 처리
 
 ///    전자결재 결과 처리(kafka consumer)
     @Transactional
@@ -315,6 +303,7 @@ public class PayrollService {
 //        approvalDocId 보완
         if(run.getApprovalDocId() == null && event.getApprovalDocId() != null){
             run.bindApprovalDoc(event.getApprovalDocId());
+            run.submitApproval(event.getApprovalDocId());
         }
 
         String status = event.getStatus();
@@ -326,6 +315,12 @@ public class PayrollService {
             run.rejectApproval();
             log.info("[PayrollService] 전자결재 반려 처리 - payrollRunId={}, reason={}",
                     event.getPayrollRunId(), event.getRejectReason());
+        } else if ("CANCELED".equals(status)) {
+            run.cancelApproval();
+            log.info("[PayrollService] 전자결재 회수 - payrollRunId={}", event.getPayrollRunId());
+        } else {
+            log.warn("[PayrollService] 알 수 없는 status={} - payrollRunId={}",
+                    status, event.getPayrollRunId());
         }
     }
 
@@ -335,6 +330,9 @@ public class PayrollService {
     public void processPayment(UUID companyId, Long payrollRunId){
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
         run.markPaid(LocalDate.now());
+
+//        DC형 퇴직연금 적립 데이터 저장
+        createDcDeposits(run, run.getCompany());
     }
 
 
@@ -609,6 +607,44 @@ public class PayrollService {
 
     private PayrollRuns findPayrollRun(UUID companyId, Long payrollRunId){
         return payrollRunsRepository.findByPayrollRunIdAndCompany_CompanyId(payrollRunId, companyId).orElseThrow(()-> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
+    }
+
+//    DC형 사원의 해당 급여대장의 퇴직연금 적립 데이터 생성
+//    연간 임금 % 12
+    private void createDcDeposits(PayrollRuns run, Company company){
+        List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRuns(run);
+        Map<Long, List<PayrollDetails>> byEmp = details.stream()
+                .collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()  ));
+        for (Map.Entry<Long, List<PayrollDetails>> entry : byEmp.entrySet()){
+            Long empId = entry.getKey();
+            Employee emp = entry.getValue().get(0).getEmployee();
+
+//            DC형만
+            if(emp.getRetirementType() != RetirementType.DC) continue;
+//            중복방지
+            if (depositRepository.existsByPayrollRun_PayrollRunIdAndEmployee_EmpId(run.getPayrollRunId(), empId)) continue;
+
+//            적립기준임금 = 해당 월지급합계(과세지급 총액)
+            long baseAmount = entry.getValue().stream()
+                    .filter(d-> d.getPayItemType() == PayItemType.PAYMENT)
+                    .mapToLong(PayrollDetails::getAmount)
+                    .sum();
+
+//            월적립액 = 연간임금/12 -> 매월 지급시마다 1/12 적립
+            long depositAmount = baseAmount / 12;
+
+            RetirementPensionDeposits deposits = RetirementPensionDeposits.builder()
+                    .employee(emp)
+                    .baseAmount(baseAmount)
+                    .depositAmount(depositAmount)
+                    .depositDate(LocalDateTime.now())
+                    .depStatus(DepStatus.COMPLETED)
+                    .company(company)
+                    .payrollRun(run)
+                    .build();
+
+            depositRepository.save(deposits);
+        }
     }
 
 }

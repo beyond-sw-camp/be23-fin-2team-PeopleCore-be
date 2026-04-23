@@ -3,16 +3,17 @@ package com.peoplecore.pay.controller;
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.enums.SevStatus;
+import com.peoplecore.pay.service.SeveranceEstimateService;
 import com.peoplecore.pay.service.SeveranceService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.awt.print.Pageable;
-import java.util.List;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @RestController
@@ -21,55 +22,58 @@ import java.util.UUID;
 public class SeveranceController {
 
     private final SeveranceService severanceService;
+    private final SeveranceEstimateService severanceEstimateService;
 
     @Autowired
-    public SeveranceController(SeveranceService severanceService) {
+    public SeveranceController(SeveranceService severanceService, SeveranceEstimateService severanceEstimateService) {
         this.severanceService = severanceService;
+        this.severanceEstimateService = severanceEstimateService;
     }
 
-//    퇴직금 산정
+    //    퇴직금 산정
     @PostMapping("/calculate")
-    public ResponseEntity<SeveranceDetailResDto> calculate(
-            @RequestHeader("X-User-Company")UUID companyId,
-            @RequestBody @Valid SeveranceCalcReqDto reqDto){
+    public ResponseEntity<SeveranceDetailResDto> calculateSeverance(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestBody @Valid SeveranceCalcReqDto reqDto) {
         return ResponseEntity.status(HttpStatus.CREATED).body(severanceService.calculateSeverance(companyId, reqDto));
     }
 
-////    퇴직금 목록 조회
-//    @GetMapping
-//    public ResponseEntity<SeveranceListResDto> list(
-//            @RequestHeader("X-User-Company")UUID companyId,
-//            @RequestParam(required = false)SevStatus status,
-//            @PageableDefault(size = 10)Pageable pageable){
-//        return ResponseEntity.ok(severanceService.getSeveranceList(companyId, status, pageable));
-//    }
-//
-////    퇴직금 상세 조회
-//    @GetMapping("/{sevId}")
-//    public ResponseEntity<SeveranceDetailResDto> detail(
-//            @RequestHeader("X-User-Company") UUID companyId,
-//            @PathVariable Long sevId) {
-//        return ResponseEntity.ok().body(severanceService.getSeveranceDetail(companyId, sevId));
-//    }
-//
-////    퇴직금 확정
-//    @PutMapping("/{sevId}/confirm")
-//    public ResponseEntity<Void> confirm(
-//            @RequestHeader("X-User-Company") UUID companyId,
-//            @RequestHeader("X-User-EmpId") Long empId,
-//            @PathVariable Long sevId){
-//        severanceService.confirmSeverance(companyId, sevId, empId);
-//        return ResponseEntity.ok().build();
-//    }
-//
-////    전자결재 상신
-//    @PutMapping("/{sevId}/submit-approval")
-//    public ResponseEntity<Void> submitApproval(
-//            @RequestHeader("X-User-Company") UUID companyId,
-//            @PathVariable Long sevId,
-//            @RequestParam Long approvalDocId){
-//        severanceService.submitApproval(companyId, sevId, approvalDocId);
-//    }
+    //    퇴직금 목록 조회
+    @GetMapping
+    public ResponseEntity<SeveranceListResDto> list(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam(required = false) SevStatus status,
+            @PageableDefault(size = 10) Pageable pageable) {
+        return ResponseEntity.ok(severanceService.getSeveranceList(companyId, status, pageable));
+    }
+
+    //    퇴직금 상세 조회
+    @GetMapping("/{sevId}")
+    public ResponseEntity<SeveranceDetailResDto> detail(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long sevId) {
+        return ResponseEntity.ok().body(severanceService.getSeveranceDetail(companyId, sevId));
+    }
+
+    //    퇴직금 확정
+    @PutMapping("/{sevId}/confirm")
+    public ResponseEntity<Void> confirm(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-EmpId") Long empId,
+            @PathVariable Long sevId) {
+        severanceService.confirmSeverance(companyId, sevId, empId);
+        return ResponseEntity.ok().build();
+    }
+
+    //    전자결재 상신
+    @PutMapping("/{sevId}/submit-approval")
+    public ResponseEntity<Void> submitApproval(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long sevId,
+            @RequestParam Long approvalDocId) {
+        severanceService.submitApproval(companyId, sevId, approvalDocId);
+        return ResponseEntity.ok().build();
+    }
 //
 ////    지급 처리
 //    @PutMapping("/{sevId}/pay")
@@ -82,7 +86,8 @@ public class SeveranceController {
 //        return ResponseEntity.ok().build();
 //    }
 //
-////    이체파일 생성 (선택 건)
+
+    /// /    이체파일 생성 (선택 건)
 //    @PostMapping("/transfer-file")
 //    public ResponseEntity<byte[]> transferFile(
 //            @RequestHeader("X-User-Company") UUID companyId,
@@ -95,8 +100,18 @@ public class SeveranceController {
 //                .body(file.getFileBytes());
 //    }
 
+//      퇴직금추계액 조회 (재직자 전원 기준)
+    @GetMapping("/estimate")
+    public ResponseEntity<SeveranceEstimateSummaryResDto> getEstimateSummary(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam(required = false) LocalDate baseDate,
+            @RequestParam(required = false) String typeFilter) {
 
+        LocalDate effectiveDate = baseDate != null ? baseDate : LocalDate.now();
+        return ResponseEntity.ok(
+                severanceEstimateService.getEstimateSummary(companyId, effectiveDate, typeFilter)
+        );
+    }
 
 
 }
-

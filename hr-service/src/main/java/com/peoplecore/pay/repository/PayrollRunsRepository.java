@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-@Repository
 public interface PayrollRunsRepository extends JpaRepository<PayrollRuns, Long> {
 
     //    회사 + 연월 조회

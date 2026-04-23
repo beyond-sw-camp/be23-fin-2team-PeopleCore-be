@@ -13,8 +13,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-@Repository
-public interface SeveranceRepository extends JpaRepository<SeverancePays, Long>, SeveranceRepositoryCustom {
+public interface SeverancePaysRepository extends JpaRepository<SeverancePays, Long>, SeverancePaysRepositoryCustom {
 
     Optional<SeverancePays> findByEmployee_EmpIdAndCompany_CompanyId(Long empId, UUID companyId);
 

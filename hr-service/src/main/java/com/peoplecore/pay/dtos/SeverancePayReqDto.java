@@ -13,7 +13,7 @@ import java.time.LocalDate;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SeverancePayReqDto {
-//    신규 - 지급처리 요청
+//    지급처리 요청
 
     @NotNull(message = "이체일은 필수입니다")
     private LocalDate transferDate;     // 이체예정일

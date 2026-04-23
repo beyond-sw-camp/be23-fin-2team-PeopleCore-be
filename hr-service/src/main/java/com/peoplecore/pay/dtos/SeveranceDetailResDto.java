@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SeveranceDetailResDto {
-// 신규 - 상세
+// 상세
 
     /* ── 사원 정보 ── */
     private Long sevId;
@@ -35,13 +35,17 @@ public class SeveranceDetailResDto {
     /* ── 산정 기초 ── */
     private Long last3MonthPay;
     private Long lastYearBonus;
-    private Long annualLeaveAllowance;
+    private Long annualLeaveForAvgWage;       // 평균임금 반영 연차수당 (전년도 소멸분)
+    private Long annualLeaveOnRetirement;     // 퇴직정산 별도지급 연차수당 (RESIGNED 타입)
     private Integer last3MonthDays;
     private BigDecimal avgDailyWage;
 
     /* ── 산정 금액 ── */
     private Long severanceAmount;
-    private Long taxAmount;
+    private Long taxAmount;           // 퇴직소득세
+    private Long localIncomeTax;      // 지방소득세
+    private Integer taxYear;          // 세액 귀속연도
+    private Boolean irpTransfer;      // IRP 이전 여부 (과세이연)
     private Long netAmount;
 
     /* ── DC형 정보 ── */
@@ -72,11 +76,15 @@ public class SeveranceDetailResDto {
                 .serviceDays(s.getServiceDays())
                 .last3MonthPay(s.getLast3MonthPay())
                 .lastYearBonus(s.getLastYearBonus())
-                .annualLeaveAllowance(s.getAnnualLeaveAllowance())
+                .annualLeaveForAvgWage(s.getAnnualLeaveForAvgWage())
+                .annualLeaveOnRetirement(s.getAnnualLeaveOnRetirement())
                 .last3MonthDays(s.getLast3MonthDays())
                 .avgDailyWage(s.getAvgDailyWage())
                 .severanceAmount(s.getSeveranceAmount())
                 .taxAmount(s.getTaxAmount())
+                .localIncomeTax(s.getLocalIncomeTax())
+                .taxYear(s.getTaxYear())
+                .irpTransfer(s.getIrpTransfer())
                 .netAmount(s.getNetAmount())
                 .dcDepositedTotal(s.getDcDepositedTotal())
                 .dcDiffAmount(s.getDcDiffAmount())

@@ -13,8 +13,11 @@ import com.peoplecore.resign.domain.RetireStatus;
 import com.peoplecore.resign.dto.ResignDetailDto;
 import com.peoplecore.resign.dto.ResignListDto;
 import com.peoplecore.resign.dto.ResignStatusDto;
+import com.peoplecore.resign.event.EmployeeRetiredEvent;
 import com.peoplecore.resign.repository.ResignRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -36,13 +39,15 @@ public class ResignService {
     private final EmployeeRepository employeeRepository;
     private final ObjectMapper objectMapper;
     private final FaceAuthService faceAuthService;
+    private final ApplicationEventPublisher eventPublisher;
 
-
-    public ResignService(ResignRepository resignRepository, EmployeeRepository employeeRepository, ObjectMapper objectMapper, FaceAuthService faceAuthService) {
+    @Autowired
+    public ResignService(ResignRepository resignRepository, EmployeeRepository employeeRepository, ObjectMapper objectMapper, FaceAuthService faceAuthService, ApplicationEventPublisher eventPublisher) {
         this.resignRepository = resignRepository;
         this.employeeRepository = employeeRepository;
         this.objectMapper = objectMapper;
         this.faceAuthService = faceAuthService;
+        this.eventPublisher = eventPublisher;
     }
 
 
@@ -95,6 +100,9 @@ public class ResignService {
             employee.updateStatus(EmpStatus.RESIGNED);
             employee.updateResignDate(resign.getResignDate());
             faceAuthService.cascadeUnregisterFace(employee.getEmpId(), employee.getCompany().getCompanyId());
+
+//            이벤트 발생(-> 퇴직금 산정)
+            eventPublisher.publishEvent(new EmployeeRetiredEvent(employee.getCompany().getCompanyId(),employee.getEmpId()));
         }
     }
 
