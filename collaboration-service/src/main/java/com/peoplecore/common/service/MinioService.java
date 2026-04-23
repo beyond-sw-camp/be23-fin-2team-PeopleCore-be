@@ -90,6 +90,8 @@ public class MinioService {
                             .stream(stream, file.getSize(), -1)
                             .contentType(file.getContentType())
                             .build());
+            log.info("[MinIO putObject 성공] bucket={}, objectName={}, contentType={}",
+                    bucket, objectName, file.getContentType());
         } catch (Exception e) {
             log.error("MinIO 첨부파일 업로드 실패 objectName={}, error={}", objectName, e.getMessage());
             throw new BusinessException("첨부파일 업로드에 실패했습니다.", HttpStatus.SERVICE_UNAVAILABLE);

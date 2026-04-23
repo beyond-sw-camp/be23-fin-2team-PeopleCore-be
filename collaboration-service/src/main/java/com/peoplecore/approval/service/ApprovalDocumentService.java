@@ -71,6 +71,7 @@ public class ApprovalDocumentService {
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번 + 첨부 업로드 */
     @Transactional
     public Long createDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request, List<MultipartFile> files) {
+        log.info("[기안] empId={}, formId={}, filesReceived={}", empId, request.getFormId(), files != null ? files.size() : 0);
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
         /* 근태 정정 / 휴가 부여 신청 양식이면 결재선에 HR 사원 포함 여부 검증 */
         String formCode = form.getFormCode();
@@ -198,6 +199,7 @@ public class ApprovalDocumentService {
     /* 문서 수정 (임시 저장 문서) + 신규 첨부 추가 (기존 첨부는 유지, 개별 삭제는 DELETE /attachments/{attachId}) */
     @Transactional
     public void updateDocument(UUID companyId, Long empId, Long docId, DocumentUpdateRequest request, List<MultipartFile> files) {
+        log.info("[문서 수정] docId={}, empId={}, filesReceived={}", docId, empId, files != null ? files.size() : 0);
         ApprovalDocument document = findOwnDraftDocument(companyId, empId, docId);
         document.updateDraft(request.getDocTitle(), request.getDocData(), request.getIsEmergency());
 
@@ -228,6 +230,7 @@ public class ApprovalDocumentService {
     /* 임시 저장 - Draft 상태로 생성 (채번 없음) + 첨부 업로드 */
     @Transactional
     public Long saveTempDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request, List<MultipartFile> files) {
+        log.info("[임시저장] empId={}, formId={}, filesReceived={}", empId, request.getFormId(), files != null ? files.size() : 0);
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
         /*동기 요청*/
         DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
@@ -349,6 +352,7 @@ public class ApprovalDocumentService {
     @Transactional
     public Long resubmitDocument(UUID companyId, Long empId, Long deptId,
                                  Long docId, DocumentUpdateRequest request, List<MultipartFile> files) {
+        log.info("[재기안] prevDocId={}, empId={}, filesReceived={}", docId, empId, files != null ? files.size() : 0);
         ApprovalDocument prev = documentRepository.findByDocIdAndCompanyId(docId, companyId)
                 .orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
