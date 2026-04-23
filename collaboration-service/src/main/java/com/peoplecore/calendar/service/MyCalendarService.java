@@ -23,8 +23,6 @@ public class MyCalendarService {
     /* 휴가 전용 캘린더 - 휴가 승인 시 자동으로 이벤트 생성됨. 이름/색 고정 */
     private static final String VACATION_CALENDAR_NAME = "휴가 캘린더";
     private static final String VACATION_CALENDAR_COLOR = "#E57373";
-    private static final String LEAVE_CALENDAR_NAME = "휴가 일정";
-    private static final String LEAVE_CALENDAR_COLOR = "#10B981";
 
 
     private final MyCalendarsRepository myCalendarsRepository;
@@ -52,7 +50,7 @@ public class MyCalendarService {
         boolean hasMy = calendars.stream()
                 .anyMatch(c -> DEFAULT_CALENDAR_NAME.equals(c.getCalendarName()));
         boolean hasLeave = calendars.stream()
-                .anyMatch(c -> LEAVE_CALENDAR_NAME.equals(c.getCalendarName()));
+                .anyMatch(c -> VACATION_CALENDAR_NAME.equals(c.getCalendarName()));
 
         if (!hasMy) {
             myCalendarsRepository.save(MyCalendars.builder()
@@ -70,8 +68,8 @@ public class MyCalendarService {
             myCalendarsRepository.save(MyCalendars.builder()
                     .empId(empId)
                     .companyId(companyId)
-                    .calendarName(LEAVE_CALENDAR_NAME)
-                    .myDisplayColor(LEAVE_CALENDAR_COLOR)
+                    .calendarName(VACATION_CALENDAR_NAME)
+                    .myDisplayColor(VACATION_CALENDAR_COLOR)
                     .isVisible(true)
                     .isPublic(true)
                     .isDefault(true)
