@@ -5,13 +5,13 @@ import com.peoplecore.pay.domain.QPayItems;
 import com.peoplecore.pay.enums.PayItemType;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
 import java.util.UUID;
 
+@Repository
 public class PayItemSearchRepository {
 
     private final JPAQueryFactory queryFactory;

@@ -1,5 +1,6 @@
 package com.peoplecore.calendar.dtos;
 
+import com.peoplecore.calendar.entity.MyCalendars;
 import lombok.*;
 
 import java.util.List;
@@ -22,7 +23,7 @@ public class AnnualLeaveSettingResDto {
         private Boolean isPublic;
     }
 
-    public static AnnualLeaveSettingResDto fromEntity(List<AnnualLeaveSetting> settings) {
+    public static AnnualLeaveSettingResDto fromEntity(List<MyCalendars> settings) {
         List<LinkedCalendar> calendars = settings.stream()
                 .map(s -> LinkedCalendar.builder()
                         .calendarIds(s.getMyCalendar().getMyCalendarsId())

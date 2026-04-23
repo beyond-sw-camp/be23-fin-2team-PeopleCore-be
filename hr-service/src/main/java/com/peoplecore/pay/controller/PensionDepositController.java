@@ -19,6 +19,7 @@ import java.util.UUID;
 @RequestMapping("/pay/admin/pension-deposits")
 @RoleRequired({"HR_SUPER_ADMIN","HR_ADMIN"})
 public class PensionDepositController {
+// 퇴직연금 적립내역 조회
 
     private final PensionDepositService pensionDepositService;
     @Autowired
@@ -81,7 +82,7 @@ public class PensionDepositController {
     }
 
 
-    // 6. 사원별 집계 (화면 메인 테이블용 - 사원당 1행으로 묶음)
+    // 6. 사원별 집계 (화면 메인 테이블용(리스트) - 사원당 1행으로 묶음)
     @GetMapping("/by-employee")
     public ResponseEntity<PensionDepositByEmployeeSummaryResDto> getByEmployee(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -93,5 +94,6 @@ public class PensionDepositController {
         return ResponseEntity.ok(
                 pensionDepositService.getDepositByEmployee(companyId, fromYm, toYm, search, deptId, status));
     }
+
 }
-}
+

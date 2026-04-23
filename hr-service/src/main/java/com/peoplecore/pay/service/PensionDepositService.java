@@ -6,10 +6,7 @@ import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.RetirementPensionDeposits;
-import com.peoplecore.pay.dtos.PensionDepositCreateReqDto;
-import com.peoplecore.pay.dtos.PensionDepositEmployeeResDto;
-import com.peoplecore.pay.dtos.PensionDepositResDto;
-import com.peoplecore.pay.dtos.PensionDepositSummaryResDto;
+import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.enums.DepStatus;
 import com.peoplecore.pay.enums.RetirementType;
 import com.peoplecore.pay.repository.RetirementPensionDepositsRepository;
@@ -126,9 +123,56 @@ public class PensionDepositService {
                 saved.getDepId(), req.getEmpId(), req.getPayYearMonth(), req.getDepositAmount(), adminEmpId);
 
         return toRes(saved, emp);
-
-
     }
+
+
+//    적립 취소
+    @Transactional
+    public void cancelDeposit(UUID companyId, Long adminEmpId, Long depId, String reason) {
+        RetirementPensionDeposits deposit = retirementPensionDepositsRepository.findByDepIdAndCompany_CompanyId(depId, companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.DEPOSIT_NOT_FOUND));
+
+        if (deposit.getDepStatus() == DepStatus.CANCELED) {
+            throw new CustomException(ErrorCode.DEPOSIT_ALREADY_CANCELED);
+        }
+
+        deposit.cancel(adminEmpId, reason);
+
+        log.warn("[PensionDeposit 취소] depId={}, empId={}, by={}, reason={}",
+                depId, deposit.getEmployee().getEmpId(), adminEmpId, reason);
+    }
+
+
+    // 5. 월별 요약
+    public List<MonthlyDepositSummaryDto> getMonthlySummary(UUID companyId, Integer year) {
+        int targetYear = year != null ? year : java.time.LocalDate.now().getYear();
+        return retirementPensionDepositsRepository.monthlySummary(companyId, targetYear);
+    }
+
+
+    // 6. 사원별 집계 (화면 메인 테이블용(리스트) - 사원당 1행으로 묶음)
+    public PensionDepositByEmployeeSummaryResDto getDepositByEmployee(
+            UUID companyId, String fromYm, String toYm,
+            String search, Long deptId, DepStatus status) {
+
+        List<PensionDepositByEmployeeResDto> rows = retirementPensionDepositsRepository.searchByEmployee(companyId, fromYm, toYm, search, deptId, status);
+
+        // 요약 카드 (기존 목록 API와 동일)
+        Integer totalEmployees = rows.size();
+        Long totalDepositAmount = rows.stream().mapToLong(PensionDepositByEmployeeResDto::getTotalAmount).sum();
+        Long grandTotalDeposited = retirementPensionDepositsRepository.grandTotalDeposited(companyId);
+        long months = calcMonthsBetween(fromYm, toYm);
+        Long monthlyAverage = months > 0 ? totalDepositAmount / months : 0L;
+
+        return PensionDepositByEmployeeSummaryResDto.builder()
+                .totalEmployees(totalEmployees)
+                .totalDepositAmount(totalDepositAmount)
+                .monthlyAverage(monthlyAverage)
+                .grandTotalDeposited(grandTotalDeposited)
+                .employees(rows)
+                .build();
+    }
+
 
 
 
@@ -154,5 +198,5 @@ public class PensionDepositService {
                 .isManual(d.getIsManual())
                 .build();
     }
-    }
+}
 

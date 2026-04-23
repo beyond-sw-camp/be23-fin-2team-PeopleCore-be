@@ -159,19 +159,22 @@ public class SeverancePaysRepositoryImpl implements SeverancePaysRepositoryCusto
     @Override
     public Map<Long, Long> sumDcDepositedTotalByEmpIds(UUID companyId, List<Long> empIds) {
         List<Tuple> rows = queryFactory
-                .select(rpd.empId, rpd.depositAmount.sum())
+                .select(rpd.employee.empId, rpd.depositAmount.sum())
                 .from(rpd)
                 .where(
-                        rpd.empId.in(empIds),
+                        rpd.employee.empId.in(empIds),
                         rpd.company.companyId.eq(companyId),
                         rpd.depStatus.eq(DepStatus.COMPLETED)
                 )
-                .groupBy(rpd.empId)
+                .groupBy(rpd.employee.empId)
                 .fetch();
 
-        return rows.stream().collect(Collectors.toMap(
-                t -> t.get(rpd.empId),
-                t -> t.get(rpd.depositAmount.sum()) != null ? t.get(rpd.depositAmount.sum()) : 0L
+        return rows.stream().collect(java.util.stream.Collectors.toMap(
+                t -> t.get(rpd.employee.empId),
+                t -> {
+                    Long v = t.get(rpd.depositAmount.sum());
+                    return v != null ? v : 0L;
+                }
         ));
     }
 
@@ -184,7 +187,7 @@ public class SeverancePaysRepositoryImpl implements SeverancePaysRepositoryCusto
                 .select(rpd.depositAmount.sum())
                 .from(rpd)
                 .where(
-                        rpd.empId.eq(empId),
+                        rpd.employee.empId.eq(empId),
                         rpd.company.companyId.eq(companyId),
                         rpd.depStatus.eq(DepStatus.COMPLETED)
                 )

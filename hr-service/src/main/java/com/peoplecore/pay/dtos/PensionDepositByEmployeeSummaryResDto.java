@@ -12,7 +12,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class PensionDepositByEmployeeSummaryResDto {
-//    사원 집계 요청(대시보드에서 한명당1행 묶음)
+//    사원 집계 요청
     private Integer totalEmployees;
     private Long totalDepositAmount;
     private Long monthlyAverage;
