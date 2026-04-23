@@ -163,9 +163,9 @@ public class ApprovalEventPublisher {
                 log.info("[Kafka] OT result 발행 - docId={}, status={}", document.getDocId(), status);
             } else if (FORM_CODE_VACATION_GRANT_REQUEST.equals(formCode)) {
                 // 휴가 부여 신청 (GRANT) 결과 - VacationApprovalResultEvent DTO 재사용, 토픽만 분리
+                // vacReqId 는 USE 전용 식별자라 GRANT 발행에서는 세팅하지 않음 (hr 측은 approvalDocId 로 조회)
                 VacationApprovalResultEvent event = VacationApprovalResultEvent.builder()
                         .companyId(document.getCompanyId())
-                        .vacReqId(extractVacGrantReqId(document))
                         .approvalDocId(document.getDocId())
                         .status(status)
                         .managerId(managerId)
@@ -174,9 +174,9 @@ public class ApprovalEventPublisher {
                 kafkaTemplate.send(TOPIC_VAC_GRANT_RESULT, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] VacationGrant result 발행 - docId={}, status={}", document.getDocId(), status);
             } else if (FORM_CODE_VACATION_REQUEST.equals(formCode)) {
+                // vacReqId 는 docData 에 기록되지 않아 null 로 내려가므로 세팅하지 않음 (hr 측은 approvalDocId 로 조회)
                 VacationApprovalResultEvent event = VacationApprovalResultEvent.builder()
                         .companyId(document.getCompanyId())
-                        .vacReqId(extractVacReqId(document))
                         .approvalDocId(document.getDocId())
                         .status(status)
                         .managerId(managerId)
@@ -239,15 +239,6 @@ public class ApprovalEventPublisher {
     /* result 발행 시 otId — hr 측이 docId 로 찾는 것이 주경로라 null 허용. docData 에 있으면 파싱 */
     private Long extractOtId(ApprovalDocument document) {
         return parseLong(document.getDocData(), "otId");
-    }
-
-    private Long extractVacReqId(ApprovalDocument document) {
-        return parseLong(document.getDocData(), "vacReqId");
-    }
-
-    /* GRANT result 발행 시 vacGrantReqId - hr 측 INSERT 후 docData 에 기록된 경우 파싱. 없으면 null */
-    private Long extractVacGrantReqId(ApprovalDocument document) {
-        return parseLong(document.getDocData(), "vacGrantReqId");
     }
 
     /* result 발행 경로 전용 - 단일 id 필드 파싱. docCreated 경로는 폼별 DTO 로 대체됨 */

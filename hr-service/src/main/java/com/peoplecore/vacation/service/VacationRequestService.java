@@ -117,8 +117,10 @@ public class VacationRequestService {
 
     /* Kafka(vacation-approval-result) 진입 - 상태 전이 + Balance 반영 */
     public void applyApprovalResult(VacationApprovalResultEvent event) {
+        // 조회 키는 approvalDocId - publisher 가 vacReqId 를 채우지 못해 NULL 로 들어옴
+        // docCreated 중복 방어와 동일 인덱스(idx_vr_approval_doc) 재사용
         VacationRequest request = vacationRequestRepository
-                .findByCompanyIdAndRequestId(event.getCompanyId(), event.getVacReqId())
+                .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId())
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND));
 
         RequestStatus newStatus = RequestStatus.valueOf(event.getStatus());

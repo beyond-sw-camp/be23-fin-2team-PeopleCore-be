@@ -145,8 +145,10 @@ public class VacationGrantRequestService {
     /* Kafka(vacation-grant-approval-result) 진입 - 상태 전이 + Balance 적립 (APPROVED 만) */
     /* 2층 방어: VacationBalance.@Version 낙관적 락이 동시 accrue UPDATE 충돌 감지 → Kafka retry */
     public void applyApprovalResult(VacationApprovalResultEvent event) {
+        // 조회 키는 approvalDocId - publisher 가 vacReqId 를 채우지 못해 NULL 로 들어옴
+        // USE(VacationRequestService) 와 동일 패턴, 인덱스 idx_vgr_approval_doc 사용
         VacationGrantRequest request = vacationGrantRequestRepository
-                .findByCompanyIdAndRequestId(event.getCompanyId(), event.getVacReqId())
+                .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId())
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND));
 
         RequestStatus newStatus = RequestStatus.valueOf(event.getStatus());
