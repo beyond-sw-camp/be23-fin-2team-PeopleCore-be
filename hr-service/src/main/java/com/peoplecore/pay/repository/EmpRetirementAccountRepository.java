@@ -8,7 +8,6 @@ import javax.swing.text.html.Option;
 import java.util.Optional;
 import java.util.UUID;
 
-@Repository
 public interface EmpRetirementAccountRepository extends JpaRepository<EmpRetirementAccount, Long> {
 
     Optional<EmpRetirementAccount> findByEmployee_EmpIdAndCompany_CompanyId(Long empId, UUID companyId);

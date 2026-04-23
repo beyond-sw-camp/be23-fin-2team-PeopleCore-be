@@ -3,7 +3,6 @@ package com.peoplecore.pay.repository;
 import com.peoplecore.pay.domain.PayItems;
 import com.peoplecore.pay.enums.LegalCalcType;
 import com.peoplecore.pay.enums.PayItemType;
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

@@ -15,6 +15,7 @@ public class MyCalendarResDto {
     private Long myCalendarsId;
     private String calendarName;
     private String displayColor;
+    private Boolean isPublic;
     private Boolean isVisible;
     private Integer sortOrder;
 
@@ -25,6 +26,7 @@ public class MyCalendarResDto {
                 .calendarName(c.getCalendarName())
                 .displayColor(c.getMyDisplayColor())
                 .isVisible(c.getIsVisible())
+                .isPublic(c.getIsPublic())
                 .sortOrder(c.getSortOrder())
                 .build();
     }

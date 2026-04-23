@@ -9,7 +9,6 @@ public enum ApprovalFormType {
     private final String templateFileName;
     private final String formCode;
 
-    @Autowired
     ApprovalFormType(String templateFileName, String formCode) {
         this.templateFileName = templateFileName;
         this.formCode = formCode;

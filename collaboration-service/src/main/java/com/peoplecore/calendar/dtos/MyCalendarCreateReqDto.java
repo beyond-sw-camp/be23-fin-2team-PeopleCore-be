@@ -13,4 +13,5 @@ public class MyCalendarCreateReqDto {
 
     private String calendarName;
     private String displayColor;
+    private Boolean isPublic;
 }

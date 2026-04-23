@@ -8,12 +8,15 @@ import com.peoplecore.pay.enums.DepStatus;
 import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
 import com.peoplecore.pay.enums.PayrollStatus;
+import com.querydsl.core.Tuple;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Repository
 public class SeverancePaysRepositoryImpl implements SeverancePaysRepositoryCustom {
@@ -108,8 +111,75 @@ public class SeverancePaysRepositoryImpl implements SeverancePaysRepositoryCusto
         return result != null ? result : 0L;
     }
 
+    //  3개월급여총액, 1년상여금총액, DC형적립급합계
+    @Override
+    public Map<Long, Long> sumLast3MonthPayByEmpIds(UUID companyId, List<Long> empIds, List<String> months) {
+        List<Tuple> rows = queryFactory
+                .select(pd.employee.empId, pd.amount.sum())     // empId별 합계
+                .from(pd)
+                .join(pd.payrollRuns, pr)
+                .where(
+                        pd.employee.empId.in(empIds),
+                        pd.company.companyId.eq(companyId),
+                        pr.payYearMonth.in(months),
+                        pd.payItemType.eq(PayItemType.PAYMENT)
 
-//    DB형 기적립금 합계
+                )
+                .groupBy(pd.employee.empId)
+                .fetch();
+
+        return rows.stream().collect(Collectors.toMap(
+                t -> t.get(pd.employee.empId),
+                t -> t.get(pd.amount.sum()) != null ? t.get(pd.amount.sum()) : 0L
+        ));
+    }
+
+    @Override
+    public Map<Long, Long> sumLastYearBonusByEmpIds(UUID companyId, List<Long> empIds, List<String> months) {
+        List<Tuple> rows = queryFactory
+                .select(pd.employee.empId, pd.amount.sum())
+                .from(pd)
+                .join(pd.payrollRuns, pr)
+                .where(
+                        pd.employee.empId.in(empIds),
+                        pd.company.companyId.eq(companyId),
+                        pr.payYearMonth.in(months),
+                        pd.payItemType.eq(PayItemType.PAYMENT),
+                        pd.payItems.payItemCategory.eq(PayItemCategory.BONUS)
+                )
+                .groupBy(pd.employee.empId)
+                .fetch();
+
+        return rows.stream().collect(Collectors.toMap(
+                t -> t.get(pd.employee.empId),
+                t -> t.get(pd.amount.sum()) != null ? t.get(pd.amount.sum()) : 0L
+        ));
+    }
+
+    @Override
+    public Map<Long, Long> sumDcDepositedTotalByEmpIds(UUID companyId, List<Long> empIds) {
+        List<Tuple> rows = queryFactory
+                .select(rpd.employee.empId, rpd.depositAmount.sum())
+                .from(rpd)
+                .where(
+                        rpd.employee.empId.in(empIds),
+                        rpd.company.companyId.eq(companyId),
+                        rpd.depStatus.eq(DepStatus.COMPLETED)
+                )
+                .groupBy(rpd.employee.empId)
+                .fetch();
+
+        return rows.stream().collect(java.util.stream.Collectors.toMap(
+                t -> t.get(rpd.employee.empId),
+                t -> {
+                    Long v = t.get(rpd.depositAmount.sum());
+                    return v != null ? v : 0L;
+                }
+        ));
+    }
+
+
+    //    DB형 기적립금 합계
 //    RetirementPensionDeposits에서 COMPLETED 상태의 depositAmount합산
     @Override
     public Long sumDcDepositedTotal(Long empId, UUID companyId) {
@@ -117,7 +187,7 @@ public class SeverancePaysRepositoryImpl implements SeverancePaysRepositoryCusto
                 .select(rpd.depositAmount.sum())
                 .from(rpd)
                 .where(
-                        rpd.empId.eq(empId),
+                        rpd.employee.empId.eq(empId),
                         rpd.company.companyId.eq(companyId),
                         rpd.depStatus.eq(DepStatus.COMPLETED)
                 )

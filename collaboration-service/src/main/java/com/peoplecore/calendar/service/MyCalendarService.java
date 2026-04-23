@@ -8,11 +8,9 @@ import com.peoplecore.calendar.repository.MyCalendarsRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.awt.print.Pageable;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,6 +20,8 @@ public class MyCalendarService {
 
     private static final String DEFAULT_CALENDAR_NAME = "내 일정(기본)";
     private static final String DEFAULT_CALENDAR_COLOR = "#1A73E8";
+    private static final String LEAVE_CALENDAR_NAME = "휴가 일정";
+    private static final String LEAVE_CALENDAR_COLOR = "#10B981";
 
 
     private final MyCalendarsRepository myCalendarsRepository;
@@ -32,29 +32,56 @@ public class MyCalendarService {
     }
 
 
-    //    내 캘린더 목록조회 + 기본캘린더 없으면 자동 생성
+    //    내 캘린더 목록조회
     @Transactional
     public List<MyCalendarResDto> getMyCalendars(UUID companyId, Long empId) {
-        List<MyCalendars> calendars = myCalendarsRepository.findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId);
-
-        if (calendars.isEmpty()) {
-            MyCalendars defaultMyCal = MyCalendars.builder()
-                    .empId(empId)
-                    .calendarName(DEFAULT_CALENDAR_NAME)
-                    .myDisplayColor(DEFAULT_CALENDAR_COLOR)
-                    .isVisible(true)
-                    .sortOrder(0)
-                    .companyId(companyId)
-                    .build();
-            myCalendarsRepository.save(defaultMyCal);
-            calendars = List.of(defaultMyCal);
-        }
-
-        return calendars.stream()
+        return ensureDefaultCalendars(companyId, empId).stream()
                 .map(MyCalendarResDto::fromEntity)
                 .toList();
     }
+    // 기본캘린더(내일정,휴가일정) 없으면 자동생성하는 멱등 메서드
+    @Transactional
+    public List<MyCalendars> ensureDefaultCalendars(UUID companyId, Long empId) {
+        List<MyCalendars> calendars = myCalendarsRepository
+                .findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId);
 
+        boolean hasMy    = calendars.stream()
+                .anyMatch(c -> DEFAULT_CALENDAR_NAME.equals(c.getCalendarName()));
+        boolean hasLeave = calendars.stream()
+                .anyMatch(c -> LEAVE_CALENDAR_NAME.equals(c.getCalendarName()));
+
+        if (!hasMy) {
+            myCalendarsRepository.save(MyCalendars.builder()
+                    .empId(empId)
+                    .companyId(companyId)
+                    .calendarName(DEFAULT_CALENDAR_NAME)
+                    .myDisplayColor(DEFAULT_CALENDAR_COLOR)
+                    .isVisible(true)
+                    .isPublic(true)
+                    .isDefault(true)
+                    .sortOrder(0)
+                    .build());
+        }
+        if (!hasLeave) {
+            myCalendarsRepository.save(MyCalendars.builder()
+                    .empId(empId)
+                    .companyId(companyId)
+                    .calendarName(LEAVE_CALENDAR_NAME)
+                    .myDisplayColor(LEAVE_CALENDAR_COLOR)
+                    .isVisible(true)
+                    .isPublic(true)
+                    .isDefault(true)
+                    .sortOrder(1)
+                    .build());
+        }
+
+        // 새로 만든 게 있으면 재조회(정렬 + 생성된 ID 포함)
+        if (!hasMy || !hasLeave) {
+            calendars = myCalendarsRepository
+                    .findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId);
+        }
+        return calendars;
+    }
 
 //    내 캘린더 추가
     @Transactional
@@ -73,6 +100,7 @@ public class MyCalendarService {
                 .isVisible(true)
                 .isDefault(false)
                 .sortOrder(existing.size()+1)
+                .isPublic(reqDto.getIsPublic() != null ? reqDto.getIsPublic() : Boolean.TRUE)
                 .companyId(companyId)
                 .build();
 
@@ -106,6 +134,10 @@ public class MyCalendarService {
         }
         if (reqDto.getSortOrder() != null){
             myCalendar.updateSortOrder(reqDto.getSortOrder());
+        }
+        if (reqDto.getIsPublic() != null) {
+            if(!reqDto.getIsPublic().equals(myCalendar.getIsPublic()))
+            myCalendar.updatePublic();
         }
 
         return MyCalendarResDto.fromEntity(myCalendar);

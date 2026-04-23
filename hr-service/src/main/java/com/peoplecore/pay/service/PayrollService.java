@@ -13,9 +13,7 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.*;
 import com.peoplecore.pay.dtos.*;
-import com.peoplecore.pay.enums.LegalCalcType;
-import com.peoplecore.pay.enums.PayItemType;
-import com.peoplecore.pay.enums.PayrollStatus;
+import com.peoplecore.pay.enums.*;
 import com.peoplecore.pay.repository.*;
 import com.peoplecore.pay.transfer.BankTransferFileFactory;
 import com.peoplecore.pay.transfer.BankTransferFileGenerator;
@@ -31,6 +29,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -56,10 +55,11 @@ public class PayrollService {
     private final CommuteRecordRepository commuteRecordRepository;
     private final InsuranceRatesRepository insuranceRatesRepository;
     private final TaxWithholdingService taxWithholdingService;
+    private final RetirementPensionDepositsRepository depositRepository;
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -73,6 +73,7 @@ public class PayrollService {
         this.commuteRecordRepository = commuteRecordRepository;
         this.insuranceRatesRepository = insuranceRatesRepository;
         this.taxWithholdingService = taxWithholdingService;
+        this.depositRepository = depositRepository;
     }
 
 ///       급여대장 조회(특정 월)
@@ -329,6 +330,9 @@ public class PayrollService {
     public void processPayment(UUID companyId, Long payrollRunId){
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
         run.markPaid(LocalDate.now());
+
+//        DC형 퇴직연금 적립 데이터 저장
+        createDcDeposits(run, run.getCompany());
     }
 
 
@@ -603,6 +607,44 @@ public class PayrollService {
 
     private PayrollRuns findPayrollRun(UUID companyId, Long payrollRunId){
         return payrollRunsRepository.findByPayrollRunIdAndCompany_CompanyId(payrollRunId, companyId).orElseThrow(()-> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
+    }
+
+//    DC형 사원의 해당 급여대장의 퇴직연금 적립 데이터 생성
+//    연간 임금 % 12
+    private void createDcDeposits(PayrollRuns run, Company company){
+        List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRuns(run);
+        Map<Long, List<PayrollDetails>> byEmp = details.stream()
+                .collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()  ));
+        for (Map.Entry<Long, List<PayrollDetails>> entry : byEmp.entrySet()){
+            Long empId = entry.getKey();
+            Employee emp = entry.getValue().get(0).getEmployee();
+
+//            DC형만
+            if(emp.getRetirementType() != RetirementType.DC) continue;
+//            중복방지
+            if (depositRepository.existsByPayrollRun_PayrollRunIdAndEmployee_EmpId(run.getPayrollRunId(), empId)) continue;
+
+//            적립기준임금 = 해당 월지급합계(과세지급 총액)
+            long baseAmount = entry.getValue().stream()
+                    .filter(d-> d.getPayItemType() == PayItemType.PAYMENT)
+                    .mapToLong(PayrollDetails::getAmount)
+                    .sum();
+
+//            월적립액 = 연간임금/12 -> 매월 지급시마다 1/12 적립
+            long depositAmount = baseAmount / 12;
+
+            RetirementPensionDeposits deposits = RetirementPensionDeposits.builder()
+                    .employee(emp)
+                    .baseAmount(baseAmount)
+                    .depositAmount(depositAmount)
+                    .depositDate(LocalDateTime.now())
+                    .depStatus(DepStatus.COMPLETED)
+                    .company(company)
+                    .payrollRun(run)
+                    .build();
+
+            depositRepository.save(deposits);
+        }
     }
 
 }

@@ -13,7 +13,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-@Repository
 public interface InsuranceSettlementRepository extends JpaRepository<InsuranceSettlement, Long> {
 
 //    회사 + 연월 조회
