@@ -192,23 +192,27 @@ public class VacationBalanceService {
                 .findByEmpAndYearFetchType(companyId, empId, year);
 
         MyVacationStatusResponseDto.AnnualSummary annual = null;
+        VacationBalance monthly = null; // 폴백 후보 (입사 1년 미만)
         List<MyVacationStatusResponseDto.OtherBalance> others = new ArrayList<>();
 
         for (VacationBalance b : balances) {
-            if (VacationType.CODE_ANNUAL.equals(b.getVacationType().getTypeCode())) {
+            String code = b.getVacationType().getTypeCode();
+            if (VacationType.CODE_ANNUAL.equals(code)) {
                 /* UNIQUE (company, emp, type, year) → ANNUAL 은 최대 1건 */
-                annual = MyVacationStatusResponseDto.AnnualSummary.builder()
-                        .periodStart(b.getGrantedAt())
-                        .periodEnd(b.getExpiresAt())
-                        .totalDays(b.getTotalDays())
-                        .usedDays(b.getUsedDays())
-                        .pendingDays(b.getPendingDays())
-                        .expiredDays(b.getExpiredDays())
-                        .availableDays(b.getAvailableDays())
-                        .build();
+                annual = toAnnualSummary(b);
+            } else if (VacationType.CODE_MONTHLY.equals(code)) {
+                monthly = b; // ANNUAL 없을 때만 annual 로 승격, 있으면 others 로 내림
             } else {
                 others.add(MyVacationStatusResponseDto.OtherBalance.from(b));
             }
+        }
+
+        /* 입사 1년 미만 - ANNUAL 미생성 상태면 MONTHLY 를 연차 카드 자리에 노출 */
+        if (annual == null && monthly != null) {
+            annual = toAnnualSummary(monthly);
+        } else if (monthly != null) {
+            /* 1주년 전환 시점 겹치는 경우 - MONTHLY 는 이력으로 others 에 보여줌 */
+            others.add(MyVacationStatusResponseDto.OtherBalance.from(monthly));
         }
 
         /* request - 연도 overlap 로드 후 now 기준 예정/지난 분류 */
@@ -245,6 +249,21 @@ public class VacationBalanceService {
                 .others(others)
                 .upcoming(upcoming)
                 .past(past)
+                .build();
+    }
+
+    /* VacationBalance → AnnualSummary 매핑 (ANNUAL/MONTHLY 공용) */
+    private MyVacationStatusResponseDto.AnnualSummary toAnnualSummary(VacationBalance b) {
+        return MyVacationStatusResponseDto.AnnualSummary.builder()
+                .typeCode(b.getVacationType().getTypeCode())
+                .typeName(b.getVacationType().getTypeName())
+                .periodStart(b.getGrantedAt())
+                .periodEnd(b.getExpiresAt())
+                .totalDays(b.getTotalDays())
+                .usedDays(b.getUsedDays())
+                .pendingDays(b.getPendingDays())
+                .expiredDays(b.getExpiredDays())
+                .availableDays(b.getAvailableDays())
                 .build();
     }
 }
