@@ -548,14 +548,20 @@ public class ApprovalDocumentService {
         /* 상태 패턴: PENDING → CANCELED (PendingState.recall() 호출) */
         document.recall();
 
+        /* 결재선 조회 — 라인 취소 + 알림 수신자 수집을 한 번의 조회로 처리 */
+        List<ApprovalLine> allLines = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId());
+
+        /* 아직 PENDING 인 결재자 라인 전부 CANCELED 로 종결 (라인-문서 상태 정합성 보장) */
+        allLines.stream()
+                .filter(l -> l.getApprovalRole() == ApprovalRole.APPROVER
+                        && l.getApprovalLineStatus() == ApprovalLineStatus.PENDING)
+                .forEach(ApprovalLine::cancel);
+
         /* hr-service 에 회수 이벤트 발행 — 초과근무/휴가 양식에만 실제 발행 (Publisher 내부 formName 분기) */
         approvalEventPublisher.publishResult(document, "CANCELED", empId, null);
 
         /*결재 라인 전원에게 알림 발행 */
-        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
-                .stream()
-                .map(ApprovalLine::getEmpId)
-                .toList();
+        List<Long> receiverIds = allLines.stream().map(ApprovalLine::getEmpId).toList();
 
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)

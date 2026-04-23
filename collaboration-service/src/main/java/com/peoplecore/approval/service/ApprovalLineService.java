@@ -216,6 +216,13 @@ public class ApprovalLineService {
         myLine.markRead();
         document.reject();
 
+        /* 내가 반려했으니 아직 PENDING 인 다른 결재자 라인들(같은 step 병렬합의자 + 뒷 step)은 모두 취소 처리 */
+        lineRepository.findByDocId_DocIdOrderByLineStep(docId).stream()
+                .filter(l -> !l.getLineId().equals(myLine.getLineId())
+                        && l.getApprovalRole() == ApprovalRole.APPROVER
+                        && l.getApprovalLineStatus() == ApprovalLineStatus.PENDING)
+                .forEach(ApprovalLine::cancel);
+
         /* 초과근무/휴가 반려 이벤트 발행 — Publisher 내부에서 formName 분기 */
         approvalEventPublisher.publishResult(document, "REJECTED", empId, reason);
 
