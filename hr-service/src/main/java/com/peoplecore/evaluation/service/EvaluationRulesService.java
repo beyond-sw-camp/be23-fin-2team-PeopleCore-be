@@ -1,6 +1,7 @@
 package com.peoplecore.evaluation.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.evaluation.domain.EvaluationRules;
@@ -11,9 +12,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 // 평가규칙 - 회사별 전사 공통 규칙 (Company 와 1:1, 시즌과 무관하게 자유 편집)
@@ -44,7 +48,7 @@ public class EvaluationRulesService {
         EvaluationRules rules = rulesRepository.findByCompany_CompanyId(companyId)
                 .orElseThrow(() -> new IllegalStateException("회사 규칙이 초기화되지 않았습니다"));
 
-        String formValuesJson = serializeFormValues(req);
+        String formValuesJson = serializeFormValues(req, rules.getFormValues());
         EvaluationRulesDto.TaskGradeWeight tgw = req.getTaskGradeWeight();
 
         // null 오면 기존값 유지
@@ -110,17 +114,79 @@ public class EvaluationRulesService {
     }
 
     //    Request -> formValues JSON 직렬화, LinkedHashMap으로 키 순서 고정
-    private String serializeFormValues(EvaluationRulesSaveRequestDto req) {
+    //    - itemList: 기존 DB 의 locked 항목은 그대로 유지(덮어쓰기/삭제 차단), 나머지는 요청값으로 대체
+    //    - 다른 섹션: 요청 null이면 기존 DB 값 유지 (한 섹션 누락이 전체 날리는 사고 방지)
+    private String serializeFormValues(EvaluationRulesSaveRequestDto req, String existingJson) {
+        Map<String, Object> existing = parseFormValuesSafely(existingJson);
         Map<String, Object> form = new LinkedHashMap<>();
-        form.put("itemList", req.getItemList());             // FormSnapshotDto.itemList 와 키 맞춤
-        form.put("gradeRules", req.getGrades());              // FormSnapshotDto.gradeRules
-        form.put("adjustments", req.getAdjustItems());        // FormSnapshotDto.adjustments
-        form.put("rawScoreTable", req.getGradeItems());       // FormSnapshotDto.rawScoreTable
-        form.put("kpiScoring", req.getKpiScoringConfig());    // FormSnapshotDto.kpiScoring
+
+        // itemList: DB 의 locked 항목 보호 + 요청의 non-locked 만 반영
+        form.put("itemList", mergeItemList(req.getItemList(), existing));
+
+        // 나머지 섹션: 요청 null이면 기존값 유지
+        form.put("gradeRules",    req.getGrades() != null           ? req.getGrades()           : existing.get("gradeRules"));
+        form.put("adjustments",   req.getAdjustItems() != null      ? req.getAdjustItems()      : existing.get("adjustments"));
+        form.put("rawScoreTable", req.getGradeItems() != null       ? req.getGradeItems()       : existing.get("rawScoreTable"));
+        form.put("kpiScoring",    req.getKpiScoringConfig() != null ? req.getKpiScoringConfig() : existing.get("kpiScoring"));
+
         try {
             return objectMapper.writeValueAsString(form);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("평가규칙 JSON 직렬화 실패", e);
+        }
+    }
+
+    // itemList 병합 — 회사 생성 시 넣어둔 locked 항목은 덮어쓰기/삭제 불가
+    private List<Map<String, Object>> mergeItemList(List<EvaluationRulesDto.EvalItem> reqItems,
+                                                    Map<String, Object> existingForm) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        Set<String> lockedIds = new HashSet<>();
+
+        // DB의 itemList 를 EvalItem DTO 로 변환 (타입 안전)
+        List<EvaluationRulesDto.EvalItem> existingItems = objectMapper.convertValue(
+                existingForm.get("itemList"),
+                new TypeReference<List<EvaluationRulesDto.EvalItem>>() {}
+        );
+
+        if (existingItems != null) {
+            for (EvaluationRulesDto.EvalItem item : existingItems) {
+                if (!Boolean.TRUE.equals(item.getLocked())) continue;
+                Map<String, Object> copy = new LinkedHashMap<>();
+                copy.put("id", item.getId());
+                copy.put("name", item.getName());
+                copy.put("weight", item.getWeight());
+                copy.put("locked", true);
+                copy.put("enabled", item.getEnabled() != null ? item.getEnabled() : Boolean.TRUE);
+                result.add(copy);
+                if (item.getId() != null) lockedIds.add(item.getId());
+            }
+        }
+
+        if (reqItems != null) {
+            for (EvaluationRulesDto.EvalItem item : reqItems) {
+                if (item == null || item.getId() == null) continue;
+                if (lockedIds.contains(item.getId())) continue;  // locked ID 는 스킵 (덮어쓰기 차단)
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("id", item.getId());
+                m.put("name", item.getName());
+                m.put("weight", item.getWeight());
+                m.put("locked", false);
+                m.put("enabled", item.getEnabled() != null ? item.getEnabled() : Boolean.TRUE);
+                result.add(m);
+            }
+        }
+        return result;
+    }
+
+    // 기존 form_values JSON 파싱 (null/파싱에러 방어 -> 빈 Map)
+    private Map<String, Object> parseFormValuesSafely(String json) {
+        if (json == null || json.isBlank()) return new LinkedHashMap<>();
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> parsed = objectMapper.readValue(json, Map.class);
+            return parsed != null ? parsed : new LinkedHashMap<>();
+        } catch (Exception e) {
+            return new LinkedHashMap<>();
         }
     }
 
