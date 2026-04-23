@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 
@@ -67,9 +68,9 @@ public class ApprovalDocumentService {
         this.hrServiceClient = hrServiceClient;
     }
 
-    /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번*/
+    /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번 + 첨부 업로드 */
     @Transactional
-    public Long createDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request) {
+    public Long createDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request, List<MultipartFile> files) {
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
         /* 근태 정정 / 휴가 부여 신청 양식이면 결재선에 HR 사원 포함 여부 검증 */
         String formCode = form.getFormCode();
@@ -156,6 +157,11 @@ public class ApprovalDocumentService {
         List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId());
         approvalEventPublisher.publishDocCreated(document, savedLines);
 
+        /* 첨부파일이 같이 왔으면 MinIO + DB 저장 (같은 트랜잭션) */
+        if (files != null && !files.isEmpty()) {
+            attachmentService.uploadAttachments(companyId, empId, document.getDocId(), files);
+        }
+
         return document.getDocId();
     }
 
@@ -189,9 +195,9 @@ public class ApprovalDocumentService {
         return response;
     }
 
-    /*문서 수정( 임시 저장 문서만 )*/
+    /* 문서 수정 (임시 저장 문서) + 신규 첨부 추가 (기존 첨부는 유지, 개별 삭제는 DELETE /attachments/{attachId}) */
     @Transactional
-    public void updateDocument(UUID companyId, Long empId, Long docId, DocumentUpdateRequest request) {
+    public void updateDocument(UUID companyId, Long empId, Long docId, DocumentUpdateRequest request, List<MultipartFile> files) {
         ApprovalDocument document = findOwnDraftDocument(companyId, empId, docId);
         document.updateDraft(request.getDocTitle(), request.getDocData(), request.getIsEmergency());
 
@@ -200,6 +206,11 @@ public class ApprovalDocumentService {
             lineRepository.deleteByDocId_DocId(docId);
             lineRepository.flush();
             saveApprovalLine(companyId, document, request.getApprovalLines());
+        }
+
+        /* 신규 첨부 추가 업로드 */
+        if (files != null && !files.isEmpty()) {
+            attachmentService.uploadAttachments(companyId, empId, docId, files);
         }
     }
 
@@ -214,9 +225,9 @@ public class ApprovalDocumentService {
     }
 
 
-    /*임시 저장 - Draft 상태로 생성 (채번 없음) */
+    /* 임시 저장 - Draft 상태로 생성 (채번 없음) + 첨부 업로드 */
     @Transactional
-    public Long saveTempDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request) {
+    public Long saveTempDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request, List<MultipartFile> files) {
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
         /*동기 요청*/
         DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
@@ -245,14 +256,20 @@ public class ApprovalDocumentService {
         if (request.getApprovalLines() != null && !request.getApprovalLines().isEmpty()) {
             saveApprovalLine(companyId, document, request.getApprovalLines());
         }
+
+        /* 임시저장 단계에서도 첨부 허용 */
+        if (files != null && !files.isEmpty()) {
+            attachmentService.uploadAttachments(companyId, empId, document.getDocId(), files);
+        }
+
         return document.getDocId();
     }
 
 
     /*임시 저장 수정*/
     @Transactional
-    public void updateTempDocument(UUID companyId, Long empId, Long docId, DocumentUpdateRequest request) {
-        updateDocument(companyId, empId, docId, request);
+    public void updateTempDocument(UUID companyId, Long empId, Long docId, DocumentUpdateRequest request, List<MultipartFile> files) {
+        updateDocument(companyId, empId, docId, request, files);
     }
 
     /*임시 저장 -> 결재 요청 전환(상태 패턴을 사용 + 낙관적 락)*/
@@ -331,7 +348,7 @@ public class ApprovalDocumentService {
      */
     @Transactional
     public Long resubmitDocument(UUID companyId, Long empId, Long deptId,
-                                 Long docId, DocumentUpdateRequest request) {
+                                 Long docId, DocumentUpdateRequest request, List<MultipartFile> files) {
         ApprovalDocument prev = documentRepository.findByDocIdAndCompanyId(docId, companyId)
                 .orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
@@ -479,6 +496,11 @@ public class ApprovalDocumentService {
         /* hr-service 에 docCreated 이벤트 발행 — 새 문서를 새 기안처럼 전파 */
         List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(newDoc.getDocId());
         approvalEventPublisher.publishDocCreated(newDoc, savedLines);
+
+        /* 재기안 시 신규로 추가되는 첨부 업로드 (이전 첨부는 위에서 row 복제됨) */
+        if (files != null && !files.isEmpty()) {
+            attachmentService.uploadAttachments(companyId, empId, newDoc.getDocId(), files);
+        }
 
         return newDoc.getDocId();
     }
