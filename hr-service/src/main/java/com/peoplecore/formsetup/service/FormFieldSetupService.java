@@ -213,7 +213,6 @@ public class FormFieldSetupService {
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "empId", "사번", "시스템 계정 설정", FieldType.AUTO, true, true, 1, null, null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "companyEmail", "사내 이메일", "시스템 계정 설정", FieldType.TEXT, true, true, 2, null, null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "pwMethod", "초기 비밀번호 발급 방식", "시스템 계정 설정", FieldType.RADIO, true, true, 3, null, null));
-        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "mailQuota", "메일함 용량", "시스템 계정 설정", FieldType.SELECT, true, false, 4, "[\"5 GB (기본)\",\"10 GB\",\"20 GB\",\"50 GB\"]", null));
 
         // 메뉴 / 기능 권한 설정
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "authTemplate", "권한 템플릿", "메뉴 / 기능 권한 설정", FieldType.SELECT, true, true, 1, "[\"일반 사원 (기본)\",\"팀장\",\"HR 담당자\",\"재무 담당자\",\"시스템 관리자\"]", null));

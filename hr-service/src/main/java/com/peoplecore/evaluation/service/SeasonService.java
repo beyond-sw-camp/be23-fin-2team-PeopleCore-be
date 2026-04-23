@@ -155,9 +155,9 @@ public class SeasonService {
             if (s.getStartDate().isBefore(seasonStart) || s.getEndDate().isAfter(seasonEnd)) {
                 throw new IllegalArgumentException((i + 1) + "번째 단계는 시즌 기간 내여야 합니다");
             }
-            // 시작일 겹침 허용, 이전 단계보다 앞서지만 않으면 OK
-            if (prevStart != null && s.getStartDate().isBefore(prevStart)) {
-                throw new IllegalArgumentException((i + 1) + "번째 단계 시작일은 이전 단계 시작일보다 앞설 수 없습니다");
+            // 이전 단계보다 반드시 이후여야 함 (같은 날짜 불허)
+            if (prevStart != null && !s.getStartDate().isAfter(prevStart)) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계 시작일은 이전 단계 시작일보다 이후여야 합니다");
             }
             prevStart = s.getStartDate();
         }

@@ -73,6 +73,10 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "emp_type", nullable = false)
     private EmpType empType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "job_type")
+    private JobType jobType;
+
     @Column(name = "emp_resign")
     private LocalDate empResignDate;
 
@@ -138,11 +142,6 @@ public class Employee extends BaseTimeEntity {
     private String empAddressDetail;
 
 
-    //하드코딩 커스텀 고려
-    @Column(name = "emp_mailbox_size")
-    @Builder.Default
-    private String empMailboxSize= "5GB";
-
 //    사원이 비밀번호 변경을 필수로 해야하는지 여부
     @Builder.Default
     @Column(nullable = false)
@@ -186,9 +185,9 @@ public class Employee extends BaseTimeEntity {
     public void updateInfo(String empName, String empNameEn, LocalDate empBirthDate,
                            EmpGender empGender, String empPhone, String empPersonalEmail,
                            String empZipCode, String empAddressBase, String empAddressDetail,
-                           LocalDate empHireDate, EmpType empType,
+                           LocalDate empHireDate, EmpType empType, JobType jobType,
                            Department dept, Grade grade, Title title,
-                           EmpRole empRole, String empMailboxSize) {
+                           EmpRole empRole) {
         this.empName = empName;
         this.empNameEn = empNameEn;
         this.empBirthDate = empBirthDate;
@@ -200,11 +199,11 @@ public class Employee extends BaseTimeEntity {
         this.empAddressDetail = empAddressDetail;
         this.empHireDate = empHireDate;
         this.empType = empType;
+        this.jobType = jobType;
         this.dept = dept;
         this.grade = grade;
         this.title = title;
         this.empRole = empRole;
-        this.empMailboxSize = empMailboxSize;
     }
 
 
