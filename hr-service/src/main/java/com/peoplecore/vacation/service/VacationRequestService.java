@@ -6,6 +6,7 @@ import com.peoplecore.event.VacationApprovalDocCreatedEvent;
 import com.peoplecore.event.VacationApprovalResultEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
 import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
 import com.peoplecore.vacation.entity.AbstractApprovalBoundRequest;
@@ -15,6 +16,7 @@ import com.peoplecore.vacation.entity.VacationLedger;
 import com.peoplecore.vacation.entity.VacationPolicy;
 import com.peoplecore.vacation.entity.VacationRequest;
 import com.peoplecore.vacation.entity.VacationType;
+import com.peoplecore.vacation.repository.VacationBalanceQueryRepository;
 import com.peoplecore.vacation.repository.VacationBalanceRepository;
 import com.peoplecore.vacation.repository.VacationLedgerRepository;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
@@ -49,6 +51,7 @@ public class VacationRequestService {
     private final VacationBalanceRepository vacationBalanceRepository;
     private final VacationLedgerRepository vacationLedgerRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
+    private final VacationBalanceQueryRepository vacationBalanceQueryRepository;
 
     @Autowired
     public VacationRequestService(VacationRequestRepository vacationRequestRepository,
@@ -57,7 +60,8 @@ public class VacationRequestService {
                                   EmployeeRepository employeeRepository,
                                   VacationBalanceRepository vacationBalanceRepository,
                                   VacationLedgerRepository vacationLedgerRepository,
-                                  VacationPolicyRepository vacationPolicyRepository) {
+                                  VacationPolicyRepository vacationPolicyRepository,
+                                  VacationBalanceQueryRepository vacationBalanceQueryRepository) {
         this.vacationRequestRepository = vacationRequestRepository;
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
         this.vacationTypeRepository = vacationTypeRepository;
@@ -65,6 +69,7 @@ public class VacationRequestService {
         this.vacationBalanceRepository = vacationBalanceRepository;
         this.vacationLedgerRepository = vacationLedgerRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
+        this.vacationBalanceQueryRepository = vacationBalanceQueryRepository;
     }
 
     /* Kafka(vacation-approval-doc-created) 진입 - PENDING INSERT + Balance markPending */
@@ -213,5 +218,18 @@ public class VacationRequestService {
         return vacationPolicyRepository.findByCompanyId(companyId)
                 .map(VacationPolicy::isAdvanceUseActive)
                 .orElse(false);
+    }
+
+    /* 본인 Balance 존재하는 활성 휴가 유형 - 휴가 사용 신청 모달 드롭다운 */
+    /* isActive 필터는 쿼리단에서 처리. 잔여량 음수/성별 제한은 포함 (프론트 판단) */
+    /* 정렬: VacationType.sortOrder ASC (쿼리에서 보장) */
+    @Transactional(readOnly = true)
+    public List<MyVacationTypeResponseDto> listMyVacationTypes(UUID companyId, Long empId) {
+        int year = LocalDate.now().getYear();
+        return vacationBalanceQueryRepository
+                .findAllByEmpYearFetchType(companyId, empId, year)
+                .stream()
+                .map(MyVacationTypeResponseDto::from)
+                .toList();
     }
 }

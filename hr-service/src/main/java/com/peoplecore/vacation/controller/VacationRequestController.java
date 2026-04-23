@@ -2,6 +2,7 @@ package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.vacation.dto.CancelRequest;
+import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
 import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
 import com.peoplecore.vacation.entity.RequestStatus;
@@ -66,5 +67,14 @@ public class VacationRequestController {
             @RequestBody CancelRequest body) {
         vacationRequestService.cancelByAdmin(companyId, managerId, requestId, body.getReason());
         return ResponseEntity.noContent().build();
+    }
+
+    /* 본인 보유 휴가 유형 - 휴가 사용 신청 모달 드롭다운 */
+    /* Balance 존재 + isActive 유형만. 잔여량/선사용 가능 판단은 프론트 */
+    @GetMapping("/my-vacation-types")
+    public ResponseEntity<List<MyVacationTypeResponseDto>> listMyVacationTypes(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId) {
+        return ResponseEntity.ok(vacationRequestService.listMyVacationTypes(companyId, empId));
     }
 }

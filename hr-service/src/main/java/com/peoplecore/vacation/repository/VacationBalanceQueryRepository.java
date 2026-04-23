@@ -141,9 +141,10 @@ public class VacationBalanceQueryRepository {
     }
 
     /*
-     * 사원 특정 연도 모든 유형 잔여 + VacationType fetch join
-     * 용도: 사원 "내 잔여 보기" 화면 (월차/연차/특수휴가 등 한 번에)
+     * 사원 특정 연도 활성 유형 잔여 + VacationType fetch join
+     * 용도: 휴가 사용 신청 모달 드롭다운 (MyVacationType), 내 잔여 화면
      * N+1 방지: VacationType 같이 로드 (typeName/typeCode 표시용)
+     * 필터: VacationType.isActive=true - 비활성 유형은 신규 신청 불가라 제외 (GRANT 쿼리와 일관)
      * 정렬: VacationType.sortOrder 오름차순
      */
     public List<VacationBalance> findAllByEmpYearFetchType(UUID companyId, Long empId, Integer year) {
@@ -156,7 +157,8 @@ public class VacationBalanceQueryRepository {
                 .where(
                         b.companyId.eq(companyId),
                         b.employee.empId.eq(empId),
-                        b.balanceYear.eq(year)
+                        b.balanceYear.eq(year),
+                        t.isActive.isTrue()
                 )
                 .orderBy(t.sortOrder.asc())
                 .fetch();
