@@ -133,36 +133,47 @@ public class VacationRequestService {
     }
 
     /* Kafka(vacation-approval-result) 진입 - 상태 전이 + Balance 반영 */
+    /* 멱등: 이미 newStatus 로 전이된 건 조용히 skip (재수신 방어) — 첫 처리 결과(manager/processedAt/rejectReason) 보존 */
+    /* CANCELED 는 기안자 회수 경로. PENDING 에서만 수신 가정 (APPROVED→CANCELED 는 관리자 직권 API 로만 처리) */
     public void applyApprovalResult(VacationApprovalResultEvent event) {
         // 조회 키는 approvalDocId - publisher 가 vacReqId 를 채우지 못해 NULL 로 들어옴
-        // docCreated 중복 방어와 동일 인덱스(idx_vr_approval_doc) 재사용
         VacationRequest request = vacationRequestRepository
                 .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId())
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND));
 
         RequestStatus newStatus = RequestStatus.valueOf(event.getStatus());
+
+        // 멱등 가드: 이미 같은 상태면 첫 처리 결과 보존하고 no-op
+        if (request.getRequestStatus() == newStatus) {
+            log.info("[VacationRequest] applyApprovalResult 중복 수신 skip - requestId={}, status={}",
+                    request.getRequestId(), newStatus);
+            return;
+        }
+
+        RequestStatus currentStatus = request.getRequestStatus();     // apply 전 캡처 (balance 처리 분기 근거)
         Employee manager = (event.getManagerId() != null)
                 ? employeeRepository.findById(event.getManagerId())
                     .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND))
                 : null;
 
-        request.apply(newStatus, manager, event.getRejectReason());
-
-        // 상태 패턴 위임: pending→used or releasePending
         Integer balanceYear = request.getRequestStartAt().toLocalDate().getYear();
         VacationBalance balance = vacationBalanceRepository
                 .findOne(request.getCompanyId(),
                          request.getEmployee().getEmpId(),
                          request.getVacationType().getTypeId(),
                          balanceYear)
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT));
+                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_NOT_FOUND));
 
-        Optional<VacationLedger> ledgerToSave = newStatus.applyKafkaResult(
-                balance, request.getRequestUseDays(), request.getRequestId(), event.getManagerId());
+        // 상태 패턴 위임: currentStatus 가 newStatus 로의 전이 책임. PENDING 만 override, 그 외는 멱등 가드로 이미 걸러짐
+        Optional<VacationLedger> ledgerToSave = currentStatus.kafkaTransitionTo(
+                newStatus, balance, request.getRequestUseDays(),
+                request.getRequestId(), event.getManagerId(), event.getRejectReason());
+
+        request.apply(newStatus, manager, event.getRejectReason());  // 상태 전이 커밋
         ledgerToSave.ifPresent(vacationLedgerRepository::save);
 
-        log.info("[VacationRequest] 결재 결과 반영 - requestId={}, status={}, managerId={}",
-                request.getRequestId(), newStatus, event.getManagerId());
+        log.info("[VacationRequest] 결재 결과 반영 - requestId={}, {}→{}, managerId={}",
+                request.getRequestId(), currentStatus, newStatus, event.getManagerId());
     }
 
     /* 전사 휴가 관리 - 기간 교집합 + 상태 복수 필터 페이지 */
@@ -199,7 +210,8 @@ public class VacationRequestService {
     private void cancelInternal(VacationRequest request, Long actorId, String reason, boolean isAdmin) {
         RequestStatus currentStatus = request.getRequestStatus();   // apply 전 캡처
 
-        Employee actor = employeeRepository.findById(actorId)
+        // 회사 스코프 내 actor 조회 - 타 회사 empId 탈취 방어 (Gateway 보장 이중 방어)
+        Employee actor = employeeRepository.findByEmpIdAndCompany_CompanyId(actorId, request.getCompanyId())
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
         if (isAdmin) {
@@ -214,7 +226,7 @@ public class VacationRequestService {
                          request.getEmployee().getEmpId(),
                          request.getVacationType().getTypeId(),
                          balanceYear)
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT));
+                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_NOT_FOUND));
 
         Optional<VacationLedger> ledgerToSave = currentStatus.cancelFrom(
                 balance, request.getRequestUseDays(), request.getRequestId(), actorId, reason);

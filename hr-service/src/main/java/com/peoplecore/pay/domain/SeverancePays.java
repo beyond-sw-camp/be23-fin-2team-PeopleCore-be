@@ -66,6 +66,7 @@ public class SeverancePays extends BaseTimeEntity {
 //    평균임금 산정용역 연차수당
     private Long annualLeaveForAvgWage;
 //    퇴직정산 별도지급 연차수당
+    @Builder.Default
     private Long annualLeaveOnRetirement = 0L;
 
 //    직전 3개월 총 일수

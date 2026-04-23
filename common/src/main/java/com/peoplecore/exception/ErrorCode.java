@@ -233,6 +233,7 @@ public enum ErrorCode {
     VACATION_POLICY_NOTICE_ORDER_INVALID(400, "2차 통지는 1차 통지보다 만료일에 가까워야 합니다."),
     VACATION_BALANCE_CAP_EXCEEDED(409, "연 최대 적립 일수를 초과했습니다."),
     VACATION_BALANCE_INSUFFICIENT(409, "휴가 잔여가 부족합니다."),
+    VACATION_BALANCE_NOT_FOUND(404, "휴가 잔여 정보를 찾을 수 없습니다."),
     VACATION_BALANCE_PENDING_INSUFFICIENT(500, "잔여 대기 일수 정합성 오류 — 관리자 문의 필요."),
     VACATION_BALANCE_USED_INSUFFICIENT(500, "잔여 사용 일수 정합성 오류 — 관리자 문의 필요."),
     VACATION_TYPE_SYSTEM_RESERVED(400, "시스템 예약 휴가 유형은 변경/삭제할 수 없습니다."),
