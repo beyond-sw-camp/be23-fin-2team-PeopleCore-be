@@ -33,7 +33,7 @@ public class SeasonScheduler {
         this.transitionExecutor = transitionExecutor;
     }
 
-//    자정 시작 — 건별 트랜잭션은 executor/SeasonService 가 각자 보유
+//    자정 시작 — 건별 트랜잭션은 executor/SeasonService 각자 보유
     @Scheduled(cron = "0 0 0 * * *")
     public void transitionByDate(){
         LocalDate today = LocalDate.now();

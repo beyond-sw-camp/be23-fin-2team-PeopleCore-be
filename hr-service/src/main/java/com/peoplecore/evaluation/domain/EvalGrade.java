@@ -33,6 +33,10 @@ public class EvalGrade extends BaseTimeEntity {
     @Column(name = "self_score", precision = 6, scale = 2)
     private BigDecimal selfScore; // 자기평가 원점수 (편향보정 대상 아님)
 
+    // 자기평가 clip 전 가중평균 [0, cap] - scaleTo 초과 시 등급 보정 후보 판정에 사용
+    @Column(name = "raw_self_score", precision = 6, scale = 2)
+    private BigDecimal rawSelfScore;
+
     @Column(name = "manager_score", precision = 6, scale = 2)
     private BigDecimal managerScore; // 상위자평가 원점수 (편향보정 대상)
 
@@ -110,8 +114,10 @@ public class EvalGrade extends BaseTimeEntity {
 
 //    자동산정 결과 - 자기/상위자 원점수 + 가중평균/가감/종합 분리 저장
 //    - selfScore, managerScore: 편향보정 시 상위자점수만 보정하기 위한 원점수 분리
-    public void applyTotalScore(BigDecimal selfScore, BigDecimal managerScore,
+//    - rawSelfScore: clip 전 가중평균 (scaleTo 초과 시 등급 보정 후보 판정용)
+    public void applyTotalScore(BigDecimal rawSelfScore, BigDecimal selfScore, BigDecimal managerScore,
                                 BigDecimal weighted, BigDecimal adjustment, BigDecimal total){
+        this.rawSelfScore = rawSelfScore;
         this.selfScore = selfScore;
         this.managerScore = managerScore;
         this.weightedScore = weighted;

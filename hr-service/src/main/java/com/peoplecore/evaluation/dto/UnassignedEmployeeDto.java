@@ -8,6 +8,7 @@ import lombok.*;
 @AllArgsConstructor
 @NoArgsConstructor
 public class UnassignedEmployeeDto {
+    private Long empId;        // 확정 시 acknowledgedEmpIds 로 돌려받기 위한 식별자
     private String empNum;     // 사번
     private String empName;    // 이름
     private String deptName;   // 부서 (시즌 오픈 시 스냅샷)

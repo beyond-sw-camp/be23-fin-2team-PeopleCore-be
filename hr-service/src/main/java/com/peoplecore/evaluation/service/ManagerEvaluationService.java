@@ -6,6 +6,7 @@ import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.Goal;
 import com.peoplecore.evaluation.domain.GoalApprovalStatus;
+import com.peoplecore.evaluation.domain.GoalType;
 import com.peoplecore.evaluation.domain.ManagerEvaluation;
 import com.peoplecore.evaluation.domain.MyResultStatus;
 import com.peoplecore.evaluation.domain.Season;
@@ -188,16 +189,16 @@ public class ManagerEvaluationService {
         List<ManagerEvalAchievementDto.OkrItem> okrList = new ArrayList<>();
         for (Goal g : goals) {
             SelfEvaluation se = selfByGoalId.get(g.getGoalId());
-            if ("KPI".equals(g.getGoalType())) {
+            if (g.getGoalType() == GoalType.KPI) {
                 kpiList.add(ManagerEvalAchievementDto.KpiItem.builder()
                         .category(g.getCategory())
                         .title(g.getTitle())
                         .targetValue(g.getTargetValue())
                         .targetUnit(g.getTargetUnit())
                         .actualValue(se != null ? se.getActualValue() : null)
-                        .direction(g.getKpiTemplate() != null ? g.getKpiTemplate().getDirection() : null)
+                        .direction(g.getKpiDirection())
                         .build());
-            } else if ("OKR".equals(g.getGoalType())) {
+            } else if (g.getGoalType() == GoalType.OKR) {
                 String selfLevel = null;
                 if (se != null && se.getAchievementLevel() != null) {
                     selfLevel = se.getAchievementLevel().name();

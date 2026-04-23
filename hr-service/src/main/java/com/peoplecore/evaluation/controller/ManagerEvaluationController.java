@@ -6,22 +6,29 @@ import com.peoplecore.evaluation.dto.ManagerEvalRequest;
 import com.peoplecore.evaluation.dto.MySeasonOptionDto;
 import com.peoplecore.evaluation.dto.TeamMemberEvalListDto;
 import com.peoplecore.evaluation.dto.TeamMemberResultDto;
+import com.peoplecore.evaluation.service.EvaluatorRoleService;
 import com.peoplecore.evaluation.service.ManagerEvaluationService;
+import com.peoplecore.exception.BusinessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
 
-// 팀장 평가 - 팀원 1명당 등급/코멘트/피드백 1건 (사원별 1건)
+// 팀장 평가 - 팀원 1명당 등급/코멘트/피드백 1건 (사원별 1건). 모든 엔드포인트는 평가자 가드 필수.
 @RestController
 @RequestMapping("/eval/manager-evaluations")
 public class ManagerEvaluationController {
 
     private final ManagerEvaluationService mgrEvalService;
+    private final EvaluatorRoleService evaluatorRoleService;
 
-    public ManagerEvaluationController(ManagerEvaluationService mgrEvalService) {
+    public ManagerEvaluationController(
+            ManagerEvaluationService mgrEvalService,
+            EvaluatorRoleService evaluatorRoleService) {
         this.mgrEvalService = mgrEvalService;
+        this.evaluatorRoleService = evaluatorRoleService;
     }
 
 
@@ -30,6 +37,7 @@ public class ManagerEvaluationController {
     public ResponseEntity<List<TeamMemberEvalListDto>> getTeamMembers(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long managerEmpId) {
+        requireEvaluator(companyId, managerEmpId);
         return ResponseEntity.ok(mgrEvalService.getTeamMembers(companyId, managerEmpId));
     }
 
@@ -40,6 +48,7 @@ public class ManagerEvaluationController {
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long managerEmpId,
             @PathVariable Long empId) {
+        requireEvaluator(companyId, managerEmpId);
         return ResponseEntity.ok(mgrEvalService.getAchievement(companyId, managerEmpId, empId));
     }
 
@@ -50,6 +59,7 @@ public class ManagerEvaluationController {
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long managerEmpId,
             @PathVariable Long empId) {
+        requireEvaluator(companyId, managerEmpId);
         return ResponseEntity.ok(mgrEvalService.getEvaluation(companyId, managerEmpId, empId));
     }
 
@@ -61,6 +71,7 @@ public class ManagerEvaluationController {
             @RequestHeader("X-User-Id") Long managerEmpId,
             @PathVariable Long empId,
             @RequestBody ManagerEvalRequest request) {
+        requireEvaluator(companyId, managerEmpId);
         mgrEvalService.saveDraft(companyId, managerEmpId, empId, request);
         return ResponseEntity.noContent().build();
     }
@@ -73,6 +84,7 @@ public class ManagerEvaluationController {
             @RequestHeader("X-User-Id") Long managerEmpId,
             @PathVariable Long empId,
             @RequestBody ManagerEvalRequest request) {
+        requireEvaluator(companyId, managerEmpId);
         mgrEvalService.submit(companyId, managerEmpId, empId, request);
         return ResponseEntity.noContent().build();
     }
@@ -88,6 +100,7 @@ public class ManagerEvaluationController {
             @RequestHeader("X-User-Id") Long managerEmpId,
             @RequestParam Long seasonId,
             @RequestParam(required = false) String gradeFilter) {
+        requireEvaluator(companyId, managerEmpId);
         return ResponseEntity.ok(mgrEvalService.getTeamResults(companyId, managerEmpId, seasonId, gradeFilter));
     }
 
@@ -97,6 +110,15 @@ public class ManagerEvaluationController {
     public ResponseEntity<List<MySeasonOptionDto>> getTeamResultSeasons(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long managerEmpId) {
+        requireEvaluator(companyId, managerEmpId);
         return ResponseEntity.ok(mgrEvalService.getTeamResultSeasons(companyId, managerEmpId));
+    }
+
+
+    // 각 엔드포인트 앞에서 호출되는 평가자 가드. empId 가 부서별 배정에 있는지만 확인.
+    private void requireEvaluator(UUID companyId, Long empId) {
+        if (!evaluatorRoleService.isEvaluator(companyId, empId)) {
+            throw new BusinessException("평가자 권한이 없습니다.", HttpStatus.FORBIDDEN);
+        }
     }
 }

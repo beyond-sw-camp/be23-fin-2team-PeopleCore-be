@@ -71,16 +71,14 @@ public class EvalGradeController {
     }
 
 
-    // 4. 편향보정 이상 팀 조회 (GradeCalibration 화면 진입 시 호출)
-    //  - DB에 저장된 EvalGrade.teamStdDev / teamSize 스냅샷을 읽어 이상 팀 복원
-    //  -  단순 조회
-    //  - 응답: processedCount(보정 처리 인원수) + zeroStdDevTeams(전원 동점 팀) + undersizedTeams(소규모 팀)
-    //  - 미실행 시 processedCount=0, 리스트 빈 배열
-    @GetMapping("/{seasonId}/bias-adjust/anomalies")
-    public ResponseEntity<BiasAdjustResultDto> getBiasAdjustAnomalies(
+    // 4. 등급 보정 검토 대상 조회 (GradeCalibration 화면 진입 시 호출)
+    //  - 편향보정 스킵된 팀 (전원 동점 / 소규모) - Z-score 보정 불가 팀
+    //  - 자기평가 scaleTo 초과로 clip 된 사원 - 알림
+    @GetMapping("/{seasonId}/calibration/review")
+    public ResponseEntity<CalibrationReviewDto> getCalibrationReview(
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long seasonId) {
-        return ResponseEntity.ok(gradeService.getBiasAdjustAnomalies(companyId, seasonId));
+        return ResponseEntity.ok(gradeService.getCalibrationReview(companyId, seasonId));
     }
 
 

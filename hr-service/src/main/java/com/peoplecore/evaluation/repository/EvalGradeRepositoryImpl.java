@@ -232,6 +232,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
         List<UnassignedEmployeeDto> dtos = new ArrayList<>();
         for (EvalGrade g : content) {
             dtos.add(UnassignedEmployeeDto.builder()
+                    .empId(g.getEmp().getEmpId())
                     .empNum(g.getEmp().getEmpNum())
                     .empName(g.getEmp().getEmpName())
                     .deptName(g.getDeptNameSnapshot())

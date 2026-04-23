@@ -1,5 +1,6 @@
 package com.peoplecore.resign.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.auth.service.FaceAuthService;
 import com.peoplecore.employee.domain.EmpStatus;
@@ -115,7 +116,7 @@ public class ResignService {
         LocalDate resignDate = null;
         try{
 //            json문자열을 map<키,값>으로 파싱
-            Map<String, String> docData = objectMapper.readValue(event.getDocData(),Map.class);
+            Map<String, String> docData = objectMapper.readValue(event.getDocData(), new TypeReference<Map<String, String>>() {});
 //            양식에 name= "resignDate"있으면 해당 값 사용
             String dateStr = docData.get("resignDate");
             if(dateStr == null){

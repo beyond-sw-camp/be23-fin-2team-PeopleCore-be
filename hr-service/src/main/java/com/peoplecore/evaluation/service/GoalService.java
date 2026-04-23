@@ -3,6 +3,7 @@ package com.peoplecore.evaluation.service;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.evaluation.domain.*;
+import com.peoplecore.evaluation.dto.GoalDeleteResultDto;
 import com.peoplecore.evaluation.dto.GoalRequest;
 import com.peoplecore.evaluation.dto.GoalResponse;
 import com.peoplecore.evaluation.dto.TeamMemberGoalResponse;
@@ -16,6 +17,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -127,7 +129,10 @@ public class GoalService {
     }
 
     //    4번 삭제 - 본인 소유 + 작성중/반려 상태만 삭제 가능
-    public void deleteGoal(UUID companyId, Long empId, Long goalId) {
+    //      - KPI 삭제 시 cascade 체크: 마지막 KPI + OKR 존재 → confirm 확인 후 OKR 일괄 삭제
+    //      - confirm=false 로 들어오면 DB 변경 없이 cascade 대상 목록을 담아 반환
+    //      - OKR 중 PENDING/APPROVED 있으면 cascade 불가 → throw (OKR 먼저 처리 유도)
+    public GoalDeleteResultDto deleteGoal(UUID companyId, Long empId, Long goalId, boolean confirm) {
 
 //        기존 목표 로드
         Goal goal = goalRepository.findById(goalId).orElse(null);
@@ -151,7 +156,59 @@ public class GoalService {
             throw new IllegalStateException("제출완료/승인된 목표는 삭제할 수 없습니다");
         }
 
+//        KPI cascade 체크
+//          - 삭제 대상이 KPI 이고 다른 KPI 가 없고 OKR 이 있으면 "마지막 KPI + OKR 잔존" 상황
+//          - confirm=false 면 삭제하지 말고 cascade 대상 목록 반환 (프론트 다이얼로그용)
+//          - confirm=true 면 OKR 전부 + 해당 KPI 일괄 삭제
+        if (goal.getGoalType() == GoalType.KPI) {
+            Long seasonId = goal.getSeason().getSeasonId();
+            List<Goal> allGoals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(empId, seasonId);
+
+            boolean hasOtherKpi = false;
+            List<Goal> okrs = new ArrayList<>();
+            for (Goal g : allGoals) {
+                if (g.getGoalId().equals(goalId)) continue;   // 자기 자신 제외
+                if (g.getGoalType() == GoalType.KPI) { hasOtherKpi = true; }
+                else if (g.getGoalType() == GoalType.OKR) { okrs.add(g); }
+            }
+
+            if (!hasOtherKpi && !okrs.isEmpty()) {
+//                cascade 가능 상태 검증 - OKR 전부 DRAFT/REJECTED 여야 일괄 삭제 가능
+                for (Goal okr : okrs) {
+                    GoalApprovalStatus okrStatus = okr.getApprovalStatus();
+                    if (okrStatus != GoalApprovalStatus.DRAFT && okrStatus != GoalApprovalStatus.REJECTED) {
+                        throw new IllegalStateException("제출완료/승인된 OKR 이 있어 KPI 를 삭제할 수 없습니다. OKR 을 먼저 처리하세요.");
+                    }
+                }
+
+                if (!confirm) {
+//                    DB 변경 없이 cascade 대상 목록만 반환 -> 프론트가 다이얼로그 띄우고 confirm=true 로 재호출
+                    List<GoalDeleteResultDto.CascadedGoal> cascaded = new ArrayList<>();
+                    for (Goal okr : okrs) {
+                        cascaded.add(GoalDeleteResultDto.CascadedGoal.builder()
+                                .goalId(okr.getGoalId())
+                                .title(okr.getTitle())
+                                .build());
+                    }
+                    return GoalDeleteResultDto.builder()
+                            .success(false)
+                            .requiresConfirm(true)
+                            .cascadedOkrs(cascaded)
+                            .build();
+                }
+
+//                confirm=true -> OKR 일괄 삭제 (KPI 삭제는 아래 공용 경로에서 수행)
+                goalRepository.deleteAll(okrs);
+            }
+        }
+
         goalRepository.delete(goal);
+
+        return GoalDeleteResultDto.builder()
+                .success(true)
+                .requiresConfirm(false)
+                .cascadedOkrs(Collections.emptyList())
+                .build();
     }
 
     //    5번 단건 제출 - 작성중/반려 상태만 제출 가능
@@ -447,6 +504,22 @@ public class GoalService {
                     || request.getDescription() == null || request.getDescription().isBlank()) {
                 throw new IllegalArgumentException("OKR 목표는 구분과 제목, 설명이 필수입니다");
             }
+//            OKR 등록/수정 시 해당 시즌에 본인의 KPI 목표가 1개 이상 있어야 허용
+//              - Phase 2 자동산정은 KPI 기반만 집계 → OKR 만 있는 사원은 self 점수 = null 로 missing 처리
+//              - 입구에서 "OKR 단독" 상태 자체를 못 만들게 차단
+//              - 수정 시에는 자기 자신 제외하고 KPI 존재 여부 판정
+            Long currentGoalId = goal.getGoalId();
+            List<Goal> existing = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(
+                    goal.getEmp().getEmpId(), goal.getSeason().getSeasonId());
+            boolean hasKpi = false;
+            for (Goal g : existing) {
+                if (currentGoalId != null && g.getGoalId().equals(currentGoalId)) continue;
+                if (g.getGoalType() == GoalType.KPI) { hasKpi = true; break; }
+            }
+            if (!hasKpi) {
+                throw new IllegalStateException("OKR 목표는 KPI 목표를 먼저 등록한 뒤 추가할 수 있습니다");
+            }
+
             goal.updateAsOkr(request.getCategory(), request.getTitle(), request.getDescription(), grade);
 
         } else {

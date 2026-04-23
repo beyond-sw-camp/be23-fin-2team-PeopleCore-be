@@ -205,6 +205,29 @@ AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
     List<Employee>findActiveByCompanyAndDept(@Param("companyId")UUID companyId,@Param("deptId") Long deptId);
 
 
+//    평가자 역할 preview 용 - 특정 직급 재직 사원
+    @Query("""
+            SELECT e FROM Employee e
+            JOIN FETCH e.dept
+            WHERE e.company.companyId = :companyId
+              AND e.grade.gradeId = :gradeId
+              AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+""")
+    List<Employee> findActiveByCompanyAndGrade(@Param("companyId") UUID companyId,
+                                               @Param("gradeId") Long gradeId);
+
+//    평가자 역할 preview 용 - 특정 직책 재직 사원
+    @Query("""
+            SELECT e FROM Employee e
+            JOIN FETCH e.dept
+            WHERE e.company.companyId = :companyId
+              AND e.title.titleId = :titleId
+              AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+""")
+    List<Employee> findActiveByCompanyAndTitle(@Param("companyId") UUID companyId,
+                                               @Param("titleId") Long titleId);
+
+
 //    최근 6개월 입사자 조회
     @Query("""
 SELECT e FROM Employee e
