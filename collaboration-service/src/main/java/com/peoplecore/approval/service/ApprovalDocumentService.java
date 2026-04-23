@@ -498,6 +498,13 @@ public class ApprovalDocumentService {
             throw new BusinessException("본인의 문서만 회수할 수 있습니다.", HttpStatus.FORBIDDEN);
         }
 
+        /* 결재자 중 한 명이라도 이미 승인했으면 회수 차단 */
+        boolean anyApproved = lineRepository.findByDocId_DocIdOrderByLineStep(docId).stream()
+                .anyMatch(line -> line.getApprovalLineStatus() == ApprovalLineStatus.APPROVED);
+        if (anyApproved) {
+            throw new BusinessException("이미 결재가 진행된 문서는 회수할 수 없습니다.");
+        }
+
         /* 상태 변경 이력 저장 */
         historyRepository.save(ApprovalStatusHistory.builder()
                 .docId(docId)
