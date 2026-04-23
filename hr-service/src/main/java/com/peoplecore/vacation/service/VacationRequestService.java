@@ -93,12 +93,29 @@ public class VacationRequestService {
             throw new CustomException(ErrorCode.VACATION_TYPE_GENDER_NOT_ALLOWED);
         }
 
-        // 보유 Balance 에서 markPending. allowAdvanceUse 회사면 available 검증 스킵
+        /* Balance 조회 - 없고 미리쓰기 허용이면 자동 생성, 비허용이면 기존대로 INSUFFICIENT */
+        /* 자동 생성 시 expiresAt 패턴은 기존 MonthlyAccrual/AnnualGrant 의 createNew 와 동일 */
         Integer balanceYear = event.getVacReqStartat().toLocalDate().getYear();
+        boolean allowNegative = isAdvanceUseAllowed(event.getCompanyId(), vacationType);
         VacationBalance balance = vacationBalanceRepository
                 .findOne(event.getCompanyId(), employee.getEmpId(), vacationType.getTypeId(), balanceYear)
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT));
-        boolean allowNegative = isAdvanceUseAllowed(event.getCompanyId(), vacationType);
+                .orElseGet(() -> {
+                    /* 미리쓰기 비허용(법정휴가 / 정책 OFF) → 기존 엄격 모드 유지 */
+                    if (!allowNegative) {
+                        throw new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT);
+                    }
+                    LocalDate today = LocalDate.now();
+                    /* 월차: hireDate + 1년 / 연차: today + 1년 - 1일 (기존 스케줄러 규칙과 동일) */
+                    LocalDate expiresAt = vacationType.isMonthly()
+                            ? employee.getEmpHireDate().plusYears(1)
+                            : today.plusYears(1).minusDays(1);
+                    log.info("[VacationRequest] Balance 자동 생성(미리쓰기) - empId={}, typeId={}, year={}, expiresAt={}",
+                            employee.getEmpId(), vacationType.getTypeId(), balanceYear, expiresAt);
+                    return vacationBalanceRepository.save(
+                            VacationBalance.createNew(
+                                    event.getCompanyId(), vacationType, employee,
+                                    balanceYear, today, expiresAt));
+                });
         balance.markPending(event.getVacReqUseDay(), allowNegative);
 
         AbstractApprovalBoundRequest.EmployeeSnapshot snapshot = new AbstractApprovalBoundRequest.EmployeeSnapshot(
@@ -222,24 +239,49 @@ public class VacationRequestService {
                 .orElse(false);
     }
 
-    /* 본인 현시점 유효 Balance - 휴가 사용 신청 모달 드롭다운 */
-    /* expires_at 기준 유효 row (HIRE 정책 입사기념일 엣지 커버), isActive=true 유형만 */
+    /* 본인 현시점 유효 Balance + 드롭다운 누락 보강 - 휴가 사용 신청 모달 드롭다운 */
+    /* 보유 Balance (expires_at 유효 + isActive=true) 는 기존대로 반환 */
+    /* 입사 1년 경과 → 연차, 미만 → 월차 중 누락된 유형 1개를 remaining=0 으로 추가 노출 */
+    /* (적립 스케줄러 실행 전·신입 4일차처럼 Balance row 가 아직 없는 케이스 커버) */
     /* allowAdvance: 회사정책 ON + 연차/월차일 때 true - 프론트 사전 검증용 */
-    /* 정렬: VacationType.sortOrder ASC */
+    /* 실제 음수 차감 차단은 submit 시점(createFromApproval) 에서 수행 */
     @Transactional(readOnly = true)
     public List<MyVacationTypeResponseDto> listMyVacationTypes(UUID companyId, Long empId) {
         LocalDate today = LocalDate.now();
-        // 회사 정책 한 번만 조회 - 유형마다 반복 조회 방지
+        /* 회사 정책 한 번만 조회 - 유형마다 반복 조회 방지 */
         boolean companyAdvanceActive = vacationPolicyRepository.findByCompanyId(companyId)
                 .map(VacationPolicy::isAdvanceUseActive)
                 .orElse(false);
 
-        return vacationBalanceQueryRepository
-                .findActiveByEmpFetchType(companyId, empId, today)
-                .stream()
-                .map(b -> MyVacationTypeResponseDto.from(
-                        b,
-                        companyAdvanceActive && (b.getVacationType().isAnnual() || b.getVacationType().isMonthly())))
-                .toList();
+        /* 기존 보유 Balance 기반 목록 (정렬: VacationType.sortOrder ASC) */
+        List<VacationBalance> balances = vacationBalanceQueryRepository
+                .findActiveByEmpFetchType(companyId, empId, today);
+
+        List<MyVacationTypeResponseDto> result = new java.util.ArrayList<>();
+        balances.forEach(b -> result.add(MyVacationTypeResponseDto.from(
+                b,
+                companyAdvanceActive && (b.getVacationType().isAnnual() || b.getVacationType().isMonthly()))));
+
+        /* 드롭다운 보강 - 입사 1년 경과 여부에 따라 연차/월차 중 누락된 유형 1개만 추가 */
+        Employee employee = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+        boolean overOneYear = !employee.getEmpHireDate().plusYears(1).isAfter(today);
+        String targetCode = overOneYear ? VacationType.CODE_ANNUAL : VacationType.CODE_MONTHLY;
+
+        boolean alreadyPresent = balances.stream()
+                .anyMatch(b -> targetCode.equals(b.getVacationType().getTypeCode()));
+        if (!alreadyPresent) {
+            /* 유형이 회사에 등록/활성화돼 있을 때만 보강. 없으면 skip */
+            vacationTypeRepository.findByCompanyIdAndTypeCode(companyId, targetCode)
+                    .filter(t -> Boolean.TRUE.equals(t.getIsActive()))
+                    .ifPresent(type -> result.add(
+                            MyVacationTypeResponseDto.ofEmpty(type, today.getYear(), companyAdvanceActive)));
+        }
+
+        /* 보강분까지 포함해 sortOrder ASC 재정렬 */
+        result.sort(java.util.Comparator.comparing(
+                MyVacationTypeResponseDto::getSortOrder,
+                java.util.Comparator.nullsLast(Integer::compareTo)));
+        return result;
     }
 }

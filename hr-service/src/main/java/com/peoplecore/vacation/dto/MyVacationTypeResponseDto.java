@@ -2,6 +2,7 @@ package com.peoplecore.vacation.dto;
 
 import com.peoplecore.vacation.entity.PayType;
 import com.peoplecore.vacation.entity.VacationBalance;
+import com.peoplecore.vacation.entity.VacationType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,6 +36,9 @@ public class MyVacationTypeResponseDto {
     /* 회기 연도 - 적립 당시 달력연도. HIRE 정책에선 실사용 연도와 다를 수 있음 (유효성은 expires_at 기준) */
     private Integer balanceYear;
 
+    /* 화면 정렬 순서 - VacationType.sortOrder 그대로. 프론트 드롭다운 ASC 정렬용 */
+    private Integer sortOrder;
+
     /* 휴가 잔여량 = total - used - pending - expired. 음수 허용 */
     private BigDecimal remainingDays;
 
@@ -50,7 +54,25 @@ public class MyVacationTypeResponseDto {
                 .deductUnit(b.getVacationType().getDeductUnit())
                 .payType(b.getVacationType().getPayType())
                 .balanceYear(b.getBalanceYear())
+                .sortOrder(b.getVacationType().getSortOrder())
                 .remainingDays(b.getAvailableDays())
+                .allowAdvance(allowAdvance)
+                .build();
+    }
+
+    /* 드롭다운 보강용 - Balance row 없는 법정 유형(연차/월차)을 remainingDays=0 으로 노출 */
+    /* 입사 기간 기준 누락된 유형 보충 시 호출. balanceYear 는 호출부에서 오늘 연도 전달 */
+    /* allowAdvance: 회사 allowAdvanceUse 값 - 실제 음수 차감 허용은 submit 시점에서 검증 */
+    public static MyVacationTypeResponseDto ofEmpty(VacationType type, Integer balanceYear, boolean allowAdvance) {
+        return MyVacationTypeResponseDto.builder()
+                .typeId(type.getTypeId())
+                .typeCode(type.getTypeCode())
+                .typeName(type.getTypeName())
+                .deductUnit(type.getDeductUnit())
+                .payType(type.getPayType())
+                .balanceYear(balanceYear)
+                .sortOrder(type.getSortOrder())
+                .remainingDays(BigDecimal.ZERO)
                 .allowAdvance(allowAdvance)
                 .build();
     }
