@@ -9,7 +9,6 @@ import lombok.*;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 /* 회사별 휴가 정책 - 회사당 1건. 발생 기준(HIRE/FISCAL) + 연차 촉진 통지 정책 */
 @Entity
@@ -26,11 +25,10 @@ import java.util.regex.Pattern;
 @Builder
 public class VacationPolicy extends BaseTimeEntity {
 
-    /* 회계연도 시작일 포맷 (mm-dd) */
-    private static final Pattern FISCAL_DATE_PATTERN =
-            Pattern.compile("^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$");
+    /* FISCAL 정책 공통 회계연도 시작일 - 1월 1일 고정 (회사별 커스텀 폐지) */
+    public static final String FIXED_FISCAL_START = "01-01";
 
-    /* 연차 발생 기준 타입 - 상태 패턴으로 fiscalYearStart 검증 분기 */
+    /* 연차 발생 기준 타입 - 상태 패턴으로 fiscalYearStart 처리 분기 */
     public enum PolicyBaseType {
         HIRE {
             /* 입사일 기준 - fiscalYearStart 무시 (null 저장) */
@@ -40,16 +38,10 @@ public class VacationPolicy extends BaseTimeEntity {
             }
         },
         FISCAL {
-            /* 회계연도 기준 - fiscalYearStart 필수 (mm-dd 형식 검증) */
+            /* 회계연도 기준 - 회사 공통 01-01 고정. 입력값 무시 */
             @Override
             public String resolveFiscalStart(String input) {
-                if (input == null || input.isBlank()) {
-                    throw new CustomException(ErrorCode.VACATION_POLICY_FISCAL_START_REQUIRED);
-                }
-                if (!FISCAL_DATE_PATTERN.matcher(input).matches()) {
-                    throw new CustomException(ErrorCode.VACATION_POLICY_FISCAL_START_INVALID);
-                }
-                return input;
+                return FIXED_FISCAL_START;
             }
         };
 

@@ -36,7 +36,7 @@ public class VacationPolicyController {
         return ResponseEntity.ok(vacationPolicyService.getVacationGrantBasis(companyId));
     }
 
-    /* 연차 지급 기준 변경 - FISCAL 선택 시 fiscalYearStart(mm-dd) 필수 (엔티티 검증) */
+    /* 연차 지급 기준 변경 - 요청의 fiscalYearStart 는 무시되고 서버가 "01-01" 강제 저장 (FISCAL 시) */
     @RoleRequired("HR_SUPER_ADMIN")
     @PutMapping("/grant-basis")
     public ResponseEntity<VacationGrantBasisDto> updateGrantBasis(

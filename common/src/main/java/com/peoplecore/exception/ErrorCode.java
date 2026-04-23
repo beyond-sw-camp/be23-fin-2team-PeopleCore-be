@@ -197,8 +197,6 @@ public enum ErrorCode {
     /* 연차 정책 */
     VACATION_POLICY_NOT_FOUND(404, "연차 정책이 존재하지 않습니다."),
     VACATION_POLICY_DUPLICATED(409, "연차 정책이 중복 존재합니다. 관리자에게 문의하세요."),
-    VACATION_POLICY_FISCAL_START_REQUIRED(400, "회계연도 시작일(mm-dd)을 지정해 주세요."),
-    VACATION_POLICY_FISCAL_START_INVALID(400, "회계연도 시작일 형식이 올바르지 않습니다. (예: 01-01)"),
     VACATION_RULE_NOT_FOUND(404, "연차 발생 규칙이 존재하지 않습니다."),
 
     OVERTIME_REQUEST_NOT_FOUND(404, "초과근무 신청을 찾을 수 없습니다"),
