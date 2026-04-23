@@ -104,7 +104,7 @@ public class ApprovalEventPublisher {
                 kafkaTemplate.send(TOPIC_VAC_GRANT_DOC_CREATED, objectMapper.writeValueAsString(event));
                 log.info("[Kafka] VacationGrant docCreated 발행 - docId={}, empId={}", document.getDocId(), document.getEmpId());
             } else if (FORM_CODE_VACATION_REQUEST.equals(formCode)) {
-                // 휴가 사용 신청 (USE)
+                // 휴가 사용 신청 (USE) - items N건을 hr 로 그대로 전달, row 분할은 hr consumer 가 처리
                 VacationUseDocData data = objectMapper.readValue(docData, VacationUseDocData.class);
                 VacationApprovalDocCreatedEvent event = VacationApprovalDocCreatedEvent.builder()
                         .companyId(document.getCompanyId())
@@ -116,14 +116,14 @@ public class ApprovalEventPublisher {
                         .empGrade(document.getEmpGrade())
                         .empTitle(document.getEmpTitle())
                         .infoId(data.getInfoId())
-                        .vacReqStartat(data.getVacReqStartat())
-                        .vacReqEndat(data.getVacReqEndat())
-                        .vacReqUseDay(data.getVacReqUseDay())
                         .vacReqReason(data.getVacReqReason())
+                        .items(data.getVacReqItems())
                         .finalApproverEmpId(findFinalApproverEmpId(lines))
                         .build();
                 kafkaTemplate.send(TOPIC_VAC_DOC_CREATED, objectMapper.writeValueAsString(event));
-                log.info("[Kafka] Vacation docCreated 발행 - docId={}, empId={}", document.getDocId(), document.getEmpId());
+                log.info("[Kafka] Vacation docCreated 발행 - docId={}, empId={}, slotCount={}",
+                        document.getDocId(), document.getEmpId(),
+                        data.getVacReqItems() == null ? 0 : data.getVacReqItems().size());
             } else if (FORM_CODE_ATTENDANCE_MODIFY.equals(formCode)) { // 근태 정정 — formCode 기반 분기
                 AttendanceModifyDocData data = objectMapper.readValue(docData, AttendanceModifyDocData.class);
                 AttendanceModifyDocCreatedEvent event = AttendanceModifyDocCreatedEvent.builder()

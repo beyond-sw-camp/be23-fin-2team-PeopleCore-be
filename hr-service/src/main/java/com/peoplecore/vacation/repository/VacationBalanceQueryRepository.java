@@ -141,6 +141,32 @@ public class VacationBalanceQueryRepository {
     }
 
     /*
+     * 사원 특정 연도 Balance + VacationType fetch join
+     * 용도: 내 휴가 현황 페이지 (연차 카드 + 기타 휴가 리스트)
+     * 조건: balance_year = year
+     *   - FISCAL: grant 시점 달력연도 = year 와 정확히 일치
+     *   - HIRE:   grant 시점 달력연도 (AnnualGrantService.grantAndRecord 에서 today.getYear())
+     *     → 발생 연도로 조회한다는 의미. expires 는 balance.expiresAt 원본 그대로 사용
+     * N+1 방지: VacationType fetch join
+     * 정렬: sortOrder ASC
+     */
+    public List<VacationBalance> findByEmpAndYearFetchType(UUID companyId, Long empId, Integer year) {
+        QVacationBalance b = QVacationBalance.vacationBalance;
+        QVacationType t = QVacationType.vacationType;
+
+        return queryFactory
+                .selectFrom(b)
+                .join(b.vacationType, t).fetchJoin()
+                .where(
+                        b.companyId.eq(companyId),
+                        b.employee.empId.eq(empId),
+                        b.balanceYear.eq(year)
+                )
+                .orderBy(t.sortOrder.asc())
+                .fetch();
+    }
+
+    /*
      * 사원의 현 시점 유효 Balance + VacationType fetch join
      * 용도: 휴가 사용 신청 모달 드롭다운 (MyVacationType)
      * 유효 기준: expires_at IS NULL (무기한) OR expires_at >= today (만료 전)

@@ -19,6 +19,9 @@ public interface ApprovalLineRepository extends JpaRepository<ApprovalLine, Long
     /* 특정 문서에서 특정 사원의 결재선 조회 */
     Optional<ApprovalLine> findByDocId_DocIdAndEmpId(Long docId, Long empId);
 
+    /*특정 문서에서 모든 결재 라인 조회*/
+    List<ApprovalLine> findAllByDocId_DocIdAndEmpId(Long docId, Long empId);
+
     /* 특정 문서의 결재자(Approval)만 조회 (결재 순대로) */
     @Query("SELECT al FROM ApprovalLine al JOIN FETCH al.docId " +
             "WHERE al.docId.docId = :docId AND al.approvalRole = :approvalRole " +

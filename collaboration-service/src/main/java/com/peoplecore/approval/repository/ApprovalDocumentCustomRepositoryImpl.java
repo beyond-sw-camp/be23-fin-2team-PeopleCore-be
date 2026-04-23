@@ -466,45 +466,17 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         return executedWithPagination(contentQuery, countQuery, pageable);
     }
 
-    /* 부서 완료 문서함 -> 부서원이 기안한 승인 완료 문서 */
+    /* 부서 문서함 - 부서원이 기안 OR 부서원이 결재라인(결재/참조/열람) 참여, 임시저장 제외 */
     @Override
-    public Page<DocumentListResponseDto> findDeptCompletedDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable) {
+    public Page<DocumentListResponseDto> findDeptDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable) {
         BooleanBuilder builder = applyCommonFilters(companyId, searchDto);
-        builder.and(doc.empDeptId.eq(deptId));
-        builder.and(doc.approvalStatus.eq(ApprovalStatus.APPROVED));
-
-        JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
-                .select(Projections.constructor(DocumentListResponseDto.class,
-                        doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
-                        doc.createdAt, hasAttachment()
-                ))
-                .from(doc)
-                .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
-
-        JPAQuery<Long> countQuery = jpaQueryFactory
-                .select(doc.count()).from(doc).where(builder);
-
-        return executedWithPagination(contentQuery, countQuery, pageable);
-    }
-
-    /* 부서 결재 수신함 */
-    @Override
-    public Page<DocumentListResponseDto> findDeptReceiveDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable) {
-        BooleanBuilder builder = applyCommonFilters(companyId, searchDto);
-        builder.and(doc.approvalStatus.eq(ApprovalStatus.PENDING));
+        builder.and(doc.approvalStatus.ne(ApprovalStatus.DRAFT));
         builder.and(
-                JPAExpressions.selectOne()
-                        .from(line)
-                        .where(
-                                line.docId.eq(doc),
-                                line.empDeptId.eq(deptId),
-                                line.approvalRole.eq(ApprovalRole.APPROVER),
-                                line.approvalLineStatus.eq(ApprovalLineStatus.PENDING)
-                        )
-                        .exists()
+                doc.empDeptId.eq(deptId)                            // 부서원이 기안
+                        .or(JPAExpressions.selectOne()              // 또는 부서원이 결재라인 참여
+                                .from(line)
+                                .where(line.docId.eq(doc), line.empDeptId.eq(deptId))
+                                .exists())
         );
 
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
@@ -611,30 +583,18 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .where(doc.companyId.eq(companyId), doc.empId.eq(empId), notExpired())
                 .fetchOne();
 
-        /* 부서 문서함: 완료/수신/발신 — 별도 1회 */
-        Tuple deptResult = jpaQueryFactory
-                .select(
-                        new CaseBuilder()
-                                .when(doc.empDeptId.eq(deptId)
-                                        .and(doc.approvalStatus.eq(ApprovalStatus.APPROVED)))
-                                .then(1).otherwise(0).sum(),
-                        new CaseBuilder()
-                                .when(doc.approvalStatus.eq(ApprovalStatus.PENDING)
-                                        .and(JPAExpressions.selectOne()
-                                                .from(line)
-                                                .where(line.docId.eq(doc),
-                                                        line.empDeptId.eq(deptId),
-                                                        line.approvalRole.eq(ApprovalRole.APPROVER),
-                                                        line.approvalLineStatus.eq(ApprovalLineStatus.PENDING))
-                                                .exists()))
-                                .then(1).otherwise(0).sum(),
-                        new CaseBuilder()
-                                .when(doc.empDeptId.eq(deptId)
-                                        .and(doc.approvalStatus.ne(ApprovalStatus.DRAFT)))
-                                .then(1).otherwise(0).sum()
-                )
+        /* 부서 문서함: 부서원 기안 OR 부서원 결재라인 참여, 임시저장 제외 */
+        Long deptCount = jpaQueryFactory
+                .select(doc.count())
                 .from(doc)
-                .where(doc.companyId.eq(companyId), notExpired())
+                .where(doc.companyId.eq(companyId),
+                        doc.approvalStatus.ne(ApprovalStatus.DRAFT),
+                        doc.empDeptId.eq(deptId)
+                                .or(JPAExpressions.selectOne()
+                                        .from(line)
+                                        .where(line.docId.eq(doc), line.empDeptId.eq(deptId))
+                                        .exists()),
+                        notExpired())
                 .fetchOne();
 
         /* 부서 폴더별 문서 개수 */
@@ -678,35 +638,10 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .inbox(result != null && result.get(5, Integer.class) != null ? result.get(5, Integer.class) : 0)
                 .draft(drafterResult != null && drafterResult.get(0, Integer.class) != null ? drafterResult.get(0, Integer.class) : 0)
                 .temp(drafterResult != null && drafterResult.get(1, Integer.class) != null ? drafterResult.get(1, Integer.class) : 0)
-                .deptCompleted(deptResult != null && deptResult.get(0, Integer.class) != null ? deptResult.get(0, Integer.class) : 0)
-                .deptReceived(deptResult != null && deptResult.get(1, Integer.class) != null ? deptResult.get(1, Integer.class) : 0)
-                .deptSent(deptResult != null && deptResult.get(2, Integer.class) != null ? deptResult.get(2, Integer.class) : 0)
+                .dept(deptCount != null ? deptCount : 0L)
                 .deptFolderCounts(deptFolderCounts)
                 .personalFolderCounts(personalFolderCounts)
                 .build();
     }
 
-    /*부서 결재 발신함*/
-    @Override
-    public Page<DocumentListResponseDto> findDeptSentDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable) {
-        BooleanBuilder builder = applyCommonFilters(companyId, searchDto);
-        builder.and(doc.empDeptId.eq(deptId));
-        builder.and(doc.approvalStatus.ne(ApprovalStatus.DRAFT));
-
-        JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
-                .select(Projections.constructor(DocumentListResponseDto.class,
-                        doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
-                        doc.createdAt, hasAttachment()
-                ))
-                .from(doc)
-                .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
-
-        JPAQuery<Long> countQuery = jpaQueryFactory
-                .select(doc.count()).from(doc).where(builder);
-
-        return executedWithPagination(contentQuery, countQuery, pageable);
-    }
 }

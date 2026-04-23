@@ -1,9 +1,12 @@
 package com.peoplecore.attendance.entity;
 
+import lombok.Getter;
+
 /**
  * 근태 현황 대시보드 "일자별" 탭의 10개 집계 카드 종류.
  * 한 사원이 여러 상태를 동시에 가질 수 있으므로 집계 시 중복 카운트 허용.
  */
+@Getter
 public enum AttendanceCardType {
 
     /** 정상 — 체크인 있고 이상 상태 없음 */
