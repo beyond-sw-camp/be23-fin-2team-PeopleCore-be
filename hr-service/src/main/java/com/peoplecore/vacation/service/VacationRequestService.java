@@ -220,16 +220,24 @@ public class VacationRequestService {
                 .orElse(false);
     }
 
-    /* 본인 Balance 존재하는 활성 휴가 유형 - 휴가 사용 신청 모달 드롭다운 */
-    /* isActive 필터는 쿼리단에서 처리. 잔여량 음수/성별 제한은 포함 (프론트 판단) */
-    /* 정렬: VacationType.sortOrder ASC (쿼리에서 보장) */
+    /* 본인 현시점 유효 Balance - 휴가 사용 신청 모달 드롭다운 */
+    /* expires_at 기준 유효 row (HIRE 정책 입사기념일 엣지 커버), isActive=true 유형만 */
+    /* allowAdvance: 회사정책 ON + 연차/월차일 때 true - 프론트 사전 검증용 */
+    /* 정렬: VacationType.sortOrder ASC */
     @Transactional(readOnly = true)
     public List<MyVacationTypeResponseDto> listMyVacationTypes(UUID companyId, Long empId) {
-        int year = LocalDate.now().getYear();
+        LocalDate today = LocalDate.now();
+        // 회사 정책 한 번만 조회 - 유형마다 반복 조회 방지
+        boolean companyAdvanceActive = vacationPolicyRepository.findByCompanyId(companyId)
+                .map(VacationPolicy::isAdvanceUseActive)
+                .orElse(false);
+
         return vacationBalanceQueryRepository
-                .findAllByEmpYearFetchType(companyId, empId, year)
+                .findActiveByEmpFetchType(companyId, empId, today)
                 .stream()
-                .map(MyVacationTypeResponseDto::from)
+                .map(b -> MyVacationTypeResponseDto.from(
+                        b,
+                        companyAdvanceActive && (b.getVacationType().isAnnual() || b.getVacationType().isMonthly())))
                 .toList();
     }
 }

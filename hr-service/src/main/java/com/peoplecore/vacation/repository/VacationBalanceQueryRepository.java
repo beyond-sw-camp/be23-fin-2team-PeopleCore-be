@@ -141,13 +141,17 @@ public class VacationBalanceQueryRepository {
     }
 
     /*
-     * 사원 특정 연도 활성 유형 잔여 + VacationType fetch join
-     * 용도: 휴가 사용 신청 모달 드롭다운 (MyVacationType), 내 잔여 화면
-     * N+1 방지: VacationType 같이 로드 (typeName/typeCode 표시용)
-     * 필터: VacationType.isActive=true - 비활성 유형은 신규 신청 불가라 제외 (GRANT 쿼리와 일관)
+     * 사원의 현 시점 유효 Balance + VacationType fetch join
+     * 용도: 휴가 사용 신청 모달 드롭다운 (MyVacationType)
+     * 유효 기준: expires_at IS NULL (무기한) OR expires_at >= today (만료 전)
+     *   - balance_year 필터 안 쓰는 이유: HIRE 정책은 입사기념일 기준 적립이라 달력연도와 엇갈림.
+     *     예) 2025-09 입사자의 2026-09 발생 연차는 balance_year=2026, expires_at=2027-08-31.
+     *        2027-01~08 시점엔 balance_year=올해(2027) 쿼리로 매칭 안 됨 → expires_at 조건이 정확.
+     * 필터: VacationType.isActive=true (비활성 유형 제외, GRANT 쿼리와 일관)
+     * N+1 방지: VacationType fetch join
      * 정렬: VacationType.sortOrder 오름차순
      */
-    public List<VacationBalance> findAllByEmpYearFetchType(UUID companyId, Long empId, Integer year) {
+    public List<VacationBalance> findActiveByEmpFetchType(UUID companyId, Long empId, LocalDate today) {
         QVacationBalance b = QVacationBalance.vacationBalance;
         QVacationType t = QVacationType.vacationType;
 
@@ -157,7 +161,7 @@ public class VacationBalanceQueryRepository {
                 .where(
                         b.companyId.eq(companyId),
                         b.employee.empId.eq(empId),
-                        b.balanceYear.eq(year),
+                        b.expiresAt.isNull().or(b.expiresAt.goe(today)),
                         t.isActive.isTrue()
                 )
                 .orderBy(t.sortOrder.asc())

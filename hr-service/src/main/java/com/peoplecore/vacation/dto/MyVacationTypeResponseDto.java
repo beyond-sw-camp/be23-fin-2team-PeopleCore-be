@@ -32,13 +32,17 @@ public class MyVacationTypeResponseDto {
     /* 유급/무급 구분 */
     private PayType payType;
 
-    /* 회기 연도 (올해 기준) */
+    /* 회기 연도 - 적립 당시 달력연도. HIRE 정책에선 실사용 연도와 다를 수 있음 (유효성은 expires_at 기준) */
     private Integer balanceYear;
 
     /* 휴가 잔여량 = total - used - pending - expired. 음수 허용 */
     private BigDecimal remainingDays;
 
-    public static MyVacationTypeResponseDto from(VacationBalance b) {
+    /* 선사용 허용 여부 - true 면 remainingDays 음수여도 신청 가능 */
+    /* 조건: 회사정책 allowAdvanceUse=true AND 유형이 연차/월차. 그 외는 false */
+    private boolean allowAdvance;
+
+    public static MyVacationTypeResponseDto from(VacationBalance b, boolean allowAdvance) {
         return MyVacationTypeResponseDto.builder()
                 .typeId(b.getVacationType().getTypeId())
                 .typeCode(b.getVacationType().getTypeCode())
@@ -47,6 +51,7 @@ public class MyVacationTypeResponseDto {
                 .payType(b.getVacationType().getPayType())
                 .balanceYear(b.getBalanceYear())
                 .remainingDays(b.getAvailableDays())
+                .allowAdvance(allowAdvance)
                 .build();
     }
 }
