@@ -1,6 +1,7 @@
 package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
+import com.peoplecore.vacation.dto.MyVacationStatusResponseDto;
 import com.peoplecore.vacation.dto.VacationAdjustmentHistoryResponseDto;
 import com.peoplecore.vacation.dto.VacationBalanceResponse;
 import com.peoplecore.vacation.dto.VacationManualGrantRequest;
@@ -54,5 +55,17 @@ public class VacationBalanceController {
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(vacationBalanceService.listAdjustmentHistory(
                 companyId, empId, year, typeId, pageable));
+    }
+
+    /* 내 휴가 현황 조회 - 휴가현황 페이지 */
+    /* year 필수 (프론트 전송). 예: GET /vacation/balances/me/status?year=2026 */
+    /* 응답: 연차 카드 + 기타 휴가 + 예정/지난 신청 */
+    /* 본인 것만 조회 (empId 헤더 기준 스코프) → @RoleRequired 불필요 */
+    @GetMapping("/me/status")
+    public ResponseEntity<MyVacationStatusResponseDto> getMyStatus(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam int year) {
+        return ResponseEntity.ok(vacationBalanceService.getMyVacationStatus(companyId, empId, year));
     }
 }

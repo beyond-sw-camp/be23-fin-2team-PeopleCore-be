@@ -166,6 +166,32 @@ public class VacationRequestQueryRepository {
     }
 
     /*
+     * 사원 + 연도 구간 교집합 신청 전체 + VacationType fetch join
+     * 용도: 내 휴가 현황 페이지 (예정/지난 분류용 원천)
+     * 조건: 휴가기간 [startAt,endAt] 이 [year-01-01 00:00, year-12-31 23:59:59] 와 교집합
+     * N+1 방지: VacationType fetch join
+     * 정렬: requestStartAt ASC (지난 리스트는 서비스에서 재정렬)
+     */
+    public List<VacationRequest> findByEmpAndYearOverlapFetchType(UUID companyId, Long empId,
+                                                                  LocalDateTime yearStart,
+                                                                  LocalDateTime yearEnd) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
+
+        return queryFactory
+                .selectFrom(r)
+                .join(r.vacationType, t).fetchJoin()
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart)
+                )
+                .orderBy(r.requestStartAt.asc())
+                .fetch();
+    }
+
+    /*
      * 사원 + 기간 교집합 + 승인 휴가 슬라이스 조회
      * 용도: 주간/월간 근태 요약 화면 - 휴가 사용 일자 표시
      * 조건: 승인된 휴가 중 [weekStart, weekEnd] 와 교집합 있는 것

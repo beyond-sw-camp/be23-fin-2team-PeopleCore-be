@@ -4,18 +4,21 @@ import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.vacation.dto.MyVacationStatusResponseDto;
 import com.peoplecore.vacation.dto.VacationAdjustmentHistoryResponseDto;
-import com.peoplecore.vacation.dto.VacationBalanceResponse;
 import com.peoplecore.vacation.dto.VacationManualGrantRequest;
+import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.entity.VacationBalance;
 import com.peoplecore.vacation.entity.VacationLedger;
 import com.peoplecore.vacation.entity.VacationPolicy;
+import com.peoplecore.vacation.entity.VacationRequest;
 import com.peoplecore.vacation.entity.VacationType;
 import com.peoplecore.vacation.repository.VacationBalanceQueryRepository;
 import com.peoplecore.vacation.repository.VacationBalanceRepository;
 import com.peoplecore.vacation.repository.VacationLedgerQueryRepository;
 import com.peoplecore.vacation.repository.VacationLedgerRepository;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
+import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,6 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,6 +52,7 @@ public class VacationBalanceService {
     private final VacationTypeRepository vacationTypeRepository;
     private final EmployeeRepository employeeRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
+    private final VacationRequestQueryRepository vacationRequestQueryRepository;
 
     @Autowired
     public VacationBalanceService(VacationBalanceRepository vacationBalanceRepository,
@@ -54,7 +61,8 @@ public class VacationBalanceService {
                                   VacationLedgerQueryRepository vacationLedgerQueryRepository,
                                   VacationTypeRepository vacationTypeRepository,
                                   EmployeeRepository employeeRepository,
-                                  VacationPolicyRepository vacationPolicyRepository) {
+                                  VacationPolicyRepository vacationPolicyRepository,
+                                  VacationRequestQueryRepository vacationRequestQueryRepository) {
         this.vacationBalanceRepository = vacationBalanceRepository;
         this.vacationBalanceQueryRepository = vacationBalanceQueryRepository;
         this.vacationLedgerRepository = vacationLedgerRepository;
@@ -62,6 +70,7 @@ public class VacationBalanceService {
         this.vacationTypeRepository = vacationTypeRepository;
         this.employeeRepository = employeeRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
+        this.vacationRequestQueryRepository = vacationRequestQueryRepository;
     }
 
     /* 관리자 연차 조정 - 다수 사원 일괄. days 양수=부여, 음수=차감 */
@@ -160,5 +169,82 @@ public class VacationBalanceService {
 
         return slice.map(l -> VacationAdjustmentHistoryResponseDto.from(
                 l, managerNameMap.get(l.getManagerId())));
+    }
+
+    /* 내 휴가 현황 조회 - 휴가현황 페이지 단일 endpoint */
+    /* year 는 프론트 필수 전송 (컨트롤러에서 보장)                                        */
+    /* balance_year 컨벤션: AnnualGrantService.grantAndRecord 가 today.getYear() 로 찍음 */
+    /*   (HIRE/FISCAL 공통) → year=YYYY = "YYYY 년도에 발생/부여된 balance"               */
+    /* HIRE period: grantedAt=기념일, expiresAt=기념일+1년-1일 (달력연도 크로스)          */
+    /* FISCAL period: grantedAt=YYYY-01-01, expiresAt=YYYY-12-31                          */
+    /* 예정/지난 분류:                                                                    */
+    /*   - PENDING → 예정                                                                 */
+    /*   - APPROVED + endAt >= now → 예정 (진행중 포함)                                   */
+    /*   - APPROVED + endAt < now → 지난                                                  */
+    /*   - REJECTED / CANCELED → 지난 (종결)                                              */
+    public MyVacationStatusResponseDto getMyVacationStatus(UUID companyId, Long empId, int year) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime yearStart = LocalDate.of(year, 1, 1).atStartOfDay();
+        LocalDateTime yearEnd = LocalDate.of(year, 12, 31).atTime(23, 59, 59);
+
+        /* balance - year 기준 전체 로드 후 ANNUAL / 기타 분리 */
+        List<VacationBalance> balances = vacationBalanceQueryRepository
+                .findByEmpAndYearFetchType(companyId, empId, year);
+
+        MyVacationStatusResponseDto.AnnualSummary annual = null;
+        List<MyVacationStatusResponseDto.OtherBalance> others = new ArrayList<>();
+
+        for (VacationBalance b : balances) {
+            if (VacationType.CODE_ANNUAL.equals(b.getVacationType().getTypeCode())) {
+                /* UNIQUE (company, emp, type, year) → ANNUAL 은 최대 1건 */
+                annual = MyVacationStatusResponseDto.AnnualSummary.builder()
+                        .periodStart(b.getGrantedAt())
+                        .periodEnd(b.getExpiresAt())
+                        .totalDays(b.getTotalDays())
+                        .usedDays(b.getUsedDays())
+                        .pendingDays(b.getPendingDays())
+                        .expiredDays(b.getExpiredDays())
+                        .availableDays(b.getAvailableDays())
+                        .build();
+            } else {
+                others.add(MyVacationStatusResponseDto.OtherBalance.from(b));
+            }
+        }
+
+        /* request - 연도 overlap 로드 후 now 기준 예정/지난 분류 */
+        List<VacationRequest> requests = vacationRequestQueryRepository
+                .findByEmpAndYearOverlapFetchType(companyId, empId, yearStart, yearEnd);
+
+        List<MyVacationStatusResponseDto.RequestItem> upcoming = new ArrayList<>();
+        List<MyVacationStatusResponseDto.RequestItem> past = new ArrayList<>();
+
+        requests.forEach(r -> {
+            RequestStatus s = r.getRequestStatus();
+            MyVacationStatusResponseDto.RequestItem item = MyVacationStatusResponseDto.RequestItem.from(r);
+            if (s == RequestStatus.REJECTED || s == RequestStatus.CANCELED) {
+                past.add(item); // 종결 - 지난
+            } else if (s == RequestStatus.PENDING) {
+                upcoming.add(item); // 대기 - 항상 예정
+            } else { // APPROVED
+                if (r.getRequestEndAt().isBefore(now)) {
+                    past.add(item);
+                } else {
+                    upcoming.add(item); // 진행중 포함
+                }
+            }
+        });
+
+        /* 지난: 최근 종료 먼저 */
+        past.sort(Comparator.comparing(
+                MyVacationStatusResponseDto.RequestItem::getEndAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
+        return MyVacationStatusResponseDto.builder()
+                .year(year)
+                .annual(annual)
+                .others(others)
+                .upcoming(upcoming)
+                .past(past)
+                .build();
     }
 }

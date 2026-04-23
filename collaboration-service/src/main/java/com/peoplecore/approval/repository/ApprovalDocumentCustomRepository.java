@@ -42,16 +42,8 @@ public interface ApprovalDocumentCustomRepository {
     /*전체 문서함 건수 조회*/
     DocumentCountResponse countAllBoxes(UUID companyId, Long empId, Long deptId);
 
-    /*부서 문서함 deptId 기준 */
-
-    /*부서 완료 문서함*/
-    Page<DocumentListResponseDto> findDeptCompletedDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable);
-
-    /*부서 수신 문서함 */
-    Page<DocumentListResponseDto> findDeptReceiveDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable);
-
-    /* 부서 발신 문서함 */
-    Page<DocumentListResponseDto> findDeptSentDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable);
+    /*부서 문서함 deptId 기준 - 부서원이 기안 OR 결재라인 참여 */
+    Page<DocumentListResponseDto> findDeptDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable);
 
 
 }
