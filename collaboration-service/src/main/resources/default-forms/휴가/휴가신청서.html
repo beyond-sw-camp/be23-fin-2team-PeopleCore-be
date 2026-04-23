@@ -61,6 +61,8 @@
   }
   .attach-cell {
     min-height: 40px;
+    color: #6b7280;
+    font-size: 12px;
   }
   .notice {
     margin-top: 10px;
@@ -72,6 +74,9 @@
     margin: 5px 0 0 20px;
     padding: 0;
   }
+  .field-input { width: 100%; border: none; font-size: 14px; font-family: inherit; background: transparent; outline: none; }
+  .field-center { text-align: center; }
+  .field-label { color: #1D9E75; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -84,7 +89,9 @@
   <table class="form-table">
     <tr>
       <th>제&nbsp;&nbsp;&nbsp;&nbsp;목</th>
-      <td colspan="3" data-dsl="text">{{text:title}}</td>
+      <td colspan="3">
+        <input type="text" name="title" class="field-input">
+      </td>
     </tr>
   </table>
 
@@ -92,19 +99,21 @@
   <table class="form-table">
     <tr>
       <th>신 청 자</th>
-      <td data-dsl="text">{{text:emp_name}}</td>
+      <td><input type="text" name="emp_name" class="field-input" readonly></td>
       <th>부&nbsp;&nbsp;&nbsp;&nbsp;서</th>
-      <td data-dsl="text">{{text:emp_dept_name}}</td>
+      <td><input type="text" name="emp_dept_name" class="field-input" readonly></td>
     </tr>
     <tr>
       <th>직&nbsp;&nbsp;&nbsp;&nbsp;급</th>
-      <td data-dsl="text">{{text:emp_grade_name}}</td>
+      <td><input type="text" name="emp_grade_name" class="field-input" readonly></td>
       <th>직&nbsp;&nbsp;&nbsp;&nbsp;책</th>
-      <td data-dsl="text">{{text:emp_title_name}}</td>
+      <td><input type="text" name="emp_title_name" class="field-input" readonly></td>
     </tr>
     <tr>
       <th>신 청 일</th>
-      <td colspan="3" data-dsl="calendar">{{calendar:request_date}}</td>
+      <td colspan="3">
+        <input type="date" name="request_date" class="field-input field-center">
+      </td>
     </tr>
   </table>
 
@@ -112,19 +121,29 @@
   <table class="form-table">
     <tr class="use-row">
       <th>휴가 종류</th>
-      <td colspan="3" data-dsl="label">{{label:vacationTypeName}}</td>
+      <td colspan="3">
+        <input type="text" name="vacationTypeName" class="field-input field-center field-label" readonly>
+        <!-- 실제 식별자는 hidden으로 전송 -->
+        <input type="hidden" name="infoId">
+      </td>
     </tr>
     <tr class="use-row">
       <th>요청 휴가일수</th>
-      <td colspan="3" class="use-cell" data-dsl="label">{{label:vacReqUseDay}} 일</td>
+      <td colspan="3" class="use-cell">
+        <input type="text" name="vacReqUseDay" class="field-input field-center field-label" readonly> 일
+      </td>
     </tr>
     <tr>
       <th>시작 일시</th>
-      <td colspan="3" data-dsl="date">{{date:vacReqStartat}}</td>
+      <td colspan="3">
+        <input type="datetime-local" name="vacReqStartat" class="field-input field-center">
+      </td>
     </tr>
     <tr>
       <th>종료 일시</th>
-      <td colspan="3" data-dsl="date">{{date:vacReqEndat}}</td>
+      <td colspan="3">
+        <input type="datetime-local" name="vacReqEndat" class="field-input field-center">
+      </td>
     </tr>
   </table>
 
@@ -132,7 +151,9 @@
   <table class="form-table">
     <tr>
       <th>사&nbsp;&nbsp;&nbsp;&nbsp;유</th>
-      <td class="reason-cell" data-dsl="editor">{{editor:vacReqReason}}</td>
+      <td class="reason-cell">
+        <textarea name="vacReqReason" rows="5" class="field-input" style="resize: vertical;"></textarea>
+      </td>
     </tr>
   </table>
 
@@ -140,19 +161,9 @@
   <table class="form-table">
     <tr>
       <th>첨부파일</th>
-      <td class="attach-cell" data-dsl="attach">{{attach:attachments}}</td>
+      <td class="attach-cell">※ 아래 첨부 영역에서 관리됩니다</td>
     </tr>
   </table>
-
-  <div class="notice">
-    ※ 유의사항
-    <ul>
-      <li>휴가 신청은 사용 3일 전까지 제출하는 것을 원칙으로 합니다.</li>
-      <li>요청 휴가일수는 잔여 휴가일수를 초과할 수 없습니다 (선사용 정책 회사는 예외).</li>
-      <li>경조사·병가 등 증빙이 필요한 휴가는 결재 첨부파일로 등록해 주세요.</li>
-      <li>법정 휴가(출산/유산 등) 부여 신청은 별도의 휴가 부여 신청서로 진행해 주세요.</li>
-    </ul>
-  </div>
 
   <p style="text-align:center; margin-top:30px; font-size:15px;">
     위와 같이 휴가를 신청합니다.
