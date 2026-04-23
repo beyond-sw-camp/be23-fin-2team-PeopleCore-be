@@ -1,3 +1,4 @@
+/*
 package com.peoplecore.permission.repository;
 
 import com.peoplecore.permission.domain.Permission;
@@ -34,3 +35,4 @@ public interface PermissionRepository extends JpaRepository<Permission, Long>,Pe
            """)
     List<Permission> findAllByCompanyOrderByProcessedAtDesc(@Param("companyId") UUID companyId);
 }
+*/

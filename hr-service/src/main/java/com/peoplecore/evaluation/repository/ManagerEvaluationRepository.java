@@ -1,10 +1,14 @@
 package com.peoplecore.evaluation.repository;
 
 import com.peoplecore.evaluation.domain.ManagerEvaluation;
+import com.peoplecore.evaluation.domain.Season;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 // 팀장평가 리포지토리
 public interface ManagerEvaluationRepository extends JpaRepository<ManagerEvaluation, Long> {
@@ -20,4 +24,17 @@ public interface ManagerEvaluationRepository extends JpaRepository<ManagerEvalua
 
 //    15번 상세 조회용 - 특정 사원이 받은 상위자평가 단건 (등급/코멘트/피드백 추출)
     Optional<ManagerEvaluation> findByEmployee_EmpIdAndSeason_SeasonId(Long employeeEmpId, Long seasonId);
+
+
+//    팀장 평가 결과 화면 드롭다운 - 팀장이 평가자로 참여한 시즌 목록 (최신순, 과거 포함)
+    @Query("""
+            SELECT DISTINCT m.season
+            FROM ManagerEvaluation m
+            WHERE m.season.company.companyId = :companyId
+              AND m.evaluator.empId = :managerEmpId
+            ORDER BY m.season.startDate DESC
+            """)
+    List<Season> findSeasonsByCompanyIdAndEvaluator(
+            @Param("companyId") UUID companyId,
+            @Param("managerEmpId") Long managerEmpId);
 }

@@ -51,7 +51,7 @@ public class StageService {
     //  - CLOSED 시즌은 수정 불가
     //  - 시즌 기간 내로 제한
     //  - endDate >= startDate
-    //  - 단계 간 시작일 순서 유지 (이전 단계 ≤ 현재 ≤ 다음 단계), 같은 날짜 허용
+    //  - 단계 간 시작일 순서 유지 (이전 단계 < 현재 < 다음 단계), 같은 날짜 불허
     public StageDto updateDates(UUID companyId, Long stageId, StageUpdateRequestDto req) {
         Stage stage = stageRepository.findById(stageId)
                 .orElseThrow(() -> new IllegalArgumentException("단계를 찾을 수 없습니다"));
@@ -83,7 +83,7 @@ public class StageService {
             throw new IllegalArgumentException("단계 종료일은 시즌 종료일을 넘을 수 없습니다");
         }
 
-        // 단계 간 시작일 순서 검증 (같은 날짜는 허용)
+        // 단계 간 시작일 순서 검증 (같은 날짜 불허 - strict 순서)
         List<Stage> siblings = stageRepository.findBySeason_SeasonId(season.getSeasonId()).stream()
                 .sorted(Comparator.comparing(s -> s.getOrderNo() == null ? 0 : s.getOrderNo()))
                 .toList();
@@ -94,14 +94,14 @@ public class StageService {
         }
         if (idx > 0) {
             Stage prev = siblings.get(idx - 1);
-            if (prev.getStartDate() != null && newStart.isBefore(prev.getStartDate())) {
-                throw new IllegalArgumentException("단계 시작일은 이전 단계 시작일보다 앞설 수 없습니다");
+            if (prev.getStartDate() != null && !newStart.isAfter(prev.getStartDate())) {
+                throw new IllegalArgumentException("단계 시작일은 이전 단계 시작일보다 이후여야 합니다");
             }
         }
         if (idx >= 0 && idx < siblings.size() - 1) {
             Stage next = siblings.get(idx + 1);
-            if (next.getStartDate() != null && newStart.isAfter(next.getStartDate())) {
-                throw new IllegalArgumentException("단계 시작일은 다음 단계 시작일보다 늦을 수 없습니다");
+            if (next.getStartDate() != null && !newStart.isBefore(next.getStartDate())) {
+                throw new IllegalArgumentException("단계 시작일은 다음 단계 시작일보다 이전이어야 합니다");
             }
         }
 

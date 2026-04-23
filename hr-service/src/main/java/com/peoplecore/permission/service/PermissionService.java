@@ -1,3 +1,4 @@
+/*
 package com.peoplecore.permission.service;
 
 import com.peoplecore.employee.domain.EmpRole;
@@ -123,4 +124,4 @@ private Employee findEmployeeWithCompanyCheck(Long empId, UUID companyId){
     return employee;
     }
 }
-
+*/

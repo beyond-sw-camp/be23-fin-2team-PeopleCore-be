@@ -12,6 +12,7 @@ import com.peoplecore.employee.service.EmployeeService;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -40,8 +41,9 @@ public class EmployeeController {
             @RequestParam(required = false) EmpType empType,
             @RequestParam(required = false) EmpStatus empStatus,
             @RequestParam(required = false) EmployeeSortField sortField,
+            @RequestParam(required = false) Sort.Direction sortDirection,
             Pageable pageable){
-        return ResponseEntity.ok(employeeService.getEmployee(companyId, keyword,deptId,empType,empStatus, sortField, pageable));
+        return ResponseEntity.ok(employeeService.getEmployee(companyId, keyword,deptId,empType,empStatus, sortField, sortDirection, pageable));
     }
 
 

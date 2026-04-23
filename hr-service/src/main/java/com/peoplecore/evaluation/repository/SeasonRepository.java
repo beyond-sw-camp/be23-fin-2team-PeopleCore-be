@@ -55,4 +55,7 @@ public interface SeasonRepository extends JpaRepository<Season, Long> {
                                  @Param("excludeSeasonId") Long excludeSeasonId);
 //    회사의  현재 진행 시즌 - 회사당 1개
     Optional<Season>findByCompany_CompanyIdAndStatus(UUID companyId, EvalSeasonStatus status);
+
+//    평가자 역할 변경 가드용 - OPEN 시즌 존재 여부
+    boolean existsByCompany_CompanyIdAndStatus(UUID companyId, EvalSeasonStatus status);
 }

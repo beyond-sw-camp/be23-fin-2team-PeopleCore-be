@@ -114,7 +114,17 @@ public class SalaryContractService {
 //        계약서 저장
 
 
-//      계약서 저장
+//        첨부파일 처리 — 계약서 build 전에 업로드해서 fileName 을 함께 세팅
+        String fileName = null;
+        if (file != null && !file.isEmpty()) {
+            try {
+                fileName = minioService.uploadFile(file, "salary-contract");
+            } catch (Exception e) {
+                throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
+            }
+        }
+
+//      계약서 저장 — details 도 builder 에 포함시켜야 CascadeType.ALL 로 자식 insert 됨
         SalaryContract contract = SalaryContract.builder()
                 .companyId(companyId)
                 .employee(emp)
@@ -126,19 +136,11 @@ public class SalaryContractService {
                 .contractYear(contractYear)
                 .applyFrom(applyFrom)
                 .applyTo(applyTo)
+                .fileName(fileName)
+                .details(details)
                 .build();
 
-//        첨부파일 처리
-        String fileName = null;
-        if (file != null && !file.isEmpty()) { //TODO: MinIO업로드
-            try {
-                fileName = minioService.uploadFile(file, "salary-contract");
-            } catch (Exception e) {
-                throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
-            }
-        }
-
-//        급여 상세 연결
+//        급여 상세 양방향 연결 — 자식의 contract 참조 세팅
         for (SalaryContractDetail d : details) {
             d.assignContract(contract);
         }

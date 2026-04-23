@@ -21,12 +21,14 @@ public class EmpDetailResponseDto {
     private String    empGender;
     private String    empPhone;
     private String    empPersonalEmail;
+    private String    empZipCode;
     private String    empAddressBase;
     private String    empAddressDetail;
 
     // 소속 및 고용 정보
     private LocalDate empHireDate;
     private String    empType;
+    private String    jobType;
     private String    deptName;
     private String    gradeName;
     private String    titleName;
@@ -45,20 +47,22 @@ public class EmpDetailResponseDto {
                 .empName(emp.getEmpName())
                 .empNameEn(emp.getEmpNameEn())
                 .empBirthDate(emp.getEmpBirthDate())
-                .empGender(emp.getEmpGender().name())
+                .empGender(emp.getEmpGender() != null ? emp.getEmpGender().name() : null)
                 .empPhone(emp.getEmpPhone())
                 .empPersonalEmail(emp.getEmpPersonalEmail())
+                .empZipCode(emp.getEmpZipCode())
                 .empAddressBase(emp.getEmpAddressBase())
                 .empAddressDetail(emp.getEmpAddressDetail())
                 .empHireDate(emp.getEmpHireDate())
-                .empType(emp.getEmpType().name())
-                .deptName(emp.getDept().getDeptName())
-                .gradeName(emp.getGrade().getGradeName())
-                .titleName(emp.getTitle().getTitleName())
-                .empStatus(emp.getEmpStatus().name())
+                .empType(emp.getEmpType() != null ? emp.getEmpType().name() : null)
+                .jobType(emp.getJobType() != null ? emp.getJobType().name() : null)
+                .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
+                .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)
+                .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
+                .empStatus(emp.getEmpStatus() != null ? emp.getEmpStatus().name() : null)
                 .empNum(emp.getEmpNum())
                 .empEmail(emp.getEmpEmail())
-                .empRole(emp.getEmpRole().name())
+                .empRole(emp.getEmpRole() != null ? emp.getEmpRole().name() : null)
                 .build();
     }
 }

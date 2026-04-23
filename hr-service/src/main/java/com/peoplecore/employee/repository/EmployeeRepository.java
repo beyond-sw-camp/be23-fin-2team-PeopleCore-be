@@ -205,6 +205,47 @@ AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
     List<Employee>findActiveByCompanyAndDept(@Param("companyId")UUID companyId,@Param("deptId") Long deptId);
 
 
+//    성과평가 대상자 - 재직중(ACTIVE) + 일반 사원(EMPLOYEE) + 평가자로 지정되지 않은 사람
+//    (HR_ADMIN/HR_SUPER_ADMIN, 휴직자, 부서 평가자는 평가 대상에서 제외)
+    @Query("""
+            SELECT e FROM Employee e
+            JOIN FETCH e.dept
+            JOIN FETCH e.grade
+            WHERE e.company.companyId = :companyId
+              AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
+              AND e.empRole = com.peoplecore.employee.domain.EmpRole.EMPLOYEE
+              AND e.empId NOT IN (
+                  SELECT a.employee.empId
+                  FROM EvaluatorRoleDeptAssignment a
+                  WHERE a.config.companyId = :companyId
+              )
+""")
+    List<Employee> findEvalTargetsByCompany(@Param("companyId") UUID companyId);
+
+
+//    평가자 역할 preview 용 - 특정 직급 재직 사원
+    @Query("""
+            SELECT e FROM Employee e
+            JOIN FETCH e.dept
+            WHERE e.company.companyId = :companyId
+              AND e.grade.gradeId = :gradeId
+              AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+""")
+    List<Employee> findActiveByCompanyAndGrade(@Param("companyId") UUID companyId,
+                                               @Param("gradeId") Long gradeId);
+
+//    평가자 역할 preview 용 - 특정 직책 재직 사원
+    @Query("""
+            SELECT e FROM Employee e
+            JOIN FETCH e.dept
+            WHERE e.company.companyId = :companyId
+              AND e.title.titleId = :titleId
+              AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
+""")
+    List<Employee> findActiveByCompanyAndTitle(@Param("companyId") UUID companyId,
+                                               @Param("titleId") Long titleId);
+
+
 //    최근 6개월 입사자 조회
     @Query("""
 SELECT e FROM Employee e
