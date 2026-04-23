@@ -40,7 +40,7 @@ public class ApprovalEventPublisher {
     private static final String TOPIC_VAC_RESULT = "vacation-approval-result";
     private static final String TOPIC_ATTEN_MODIFY_DOC_CREATED = "attendance-modify-doc-created";
     private static final String TOPIC_ATTEN_MODIFY_RESULT = "attendance-modify-result";
-    private static final String FORM_NAME_SEVERANCE_PREFIX = "퇴직금지급결의서";
+    private static final String FORM_NAME_SEVERANCE_PREFIX = "퇴직급여지급결의서";
     private static final String FORM_NAME_PAYROLL_PREFIX   = "급여지급결의서";
     private static final String TOPIC_SEVERANCE_RESULT     = "severance-approval-result";
     private static final String TOPIC_PAYROLL_RESULT       = "payroll-approval-result";

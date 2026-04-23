@@ -93,7 +93,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
     private BooleanExpression notExpired() {
         return doc.retentionYearSnapshot.isNull().or(
                 Expressions.booleanTemplate(
-                        "DATE_ADD({0}, INTERVAL {1} YEAR) > CURRENT_TIMESTAMP",
+                        "function('timestampadd', year, {1}, {0}) > current_timestamp",
                         doc.docCompleteAt, doc.retentionYearSnapshot
                 )
         );
