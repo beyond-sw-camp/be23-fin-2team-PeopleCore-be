@@ -58,7 +58,7 @@ public class PayrollApprovalDraftService {
 
         Employee drafter = employeeRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-        String htmlTemplate = templateLoader.load(ApprovalFormType.SALARY);
+        String htmlTemplate = templateLoader.load(companyId, ApprovalFormType.SALARY);
         Map<String, String> dataMap = buildDataMap(run, drafter);
 
         return ApprovalDraftResDto.builder()

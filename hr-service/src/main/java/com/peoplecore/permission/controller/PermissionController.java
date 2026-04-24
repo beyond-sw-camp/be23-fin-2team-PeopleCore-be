@@ -1,3 +1,4 @@
+/*
 package com.peoplecore.permission.controller;
 
 import com.peoplecore.employee.domain.EmpRole;
@@ -79,3 +80,4 @@ public class PermissionController {
         return ResponseEntity.ok(permissionService.getHistory(companyId));
     }
 }
+*/

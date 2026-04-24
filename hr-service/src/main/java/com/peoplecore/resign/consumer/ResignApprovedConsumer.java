@@ -28,7 +28,7 @@ public class ResignApprovedConsumer {
     public void consume(String message) {
         try {
             ResignApprovedEvent event = objectMapper.readValue(message, ResignApprovedEvent.class);
-            resignService.createResignfromApprocal(event);
+            resignService.createResignFromApprocal(event);
             log.info("퇴직 신청 생성완료");
         } catch (Exception e) {
             log.error("퇴직 승인 이벤트 처리 실패");

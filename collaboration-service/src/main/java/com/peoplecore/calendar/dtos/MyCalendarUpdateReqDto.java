@@ -14,5 +14,6 @@ public class MyCalendarUpdateReqDto {
     private String calendarName;
     private String displayColor;
     private Boolean isVisible;
+    private Boolean isPublic;
     private Integer sortOrder;
 }

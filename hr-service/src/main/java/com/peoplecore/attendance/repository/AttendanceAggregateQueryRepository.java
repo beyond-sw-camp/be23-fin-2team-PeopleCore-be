@@ -76,7 +76,7 @@ public class AttendanceAggregateQueryRepository {
         LocalDateTime weekStartAt = weekStart.atStartOfDay();
         LocalDateTime weekEndAt = weekEnd.atTime(LocalTime.MAX);
 
-        return queryFactory.select(Projections.fields(WeekVacationRow.class, vr.employee.empId.as("empId"), vr.requestStartAt.as("startAt"), vr.requestEndAt.as("endAt"))).from(vr).where(vr.companyId.eq(companyId), vr.employee.empId.in(empIds), vr.requestStatus.eq(RequestStatus.APPROVED), vr.requestStartAt.loe(weekEndAt), vr.requestEndAt.goe(weekStartAt)).fetch();
+        return queryFactory.select(Projections.fields(WeekVacationRow.class, vr.employee.empId.as("empId"), vr.requestStartAt.as("startAt"), vr.requestEndAt.as("endAt"), vr.requestUseDays.as("vacReqUseDay"))).from(vr).where(vr.companyId.eq(companyId), vr.employee.empId.in(empIds), vr.requestStatus.eq(RequestStatus.APPROVED), vr.requestStartAt.loe(weekEndAt), vr.requestEndAt.goe(weekStartAt)).fetch();
 
     }
 

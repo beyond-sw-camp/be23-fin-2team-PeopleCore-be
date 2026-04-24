@@ -3,6 +3,7 @@ package com.peoplecore.employee.dto;
 import com.peoplecore.employee.domain.EmpGender;
 import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.EmpType;
+import com.peoplecore.employee.domain.JobType;
 import com.peoplecore.employee.domain.PasswordIssueType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -54,6 +55,8 @@ public class EmployeeCreateRequestDto {
     @NotNull
     private EmpType empType;
 
+    private JobType jobType;
+
     @NotNull
     private String deptName;
 
@@ -75,9 +78,7 @@ public class EmployeeCreateRequestDto {
 
     private String initialPassword;
 
-    private String empMailboxSize;
-
-    private Long workGroupId;  // 선택된 근무 그룹 ID (null이면 기본 그룹 자동 배정)
+    private Long workGroupId;
 
 }
 

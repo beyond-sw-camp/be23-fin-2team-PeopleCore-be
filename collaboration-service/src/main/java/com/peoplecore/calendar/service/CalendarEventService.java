@@ -120,8 +120,10 @@ public class CalendarEventService {
 
 //        3. 관심캘린더 일정 (공개일정만)
         List<InterestCalendars> interestCalendars = interestCalendarsRepository.findByViewerEmpIdWithRequest(empId, companyId);
-        List<Events> interestEvents = interestCalendars.stream().filter(ic -> Boolean.TRUE.equals(ic.getIsVisible()))
-                .flatMap(ic -> eventsRepository.findPublicEventsByEmpId(ic.getTargetEmpId(), companyId, start, end).stream()).toList();
+        List<Events> interestEvents = interestCalendars.stream()
+                .filter(ic -> Boolean.TRUE.equals(ic.getIsVisible()))
+                .flatMap(ic -> eventsRepository.findPublicEventsByEmpId(ic.getTargetEmpId(), companyId, start, end).stream())
+                .toList();
 
 //        4. 전사일정
         List<Events> companyEvents = eventsRepository.findCompanyEvents(companyId, start, end);

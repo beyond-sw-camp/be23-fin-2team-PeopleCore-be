@@ -3,6 +3,7 @@ package com.peoplecore.vacation.service;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.vacation.dto.VacationAdvanceUsePolicyDto;
 import com.peoplecore.vacation.dto.VacationGrantBasisDto;
 import com.peoplecore.vacation.dto.VacationPromotionPolicyDto;
 import com.peoplecore.vacation.dto.VacationRuleCreateRequest;
@@ -140,6 +141,19 @@ public class VacationPolicyService {
                 dto.getFirstMonthsBefore(),
                 dto.getSecondMonthsBefore()
         );
+    }
+
+    /* 미리쓰기 허용 정책 조회 */
+    public VacationAdvanceUsePolicyDto getAdvanceUsePolicy(UUID companyId) {
+        return VacationAdvanceUsePolicyDto.from(findOrThrow(companyId));
+    }
+
+    /* 미리쓰기 허용 정책 변경 - DTO 받아 엔티티에 위임 */
+    /* isAllowed null 은 false 로 간주 (프론트 누락 방어) */
+    @Transactional
+    public void updateAdvanceUsePolicy(UUID companyId, VacationAdvanceUsePolicyDto dto) {
+        VacationPolicy policy = findOrThrow(companyId);
+        policy.updateAdvanceUse(Boolean.TRUE.equals(dto.getIsAllowed()));
     }
 
     /* 정책 단건 조회 (규칙 미포함) */

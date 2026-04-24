@@ -4,9 +4,12 @@ import com.peoplecore.evaluation.dto.SelfEvaluationDraftRequest;
 import com.peoplecore.evaluation.dto.SelfEvaluationRejectRequest;
 import com.peoplecore.evaluation.dto.SelfEvaluationResponse;
 import com.peoplecore.evaluation.dto.TeamMemberSelfEvaluationResponse;
+import com.peoplecore.evaluation.service.EvaluatorRoleService;
 import com.peoplecore.evaluation.service.SelfEvaluationService;
+import com.peoplecore.exception.BusinessException;
 import jakarta.validation.Valid;
 import org.springframework.core.io.Resource;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -14,17 +17,20 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.UUID;
 
-// 자기평가 - 사원 실적 입력/제출 + 팀장 검토/승인/반려
-//   - 사원: 본인 자기평가 조회 / 임시저장 / 제출 / 근거파일 업로드·삭제
-//   - 팀장: 팀원 자기평가 조회 / 파일 다운로드 / 승인·반려
+// 자기평가 - 사원 실적 입력/제출 + 평가자 검토/승인/반려
+//   - 사원(1~5): 본인 자기평가 조회 / 임시저장 / 제출 / 근거파일 업로드·삭제 (가드 불필요)
+//   - 평가자(6~10): 팀원 자기평가 조회 / 파일 다운로드 / 승인·반려 (평가자 가드 필수)
 @RestController
 @RequestMapping("/eval/self-evaluations")
 public class SelfEvaluationController {
 
     private final SelfEvaluationService selfEvaluationService;
+    private final EvaluatorRoleService evaluatorRoleService;
 
-    public SelfEvaluationController(SelfEvaluationService selfEvaluationService) {
+    public SelfEvaluationController(SelfEvaluationService selfEvaluationService,
+                                    EvaluatorRoleService evaluatorRoleService) {
         this.selfEvaluationService = selfEvaluationService;
+        this.evaluatorRoleService = evaluatorRoleService;
     }
 
     // 1. 본인 자기평가 목록 - 현재 OPEN 시즌, 목표 승인된 것 기준
@@ -76,13 +82,14 @@ public class SelfEvaluationController {
         return ResponseEntity.noContent().build();
     }
 
-//    팀장 - 자기평가 조회/파일 다운로드/승인/반려
+//    평가자 - 자기평가 조회/파일 다운로드/승인/반려
 
     // 6. 팀원 자기평가 목록 - 팀원별 묶음 (상단 카드 집계 -> 프론트)
     @GetMapping("/team")
     public ResponseEntity<List<TeamMemberSelfEvaluationResponse>> getTeamSelfEvaluations(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long managerId) {
+        requireEvaluator(companyId, managerId);
         return ResponseEntity.ok(selfEvaluationService.getTeamSelfEvaluations(companyId, managerId));
     }
 
@@ -93,6 +100,7 @@ public class SelfEvaluationController {
             @RequestHeader("X-User-Id") Long managerId,
             @PathVariable Long goalId,
             @PathVariable Long fileId) {
+        requireEvaluator(companyId, managerId);
         return selfEvaluationService.downloadFile(companyId, managerId, goalId, fileId);
     }
 
@@ -102,6 +110,7 @@ public class SelfEvaluationController {
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long managerId,
             @PathVariable Long goalId) {
+        requireEvaluator(companyId, managerId);
         return ResponseEntity.ok(selfEvaluationService.approveSelfEvaluation(companyId, managerId, goalId));
     }
 
@@ -112,6 +121,7 @@ public class SelfEvaluationController {
             @RequestHeader("X-User-Id") Long managerId,
             @PathVariable Long goalId,
             @RequestBody @Valid SelfEvaluationRejectRequest request) {
+        requireEvaluator(companyId, managerId);
         return ResponseEntity.ok(
                 selfEvaluationService.rejectSelfEvaluation(companyId, managerId, goalId, request.getRejectReason()));
     }
@@ -122,6 +132,14 @@ public class SelfEvaluationController {
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long managerId,
             @PathVariable Long empId) {
+        requireEvaluator(companyId, managerId);
         return ResponseEntity.ok(selfEvaluationService.approveAllPendingSelfEvaluations(companyId, managerId, empId));
+    }
+
+    // 각 엔드포인트 앞에서 호출되는 평가자 가드. empId 가 부서별 배정에 있는지만 확인.
+    private void requireEvaluator(UUID companyId, Long empId) {
+        if (!evaluatorRoleService.isEvaluator(companyId, empId)) {
+            throw new BusinessException("평가자 권한이 없습니다.", HttpStatus.FORBIDDEN);
+        }
     }
 }

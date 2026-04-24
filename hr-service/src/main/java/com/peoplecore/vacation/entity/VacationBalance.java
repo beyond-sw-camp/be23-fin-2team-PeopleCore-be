@@ -91,8 +91,7 @@ public class VacationBalance extends BaseTimeEntity {
 
     /* 신규 잔여 생성 - 첫 적립 시점에 호출 (월차 첫 적립 / 연차 회기 발생 / 관리자 부여) */
     /* expiredDays 초기 0 - 신규 balance 는 소멸 이력 없음 */
-    public static VacationBalance createNew(UUID companyId, VacationType vacationType, Employee employee,
-                                            Integer balanceYear, LocalDate grantedAt, LocalDate expiresAt) {
+    public static VacationBalance createNew(UUID companyId, VacationType vacationType, Employee employee,Integer balanceYear, LocalDate grantedAt, LocalDate expiresAt) {
         return VacationBalance.builder()
                 .companyId(companyId)
                 .vacationType(vacationType)
@@ -120,10 +119,18 @@ public class VacationBalance extends BaseTimeEntity {
         this.totalDays = this.totalDays.add(days);
     }
 
-    /* 신청 예약 - PENDING 시 호출. pending += days, 잔여 부족 시 예외 */
+    /* 신청 예약 - PENDING 시 호출. pending += days, 잔여 부족 시 예외 (엄격 모드) */
+    /* 기존 호출부 호환용 - 내부적으로 오버로드에 false 로 위임 */
     public void markPending(BigDecimal days) {
+        markPending(days, false);
+    }
+
+    /* 신청 예약 - allowNegative=true 면 available 검증 스킵 (미리쓰기 허용 회사의 연차/월차) */
+    /* allowAdvanceUse 정책 ON 회사의 연차/월차 신청에서만 true 로 호출 */
+    /* allowNegative=true 시 available 음수로 떨어질 수 있음 (의도된 동작) */
+    public void markPending(BigDecimal days, boolean allowNegative) {
         validatePositive(days);
-        if (getAvailableDays().compareTo(days) < 0) {
+        if (!allowNegative && getAvailableDays().compareTo(days) < 0) {
             throw new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT);
         }
         this.pendingDays = this.pendingDays.add(days);
@@ -157,20 +164,22 @@ public class VacationBalance extends BaseTimeEntity {
         this.usedDays = this.usedDays.subtract(days);
     }
 
-    /* 이벤트 기반 승인 직접 차감 - pending 경유 없이 used 증가 */
-    /* EVENT_BASED 휴가는 신청 시 markPending 을 타지 않고 승인 시 accrue + consumeDirectly 로 total/used 동시 증가 */
-    /* 예외: 가용 잔여 < days 이면 VACATION_BALANCE_INSUFFICIENT (accrue 가 total 을 먼저 올려놓았어야 함) */
+    /* 이벤트 기반 승인 직접 차감 - pending 경유 없이 used 증가 (기본 엄격 모드) */
+    /* 기존 호출부 호환용 - 내부적으로 오버로드에 false 로 위임 */
     public void consumeDirectly(BigDecimal days) {
+        consumeDirectly(days, false);
+    }
+
+    /* 직접 차감 - allowNegative=true 면 available 검증 스킵 (미리쓰기 허용 회사의 관리자 조정) */
+    public void consumeDirectly(BigDecimal days, boolean allowNegative) {
         validatePositive(days);
-        if (getAvailableDays().compareTo(days) < 0) {
+        if (!allowNegative && getAvailableDays().compareTo(days) < 0) {
             throw new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT);
         }
         this.usedDays = this.usedDays.add(days);
     }
 
     /* accrue 롤백 - 이벤트 기반 승인 후 취소 시 total 되돌림. total -= days */
-    /* 단독 호출 금지: restore(used→available) 직후에만 호출해야 total 감소가 usedDays 와 정합 */
-    /* 예외: totalDays < days 이면 USED_INSUFFICIENT (정합성 오류, 500) */
     public void rollbackAccrual(BigDecimal days) {
         validatePositive(days);
         if (this.totalDays.compareTo(days) < 0) {
@@ -179,8 +188,13 @@ public class VacationBalance extends BaseTimeEntity {
         this.totalDays = this.totalDays.subtract(days);
     }
 
+    /* 전년 미리쓴 연차 상쇄 - 차년도 연차 발생 시 total 에서 직접 차감 (음수 허용) */
+    public void applyAdvanceOffset(BigDecimal days) {
+        validatePositive(days);
+        this.totalDays = this.totalDays.subtract(days);
+    }
+
     /* 잔여 만료 - 만료 잡 / 1년 도달 시. 남은 잔여를 expired 로 이동 → 잔여 0 */
-    /* used 와 분리됨 - LeaveAllowance 의 (total - used) 미사용량 계산이 만료 후에도 정확 */
     public BigDecimal expireRemaining() {
         BigDecimal remaining = getAvailableDays();
         if (remaining.compareTo(BigDecimal.ZERO) <= 0) return BigDecimal.ZERO;

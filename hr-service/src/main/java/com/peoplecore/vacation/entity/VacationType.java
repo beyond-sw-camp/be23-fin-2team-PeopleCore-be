@@ -88,6 +88,15 @@ public class VacationType extends BaseTimeEntity {
         this.sortOrder = sortOrder;
     }
 
+    /* 정렬 순서만 변경 - 드래그 앤 드롭 재정렬 용도 */
+    /* updateDisplay 와 달리 시스템 예약 유형에도 허용 (순서는 회사별 선호 반영 가능) */
+    public void updateSortOrder(Integer sortOrder) {
+        if (sortOrder == null) {
+            throw new IllegalArgumentException("sortOrder null 불가 - typeId=" + typeId);
+        }
+        this.sortOrder = sortOrder;
+    }
+
     /* 시스템 예약 유형 여부 - StatutoryVacationType enum 에 정의된 코드면 수정/삭제 차단 */
     public boolean isSystemReserved() {
         return StatutoryVacationType.isReserved(this.typeCode);

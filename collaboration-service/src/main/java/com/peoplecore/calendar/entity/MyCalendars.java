@@ -29,6 +29,7 @@ public class MyCalendars extends BaseTimeEntity {
     private String myDisplayColor;
 
     private Boolean isVisible;
+
     private Integer sortOrder;
 
     @Column(nullable = false)
@@ -37,6 +38,11 @@ public class MyCalendars extends BaseTimeEntity {
     @Column(nullable = false)
     @Builder.Default
     private Boolean isDefault = false;
+
+    //캘린더 단위 공개 여부
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isPublic = true;
 
 
     public void updateName(String calendarName){
@@ -54,5 +60,9 @@ public class MyCalendars extends BaseTimeEntity {
 
     public boolean isDefaultCalendar(){
         return Boolean.TRUE.equals(this.isDefault);
+    }
+
+    public void updatePublic() {
+        this.isPublic = !Boolean.TRUE.equals(this.isPublic);
     }
 }

@@ -71,6 +71,7 @@ public class EventsCustomRepositoryImpl implements EventsCustomRepository{
                 .where(
                         calendar.empId.eq(targetEmpId),
                         companyIdEq(companyId),
+                        calendar.isPublic.isTrue(),
                         event.isPublic.isTrue(),
                         notDeleted(),
                         periodOverlap(start, end)

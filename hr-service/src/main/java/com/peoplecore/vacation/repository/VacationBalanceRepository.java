@@ -1,11 +1,13 @@
 package com.peoplecore.vacation.repository;
 
+import com.peoplecore.vacation.dto.BalanceExpiryQueryDto;
 import com.peoplecore.vacation.entity.VacationBalance;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -64,4 +66,24 @@ public interface VacationBalanceRepository extends JpaRepository<VacationBalance
      * 반환: true 면 삭제 차단 (VACATION_TYPE_IN_USE)
      */
     boolean existsByVacationType_TypeId(Long typeId);
+
+    /*
+     * 사원 다건 + 특정 유형 + 연도 balance 의 시작/만료일 projection 조회
+     * 용도: 부서별 사원 상세 테이블 "연차 사용기간" (grantedAt ~ expiresAt) 표시
+     * N+1 방지: IN 절 + DTO projection (엔티티 로드 없음)
+     * 반환: balance 존재하는 사원만. 없는 사원은 호출부에서 null 폴백
+     */
+    @Query("""
+            SELECT new com.peoplecore.vacation.dto.BalanceExpiryQueryDto(
+                       b.employee.empId, b.grantedAt, b.expiresAt)
+              FROM VacationBalance b
+             WHERE b.companyId = :companyId
+               AND b.vacationType.typeCode = :typeCode
+               AND b.balanceYear = :year
+               AND b.employee.empId IN :empIds
+            """)
+    List<BalanceExpiryQueryDto> findExpiryByEmpsAndType(@Param("companyId") UUID companyId,
+                                                       @Param("typeCode") String typeCode,
+                                                       @Param("year") Integer year,
+                                                       @Param("empIds") Collection<Long> empIds);
 }

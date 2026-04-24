@@ -40,9 +40,10 @@ public class ApprovalFormService {
      */
     private static final java.util.Set<String> PROTECTED_FORM_KEYS = java.util.Set.of(
             "보고-시행문/급여지급결의서",
-            "보고-시행문/퇴직금지급결의서",
+            "보고-시행문/퇴직급여지급결의서",
             "휴가/초과근로신청서",
             "휴가/휴가신청서",
+            "휴가/휴가 부여 신청",
             "인사/사직서 #2",
             "일반기안/근태정정신청서"
     );
@@ -57,9 +58,10 @@ public class ApprovalFormService {
     private static final java.util.Map<String, String> FIXED_FORM_CODES = java.util.Map.of(
             "휴가/초과근로신청서", "OVERTIME_REQUEST",
             "휴가/휴가신청서", "VACATION_REQUEST",
+            "휴가/휴가 부여 신청", "VACATION_GRANT_REQUEST",
             "인사/사직서 #2", "RESIGNATION",
-            "보고-시행문/급여지급결의서", "PAYROLL_RESOLUTION",
-            "보고-시행문/퇴직금지급결의서", "SEVERANCE_RESOLUTION",
+            "보고-시행문/급여지급결의서", "PAYROLL_PAYMENT",
+            "보고-시행문/퇴직급여지급결의서", "RETIREMENT_SEVERANCE",
             "일반기안/근태정정신청서", "ATTENDANCE_MODIFY"
     );
 

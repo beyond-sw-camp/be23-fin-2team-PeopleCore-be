@@ -25,9 +25,7 @@ public class DocumentCountResponse {
     private long inbox;
 
     /* 부서 문서함 */
-    private long deptCompleted;
-    private long deptReceived;
-    private long deptSent;
+    private long dept;
 
     /* 부서 폴더별 문서 개수 (deptFolderId → count) */
     private Map<Long, Long> deptFolderCounts;

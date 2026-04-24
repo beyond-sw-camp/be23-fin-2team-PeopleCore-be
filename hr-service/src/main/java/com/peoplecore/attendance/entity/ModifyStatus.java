@@ -7,7 +7,6 @@ import lombok.Getter;
 /**
  * 근태 정정 요청 처리 상태.
  * AttendenceModify.attenStatus 필드에서 사용.
- * <p>전이: PENDING → APPROVED | REJECTED | CANCELED
  */
 @Getter
 public enum ModifyStatus {

@@ -57,6 +57,12 @@ public class Goal extends BaseTimeEntity {
     @Column(name = "target_unit", length = 10)
     private String targetUnit; // 목표 단위
 
+    // KPI 방향성 스냅샷 - 등록/수정 시점 template.direction 복사 (OKR이면 NULL)
+    // 템플릿의 direction 이 후에 변경돼도 기존 목표의 달성률 계산은 등록 당시 기준 유지
+    @Enumerated(EnumType.STRING)
+    @Column(name = "kpi_direction", length = 10)
+    private KpiDirection kpiDirection;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "approval_status", length = 20)
     @Builder.Default
@@ -78,6 +84,7 @@ public class Goal extends BaseTimeEntity {
         this.targetUnit = template.getUnit().getOptionValue();
         this.targetValue = targetValue;
         this.taskGrade = grade;
+        this.kpiDirection = template.getDirection();
     }
 
     // OKR 목표 수정 - 사원 입력값 그대로, KPI 관련 필드는 NULL 처리
@@ -90,6 +97,7 @@ public class Goal extends BaseTimeEntity {
         this.taskGrade = grade;
         this.targetValue = null;
         this.targetUnit = null;
+        this.kpiDirection = null;
     }
 
     // 반려된 목표 재수정 시 작성중 상태로 리셋 (재제출 가능)

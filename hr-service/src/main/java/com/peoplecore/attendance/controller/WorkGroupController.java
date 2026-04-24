@@ -79,4 +79,13 @@ public class WorkGroupController {
             @RequestHeader("X-User-Company") UUID companyId) {
         return ResponseEntity.ok(workGroupService.getWorkGroupOptions(companyId));
     }
+
+    /* 본인 근무그룹 조회 - 휴가 사용 신청 모달 진입 시 호출 */
+    /* 모든 역할 허용 (class-level @RoleRequired 오버라이드) */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN", "EMPLOYEE"})
+    @GetMapping("/me")
+    public ResponseEntity<MyWorkGroupResponseDto> getMyWorkGroup(
+            @RequestHeader("X-User-Id") Long empId) {
+        return ResponseEntity.ok(workGroupService.getMyWorkGroup(empId));
+    }
 }

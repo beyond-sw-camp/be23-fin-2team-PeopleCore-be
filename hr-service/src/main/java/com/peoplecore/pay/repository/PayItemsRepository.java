@@ -2,8 +2,8 @@ package com.peoplecore.pay.repository;
 
 import com.peoplecore.pay.domain.PayItems;
 import com.peoplecore.pay.enums.LegalCalcType;
+import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
-import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -18,6 +18,10 @@ public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
     List<PayItems> findByPayItemIdInAndCompany_CompanyId(List<Long> payItemIds, UUID companyId);
 
     List<PayItems>findByCompany_CompanyIdAndPayItemTypeAndIsActiveTrueOrderBySortOrderAsc(UUID companyId, PayItemType payItemType);
+
+    // 연봉계약서 폼 급여 섹션 전용 — 수당(ALLOWANCE) 만 필터링
+    List<PayItems> findByCompany_CompanyIdAndPayItemTypeAndPayItemCategoryAndIsActiveTrueOrderBySortOrderAsc(
+            UUID companyId, PayItemType payItemType, PayItemCategory payItemCategory);
 
     List<PayItems> findByCompany_CompanyIdAndPayItemTypeAndPayItemNameIn(UUID companyId, PayItemType payItemType, List<String> payItemNames);
 

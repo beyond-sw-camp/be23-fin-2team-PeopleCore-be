@@ -182,7 +182,7 @@ public class AnnualGrantScheduler {
     }
 
     /* FISCAL - 오늘이 회계연도 시작일일 때만 Batch Job 런칭 */
-    /* 2/29 FISCAL 시작 + 비윤년 → 3/1 에 대신 fire (HIRE 와 동일 보정) */
+    /* 회계연도 시작일은 01-01 로 고정 (회사별 커스텀 폐지) */
     /* 회사별 전사원 대상 → Spring Batch 로 위임 (청크 tx / 재시작 / dedup) */
     private void processFiscal(Company company, VacationPolicy policy, VacationType annualType, LocalDate today) {
         UUID companyId = company.getCompanyId();
@@ -193,14 +193,10 @@ public class AnnualGrantScheduler {
         }
 
         String todayMmDd = String.format("%02d-%02d", today.getMonthValue(), today.getDayOfMonth());
-        // 2/29 FISCAL 시작인데 올해 비윤년이면 3/1 에 대신 발생 (해당 해 누락 방지)
-        boolean leapShift = "02-29".equals(fiscalStart)
-                && today.getMonthValue() == 3 && today.getDayOfMonth() == 1
-                && !today.isLeapYear();
-        if (!fiscalStart.equals(todayMmDd) && !leapShift) return;
+        if (!fiscalStart.equals(todayMmDd)) return;
 
-        log.info("[AnnualGrant-FISCAL] Batch 런칭 - companyId={}, fiscalStart={}, today={}, leapShift={}",
-                companyId, fiscalStart, todayMmDd, leapShift);
+        log.info("[AnnualGrant-FISCAL] Batch 런칭 - companyId={}, fiscalStart={}, today={}",
+                companyId, fiscalStart, todayMmDd);
         try {
             // (companyId, targetDate) 식별 파라미터 → 같은 회사 같은 날 중복 자동 차단
             JobParameters params = new JobParametersBuilder()

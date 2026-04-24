@@ -2,17 +2,27 @@ package com.peoplecore.approval.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.alarm.publisher.AlarmEventPublisher;
+import com.peoplecore.approval.dto.docdata.VacationUseDocData;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.publisher.ApprovalEventPublisher;
 import com.peoplecore.approval.repository.ApprovalDocumentRepository;
 import com.peoplecore.approval.repository.ApprovalLineRepository;
 import com.peoplecore.approval.repository.ApprovalSignatureRepository;
 import com.peoplecore.approval.repository.ApprovalStatusHistoryRepository;
+import com.peoplecore.calendar.entity.Events;
+import com.peoplecore.calendar.entity.MyCalendars;
+import com.peoplecore.calendar.repository.EventsRepository;
+import com.peoplecore.calendar.service.MyCalendarService;
+import com.peoplecore.client.component.HrServiceClient;
+import com.peoplecore.client.dto.EmployeeSimpleResDto;
 import com.peoplecore.common.service.MinioService;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.event.ResignApprovedEvent;
 import com.peoplecore.event.SeveranceApprovalResultEvent;
+import com.peoplecore.event.VacationSlotItem;
 import com.peoplecore.exception.BusinessException;
+import com.peoplecore.exception.CustomException;
+import com.peoplecore.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -20,6 +30,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -36,13 +47,18 @@ public class ApprovalLineService {
     private final ApprovalSignatureRepository signatureRepository;
     private final AlarmEventPublisher alarmEventPublisher;
     private final MinioService minioService;
-    private final KafkaTemplate<String, String>kafkaTemplate;
+    private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private final ApprovalEventPublisher approvalEventPublisher;
+    private final MyCalendarService myCalendarService;
+    private final EventsRepository eventsRepository;
+    private final HrServiceClient hrServiceClient;
 
+    private static final String RESIGNATION_CODE = "RESIGNATION";
+    private static final String VACATION_REQUEST = "VACATION_REQUEST";
 
     @Autowired
-    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, ApprovalEventPublisher approvalEventPublisher) {
+    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService, KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper, ApprovalEventPublisher approvalEventPublisher, MyCalendarService myCalendarService, EventsRepository eventsRepository, HrServiceClient hrServiceClient) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.historyRepository = historyRepository;
@@ -52,6 +68,9 @@ public class ApprovalLineService {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.approvalEventPublisher = approvalEventPublisher;
+        this.myCalendarService = myCalendarService;
+        this.eventsRepository = eventsRepository;
+        this.hrServiceClient = hrServiceClient;
     }
 
     /* 승인 처리 / 순차 처리(이전 단계가 approved여야만 승인 가능) / 마지막 결재자가 승인 해야만 문서상태 approved*/
@@ -123,8 +142,14 @@ public class ApprovalLineService {
                     .build());
 
 
-//        사직서 승인 시 hr-service로 이벤트 발행 (계약 formCode = "RESIGNATION")
             String formCode = document.getFormId().getFormCode();
+
+            // 휴가 사용 최종 승인 → 본인 휴가 캘린더에 이벤트 생성
+            if ("VACATION_REQUEST".equals(formCode)) {
+                createVacationCalendarEvent(document);
+            }
+
+//        사직서 승인 시 hr-service로 이벤트 발행 (계약 formCode = "RESIGNATION")
             if ("RESIGNATION".equals(formCode)) {
                 try {
                     ResignApprovedEvent resignApprovedEvent = ResignApprovedEvent.builder()
@@ -199,6 +224,13 @@ public class ApprovalLineService {
         myLine.reject(reason);
         myLine.markRead();
         document.reject();
+
+        /* 내가 반려했으니 아직 PENDING 인 다른 결재자 라인들(같은 step 병렬합의자 + 뒷 step)은 모두 취소 처리 */
+        lineRepository.findByDocId_DocIdOrderByLineStep(docId).stream()
+                .filter(l -> !l.getLineId().equals(myLine.getLineId())
+                        && l.getApprovalRole() == ApprovalRole.APPROVER
+                        && l.getApprovalLineStatus() == ApprovalLineStatus.PENDING)
+                .forEach(ApprovalLine::cancel);
 
         /* 초과근무/휴가 반려 이벤트 발행 — Publisher 내부에서 formName 분기 */
         approvalEventPublisher.publishResult(document, "REJECTED", empId, reason);
@@ -387,6 +419,155 @@ public class ApprovalLineService {
 
         html.append("</body></html>");
         return html.toString();
+    }
+
+    /* 휴가 사용 최종 승인 시 본인 휴가 캘린더에 이벤트 생성 */
+    /* items 배열 순회 → 슬롯 1건당 캘린더 이벤트 1건. 중간 반차가 있어도 연속으로 이어붙지 않음 */
+    /* 각 슬롯: useDay 정수면 종일, 0.5/0.25 면 시간 지정 이벤트 */
+    /* docData 파싱 실패 or items 비어있으면 로그만 남기고 승인 플로우는 계속 진행 (롤백 X) */
+    private void createVacationCalendarEvent(ApprovalDocument document) {
+        try {
+            VacationUseDocData data = objectMapper.readValue(document.getDocData(), VacationUseDocData.class);
+            List<VacationSlotItem> items = data.getVacReqItems();
+            if (items == null || items.isEmpty()) {
+                log.warn("[CalendarEvent] 휴가 슬롯 비어있음 - docId={} 이벤트 생성 skip", document.getDocId());
+                return;
+            }
+
+            MyCalendars vacationCalendar = myCalendarService.ensureVacationCalendar(
+                    document.getCompanyId(), document.getEmpId());
+
+            // 슬롯별 독립 이벤트 - 연속 머지 여부는 프론트 렌더 단계에서 판단
+            items.forEach(item -> {
+                BigDecimal useDay = item.getUseDay();
+                boolean isAllDay = useDay != null && useDay.stripTrailingZeros().scale() <= 0;
+
+                Events event = Events.builder()
+                        .empId(document.getEmpId())
+                        .title("[휴가] " + document.getDocTitle())
+                        .description(data.getVacReqReason())
+                        .startAt(item.getStartAt())
+                        .endAt(item.getEndAt())
+                        .isAllDay(isAllDay)
+                        .isPublic(true)
+                        .isAllEmployees(false)
+                        .companyId(document.getCompanyId())
+                        .myCalendars(vacationCalendar)
+                        .build();
+                eventsRepository.save(event);
+                log.info("[CalendarEvent] 휴가 슬롯 이벤트 생성 - docId={}, empId={}, eventsId={}, start={}, isAllDay={}",
+                        document.getDocId(), document.getEmpId(), event.getEventsId(), item.getStartAt(), isAllDay);
+            });
+        } catch (Exception e) {
+            log.error("[CalendarEvent] 휴가 이벤트 생성 실패 - docId={}, err={}",
+                    document.getDocId(), e.getMessage(), e);
+        }
+    }
+
+    /*전결 처리 이후에 approvalLine이 있다면 전부 Approved로 */
+    @Transactional
+    public void approvalDocumentAll(UUID companyId, Long empId, Long docId, String comment) {
+        /* 결재하는 사원 정보를 받아옴 */
+        EmployeeSimpleResDto myInfo = hrServiceClient.getEmployees(List.of(empId)).stream().findFirst().orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        ApprovalDocument document = findPendingDocument(companyId, docId);
+
+        /*본인 결재선 조회 + 권한 확인 + 전사람 완료 됐는지 검증  */
+        ApprovalLine approvalLine = lineRepository.findByDocId_DocIdAndEmpId(docId, empId).orElseThrow(() -> new CustomException(ErrorCode.APPROVAL_NOT_ROLE));
+
+        if (approvalLine.getApprovalRole() != ApprovalRole.APPROVER) {
+            throw new CustomException(ErrorCode.APPROVAL_NOT_ROLE);
+        }
+        /*이미 처리된 결재선인지 확인 */
+        if (approvalLine.getApprovalLineStatus() != ApprovalLineStatus.PENDING) {
+            throw new CustomException(ErrorCode.APPROVAL_ALREADY_APPROVED);
+        }
+
+        validatePreviousStepApproved(docId, approvalLine.getLineStep());
+
+
+        /*전체 결재선 조회 */
+        List<ApprovalLine> approvalLines = lineRepository.findByDocId_DocIdOrderByLineStep(docId, ApprovalRole.APPROVER);
+
+        /*본인 포함 이후 모든 pending 결재선 일괄 승인 */
+        approvalLines.stream().filter(l -> l.getLineStep() >= approvalLine.getLineStep() && l.getApprovalLineStatus() == ApprovalLineStatus.PENDING).forEach(l -> {
+            l.approve();
+            l.markRead();
+            historyRepository.save(ApprovalStatusHistory.builder()
+                    .docId(docId)
+                    .companyId(companyId)
+                    .previousStatus(ApprovalStatus.PENDING)
+                    .changedStatus(ApprovalStatus.APPROVED)
+                    .changedBy(empId)
+                    .changeByName(myInfo.getEmpName())
+                    .changeByDeptName(myInfo.getDeptName())
+                    .changeByGrade(myInfo.getGradeName())
+                    .changeReason("전결 - " + l.getLineStep() + "단계")
+                    .changedAt(LocalDateTime.now())
+                    .build());
+        });
+
+        /* all approved인지 체크 */
+        boolean allApproved = approvalLines.stream().allMatch(l -> l.getApprovalLineStatus() == ApprovalLineStatus.APPROVED);
+
+        if (allApproved) {
+            /*상태 ㅍ패턴 호출 */
+            document.approve();
+
+            /*완성 문서 HTML 생성 -> minio 업로드 -> docURL 저장 */
+            String docHTML = buildCompletedDocumentHtml(companyId, document, approvalLines);
+            String objectName = String.format("completed/%s/%d/%s.html", companyId, docId, document.getDocNum());
+            minioService.uploadFormHtml(objectName, docHTML);
+            document.assignDocUrl(objectName);
+
+            /*상태 변경 이력 저장 */
+            historyRepository.save(ApprovalStatusHistory.builder()
+                    .docId(docId)
+                    .companyId(companyId)
+                    .previousStatus(ApprovalStatus.PENDING)
+                    .changedStatus(ApprovalStatus.APPROVED)
+                    .changedBy(empId)
+                    .changeByName(myInfo.getEmpName())
+                    .changeByDeptName(myInfo.getDeptName())
+                    .changeByGrade(myInfo.getGradeName())
+                    .changeReason("전결 처리")
+                    .changedAt(LocalDateTime.now())
+                    .build());
+
+            String formCode = document.getFormId().getFormCode();
+
+            /*휴가 사용 최종 ㅡㅇ인 -> 본인 휴가 캘린더에 이벤트 생성 */
+            if (VACATION_REQUEST.equals(formCode)) createVacationCalendarEvent(document);
+
+            /*사직서 승인시 hr-service로 이벤트 발핼 */
+            if (RESIGNATION_CODE.equals(formCode)) {
+                try {
+                    ResignApprovedEvent resignApprovedEvent = ResignApprovedEvent.builder()
+                            .companyId(companyId)
+                            .docId(docId)
+                            .empId(document.getEmpId())
+                            .docData(document.getDocData())
+                            .build();
+                    kafkaTemplate.send("resign-approved", objectMapper.writeValueAsString(resignApprovedEvent));
+                } catch (Exception e) {
+                    log.error("퇴직 승인 이벤트 발행 실패", e.getMessage());
+                }
+            }
+            approvalEventPublisher.publishResult(document, "APPROVED", empId, null);
+        }
+
+        /*기안자한테 승인 알림 발행 */
+        alarmEventPublisher.publisher(AlarmEvent.builder()
+                .companyId(companyId)
+                .empIds(List.of(document.getEmpId()))
+                .alarmType("APPROVAL")
+                .alarmTitle(myInfo.getDeptName() + " " + myInfo.getEmpName() + " " + myInfo.getGradeName() + "이(가) 결재 문서르르 승인하였습니다.")
+
+                .alarmContent("[" + document.getDocNum() + "]" + document.getDocTitle())
+                .alarmLink("/approval")
+                .alarmRefId(docId)
+                .alarmRefType("APPROVAL_DOCUMENT")
+                .build());
     }
 
 }
