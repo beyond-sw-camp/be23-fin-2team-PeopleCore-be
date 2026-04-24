@@ -20,8 +20,21 @@ public interface PersonalFolderDocumentRepository extends JpaRepository<Personal
     /** 사원+문서 매핑 단건 조회 */
     Optional<PersonalFolderDocument> findByCompanyIdAndEmpIdAndDocId(UUID companyId, Long empId, Long docId);
 
-    /** 폴더 내 문서 수 */
-    int countByCompanyIdAndEmpIdAndPersonalFolderId(UUID companyId, Long empId, Long personalFolderId);
+    /**
+     * 폴더 내 문서 수 — ApprovalDocument JOIN + notExpired 필터 적용
+     * list 쿼리(findPersonalFolderDocument)가 notExpired() 로 만료 문서를 제외하므로
+     * count 도 동일 기준으로 맞추어 사이드바 숫자와 리스트 개수 일치
+     */
+    @Query("SELECT COUNT(fd) FROM PersonalFolderDocument fd " +
+            "JOIN ApprovalDocument d ON d.docId = fd.docId " +
+            "WHERE fd.companyId = :companyId " +
+            "AND fd.empId = :empId " +
+            "AND fd.personalFolderId = :personalFolderId " +
+            "AND (d.retentionYearSnapshot IS NULL " +
+            "     OR function('timestampadd', year, d.retentionYearSnapshot, d.docCompleteAt) > current_timestamp)")
+    int countByCompanyIdAndEmpIdAndPersonalFolderId(@Param("companyId") UUID companyId,
+                                                    @Param("empId") Long empId,
+                                                    @Param("personalFolderId") Long personalFolderId);
 
     /** 문서 개별 이동 */
     @Modifying
