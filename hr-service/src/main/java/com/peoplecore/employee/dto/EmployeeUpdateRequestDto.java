@@ -53,13 +53,13 @@ public class EmployeeUpdateRequestDto {
     private JobType jobType;
 
     @NotNull
-    private String deptName;
+    private Long deptId;
 
     @NotNull
-    private String gradeName;
+    private Long gradeId;
 
     @NotNull
-    private String titleName;
+    private Long titleId;
 
     // 권한
     @NotNull

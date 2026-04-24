@@ -15,4 +15,7 @@ public interface GradeRepository extends JpaRepository<Grade, Long> {
     Optional<Grade> findByGradeName(String gradeName);
 
     Optional<Grade> findByCompanyIdAndGradeName(UUID companyId, String gradeName);
+
+    // id 로 직급 조회, 회사 스코프 동시 검증 (테넌트 우회 방지)
+    Optional<Grade> findByGradeIdAndCompanyId(Long gradeId, UUID companyId);
 }

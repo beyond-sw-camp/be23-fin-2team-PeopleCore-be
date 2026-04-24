@@ -29,8 +29,11 @@ public class EmpDetailResponseDto {
     private LocalDate empHireDate;
     private String    empType;
     private String    jobType;
+    private Long      deptId;
     private String    deptName;
+    private Long      gradeId;
     private String    gradeName;
+    private Long      titleId;
     private String    titleName;
     private String    empStatus;
 
@@ -56,8 +59,11 @@ public class EmpDetailResponseDto {
                 .empHireDate(emp.getEmpHireDate())
                 .empType(emp.getEmpType() != null ? emp.getEmpType().name() : null)
                 .jobType(emp.getJobType() != null ? emp.getJobType().name() : null)
+                .deptId(emp.getDept() != null ? emp.getDept().getDeptId() : null)
                 .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
+                .gradeId(emp.getGrade() != null ? emp.getGrade().getGradeId() : null)
                 .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)
+                .titleId(emp.getTitle() != null ? emp.getTitle().getTitleId() : null)
                 .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
                 .empStatus(emp.getEmpStatus() != null ? emp.getEmpStatus().name() : null)
                 .empNum(emp.getEmpNum())
