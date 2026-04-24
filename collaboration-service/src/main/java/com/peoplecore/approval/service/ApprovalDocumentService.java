@@ -19,6 +19,7 @@ import com.peoplecore.approval.slot.SlotContextDto;
 import com.peoplecore.client.component.HrCacheService;
 import com.peoplecore.client.dto.CompanyInfoResponse;
 import com.peoplecore.client.dto.DeptInfoResponse;
+import com.peoplecore.dtos.ApprovalLineDto;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
@@ -49,9 +50,9 @@ public class ApprovalDocumentService {
     private final MinioService minioService;
     private final ApprovalEventPublisher approvalEventPublisher;
     private final HrServiceClient hrServiceClient;
+    private final ApprovalDocumentRepository approvalDocumentRepository;
 
-    @Autowired
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalDocumentRepository approvalDocumentRepository) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -66,6 +67,7 @@ public class ApprovalDocumentService {
         this.minioService = minioService;
         this.approvalEventPublisher = approvalEventPublisher;
         this.hrServiceClient = hrServiceClient;
+        this.approvalDocumentRepository = approvalDocumentRepository;
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번 + 첨부 업로드 */
@@ -370,6 +372,7 @@ public class ApprovalDocumentService {
         /* 새 채번 생성 */
         DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
         CompanyInfoResponse companyInfo = hrCacheService.getCompany(companyId);
+
         SlotContextDto contextDto = SlotContextDto.builder()
                 .companyName(companyInfo.getCompanyName())
                 .deptCode(deptInfo.getDeptCode())

@@ -2,6 +2,7 @@ package com.peoplecore.pay.approval;
 
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.event.PayrollApprovalDocCreatedEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.PayrollRuns;
@@ -31,16 +32,16 @@ public class PayrollApprovalDraftService {
     private final PayrollRunsRepository payrollRunsRepository;
     private final PayrollDetailsRepository payrollDetailsRepository;
     private final EmployeeRepository employeeRepository;
-    private final ApprovalHtmlTemplateLoader templateLoader;
     private final PayrollApprovalDocCreatedPublisher docCreatedPublisher;
+    private final ApprovalFormCache approvalFormCache;
 
     @Autowired
-    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, ApprovalHtmlTemplateLoader templateLoader, PayrollApprovalDocCreatedPublisher docCreatedPublisher) {
+    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, PayrollApprovalDocCreatedPublisher docCreatedPublisher, ApprovalFormCache approvalFormCache) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
-        this.templateLoader = templateLoader;
         this.docCreatedPublisher = docCreatedPublisher;
+        this.approvalFormCache = approvalFormCache;
     }
 
     private static final DateTimeFormatter YMD = DateTimeFormatter.ISO_LOCAL_DATE;
@@ -58,7 +59,8 @@ public class PayrollApprovalDraftService {
 
         Employee drafter = employeeRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-        String htmlTemplate = templateLoader.load(companyId, ApprovalFormType.SALARY);
+        ApprovalFormCache.CachedForm form = approvalFormCache.get(companyId, ApprovalFormType.SALARY);
+        String htmlTemplate = form.formHtml();   // ← collab → MinIO 최신본
         Map<String, String> dataMap = buildDataMap(run, drafter);
 
         return ApprovalDraftResDto.builder()
@@ -157,8 +159,34 @@ public class PayrollApprovalDraftService {
 //    전자결재 상신 (Kafka 발행)
     @Transactional
     public void submit(UUID companyId, Long userId, ApprovalSubmitReqDto reqDto) {
-        // SeveranceApprovalDraftService.submit()와 동일 패턴
-        // SalaryApprovalDocCreatedEvent 발행
+
+        PayrollRuns run = payrollRunsRepository
+                .findByPayrollRunIdAndCompany_CompanyId(reqDto.getLedgerId(), companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
+
+        if (run.getPayrollStatus() != PayrollStatus.APPROVED) {
+            throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
+        }
+
+        ApprovalFormCache.CachedForm form =
+                approvalFormCache.get(companyId, ApprovalFormType.SALARY);
+
+        docCreatedPublisher.publish(PayrollApprovalDocCreatedEvent.builder()
+                .companyId(companyId)
+                .payrollRunId(run.getPayrollRunId())
+                .drafterId(userId)
+                .formId(form.formId())
+                .formCode(ApprovalFormType.SALARY.getFormCode())   // "PAYROLL_RESOLUTION"
+                .htmlContent(reqDto.getHtmlContent())
+                .approvalLine(reqDto.getApprovalLine())
+                .build());
+
+        log.info("[PayrollApproval] 상신 발행 - payrollRunId={}, formId={}, drafterId={}",
+                run.getPayrollRunId(), form.formId(), userId);
+
+        // 상태 전이: APPROVED → IN_APPROVAL (요구사항에 따라 조정)
+        // run.changeStatus(PayrollStatus.IN_APPROVAL);
+
     }
 
     // currency, format helpers는 공용 유틸로 추출 권장

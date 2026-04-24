@@ -56,10 +56,11 @@ public class PayrollService {
     private final InsuranceRatesRepository insuranceRatesRepository;
     private final TaxWithholdingService taxWithholdingService;
     private final RetirementPensionDepositsRepository depositRepository;
+    private final MySalaryCacheService mySalaryCacheService;
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -74,6 +75,7 @@ public class PayrollService {
         this.insuranceRatesRepository = insuranceRatesRepository;
         this.taxWithholdingService = taxWithholdingService;
         this.depositRepository = depositRepository;
+        this.mySalaryCacheService = mySalaryCacheService;
     }
 
 ///       급여대장 조회(특정 월)
@@ -311,6 +313,18 @@ public class PayrollService {
             run.approve();
             log.info("[PayrollService] 전자결재 승인 처리 완료 - payrollRunId={}",
                     event.getPayrollRunId());
+
+            // 승인 시 redis에 저장해둔 캐시 무효화(invalidate)
+            List<Long> empIds = payrollDetailsRepository
+                    .findDistinctEmpIdsByPayrollRunId(event.getPayrollRunId());
+            for (Long empId : empIds) {
+                mySalaryCacheService.evictSalaryInfoCache(event.getCompanyId(), empId);
+                mySalaryCacheService.evictStubListCache(event.getCompanyId(), empId);
+                mySalaryCacheService.evictSeveranceEstimateCache(event.getCompanyId(), empId);
+            }
+            log.info("[PayrollService] 캐시 invalidate - runId={}, empCount={}",
+                    event.getPayrollRunId(), empIds.size());
+
         } else if ("REJECTED".equals(status)){
             run.rejectApproval();
             log.info("[PayrollService] 전자결재 반려 처리 - payrollRunId={}, reason={}",
