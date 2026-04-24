@@ -113,11 +113,15 @@ public class EmployeeService {
 //        연관 entity조회
         Company company = companyRepository.getReferenceById(companyId);
 
-        Department dept = departmentRepository.findByDeptName(requestDto.getDeptName()).orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        // id + companyId 로 단건 보장 + 테넌트 격리
+        Department dept = departmentRepository.findByDeptIdAndCompany_CompanyId(requestDto.getDeptId(), companyId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Grade grade = gradeRepository.findByGradeName(requestDto.getGradeName()).orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        Grade grade = gradeRepository.findByGradeIdAndCompanyId(requestDto.getGradeId(), companyId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Title title = titleRepository.findByTitleName(requestDto.getTitleName()).orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        Title title = titleRepository.findByTitleIdAndCompanyId(requestDto.getTitleId(), companyId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
         String empNum = generateEmpNum(companyId, requestDto.getEmpHireDate());
 
@@ -257,13 +261,14 @@ public class EmployeeService {
         Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId)
                 .orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
 
-        Department dept = departmentRepository.findByDeptName(requestDto.getDeptName())
+        // id + companyId 로 단건 보장 + 테넌트 격리
+        Department dept = departmentRepository.findByDeptIdAndCompany_CompanyId(requestDto.getDeptId(), companyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Grade grade = gradeRepository.findByGradeName(requestDto.getGradeName())
+        Grade grade = gradeRepository.findByGradeIdAndCompanyId(requestDto.getGradeId(), companyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Title title = titleRepository.findByTitleName(requestDto.getTitleName())
+        Title title = titleRepository.findByTitleIdAndCompanyId(requestDto.getTitleId(), companyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
         employee.updateInfo(
