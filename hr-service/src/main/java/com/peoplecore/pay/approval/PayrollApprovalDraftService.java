@@ -189,4 +189,5 @@ public class PayrollApprovalDraftService {
 
     }
 
+    // currency, format helpers는 공용 유틸로 추출 권장
 }

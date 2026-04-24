@@ -2,20 +2,30 @@ package com.peoplecore.evaluation.service;
 
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.Goal;
 import com.peoplecore.evaluation.domain.GoalApprovalStatus;
+import com.peoplecore.evaluation.domain.GoalType;
 import com.peoplecore.evaluation.domain.ManagerEvaluation;
+import com.peoplecore.evaluation.domain.MyResultStatus;
 import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.domain.SelfEvaluation;
+import com.peoplecore.evaluation.domain.Stage;
+import com.peoplecore.evaluation.domain.StageStatus;
+import com.peoplecore.evaluation.domain.StageType;
 import com.peoplecore.evaluation.dto.ManagerEvalAchievementDto;
 import com.peoplecore.evaluation.dto.ManagerEvalDetailDto;
 import com.peoplecore.evaluation.dto.ManagerEvalRequest;
+import com.peoplecore.evaluation.dto.MySeasonOptionDto;
 import com.peoplecore.evaluation.dto.TeamMemberEvalListDto;
+import com.peoplecore.evaluation.dto.TeamMemberResultDto;
+import com.peoplecore.evaluation.repository.EvalGradeRepository;
 import com.peoplecore.evaluation.repository.GoalRepository;
 import com.peoplecore.evaluation.repository.ManagerEvaluationRepository;
 import com.peoplecore.evaluation.repository.SeasonRepository;
 import com.peoplecore.evaluation.repository.SelfEvaluationRepository;
+import com.peoplecore.evaluation.repository.StageRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -37,17 +47,23 @@ public class ManagerEvaluationService {
     private final SeasonRepository seasonRepository;
     private final GoalRepository goalRepository;
     private final SelfEvaluationRepository selfEvaluationRepository;
+    private final EvalGradeRepository evalGradeRepository;
+    private final StageRepository stageRepository;
 
     public ManagerEvaluationService(ManagerEvaluationRepository mgrEvalRepository,
                                     EmployeeRepository employeeRepository,
                                     SeasonRepository seasonRepository,
                                     GoalRepository goalRepository,
-                                    SelfEvaluationRepository selfEvaluationRepository) {
+                                    SelfEvaluationRepository selfEvaluationRepository,
+                                    EvalGradeRepository evalGradeRepository,
+                                    StageRepository stageRepository) {
         this.mgrEvalRepository = mgrEvalRepository;
         this.employeeRepository = employeeRepository;
         this.seasonRepository = seasonRepository;
         this.goalRepository = goalRepository;
         this.selfEvaluationRepository = selfEvaluationRepository;
+        this.evalGradeRepository = evalGradeRepository;
+        this.stageRepository = stageRepository;
     }
 
 
@@ -173,16 +189,16 @@ public class ManagerEvaluationService {
         List<ManagerEvalAchievementDto.OkrItem> okrList = new ArrayList<>();
         for (Goal g : goals) {
             SelfEvaluation se = selfByGoalId.get(g.getGoalId());
-            if ("KPI".equals(g.getGoalType())) {
+            if (g.getGoalType() == GoalType.KPI) {
                 kpiList.add(ManagerEvalAchievementDto.KpiItem.builder()
                         .category(g.getCategory())
                         .title(g.getTitle())
                         .targetValue(g.getTargetValue())
                         .targetUnit(g.getTargetUnit())
                         .actualValue(se != null ? se.getActualValue() : null)
-                        .direction(g.getKpiTemplate() != null ? g.getKpiTemplate().getDirection() : null)
+                        .direction(g.getKpiDirection())
                         .build());
-            } else if ("OKR".equals(g.getGoalType())) {
+            } else if (g.getGoalType() == GoalType.OKR) {
                 String selfLevel = null;
                 if (se != null && se.getAchievementLevel() != null) {
                     selfLevel = se.getAchievementLevel().name();
@@ -248,10 +264,8 @@ public class ManagerEvaluationService {
         }
 
 //        신규 row 생성 - evaluator/employee 엔티티 로드 필요
-        Employee evaluator = employeeRepository.findById(managerEmpId)
-                .orElseThrow(() -> new IllegalArgumentException("팀장 정보가 없습니다"));
-        Employee employee = employeeRepository.findById(empId)
-                .orElseThrow(() -> new IllegalArgumentException("팀원 정보가 없습니다"));
+        Employee evaluator = employeeRepository.findById(managerEmpId).orElseThrow(() -> new IllegalArgumentException("팀장 정보가 없습니다"));
+        Employee employee = employeeRepository.findById(empId).orElseThrow(() -> new IllegalArgumentException("팀원 정보가 없습니다"));
 
         ManagerEvaluation newEval = ManagerEvaluation.builder()
                 .evaluator(evaluator)
@@ -298,6 +312,106 @@ public class ManagerEvaluationService {
     }
 
 
+    // 6. 팀원 최종 평가결과 일괄 조회 - 팀장 기준, 특정 시즌 (과거 포함)
+    //   - GRADING 단계 시작 이후 결과공개
+    //   - gradeFilter: null=전체 / 값(S/A/B/C/D 등) = 최종등급 일치만
+
+    @Transactional(readOnly = true)
+    public List<TeamMemberResultDto> getTeamResults(UUID companyId, Long managerEmpId, Long seasonId, String gradeFilter) {
+
+//        팀장 회사 소유권 검증
+        Employee manager = employeeRepository.findById(managerEmpId).orElse(null);
+        if (manager == null || !manager.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("팀장 정보가 없습니다");
+        }
+
+//        시즌 회사 소유권 검증
+        Season season = seasonRepository.findById(seasonId)
+                .orElseThrow(() -> new IllegalArgumentException("시즌 정보가 없습니다"));
+        if (!season.getCompany().getCompanyId().equals(companyId)) {
+            throw new IllegalArgumentException("접근 권한 없음");
+        }
+
+//        GRADING 시작 전이면 빈 리스트 ("결과공개기간 아닙니다" 표시)
+        if (!isGradingRevealed(seasonId)) return new ArrayList<>();
+
+//        finalGrade 는 시즌 확정 후에만 공개 (autoGrade / managerGrade 는 조건부 자동 노출)
+        boolean finalized = season.getFinalizedAt() != null;
+
+//        해당 시즌 팀장이 평가한 팀원 목록 (그 시즌의 팀 소속 박제)
+        List<ManagerEvaluation> mgrEvals = mgrEvalRepository.findByEvaluator_EmpIdAndSeason_SeasonId(managerEmpId, seasonId);
+        if (mgrEvals.isEmpty()) return new ArrayList<>();
+
+//        팀원 empId 목록 -> EvalGrade 배치 조회 후 Map (N+1 방지)
+        Set<Long> empIds = new HashSet<>();
+        for (ManagerEvaluation me : mgrEvals) empIds.add(me.getEmployee().getEmpId());
+        List<EvalGrade> grades = evalGradeRepository.findBySeason_SeasonId(seasonId);
+        Map<Long, EvalGrade> gradeByEmp = new HashMap<>();
+        for (EvalGrade g : grades) {
+            if (empIds.contains(g.getEmp().getEmpId())) {
+                gradeByEmp.put(g.getEmp().getEmpId(), g);
+            }
+        }
+
+//        DTO 조립 (finalGrade 필터는 finalized 이후에만 유의미)
+        List<TeamMemberResultDto> result = new ArrayList<>();
+        for (ManagerEvaluation me : mgrEvals) {
+            Employee emp = me.getEmployee();
+            EvalGrade g = gradeByEmp.get(emp.getEmpId());
+            String finalGrade = finalized && g != null ? g.getFinalGrade() : null;
+
+//            gradeFilter 지정 시 최종등급 일치만 포함 (대소문자 무시)
+            if (gradeFilter != null && !gradeFilter.isBlank()
+                    && (finalGrade == null || !finalGrade.equalsIgnoreCase(gradeFilter))) {
+                continue;
+            }
+
+            result.add(TeamMemberResultDto.builder()
+                    .empId(emp.getEmpId())
+                    .empName(emp.getEmpName())
+                    .position(g != null ? g.getPositionSnapshot() : null)
+                    .managerGradeId(me.getGradeLabel())
+                    .autoGradeId(g != null ? g.getAutoGrade() : null)
+                    .finalGradeId(finalGrade)
+                    .managerComment(me.getComment())
+                    .managerFeedback(me.getFeedback())
+                    .build());
+        }
+        return result;
+    }
+
+
+    // 7. 팀장 평가 결과 드롭다운 - 팀장이 평가자로 참여한 시즌 목록 (최신순, 과거 포함)
+    @Transactional(readOnly = true)
+    public List<MySeasonOptionDto> getTeamResultSeasons(UUID companyId, Long managerEmpId) {
+        List<Season> seasons = mgrEvalRepository.findSeasonsByCompanyIdAndEvaluator(companyId, managerEmpId);
+        List<MySeasonOptionDto> result = new ArrayList<>();
+        for (Season s : seasons) {
+            MyResultStatus status = s.getFinalizedAt() != null ? MyResultStatus.FINALIZED : MyResultStatus.IN_PROGRESS;
+            result.add(MySeasonOptionDto.builder()
+                    .seasonId(s.getSeasonId())
+                    .name(s.getName())
+                    .status(status)
+                    .finalizedAt(s.getFinalizedAt())
+                    .startDate(s.getStartDate())
+                    .build());
+        }
+        return result;
+    }
+
+
+    // GRADING 단계 시작(IN_PROGRESS 또는 FINISHED) 여부 - MyResult와 동일
+    private boolean isGradingRevealed(Long seasonId) {
+        List<Stage> stages = stageRepository.findBySeason_SeasonId(seasonId);
+        for (Stage st : stages) {
+            if (st.getType() == StageType.GRADING) {
+                return st.getStatus() != StageStatus.WAITING;
+            }
+        }
+        return false;
+    }
+
+
     // 팀장 기준 팀원 범위 확인 (같은 부서, 본인 제외)
     private void validateTeamMember(UUID companyId, Long managerEmpId, Long targetEmpId) {
         Employee manager = employeeRepository.findById(managerEmpId).orElse(null);
@@ -308,9 +422,7 @@ public class ManagerEvaluationService {
         if (target == null || !target.getCompany().getCompanyId().equals(companyId)) {
             throw new IllegalArgumentException("팀원 정보가 없습니다");
         }
-        if (target.getDept() == null || manager.getDept() == null
-                || !target.getDept().getDeptId().equals(manager.getDept().getDeptId())
-                || target.getEmpId().equals(managerEmpId)) {
+        if (target.getDept() == null || manager.getDept() == null || !target.getDept().getDeptId().equals(manager.getDept().getDeptId()) || target.getEmpId().equals(managerEmpId)) {
             throw new IllegalArgumentException("본인 팀원이 아닙니다");
         }
     }

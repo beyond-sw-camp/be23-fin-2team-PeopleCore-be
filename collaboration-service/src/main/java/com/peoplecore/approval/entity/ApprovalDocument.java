@@ -139,6 +139,12 @@ public class ApprovalDocument extends BaseTimeEntity {
     @Version
     private Long version;
 
+    /**
+     * 이전 문서 Id - 재기안으로 생성된 경우 원본 REJECTED 문서의 docId
+     * 최초 기안은 null, 재기안 시 원본 docId 세팅 → 체인 추적(링크드 리스트)
+     */
+    private Long previousDocId;
+
     /*개인 문서함 id */
     private Long personalFolderId;
 
@@ -217,21 +223,6 @@ public class ApprovalDocument extends BaseTimeEntity {
     /*완성 문서 URL 저장*/
     public void assignDocUrl(String docUrl) {
         this.docUrl = docUrl;
-    }
-
-    /*반려된 문서 재기안시 내용 수정 (REJECT일때만 호출)*/
-    public void updateForReSubmit(String docTitle, String docData, Boolean isEmergency,String docOpinion) {
-        this.docTitle = docTitle;
-        this.docData = docData;
-        if (isEmergency != null) {
-            this.isEmergency = isEmergency;
-        }
-        if( docOpinion != null) {
-            this.docOpinion  = docOpinion;
-        }
-        this.docNum = null;
-        this.docCompleteAt = null;
-        this.retentionYearSnapshot = null;   // 재기안 시 박제 초기화
     }
 
 }

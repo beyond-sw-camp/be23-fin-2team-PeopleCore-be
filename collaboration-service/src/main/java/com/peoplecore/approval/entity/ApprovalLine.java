@@ -145,6 +145,20 @@ public class ApprovalLine extends BaseTimeEntity {
         this.lineProcessedAt = LocalDateTime.now();
     }
 
+    /* 회수/앞 결재자 반려로 인한 결재선 취소 처리 */
+    public void cancel() {
+        this.approvalLineStatus = ApprovalLineStatus.CANCELED;
+        this.lineProcessedAt = LocalDateTime.now();
+    }
+
+    /* 전결 처리로 인한 결재선 종결 — 다른 결재자(delegatorEmpId)가 내 몫까지 일괄 승인 */
+    public void delegate(Long delegatorEmpId) {
+        this.approvalLineStatus = ApprovalLineStatus.DELEGATED;
+        this.isDelegated = true;
+        this.lineDelegatedId = delegatorEmpId;
+        this.lineProcessedAt = LocalDateTime.now();
+    }
+
     /*열람/ 참조 확인 처리 */
     public void markRead() {
         this.isRead = true;

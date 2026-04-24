@@ -1,3 +1,4 @@
+/*
 package com.peoplecore.permission.repository;
 
 import com.peoplecore.employee.domain.EmpRole;
@@ -12,3 +13,4 @@ public interface PermissionRepositoryCustom {
 //    관리자 목록조회(검색,필터,정렬,페이징)
     Page<AdminUserResDto>findAdminList(UUID companyId, String keyword, Long deptId, EmpRole empRole, String sortField, Pageable pageable);
 }
+*/

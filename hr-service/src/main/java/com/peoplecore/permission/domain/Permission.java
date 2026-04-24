@@ -1,3 +1,4 @@
+/*
 package com.peoplecore.permission.domain;
 
 import com.peoplecore.employee.domain.EmpRole;
@@ -52,3 +53,4 @@ public class Permission {
     @Column(name = "processed_at")
     private LocalDateTime processedAt;
 }
+*/

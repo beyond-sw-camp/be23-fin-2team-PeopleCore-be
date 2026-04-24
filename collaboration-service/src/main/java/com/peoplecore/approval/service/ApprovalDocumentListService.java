@@ -72,15 +72,7 @@ public class ApprovalDocumentListService {
 
     /* === 부서 문서함 (deptId 기준) === */
 
-    public Page<DocumentListResponseDto> getDeptCompletedDocuments(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable) {
-        return documentRepository.findDeptCompletedDocument(companyId, deptId, searchDto, pageable);
-    }
-
-    public Page<DocumentListResponseDto> getDeptReceivedDocuments(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable) {
-        return documentRepository.findDeptReceiveDocument(companyId, deptId, searchDto, pageable);
-    }
-
-    public Page<DocumentListResponseDto> getDeptSentDocuments(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable) {
-        return documentRepository.findDeptSentDocument(companyId, deptId, searchDto, pageable);
+    public Page<DocumentListResponseDto> getDeptDocuments(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable) {
+        return documentRepository.findDeptDocument(companyId, deptId, searchDto, pageable);
     }
 }

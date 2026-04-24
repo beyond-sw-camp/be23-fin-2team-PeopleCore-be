@@ -1,7 +1,9 @@
 package com.peoplecore.vacation.consumer;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.event.VacationApprovalResultEvent;
+import com.peoplecore.exception.CustomException;
 import com.peoplecore.vacation.service.VacationRequestService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,10 +28,16 @@ public class VacationApprovalResultConsumer {
         this.objectMapper = objectMapper;
     }
 
+    /* 비회복성 예외(검증/파싱/전이 규칙)는 재시도 스킵하고 즉시 DLT - 로그 소음 + 지연 제거 */
     @RetryableTopic(
             attempts = "3",
             backoff = @Backoff(delay = 10_000, multiplier = 2.0),
-            topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE
+            topicSuffixingStrategy = TopicSuffixingStrategy.SUFFIX_WITH_INDEX_VALUE,
+            exclude = {
+                    CustomException.class,
+                    JsonProcessingException.class,
+                    IllegalArgumentException.class
+            }
     )
     @KafkaListener(
             topics = "vacation-approval-result",

@@ -12,7 +12,8 @@ import java.util.stream.Collectors;
 public enum StatutoryVacationType {
 
     /* 월차 - 근기법  (1년 미만 근로자 월 1일 유급, 매월 스케줄러 적립) */
-    MONTHLY       ("MONTHLY",        "월차",           "1.00",  1,
+    /* deductUnit 0.25 = 반반차까지 쪼개서 신청 가능 */
+    MONTHLY       ("MONTHLY",        "월차",           "0.25",  1,
                    GrantMode.SCHEDULED,   GenderLimit.ALL,         PayType.PAID,   null),
     /* 연차 - 근기법 80% 이상 출근 시 15일, 근속 2년당 +1, 최대 25일) */
     ANNUAL        ("ANNUAL",         "연차",           "0.25",  2,
@@ -33,7 +34,8 @@ public enum StatutoryVacationType {
     MENSTRUAL     ("MENSTRUAL",      "생리휴가",       "1.00", 15,
                    GrantMode.SCHEDULED,   GenderLimit.FEMALE_ONLY, PayType.UNPAID, 1),
     /* 공가 - 근기법 + 예비군법 + 민방위기본법 (증빙별 일수, 연 누적 row 1개) */
-    OFFICIAL_LEAVE("OFFICIAL_LEAVE", "공가",           "1.00", 20,
+    /* deductUnit 0.25 = 반반차까지 쪼개서 신청 가능 */
+    OFFICIAL_LEAVE("OFFICIAL_LEAVE", "공가",           "0.25", 20,
                    GrantMode.EVENT_BASED, GenderLimit.ALL,         PayType.PAID,   null);
 
     /* VacationType.typeCode 에 그대로 저장되는 식별 코드 (UNIQUE per 회사) */

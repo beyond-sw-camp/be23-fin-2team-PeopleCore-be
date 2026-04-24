@@ -61,4 +61,16 @@ public class OverTimePolicyService {
     }
 
 
+    /* 회사 생성 시점 기본 초과근무 정책 1 row INSERT
+     * - OvertimePolicy @Builder.Default 값 적용 (15분 / 3120분 / 2700분 / NOTIFY)
+     * - 관리자 id/이름은 시스템 생성이므로 null 허용
+     * - CompanyService.createCompany 에서 호출됨
+     */
+    public void initDefault(Company company) {
+        OvertimePolicy policy = OvertimePolicy.builder()
+                .company(company)
+                .build();
+        overTimePolicyRepository.save(policy);
+    }
+
 }

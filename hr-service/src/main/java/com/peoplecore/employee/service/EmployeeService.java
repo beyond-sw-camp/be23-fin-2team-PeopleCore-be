@@ -27,6 +27,7 @@ import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -74,8 +75,8 @@ public class EmployeeService {
     private static final String EMAIL_DOMAIN = "@peoplecore.com";
 
     //    1.사원조회 및 등록
-    public Page<EmployeeListDto> getEmployee(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField employeeSortField, Pageable pageable) {
-        Page<Employee> employees = employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, employeeSortField, pageable);
+    public Page<EmployeeListDto> getEmployee(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, EmployeeSortField employeeSortField, Sort.Direction sortDirection, Pageable pageable) {
+        Page<Employee> employees = employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, employeeSortField, sortDirection, pageable);
         return employees.map(EmployeeListDto::fromEntity);
     }
 
@@ -125,10 +126,17 @@ public class EmployeeService {
         String rawPassword = resolvePassword(requestDto);
 
 
-        /* 회사 근무 그룹 조회 */
-        WorkGroup workGroup = workGroupRepository
-                .findByWorkGroupIdAndGroupDeleteAtIsNull(requestDto.getWorkGroupId())
-                .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+        /* 회사 근무 그룹 조회 - 미선택 시 기본 그룹(DEFAULT) 자동 배정 */
+        WorkGroup workGroup;
+        if (requestDto.getWorkGroupId() == null) {
+            workGroup = workGroupRepository
+                    .findByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(companyId, "DEFAULT")
+                    .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+        } else {
+            workGroup = workGroupRepository
+                    .findByWorkGroupIdAndGroupDeleteAtIsNull(requestDto.getWorkGroupId())
+                    .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+        }
 
 
 //        사원 저장
@@ -148,11 +156,11 @@ public class EmployeeService {
                 .empAddressDetail(requestDto.getEmpAddressDetail())
                 .empHireDate(requestDto.getEmpHireDate())
                 .empType(requestDto.getEmpType())
+                .jobType(requestDto.getJobType())
                 .empNum(empNum)
                 .empEmail(fullEmail)
                 .empRole(requestDto.getEmpRole())
                 .empPassword(passwordEncoder.encode(rawPassword))
-                .empMailboxSize(requestDto.getEmpMailboxSize()) //사용. 5gb고정 하드 코딩// 커스��� 고려
                 .empStatus(EmpStatus.ACTIVE)
                 .workGroup(workGroup)
                 .workGroupAssignedAt(LocalDateTime.now())
@@ -270,11 +278,11 @@ public class EmployeeService {
                 requestDto.getEmpAddressDetail(),
                 requestDto.getEmpHireDate(),
                 requestDto.getEmpType(),
+                requestDto.getJobType(),
                 dept,
                 grade,
                 title,
-                requestDto.getEmpRole(),
-                requestDto.getEmpMailboxSize()
+                requestDto.getEmpRole()
         );
 
         return EmpDetailResponseDto.from(employee);

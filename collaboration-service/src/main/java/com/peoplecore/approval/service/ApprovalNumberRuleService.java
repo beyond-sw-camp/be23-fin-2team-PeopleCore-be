@@ -39,6 +39,18 @@ public class ApprovalNumberRuleService {
         return NumberRuleResponse.from(rule, preview);
     }
 
+    /**
+     * 회사 생성 시 기본 채번 규칙 자동 주입 (멱등).
+     * 이미 존재하면 스킵 — RestClient + Kafka 폴백 중복 진입 대비.
+     */
+    @Transactional
+    public void initDefault(UUID companyId) {
+        if (numberRuleRepository.findByNumberRuleCompanyId(companyId).isPresent()) {
+            return;
+        }
+        numberRuleRepository.save(ApprovalNumberRule.createDefault(companyId));
+    }
+
     /*채번 규칙 수정 */
     @Transactional
     public void updateNumberRule(UUID companyId, Long empId, NumberRuleUpdateRequest request) {

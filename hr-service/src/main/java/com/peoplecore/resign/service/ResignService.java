@@ -1,5 +1,6 @@
 package com.peoplecore.resign.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.auth.service.FaceAuthService;
 import com.peoplecore.employee.domain.EmpStatus;
@@ -116,14 +117,14 @@ public class ResignService {
 
 
 //    kafka
-    public void createResignfromApprocal(ResignApprovedEvent event){
+    public void createResignFromApprocal(ResignApprovedEvent event){
         Employee employee =employeeRepository.findById(event.getEmpId()).orElseThrow(()-> new IllegalArgumentException("사원을 찾을 수 없습니다"));
 
 //        docData(json)에서 퇴직예정일 추출
         LocalDate resignDate = null;
         try{
 //            json문자열을 map<키,값>으로 파싱
-            Map<String, String> docData = objectMapper.readValue(event.getDocData(),Map.class);
+            Map<String, String> docData = objectMapper.readValue(event.getDocData(), new TypeReference<Map<String, String>>() {});
 //            양식에 name= "resignDate"있으면 해당 값 사용
             String dateStr = docData.get("resignDate");
             if(dateStr == null){

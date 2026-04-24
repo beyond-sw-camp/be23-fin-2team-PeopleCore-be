@@ -1,3 +1,4 @@
+/*
 package com.peoplecore.permission.dto;
 
 
@@ -35,3 +36,4 @@ public class PermissionReqDto {
                 .build();
     }
 }
+*/

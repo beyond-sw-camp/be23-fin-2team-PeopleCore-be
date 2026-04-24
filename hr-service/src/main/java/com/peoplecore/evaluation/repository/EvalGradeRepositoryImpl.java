@@ -13,6 +13,7 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
     @Override
     public Page<DraftListItemDto> searchDraftList(UUID companyId, Long seasonId,
                                                   Long deptId, String keyword,
-                                                  EvalGradeSortField sortField, Pageable pageable) {
+                                                  EvalGradeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
 
 //        데이터 조회 fetch join
         List<EvalGrade> content = queryFactory
@@ -49,7 +50,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
                         deptEq(deptId),                    //부서(스냅샷) 필터
                         searchContains(keyword)            //이름/사번 검색
                 )
-                .orderBy(getOrderSpecifier(sortField))     //정렬
+                .orderBy(getOrderSpecifier(sortField, sortDirection))     //정렬
                 .offset(pageable.getOffset())              //시작위치
                 .limit(pageable.getPageSize())             //한 페이지 개수
                 .fetch();   //실행 -> List반환
@@ -93,7 +94,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
     @Override
     public Page<EvalGrade> searchCalibrationGrades(UUID companyId, Long seasonId,
                                                     Long deptId, String keyword,
-                                                    EvalGradeSortField sortField, Pageable pageable) {
+                                                    EvalGradeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
 
 //        데이터 조회 (사원정보 fetch join)
         List<EvalGrade> content = queryFactory
@@ -106,7 +107,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
                         searchContains(keyword),
                         qGrade.autoGrade.isNotNull()       // 미산정 제외
                 )
-                .orderBy(getOrderSpecifier(sortField))
+                .orderBy(getOrderSpecifier(sortField, sortDirection))
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
                 .fetch();
@@ -130,27 +131,32 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
 
 
 
-//  정렬 기준 매핑 Enum사용
-    private OrderSpecifier<?> getOrderSpecifier(EvalGradeSortField sortField) {
+//  정렬 기준 매핑 Enum사용 (direction 이 null 이면 필드별 기본 방향 사용)
+    private OrderSpecifier<?> getOrderSpecifier(EvalGradeSortField sortField, Sort.Direction direction) {
         if (sortField == null) {
             return qGrade.totalScore.desc();           // 기본: 점수 높은순
         }
         switch (sortField) {
             case EMP_NUM:
-                return qEmployee.empNum.asc();          // 사번 오름차순
+                return isDesc(direction, false) ? qEmployee.empNum.desc() : qEmployee.empNum.asc();              // 사번
             case EMP_NAME:
-                return qEmployee.empName.asc();         // 이름 가나다순
+                return isDesc(direction, false) ? qEmployee.empName.desc() : qEmployee.empName.asc();            // 이름
             case DEPT_NAME:
-                return qGrade.deptNameSnapshot.asc();   // 부서 가나다순 (스냅샷)
+                return isDesc(direction, false) ? qGrade.deptNameSnapshot.desc() : qGrade.deptNameSnapshot.asc(); // 부서 (스냅샷)
             case TOTAL_SCORE:
-                return qGrade.totalScore.desc();        // 점수 높은순
+                return isDesc(direction, true) ? qGrade.totalScore.desc() : qGrade.totalScore.asc();              // 점수 (기본 높은순)
             case AUTO_GRADE:
-                return qGrade.autoGrade.asc();          // 예정등급 오름차순
+                return isDesc(direction, false) ? qGrade.autoGrade.desc() : qGrade.autoGrade.asc();               // 예정등급
             case FINAL_GRADE:
-                return qGrade.finalGrade.asc();         // 확정/보정등급 오름차순 (최신 보정값)
+                return isDesc(direction, false) ? qGrade.finalGrade.desc() : qGrade.finalGrade.asc();             // 확정/보정등급
             default:
                 return qGrade.totalScore.desc();        // 기본값
         }
+    }
+
+    // direction 이 null 이면 필드별 기본 방향(defaultDesc) 사용
+    private boolean isDesc(Sort.Direction direction, boolean defaultDesc) {
+        return direction == null ? defaultDesc : direction == Sort.Direction.DESC;
     }
 
     //    회사 id필터
@@ -201,6 +207,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
     public Page<UnassignedEmployeeDto> searchUnassigned(UUID companyId, Long seasonId,
                                                          Long deptId,
                                                          EvalGradeSortField sortField,
+                                                         Sort.Direction sortDirection,
                                                          Pageable pageable) {
 
         List<EvalGrade> content = queryFactory
@@ -212,7 +219,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
                         deptEq(deptId),
                         qGrade.finalGrade.isNull()         // 미산정만
                 )
-                .orderBy(getUnassignedOrder(sortField))
+                .orderBy(getUnassignedOrder(sortField, sortDirection))
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
                 .fetch();
@@ -232,6 +239,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
         List<UnassignedEmployeeDto> dtos = new ArrayList<>();
         for (EvalGrade g : content) {
             dtos.add(UnassignedEmployeeDto.builder()
+                    .empId(g.getEmp().getEmpId())
                     .empNum(g.getEmp().getEmpNum())
                     .empName(g.getEmp().getEmpName())
                     .deptName(g.getDeptNameSnapshot())
@@ -242,13 +250,14 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
     }
 
     // 미산정 목록 전용 정렬 (기본: 사번 오름차순 — 점수 컬럼 없음)
-    private OrderSpecifier<?> getUnassignedOrder(EvalGradeSortField sortField) {
+    private OrderSpecifier<?> getUnassignedOrder(EvalGradeSortField sortField, Sort.Direction direction) {
         if (sortField == null) return qEmployee.empNum.asc();
+        boolean desc = isDesc(direction, false);
         switch (sortField) {
-            case EMP_NUM:   return qEmployee.empNum.asc();
-            case EMP_NAME:  return qEmployee.empName.asc();
-            case DEPT_NAME: return qGrade.deptNameSnapshot.asc();
-            case POSITION:  return qGrade.positionSnapshot.asc();
+            case EMP_NUM:   return desc ? qEmployee.empNum.desc() : qEmployee.empNum.asc();
+            case EMP_NAME:  return desc ? qEmployee.empName.desc() : qEmployee.empName.asc();
+            case DEPT_NAME: return desc ? qGrade.deptNameSnapshot.desc() : qGrade.deptNameSnapshot.asc();
+            case POSITION:  return desc ? qGrade.positionSnapshot.desc() : qGrade.positionSnapshot.asc();
             default:        return qEmployee.empNum.asc();
         }
     }
@@ -260,7 +269,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
     public Page<FinalGradeListItemDto> searchFinalList(UUID companyId, Long seasonId,
                                                        Long deptId, String keyword,
                                                        Boolean unscoredOnly,
-                                                       EvalGradeSortField sortField, Pageable pageable) {
+                                                       EvalGradeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
 
 //        데이터 조회 fetch join
         List<EvalGrade> content = queryFactory
@@ -273,7 +282,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
                         searchContains(keyword),           //이름/사번 검색
                         unscoredEq(unscoredOnly)           //미산정자 포함/배제/단독
                 )
-                .orderBy(getOrderSpecifier(sortField))     //정렬
+                .orderBy(getOrderSpecifier(sortField, sortDirection))     //정렬
                 .offset(pageable.getOffset())              //시작위치
                 .limit(pageable.getPageSize())             //한 페이지 개수
                 .fetch();   //실행 -> List반환

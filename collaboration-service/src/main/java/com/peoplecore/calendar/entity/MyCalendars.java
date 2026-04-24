@@ -29,6 +29,7 @@ public class MyCalendars extends BaseTimeEntity {
     private String myDisplayColor;
 
     private Boolean isVisible;
+
     private Integer sortOrder;
 
     @Column(nullable = false)
