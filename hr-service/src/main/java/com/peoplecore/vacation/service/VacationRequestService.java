@@ -226,6 +226,14 @@ public class VacationRequestService {
                 .map(VacationRequestResponse::from);
     }
 
+    /* 본인 휴가 신청 이력 페이지 (createdAt DESC) - Type fetch join, 응답 DTO 매핑 */
+    /* 화면 "내 신청 이력" 탭 - 상태(PENDING/APPROVED/REJECTED/CANCELED) 전부 포함 */
+    @Transactional(readOnly = true)
+    public Page<VacationRequestResponse> listMine(UUID companyId, Long empId, Pageable pageable) {
+        return vacationRequestQueryRepository.findEmployeeHistory(companyId, empId, pageable)
+                .map(VacationRequestResponse::from);
+    }
+
     /* 관리자 직권 취소 - 규칙 우회 (applyByAdmin) */
     public void cancelByAdmin(UUID companyId, Long managerId, Long requestId, String reason) {
         VacationRequest request = loadRequestForCompany(companyId, requestId);

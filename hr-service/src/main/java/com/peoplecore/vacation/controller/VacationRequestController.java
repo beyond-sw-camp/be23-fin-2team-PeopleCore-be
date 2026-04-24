@@ -77,4 +77,14 @@ public class VacationRequestController {
             @RequestHeader("X-User-Id") Long empId) {
         return ResponseEntity.ok(vacationRequestService.listMyVacationTypes(companyId, empId));
     }
+
+    /* 내 휴가 신청 이력 (페이지) - createdAt 내림차순 */
+    /* 응답: 신청일/유형/기간/일수/사유/상태(+반려사유)/처리일/requestId(취소용) */
+    @GetMapping("/me")
+    public ResponseEntity<Page<VacationRequestResponse>> listMine(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(vacationRequestService.listMine(companyId, empId, pageable));
+    }
 }
