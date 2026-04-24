@@ -8,7 +8,7 @@ import com.peoplecore.event.VacationSlotItem;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
-import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
+import com.peoplecore.vacation.dto.VacationAdminPeriodPageResponse;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
 import com.peoplecore.vacation.entity.AbstractApprovalBoundRequest;
 import com.peoplecore.vacation.entity.RequestStatus;
@@ -202,20 +202,26 @@ public class VacationRequestService {
                 event.getApprovalDocId(), group.size(), currentStatus, newStatus, event.getManagerId());
     }
 
-    /* 전사 휴가 관리 - 기간 교집합 + 상태 필터 / 사원별 요약 페이지 */
-    /* 페이지 단위 = 사원(중복 제거). totalElements = 기간 내 휴가자 수 */
-    /* statuses null or 빈 배열 이면 상태 필터 없이 전체. 경계 포함: startDate 00:00 ~ endDate 23:59:59 */
+    /* 전사 휴가 관리 - 기간 교집합 + 상태 필터 / 건별 페이지 + 메타 */
+    /* 페이지 단위 = 신청 건(사원 중복 허용). uniqueEmployeeCount = 기간 내 휴가자 수(중복 제거) */
+    /* statuses 미지정(null/empty) 시 APPROVED 강제 - "실제로 쉬는 사람" UX 기본값 */
+    /* 경계 포함: startDate 00:00 ~ endDate 23:59:59 */
     @Transactional(readOnly = true)
-    public Page<VacationAdminPeriodResponseDto> listForAdminByPeriod(UUID companyId,
-                                                                  LocalDate startDate,
-                                                                  LocalDate endDate,
-                                                                  List<RequestStatus> statuses,
-                                                                  Pageable pageable) {
+    public VacationAdminPeriodPageResponse listForAdminByPeriod(UUID companyId,
+                                                                 LocalDate startDate,
+                                                                 LocalDate endDate,
+                                                                 List<RequestStatus> statuses,
+                                                                 Pageable pageable) {
         LocalDateTime periodStart = startDate.atStartOfDay();
         LocalDateTime periodEnd = endDate.atTime(23, 59, 59);
 
+        // 기본값 APPROVED - 반려/취소 건까지 합산되어 오염되는 것 방지
+        List<RequestStatus> effectiveStatuses = (statuses == null || statuses.isEmpty())
+                ? List.of(RequestStatus.APPROVED)
+                : statuses;
+
         return vacationRequestQueryRepository
-                .findByCompanyAndPeriodAndStatuses(companyId, periodStart, periodEnd, statuses, pageable);
+                .findByCompanyAndPeriodAndStatuses(companyId, periodStart, periodEnd, effectiveStatuses, pageable);
     }
 
     /* 관리자 상태별 조회 페이지 - Type + Employee fetch join */
