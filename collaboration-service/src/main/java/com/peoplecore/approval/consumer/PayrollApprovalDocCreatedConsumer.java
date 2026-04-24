@@ -100,6 +100,7 @@ public class PayrollApprovalDocCreatedConsumer {
                         .build();
 
                 // 5) 기존 createDocument 재사용 → DB 에 ApprovalDocument 저장
+                //    hr 이벤트 기반 상신은 첨부파일이 없으므로 files 는 빈 리스트
                 Long docId = approvalDocumentService.createDocument(
                         event.getCompanyId(),
                         event.getDrafterId(),
@@ -107,7 +108,8 @@ public class PayrollApprovalDocCreatedConsumer {
                         drafter.getDeptId(),
                         drafter.getGradeName(),
                         drafter.getTitleName(),
-                        request
+                        request,
+                        java.util.Collections.emptyList()
                 );
 
                 log.info("[Collab] 급여결의서 ApprovalDocument 생성 - runId={}, docId={}, formId={}",

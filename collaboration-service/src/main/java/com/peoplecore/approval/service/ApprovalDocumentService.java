@@ -70,7 +70,6 @@ public class ApprovalDocumentService {
         this.approvalDocumentRepository = approvalDocumentRepository;
     }
 
-    @Autowired
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번 + 첨부 업로드 */
     @Transactional
     public Long createDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request, List<MultipartFile> files) {

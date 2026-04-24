@@ -93,6 +93,7 @@ public class SeveranceApprovalDocCreatedConsumer {
                     .hrRefId(event.getSevId())
                     .build();
 
+            // hr 이벤트 기반 상신은 첨부파일이 없으므로 files 는 빈 리스트
             Long docId = approvalDocumentService.createDocument(
                     event.getCompanyId(),
                     event.getDrafterId(),
@@ -100,7 +101,8 @@ public class SeveranceApprovalDocCreatedConsumer {
                     drafter.getDeptId(),
                     drafter.getGradeName(),
                     drafter.getTitleName(),
-                    request
+                    request,
+                    java.util.Collections.emptyList()
             );
 
             log.info("[Collab] 퇴직급여결의서 ApprovalDocument 생성 - runId={}, docId={}, formId={}",
