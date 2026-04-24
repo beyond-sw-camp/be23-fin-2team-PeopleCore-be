@@ -14,6 +14,7 @@ import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.domain.Calibration;
 import com.peoplecore.evaluation.domain.Goal;
 import com.peoplecore.evaluation.domain.GoalApprovalStatus;
+import com.peoplecore.evaluation.domain.GoalType;
 import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.KpiDirection;
 import com.peoplecore.evaluation.domain.ManagerEvaluation;
@@ -38,6 +39,7 @@ import com.peoplecore.evaluation.repository.StageRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -99,8 +101,8 @@ public class EvalGradeService {
     @Transactional(readOnly = true)
     // 1. 자동 산정 대상 목록 조회 //DB totalScore + autoGrade 그대로 반환 // - totalScore/autoGrade 가 null일시 미산정 -> 프론트 "-" 렌더
     //  부서/직급 시즌 오픈 시점 스냅샷 (조직개편 무관)
-    public Page<DraftListItemDto> getDraftList(UUID companyId, Long seasonId, Long deptId, String keyword, EvalGradeSortField sortField, Pageable pageable) {
-        return evalGradeRepository.searchDraftList(companyId, seasonId, deptId, keyword, sortField, pageable);
+    public Page<DraftListItemDto> getDraftList(UUID companyId, Long seasonId, Long deptId, String keyword, EvalGradeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
+        return evalGradeRepository.searchDraftList(companyId, seasonId, deptId, keyword, sortField, sortDirection, pageable);
     }
 
 
@@ -149,15 +151,18 @@ public class EvalGradeService {
         List<EvalGrade> rows = evalGradeRepository.findBySeason_SeasonId(seasonId);
 
 //        c. row마다 집계+ update
+//          - self 는 clip 전 raw (rawSelfScore) + clip 후 (selfScore) 분리 저장
+//            → 등급 보정 단계에서 "자기평가 scaleTo 초과로 잘린 사원" 식별에 사용
         for (EvalGrade row : rows) {
             Long empId = row.getEmp().getEmpId();
 
 //            items순회로 가중평균 누적식으로 계산
 //            - 자기평가(self), 상위자평가(manager) 점수는 별도 변수에 따로 보관
-//              → 이후 applyBiasAdjustment에서 상위자점수에만 Z-score 보정을 적용하기 위함
+//              -> 이후 applyBiasAdjustment에서 상위자점수에만 Z-score 보정을 적용하려
             BigDecimal weightedSum = BigDecimal.ZERO;
             BigDecimal weightTotal = BigDecimal.ZERO;
-            BigDecimal selfScore = null;     // 자기평가 원점수 (편향보정 제외)
+            BigDecimal rawSelfScore = null;  // 자기평가 clip 전 가중평균 (scaleTo 초과 판정용)
+            BigDecimal selfScore = null;     // 자기평가 원점수 (scaleTo 상한 clip 됨, 편향보정 제외)
             BigDecimal managerScore = null;  // 상위자평가 원점수 (편향보정 대상)
             boolean missing = false;
 
@@ -165,18 +170,22 @@ public class EvalGradeService {
                 // 비활성화된 잠금 항목(enabled=false)은 집계 대상에서 제외
                 if (isItemDisabled(item)) continue;
 
-                BigDecimal score = aggregateScoreByItem(item, empId, seasonId, snapshot);
-                if (score == null) {
-//                    해당 평가 미제출 -> 산정 스킵
+                BigDecimal score;
+                if ("self".equals(item.getId())) {
+                    // self 는 clip 전/후 둘 다 필요해서 SelfScoreResult 로 받음
+                    SelfScoreResult self = aggregateSelfScore(empId, seasonId, snapshot);
+                    if (self == null) { missing = true; break; }
+                    rawSelfScore = self.raw;
+                    selfScore = self.clipped;
+                    score = self.clipped;
+                } else if ("manager".equals(item.getId())) {
+                    score = aggregateManagerScore(empId, seasonId, snapshot);
+                    if (score == null) { missing = true; break; }
+                    managerScore = score;
+                } else {
+                    // 알 수 없는 item (현재 범위 밖) -> missing
                     missing = true;
                     break;
-                }
-
-                // 시스템 고정 항목 ID로 원점수 분리 저장
-                if ("self".equals(item.getId())) {
-                    selfScore = score;
-                } else if ("manager".equals(item.getId())) {
-                    managerScore = score;
                 }
 
                 weightedSum = weightedSum.add(score.multiply(item.getWeight())); //점수 x가중치 누적합
@@ -184,7 +193,7 @@ public class EvalGradeService {
             }
             if (missing || weightTotal.signum() == 0) {
 //                재산정 시 미제출이면 이전 점수 전부 null 로 초기화 (유령값 방지)
-                row.applyTotalScore(null, null, null, null, null);
+                row.applyTotalScore(null, null, null, null, null, null);
                 continue;
             }
 //            가중평균
@@ -197,8 +206,8 @@ public class EvalGradeService {
 //            종합점수
             BigDecimal total = weighted.add(adjustment);
 
-//            update(dirty checking) - self/manager 원점수 + 비율/가감/종합 저장
-            row.applyTotalScore(selfScore, managerScore, weighted, adjustment, total);
+//            update(dirty checking) - raw/clipped self + manager 원점수 + 가중/가감/종합 저장
+            row.applyTotalScore(rawSelfScore, selfScore, managerScore, weighted, adjustment, total);
         }
     }
 
@@ -228,10 +237,108 @@ public class EvalGradeService {
                 && Boolean.FALSE.equals(item.getEnabled());
     }
 
-    //    item별 점수 집계 -.id로 분기(ex.자기/팀장 점수 집계)
-    private BigDecimal aggregateScoreByItem(FormSnapshotDto.Item item, Long empId, Long seasonId, FormSnapshotDto snapshotDto) {
-//        TODO:self로직 생성후  achievementLevel 점수 매핑 + taskWeight 난이도 가중평균, manager 로직 생성후 gradeLabel 조회snapshot.rawScoreTable 로 점수 환산
-        return null;//(미체출 시 null)
+    //    자기평가 점수 집계 결과 - clip 전 raw + clip 후 clipped 둘 다 보관
+    //      - raw    : taskGrade 가중평균 [0, cap] (DB 저장용 — 등급 보정 후보 판정)
+    //      - clipped: scaleTo 상한으로 자른 값 [0, scaleTo] (실제 점수 집계에 사용)
+    private static class SelfScoreResult {
+        final BigDecimal raw;
+        final BigDecimal clipped;
+        SelfScoreResult(BigDecimal raw, BigDecimal clipped) {
+            this.raw = raw;
+            this.clipped = clipped;
+        }
+    }
+
+    //    자기평가 점수 집계 - KPI Goal만 사용 (OKR 제외)
+    //      1) 각 KPI rate = computeAchievementRate(direction, target, actual, cap, tolerance)
+    //      2) per-goal score: clamp(rate, 0, cap) + 미달 패널티 (threshold > 0 && rate < threshold 면 × factor)
+    //      3) taskGrade(상/중/하) 가중평균 → raw [0, cap]
+    //      4) scaleTo 상한 clip → clipped [0, scaleTo]
+    //      cap 은 "초과 달성이 미달 커버" 버퍼, scaleTo 는 자기평가 최종 만점
+    //      - 승인 KPI 0개, SelfEvaluation 미제출/actualValue null, rate 불능 시 null 반환 (부모 missing 처리)
+    private SelfScoreResult aggregateSelfScore(Long empId, Long seasonId, FormSnapshotDto snapshot) {
+        List<Goal> goals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdAndApprovalStatusOrderByGoalIdDesc(
+                empId, seasonId, GoalApprovalStatus.APPROVED);
+
+        List<Goal> kpiGoals = new ArrayList<>();
+        for (Goal g : goals) {
+            if (g.getGoalType() == GoalType.KPI) kpiGoals.add(g);
+        }
+        if (kpiGoals.isEmpty()) return null;
+
+        List<Long> goalIds = new ArrayList<>();
+        for (Goal g : kpiGoals) goalIds.add(g.getGoalId());
+        List<SelfEvaluation> selfEvals = selfEvaluationRepository.findByGoal_GoalIdIn(goalIds);
+        Map<Long, SelfEvaluation> selfByGoal = new HashMap<>();
+        for (SelfEvaluation se : selfEvals) selfByGoal.put(se.getGoal().getGoalId(), se);
+
+        // kpiScoring 설정 추출 (없으면 업계 표준 기본값)
+        BigDecimal cap = BigDecimal.valueOf(120);
+        BigDecimal scaleTo = BigDecimal.valueOf(100);
+        BigDecimal tolerance = BigDecimal.ZERO;
+        BigDecimal threshold = BigDecimal.ZERO;
+        BigDecimal factor = BigDecimal.ONE;
+        FormSnapshotDto.KpiScoring scoring = snapshot.getKpiScoring();
+        if (scoring != null) {
+            if (scoring.getCap() != null) cap = scoring.getCap();
+            if (scoring.getScaleTo() != null) scaleTo = scoring.getScaleTo();
+            if (scoring.getMaintainTolerance() != null) tolerance = scoring.getMaintainTolerance();
+            if (scoring.getUnderperformanceThreshold() != null) threshold = scoring.getUnderperformanceThreshold();
+            if (scoring.getUnderperformanceFactor() != null) factor = scoring.getUnderperformanceFactor();
+        }
+
+        BigDecimal weightedSum = BigDecimal.ZERO;
+        int totalWeight = 0;
+        for (Goal g : kpiGoals) {
+            SelfEvaluation se = selfByGoal.get(g.getGoalId());
+            if (se == null || se.getActualValue() == null) return null;
+
+            BigDecimal rate = computeAchievementRate(g.getKpiDirection(), g.getTargetValue(), se.getActualValue(), cap, tolerance);
+            if (rate == null) return null;
+
+            // per-goal 점수: [0, cap] 범위로 자름 + 미달 패널티 (scaleTo clip 은 집계 후 한 번)
+            BigDecimal capped = rate.max(BigDecimal.ZERO).min(cap);
+            BigDecimal goalScore = capped;
+            if (threshold.signum() > 0 && rate.compareTo(threshold) < 0) {
+                goalScore = goalScore.multiply(factor);
+            }
+
+            int tw = weightOfTaskGradeFromSnapshot(g.getTaskGrade(), snapshot);
+            weightedSum = weightedSum.add(goalScore.multiply(BigDecimal.valueOf(tw)));
+            totalWeight += tw;
+        }
+        if (totalWeight == 0) return null;
+
+        // raw: taskGrade 가중평균 [0, cap] — 초과 달성이 미달 커버 가능
+        BigDecimal raw = weightedSum.divide(BigDecimal.valueOf(totalWeight), 2, RoundingMode.HALF_UP);
+        // clipped: scaleTo 상한으로 자름 [0, scaleTo] — 실제 점수 집계용
+        BigDecimal clipped = raw.min(scaleTo).setScale(2, RoundingMode.HALF_UP);
+        return new SelfScoreResult(raw, clipped);
+    }
+
+    //    상위자평가 점수 집계 - gradeLabel(S/A/B/C/D) -> snapshot.rawScoreTable 룩업
+    //      - ManagerEvaluation row 없음, gradeLabel null, rawScoreTable 에 매칭 없음 시 null
+    private BigDecimal aggregateManagerScore(Long empId, Long seasonId, FormSnapshotDto snapshot) {
+        ManagerEvaluation mgrEval = mgrEvalRepository.findByEmployee_EmpIdAndSeason_SeasonId(empId, seasonId).orElse(null);
+        if (mgrEval == null || mgrEval.getGradeLabel() == null) return null;
+        if (snapshot.getRawScoreTable() == null) return null;
+
+        String label = mgrEval.getGradeLabel();
+        for (FormSnapshotDto.RawScore row : snapshot.getRawScoreTable()) {
+            if (label.equals(row.getGradeId())) {
+                return row.getRawScore();
+            }
+        }
+        return null;
+    }
+
+    //    taskGrade 난이도 가중치 (스냅샷 기준 - 시즌 OPEN 당시 값)
+    //      - snapshot.taskWeightSang/Jung/Ha 사용. null 이면 업계 표준 기본값(3/2/1)
+    private int weightOfTaskGradeFromSnapshot(TaskGrade grade, FormSnapshotDto snapshot) {
+        if (grade == TaskGrade.HIGH) return snapshot.getTaskWeightSang() != null ? snapshot.getTaskWeightSang() : 3;
+        if (grade == TaskGrade.MID)  return snapshot.getTaskWeightJung() != null ? snapshot.getTaskWeightJung() : 2;
+        if (grade == TaskGrade.LOW)  return snapshot.getTaskWeightHa() != null ? snapshot.getTaskWeightHa() : 1;
+        return 0;
     }
 
     //    조정점수 집계 -enabled항목만 합산(조정점수 합산)
@@ -581,10 +688,12 @@ public class EvalGradeService {
     }
 
 
-    //    4. 편향보정 이상 팀 조회 (프론트 GradeCalibration 화면 진입 시 호출)
-//       DB에 저장된 teamStdDev/teamSize 스냅샷을 읽어 이상 팀 복원 ->  단순 조회
+    //    4. 등급 보정 검토 대상 조회 (프론트 GradeCalibration 화면 진입 시 호출)
+//       - 편향보정 스킵된 팀 (전원 동점 / 소규모) - Z-score 보정 불가
+//       - 자기평가 scaleTo 초과로 clip 된 사원 - 등급 상향 후보
+//       DB 스냅샷(teamStdDev/teamSize/rawSelfScore)을 읽어 복원 -> 단순 조회
     @Transactional(readOnly = true)
-    public BiasAdjustResultDto getBiasAdjustAnomalies(UUID companyId, Long seasonId) {
+    public CalibrationReviewDto getCalibrationReview(UUID companyId, Long seasonId) {
 
 //        a. 시즌 로드 + 소유권 검증
         Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
@@ -592,38 +701,56 @@ public class EvalGradeService {
             throw new IllegalArgumentException("접근 권한 없음");
         }
 
-//        b. 소규모 팀 기준(minTeamSize) 로드 - 보정 당시 스냅샷과 같은 기준 사용
+//        b. 스냅샷에서 minTeamSize / scaleTo 추출 - 보정 당시 기준과 동일 기준 사용
         int minTeamSize = 5;                                            // 기본값
+        BigDecimal scaleTo = BigDecimal.valueOf(100);                   // 기본값
         if (season.getFormSnapshot() != null) {
             try {
                 FormSnapshotDto snap = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);           // JSON 파싱
                 if (snap.getMinTeamSize() != null) {
                     minTeamSize = snap.getMinTeamSize();                // 스냅샷 값으로 덮어씀
                 }
+                if (snap.getKpiScoring() != null && snap.getKpiScoring().getScaleTo() != null) {
+                    scaleTo = snap.getKpiScoring().getScaleTo();
+                }
             } catch (JsonProcessingException ignored) {
-//                파싱 실패해도 기본값(5)으로 조회 계속 진행
+//                파싱 실패해도 기본값으로 조회 계속 진행
             }
         }
 
 //        c. 해당 시즌의 모든 EvalGrade 레코드 조회
         List<EvalGrade> rows = evalGradeRepository.findBySeason_SeasonId(seasonId);
 
-//        d. 이상 팀 수집용 변수
+//        d. 이상 팀 / clip 대상 수집용 변수
         Set<Long> zeroStdDevTeams = new LinkedHashSet<>();  // 전원 동점 팀 ID (중복 방지 + 순서 유지)
         Set<Long> undersizedTeams = new LinkedHashSet<>();  // 소규모 팀 ID
         Set<Long> seenDepts = new HashSet<>();              // 팀당 한 번만 검사
         int processedCount = 0;                             // 보정 처리된 인원 수 (0이면 미실행)
+        List<CalibrationReviewDto.ClippedSelfEmployeeDto> clippedSelfEmployees = new ArrayList<>();
 
-//        e. 레코드 순회하며 이상 팀 판정
+//        e. 레코드 순회 - 이상 팀 판정 + clip 대상 수집
         for (EvalGrade row : rows) {
 //            biasAdjustedScore 가 null 아니면 보정 실행된 인원 -> 카운트
             if (row.getBiasAdjustedScore() != null) {
                 processedCount++;
             }
 
+//            자기평가 clip 대상 판정: rawSelfScore > scaleTo
+//              - rawSelfScore == null 이면 자동산정 미실행/미제출 -> 스킵
+            if (row.getRawSelfScore() != null && row.getRawSelfScore().compareTo(scaleTo) > 0) {
+                clippedSelfEmployees.add(CalibrationReviewDto.ClippedSelfEmployeeDto.builder()
+                        .empId(row.getEmp() != null ? row.getEmp().getEmpId() : null)
+                        .empName(row.getEmp() != null ? row.getEmp().getEmpName() : null)
+                        .deptName(row.getDeptNameSnapshot())
+                        .rawSelfScore(row.getRawSelfScore())
+                        .selfScore(row.getSelfScore())
+                        .autoGrade(row.getAutoGrade())
+                        .build());
+            }
+
             Long deptId = row.getDeptIdSnapshot();                      // 당시 소속 팀 ID (박제값)
 
-//            deptId 없거나 이미 검사한 팀이면 스킵 (팀당 한 번만 판정)
+//            deptId 없거나 이미 검사한 팀이면 팀 판정만 스킵 (팀당 한 번)
             if (deptId == null || !seenDepts.add(deptId)) {
                 continue;
             }
@@ -642,17 +769,18 @@ public class EvalGradeService {
         }
 
 //        f. DTO 조립 후 반환 (화면 배너 렌더링용)
-        return BiasAdjustResultDto.builder()
+        return CalibrationReviewDto.builder()
                 .seasonId(seasonId)                                     // 시즌 ID
                 .processedCount(processedCount)                         // 처리 인원수
                 .zeroStdDevTeams(buildTeamInfos(zeroStdDevTeams))       // 동점 팀 목록 (DTO)
                 .undersizedTeams(buildTeamInfos(undersizedTeams))       // 소규모 팀 목록 (DTO)
+                .clippedSelfEmployees(clippedSelfEmployees)             // 자기평가 clip 대상 사원
                 .build();
     }
 
 
     //    5. 이상보정조회 부서id집합 -> TeamAnomalyDto리스트 변환, batch조회
-    private List<BiasAdjustResultDto.TeamAnomalyDto> buildTeamInfos(Collection<Long> deptIds) {
+    private List<CalibrationReviewDto.TeamAnomalyDto> buildTeamInfos(Collection<Long> deptIds) {
 //       빈 입력 시 빈 리스트 반환)
         if (deptIds.isEmpty()) {
             return Collections.emptyList();
@@ -666,16 +794,16 @@ public class EvalGradeService {
             deptMap.put(d.getDeptId(), d);
         }
 //        입력순서대로 순회하며 dto생성
-        List<BiasAdjustResultDto.TeamAnomalyDto> result = new ArrayList<>();
+        List<CalibrationReviewDto.TeamAnomalyDto> result = new ArrayList<>();
         for (Long id : deptIds) {
             Department d = deptMap.get(id);
 
             if (d != null) {
 //                조회 성공 시 정상 반환
-                result.add(BiasAdjustResultDto.TeamAnomalyDto.from(d));
+                result.add(CalibrationReviewDto.TeamAnomalyDto.from(d));
             } else {
 //                조회 실패 시 ->폴백 dto
-                result.add(BiasAdjustResultDto.TeamAnomalyDto.ofMissing(id));
+                result.add(CalibrationReviewDto.TeamAnomalyDto.ofMissing(id));
             }
         }
         return result;
@@ -782,11 +910,11 @@ public class EvalGradeService {
     @Transactional(readOnly = true)
     public Page<CalibrationListItemDto> getCalibrationList(UUID companyId, Long seasonId,
                                                            Long deptId, String keyword,
-                                                           EvalGradeSortField sortField, Pageable pageable) {
+                                                           EvalGradeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
 
 //        a. 보정 대상 사원 페이지 조회 (autoGrade != null 만)
         Page<EvalGrade> gradePage = evalGradeRepository.searchCalibrationGrades(
-                companyId, seasonId, deptId, keyword, sortField, pageable);
+                companyId, seasonId, deptId, keyword, sortField, sortDirection, pageable);
 
 //        b. 보정된 row 의 gradeId 수집 -> Calibration 이력 batch 조회 (사유/수행자만 추출)
         List<Long> calibratedIds = new ArrayList<>();
@@ -1093,8 +1221,9 @@ public class EvalGradeService {
     public Page<UnassignedEmployeeDto> getUnassignedList(UUID companyId, Long seasonId,
                                                           Long deptId,
                                                           EvalGradeSortField sortField,
+                                                          Sort.Direction sortDirection,
                                                           Pageable pageable) {
-        return evalGradeRepository.searchUnassigned(companyId, seasonId, deptId, sortField, pageable);
+        return evalGradeRepository.searchUnassigned(companyId, seasonId, deptId, sortField, sortDirection, pageable);
     }
 
     
@@ -1168,7 +1297,7 @@ public class EvalGradeService {
     public Page<FinalGradeListItemDto> getFinalList(UUID companyId, Long seasonId,
                                                     Long deptId, String keyword,
                                                     Boolean unscoredOnly,
-                                                    EvalGradeSortField sortField, Pageable pageable) {
+                                                    EvalGradeSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
 
 //        시즌 로드 + 회사 소유권 검증 (멀티테넌시)
         Season season = seasonRepository.findById(seasonId).orElseThrow(() -> new IllegalStateException("시즌 없음"));
@@ -1183,7 +1312,7 @@ public class EvalGradeService {
 
 //        Impl 에서 필터 + DTO 변환까지 수행 (1번 searchDraftList 와 동일 패턴)
         return evalGradeRepository.searchFinalList(
-                companyId, seasonId, deptId, keyword, unscoredOnly, sortField, pageable);
+                companyId, seasonId, deptId, keyword, unscoredOnly, sortField, sortDirection, pageable);
     }
 
 
@@ -1396,6 +1525,7 @@ public class EvalGradeService {
                     .name(s.getName())
                     .status(status)
                     .finalizedAt(s.getFinalizedAt())
+                    .startDate(s.getStartDate())
                     .build());
         }
         return result;
@@ -1451,14 +1581,29 @@ public class EvalGradeService {
                 selfByGoal.put(se.getGoal().getGoalId(), se);
             }
 
+            // 시즌 스냅샷에서 KPI cap / maintainTolerance 추출 (없으면 기본 120 / 0)
+            BigDecimal kpiCap = BigDecimal.valueOf(120);
+            BigDecimal kpiTolerance = BigDecimal.ZERO;
+            if (season.getFormSnapshot() != null) {
+                try {
+                    FormSnapshotDto snapshot = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);
+                    if (snapshot.getKpiScoring() != null) {
+                        if (snapshot.getKpiScoring().getCap() != null) kpiCap = snapshot.getKpiScoring().getCap();
+                        if (snapshot.getKpiScoring().getMaintainTolerance() != null) kpiTolerance = snapshot.getKpiScoring().getMaintainTolerance();
+                    }
+                } catch (JsonProcessingException e) {
+                    // 파싱 실패 시 기본값 유지
+                }
+            }
+
             for (Goal go : goals) {
                 SelfEvaluation se = selfByGoal.get(go.getGoalId());
                 BigDecimal actual = se != null ? se.getActualValue() : null;
                 BigDecimal rate = null;
-                if ("KPI".equals(go.getGoalType()) && actual != null && go.getTargetValue() != null
+                if (go.getGoalType() == GoalType.KPI && actual != null && go.getTargetValue() != null
                         && go.getKpiTemplate() != null) {
-                    rate = computeAchievementRate(go.getKpiTemplate().getDirection(),
-                                                   go.getTargetValue(), actual);
+                    rate = computeAchievementRate(go.getKpiDirection(),
+                                                   go.getTargetValue(), actual, kpiCap, kpiTolerance);
                 }
                 goalDtos.add(MyEvalResultDto.GoalResult.builder()
                         .goalType(go.getGoalType())
@@ -1489,22 +1634,58 @@ public class EvalGradeService {
     }
 
 
+    //    18. HR 전체 결과 조회 드롭다운 - 회사 시즌 목록 (최신순, OPEN 이후만 — DRAFT 제외)
+    @Transactional(readOnly = true)
+    public List<MySeasonOptionDto> getAllSeasons(UUID companyId) {
+        List<Season> seasons = seasonRepository.findAllByCompany(companyId);
+        List<MySeasonOptionDto> result = new ArrayList<>();
+        for (Season s : seasons) {
+            if (s.getStatus() == EvalSeasonStatus.DRAFT) continue;
+            MyResultStatus status = s.getFinalizedAt() != null ? MyResultStatus.FINALIZED : MyResultStatus.IN_PROGRESS;
+            result.add(MySeasonOptionDto.builder()
+                    .seasonId(s.getSeasonId())
+                    .name(s.getName())
+                    .status(status)
+                    .finalizedAt(s.getFinalizedAt())
+                    .startDate(s.getStartDate())
+                    .build());
+        }
+        return result;
+    }
+
+
     //    KPI 달성률 계산 (direction 공식 분기)
-    private BigDecimal computeAchievementRate(KpiDirection direction, BigDecimal target, BigDecimal actual) {
+    //    cap       : 시즌 스냅샷(kpiScoring.cap) 달성률 상한. DOWN+actual=0 의 ÷0 대체값
+    //    tolerance : 시즌 스냅샷(kpiScoring.maintainTolerance) MAINTAIN ±n% 이내 만점 처리
+    private BigDecimal computeAchievementRate(KpiDirection direction, BigDecimal target, BigDecimal actual,
+                                              BigDecimal cap, BigDecimal tolerance) {
         if (direction == null || target == null || target.signum() == 0) return null;
         if (direction == KpiDirection.UP) {
             return actual.multiply(BigDecimal.valueOf(100))
                     .divide(target, 1, RoundingMode.HALF_UP);
         }
         if (direction == KpiDirection.DOWN) {
-            if (actual.signum() == 0) return null;
+            // actual=0 은 "완벽 0달성"으로 최고 성과. 역비율이 ÷0 이라 불가능하므로 시즌 cap 으로 치환
+            if (actual.signum() == 0) {
+                return cap.setScale(1, RoundingMode.HALF_UP);
+            }
             return target.multiply(BigDecimal.valueOf(100))
                     .divide(actual, 1, RoundingMode.HALF_UP);
         }
         if (direction == KpiDirection.MAINTAIN) {
-            BigDecimal diff = target.subtract(actual).abs();
-            BigDecimal ratio = java.math.BigDecimal.ONE.subtract(diff.divide(target, 4, RoundingMode.HALF_UP));
-            return ratio.multiply(BigDecimal.valueOf(100)).setScale(1, RoundingMode.HALF_UP);
+            // 편차율(%) = |target - actual| / target × 100
+            BigDecimal deviationPct = target.subtract(actual).abs()
+                    .divide(target, 4, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+            // tolerance 이내면 100% 만점 처리
+            BigDecimal tol = tolerance != null ? tolerance : BigDecimal.ZERO;
+            if (deviationPct.compareTo(tol) <= 0) {
+                return BigDecimal.valueOf(100).setScale(1);
+            }
+            // tolerance 초과분만큼 감점, 0% 바닥 clamp
+            BigDecimal rate = BigDecimal.valueOf(100).subtract(deviationPct.subtract(tol));
+            if (rate.signum() < 0) rate = BigDecimal.ZERO;
+            return rate.setScale(1, RoundingMode.HALF_UP);
         }
         return null;
     }

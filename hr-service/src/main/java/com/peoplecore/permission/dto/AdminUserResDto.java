@@ -1,3 +1,4 @@
+/*
 package com.peoplecore.permission.dto;
 
 import com.peoplecore.employee.domain.EmpRole;
@@ -50,3 +51,4 @@ public class AdminUserResDto {
                 .build();
     }
 }
+*/

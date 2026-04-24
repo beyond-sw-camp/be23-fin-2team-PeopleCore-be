@@ -6,6 +6,7 @@ import com.peoplecore.evaluation.service.EvalGradeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -38,9 +39,10 @@ public class EvalGradeController {
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) EvalGradeSortField sortField,
+            @RequestParam(required = false) Sort.Direction sortDirection,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(
-                gradeService.getDraftList(companyId, seasonId, deptId, keyword, sortField, pageable)
+                gradeService.getDraftList(companyId, seasonId, deptId, keyword, sortField, sortDirection, pageable)
         );
     }
 
@@ -71,16 +73,14 @@ public class EvalGradeController {
     }
 
 
-    // 4. 편향보정 이상 팀 조회 (GradeCalibration 화면 진입 시 호출)
-    //  - DB에 저장된 EvalGrade.teamStdDev / teamSize 스냅샷을 읽어 이상 팀 복원
-    //  -  단순 조회
-    //  - 응답: processedCount(보정 처리 인원수) + zeroStdDevTeams(전원 동점 팀) + undersizedTeams(소규모 팀)
-    //  - 미실행 시 processedCount=0, 리스트 빈 배열
-    @GetMapping("/{seasonId}/bias-adjust/anomalies")
-    public ResponseEntity<BiasAdjustResultDto> getBiasAdjustAnomalies(
+    // 4. 등급 보정 검토 대상 조회 (GradeCalibration 화면 진입 시 호출)
+    //  - 편향보정 스킵된 팀 (전원 동점 / 소규모) - Z-score 보정 불가 팀
+    //  - 자기평가 scaleTo 초과로 clip 된 사원 - 알림
+    @GetMapping("/{seasonId}/calibration/review")
+    public ResponseEntity<CalibrationReviewDto> getCalibrationReview(
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long seasonId) {
-        return ResponseEntity.ok(gradeService.getBiasAdjustAnomalies(companyId, seasonId));
+        return ResponseEntity.ok(gradeService.getCalibrationReview(companyId, seasonId));
     }
 
 
@@ -131,9 +131,10 @@ public class EvalGradeController {
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) EvalGradeSortField sortField,
+            @RequestParam(required = false) Sort.Direction sortDirection,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(
-                gradeService.getCalibrationList(companyId, seasonId, deptId, keyword, sortField, pageable)
+                gradeService.getCalibrationList(companyId, seasonId, deptId, keyword, sortField, sortDirection, pageable)
         );
     }
 
@@ -182,9 +183,10 @@ public class EvalGradeController {
             @PathVariable Long seasonId,
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) EvalGradeSortField sortField,
+            @RequestParam(required = false) Sort.Direction sortDirection,
             @PageableDefault(size = 10) Pageable pageable) {
         return ResponseEntity.ok(
-                gradeService.getUnassignedList(companyId, seasonId, deptId, sortField, pageable)
+                gradeService.getUnassignedList(companyId, seasonId, deptId, sortField, sortDirection, pageable)
         );
     }
 
@@ -216,14 +218,15 @@ public class EvalGradeController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) Boolean unscoredOnly,
             @RequestParam(required = false) EvalGradeSortField sortField,
+            @RequestParam(required = false) Sort.Direction sortDirection,
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(
-                gradeService.getFinalList(companyId, seasonId, deptId, keyword, unscoredOnly, sortField, pageable)
+                gradeService.getFinalList(companyId, seasonId, deptId, keyword, unscoredOnly, sortField, sortDirection, pageable)
         );
     }
     // ─── 본인 평가결과 조회 (사원용) ─────────────────
 
-    // 16. 본인 평가결과 - 드롭다운용 시즌 목록
+    // 15. 본인 평가결과 - 드롭다운용 시즌 목록
     @GetMapping("/my/seasons")
     public ResponseEntity<List<MySeasonOptionDto>> getMySeasons(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -232,7 +235,7 @@ public class EvalGradeController {
     }
 
 
-    // 17. 본인 평가결과 - 특정 시즌 상세
+    // 16. 본인 평가결과 - 특정 시즌 상세
     @GetMapping("/my/result")
     public ResponseEntity<MyEvalResultDto> getMyResult(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -242,15 +245,21 @@ public class EvalGradeController {
     }
 
 
-    // 15. 평가 결과 상세 (HR 전용) - 한 사원의 단계별 타임라인 한 번에 조회
-    //  - gradeId = EvalGrade PK (결과 목록 응답의 id)
-    //  - 목표등록 / 평가입력(자기·상위자) / 종합점수 / Z-score / 등급산정 / 보정이력 / 최종확정 모두 포함
-    //  - 확정 전/후 모두 조회 가능, 미진행 단계는 null 또는 빈 배열
+    // 17. 평가 결과 상세  - 한 사원의 단계별 타임라인 한 번에 조회
+    //  - 목표등록 / 평가입력(자기·상위자) / 종합점수 / Z-score / 등급산정 / 보정이력 / 최종확정
     @GetMapping("/{gradeId}/detail")
     public ResponseEntity<EvalGradeDetailDto> getDetail(
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long gradeId) {
         return ResponseEntity.ok(gradeService.getDetail(companyId, gradeId));
     }
+
+    // 18. HR 전체 결과 조회 드롭다운 - 회사 전체 시즌 목록 (최신순, CLOSED 포함)
+    @GetMapping("/seasons")
+    public ResponseEntity<List<MySeasonOptionDto>> getAllSeasons(
+            @RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(gradeService.getAllSeasons(companyId));
+    }
+
 
 }

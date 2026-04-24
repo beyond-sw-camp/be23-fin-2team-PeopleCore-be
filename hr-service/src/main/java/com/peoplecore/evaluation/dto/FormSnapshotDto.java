@@ -90,6 +90,9 @@ public class FormSnapshotDto {
     public static class KpiScoring {
         private BigDecimal cap; //달성률 상한
         private BigDecimal scaleTo; // 환산 만점
+        private BigDecimal maintainTolerance;         // MAINTAIN ±n% 이내 만점 처리 (0이면 선형)
+        private BigDecimal underperformanceThreshold; // 미달 기준 % (0이면 비활성)
+        private BigDecimal underperformanceFactor;    // 미달 구간 점수 배율 (기본 1.0)
     }
 
 }

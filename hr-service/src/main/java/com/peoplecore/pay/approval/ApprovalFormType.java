@@ -1,20 +1,18 @@
 package com.peoplecore.pay.approval;
 
-public enum ApprovalFormType {
-    SALARY("급여지급결의서.html", "PAYROLL_PAYMENT"),
-    RETIREMENT("퇴직급여지급결의서.html", "RETIREMENT_SEVERANCE");
 
-    private final String templateFileName;
+public enum ApprovalFormType {
+    SALARY("PAYROLL_RESOLUTION"),
+    RETIREMENT("SEVERANCE_RESOLUTION");
+//    SALARY("payroll-payment-approval.html", "PAYROLL_PAYMENT"),
+//    RETIREMENT("retirement-severance-approval.html", "RETIREMENT_SEVERANCE");
+
     private final String formCode;
 
-    ApprovalFormType(String templateFileName, String formCode) {
-        this.templateFileName = templateFileName;
+    ApprovalFormType(String formCode) {
         this.formCode = formCode;
     }
 
-    public String getTemplateFileName() {
-        return templateFileName;
-    }
     public String getFormCode(){
         return formCode;
     }

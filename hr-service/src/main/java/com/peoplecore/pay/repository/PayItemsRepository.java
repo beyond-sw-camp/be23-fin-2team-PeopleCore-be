@@ -2,6 +2,7 @@ package com.peoplecore.pay.repository;
 
 import com.peoplecore.pay.domain.PayItems;
 import com.peoplecore.pay.enums.LegalCalcType;
+import com.peoplecore.pay.enums.PayItemCategory;
 import com.peoplecore.pay.enums.PayItemType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -18,6 +19,10 @@ public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
 
     List<PayItems>findByCompany_CompanyIdAndPayItemTypeAndIsActiveTrueOrderBySortOrderAsc(UUID companyId, PayItemType payItemType);
 
+    // 연봉계약서 폼 급여 섹션 전용 — 수당(ALLOWANCE) 만 필터링
+    List<PayItems> findByCompany_CompanyIdAndPayItemTypeAndPayItemCategoryAndIsActiveTrueOrderBySortOrderAsc(
+            UUID companyId, PayItemType payItemType, PayItemCategory payItemCategory);
+
     List<PayItems> findByCompany_CompanyIdAndPayItemTypeAndPayItemNameIn(UUID companyId, PayItemType payItemType, List<String> payItemNames);
 
 
@@ -26,4 +31,5 @@ public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
 
 //    법정 항목 조회
      Optional<PayItems> findByCompany_CompanyIdAndIsLegalTrueAndLegalCalcType(UUID companyId, LegalCalcType legalCalcType);
+
 }

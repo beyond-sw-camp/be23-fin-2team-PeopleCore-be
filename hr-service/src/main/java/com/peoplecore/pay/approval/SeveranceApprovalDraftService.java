@@ -28,19 +28,18 @@ public class SeveranceApprovalDraftService {
 
     private final SeverancePaysRepository severancePaysRepository;
     private final EmployeeRepository employeeRepository;
-    private final ApprovalHtmlTemplateLoader templateLoader;
     private final SeveranceApprovalDocCreatedPublisher severanceApprovalDocCreatedPublisher;
-
+    private final ApprovalFormCache approvalFormCache;
 
     private static final DateTimeFormatter YMD = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DateTimeFormatter YM =DateTimeFormatter.ofPattern("yyyy-MM");
 
     @Autowired
-    public SeveranceApprovalDraftService(SeverancePaysRepository severancePaysRepository, EmployeeRepository employeeRepository, ApprovalHtmlTemplateLoader templateLoader, SeveranceApprovalDocCreatedPublisher severanceApprovalDocCreatedPublisher) {
+    public SeveranceApprovalDraftService(SeverancePaysRepository severancePaysRepository, EmployeeRepository employeeRepository, SeveranceApprovalDocCreatedPublisher severanceApprovalDocCreatedPublisher, ApprovalFormCache approvalFormCache) {
         this.severancePaysRepository = severancePaysRepository;
         this.employeeRepository = employeeRepository;
-        this.templateLoader = templateLoader;
         this.severanceApprovalDocCreatedPublisher = severanceApprovalDocCreatedPublisher;
+        this.approvalFormCache = approvalFormCache;
     }
 
 
@@ -57,7 +56,8 @@ public class SeveranceApprovalDraftService {
         Employee drafter = employeeRepository.findById(userId).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         Employee target = sev.getEmployee();
 
-        String htmlTemplate = templateLoader.load(companyId, ApprovalFormType.RETIREMENT);
+        ApprovalFormCache.CachedForm form = approvalFormCache.get(companyId, ApprovalFormType.RETIREMENT);
+        String htmlTemplate = form.formHtml();
         Map<String, String> dataMap = buildDataMap(sev, drafter, target);
 
         return ApprovalDraftResDto.builder()
@@ -134,14 +134,19 @@ public class SeveranceApprovalDraftService {
         return m;
     }
 
-//    상신처리
+//    전자결재 상신처리
     @Transactional
     public void submit(UUID companyId, Long userId, ApprovalSubmitReqDto reqDto){
+
         SeverancePays sev = severancePaysRepository.findBySevIdAndCompany_CompanyId(reqDto.getLedgerId(), companyId).orElseThrow(()-> new CustomException(ErrorCode.SEVERANCE_NOT_FOUND));
 
         if (sev.getSevStatus() != SevStatus.CONFIRMED){
             throw new CustomException(ErrorCode.SEVERANCE_STATUS_INVALID);
         }
+
+        // 캐시에서 formId 조회
+        ApprovalFormCache.CachedForm form =
+                approvalFormCache.get(companyId, ApprovalFormType.RETIREMENT);
 
 //        kafka 발행
         severanceApprovalDocCreatedPublisher.publish(SeveranceApprovalDocCreatedEvent.builder()
@@ -149,12 +154,13 @@ public class SeveranceApprovalDraftService {
                         .sevId(sev.getSevId())
                         .empId(sev.getEmployee().getEmpId())
                         .drafterId(userId)
-                        .formCode(ApprovalFormType.RETIREMENT.getFormCode())
+                        .formId(form.formId())
+                        .formCode(ApprovalFormType.RETIREMENT.getFormCode()) // "SEVERANCE_RESOLUTION"
                         .htmlContent(reqDto.getHtmlContent())
                         .approvalLine(reqDto.getApprovalLine())
                 .build());
 
-        log.info("[SeveranceApproval] 상신 발행 - sevId={}, drafterId={}", sev.getSevId(), userId);
+        log.info("[SeveranceApproval] 상신 발행 - sevId={}, formId={}, drafterId={}", sev.getSevId(), form.formId(), userId);
     }
 
 

@@ -417,10 +417,15 @@ public class SelfEvaluationService {
             List<SelfEvaluationResponse> evalDtos = new ArrayList<>();
             for (Goal g : memberGoals) {
                 SelfEvaluation self = selfByGoalId.get(g.getGoalId());
-                List<SelfEvaluationFile> files = self != null ? filesBySelfEvalId.get(self.getSelfEvalId()) : null;
+                // 자기평가 미작성(null) 또는 임시저장(DRAFT) 은 평가자 화면에 노출하지 않음
+                //   -> 정식 제출(PENDING/APPROVED/REJECTED) 된 것만 달성도 검토 대상
+                if (self == null) continue;
+                if (self.getApprovalStatus() == SelfEvalApprovalStatus.DRAFT) continue;
+
+                List<SelfEvaluationFile> files = filesBySelfEvalId.get(self.getSelfEvalId());
                 evalDtos.add(SelfEvaluationResponse.of(g, self, files));
                 // 가장 늦은 제출 시각 갱신 (프론트 "제출일" 표시용)
-                if (self != null && self.getSubmittedAt() != null
+                if (self.getSubmittedAt() != null
                         && (latestSubmitted == null || self.getSubmittedAt().isAfter(latestSubmitted))) {
                     latestSubmitted = self.getSubmittedAt();
                 }

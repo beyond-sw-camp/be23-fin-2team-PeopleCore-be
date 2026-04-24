@@ -47,4 +47,7 @@ public interface ApprovalDocumentRepository extends JpaRepository<ApprovalDocume
                                          @Param("folderId") Long folderId,
                                          @Param("companyId") UUID companyId);
 
+    // 멱등성 방어를 위한 조회
+    Optional<ApprovalDocument> findByCompanyIdAndHrRefTypeAndHrRefId(
+            UUID companyId, String hrRefType, Long hrRefId);
 }

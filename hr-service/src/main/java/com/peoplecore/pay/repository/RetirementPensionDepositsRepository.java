@@ -19,4 +19,8 @@ public interface RetirementPensionDepositsRepository extends JpaRepository<Retir
             Long empId, String payYearMonth, com.peoplecore.pay.enums.DepStatus depStatus);
 
     Optional<RetirementPensionDeposits> findByDepIdAndCompany_CompanyId(Long depId, UUID companyId);
+
+
+    Optional<RetirementPensionDeposits> findTopByEmployee_EmpIdAndCompany_CompanyIdAndDepStatusOrderByDepositDateDesc(
+            Long empId, UUID companyId, DepStatus depStatus);
 }

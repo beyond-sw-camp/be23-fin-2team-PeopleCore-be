@@ -73,4 +73,10 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
     List<PayrollItemSummaryDto> summarizeByPayItem(
             @Param("payrollRunId") Long payrollRunId,
             @Param("payItemType") PayItemType payItemType);
+
+
+    @Query("SELECT DISTINCT pd.employee.empId FROM PayrollDetails pd WHERE pd.payrollRuns.payrollRunId = :payrollRunId")
+    List<Long> findDistinctEmpIdsByPayrollRunId(@Param("payrollRunId") Long payrollRunId);
+
+
 }

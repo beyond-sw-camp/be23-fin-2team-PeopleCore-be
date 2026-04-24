@@ -46,7 +46,7 @@ public class EvaluationRulesDto {
     }
 
 
-    // 등급 (예: {id:"S", label:"S", minScore:90, ratio:10, color:"#7c3aed"})
+    // 등급 (예: {id:"S", label:"S", ratio:10, color:"#7c3aed"})
     @Data
     @Builder
     @AllArgsConstructor
@@ -55,7 +55,6 @@ public class EvaluationRulesDto {
     public static class GradeItem {
         private String id;         // 등급 식별자
         private String label;      // 표시 라벨 (S/A/B…)
-        private Integer minScore;  // 컷오프 (이 점수 이상이면 이 등급)
         private Integer ratio;     // 강제배분 목표 비율 %
         private String color;      // UI 색상 (#hex)
     }

@@ -17,7 +17,11 @@ public class PayrollApprovalDocCreatedEvent {
     private UUID companyId;
     private Long payrollRunId;
     private Long drafterId;
-    private String formCode;          // "PAYROLL_PAYMENT"
+    private Long formId;
+    private String formCode;          // "PAYROLL_RESOLUTION"
     private String htmlContent;       // dataMap 주입 + 사용자 수정 반영 HTML
     private List<ApprovalLineDto> approvalLine;
+    private String hrRefType;
+    private Long hrRefId;
+
 }

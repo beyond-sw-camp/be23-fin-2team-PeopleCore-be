@@ -1,5 +1,6 @@
 package com.peoplecore.client.component;
 
+import com.peoplecore.approval.dto.EmpDetailResponse;
 import com.peoplecore.client.dto.AttendanceModifyHrMemberResDto;
 import com.peoplecore.client.dto.CompanyInfoResponse;
 import com.peoplecore.client.dto.DeptInfoResponse;
@@ -63,6 +64,7 @@ public class HrServiceClient {
                 .body(CompanyInfoResponse.class);
     }
 
+
     public CompanyInfoResponse getCompanyFallback(UUID companyId, Throwable t) {
         log.warn("HR 서비스 회사 조회 실패 companyId: {}, error: {}", companyId, t.getMessage());
         throw new BusinessException("HR 서비스 연결 실패: 회사 정보를 조회할 수 없습니다.", HttpStatus.SERVICE_UNAVAILABLE);
@@ -75,6 +77,21 @@ public class HrServiceClient {
                 .uri("/internal/employee/bulk?empIds={ids}", ids)
                 .retrieve()
                 .body(new ParameterizedTypeReference<List<EmployeeSimpleResDto>>() {});
+    }
+
+
+    @CircuitBreaker(name = "hrService", fallbackMethod = "getEmployeeFallback")
+    public EmpDetailResponse getEmployee(UUID companyId, Long empId) {
+        return restClient.get()
+                .uri("/internal/employee/{empId}", empId)
+                .header("X-User-Company", companyId.toString())
+                .retrieve()
+                .body(EmpDetailResponse.class);
+    }
+
+    public EmpDetailResponse getEmployeeFallback(UUID companyId, Long empId, Throwable t) {
+        log.warn("HR 서비스 사원 단건 조회 실패 empId={}, error={}", empId, t.getMessage());
+        throw new BusinessException("HR 서비스 연결 실패: 사원 정보를 조회할 수 없습니다.", HttpStatus.SERVICE_UNAVAILABLE);
     }
 
     public List<EmployeeSimpleResDto> getEmployeeBulkFallback(List<Long> empIds, Throwable t){

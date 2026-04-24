@@ -139,10 +139,12 @@ public class MyCalendarService {
         MyCalendars myCalendar = findAndValidate(calendarId, companyId, empId);
 
 //        기본캘린더는 이름변경 불가
-        if (reqDto.getCalendarName() != null) {
+        if (reqDto.getCalendarName() != null
+                && !reqDto.getCalendarName().equals(myCalendar.getCalendarName())) {
             if (myCalendar.isDefaultCalendar()) {
                 throw new CustomException(ErrorCode.DEFAULT_CALENDAR_CANNOT_RENAME);
             }
+            myCalendar.updateName(reqDto.getCalendarName());
         }
 
         if (reqDto.getCalendarName() != null) {
