@@ -20,6 +20,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
 import java.util.Map;
+import java.util.UUID;
 
 /* 만료 처리 Batch Job - 일일 만료 balance 일괄 expire */
 /* JobInstance 식별자: targetDate - 같은 날짜 재실행 시 JobInstanceAlreadyCompleteException 로 자동 dedup */
@@ -60,13 +61,18 @@ public class BalanceExpiryJobConfig {
                 .build();
     }
 
-    /* 만료일 도래 balance 커서 조회 - JOIN FETCH 로 employee/vacationType 함께 로드 (N+1 방지) */
+    /* 만료일 도래 balance 커서 조회 - 회사별 필터 + JOIN FETCH (N+1 방지) */
     /* 커서 리더는 페이지가 아니라 스트리밍이라 JOIN FETCH 안전 */
+    /* companyId 파라미터로 회사 단위 분리 - 다른 회사 데이터 섞임 방지 + 재처리 격리 */
+    /* available(= total - used - pending - expired) > 0 조건으로 이미 처리된 balance 제외 */
+    /* → HIRE 월차는 AnnualTransitionService 가 선처리(expiredDays 증가)하여 available=0, 여기서 자동 skip (중복 스캔 제거) */
     @Bean
     @StepScope
     public JpaCursorItemReader<VacationBalance> balanceExpiryReader(
             EntityManagerFactory emf,
+            @Value("#{jobParameters['companyId']}") String companyIdStr,
             @Value("#{jobParameters['targetDate']}") String targetDateStr) {
+        UUID companyId = UUID.fromString(companyIdStr);
         LocalDate targetDate = LocalDate.parse(targetDateStr);
         return new JpaCursorItemReaderBuilder<VacationBalance>()
                 .name("balanceExpiryReader")
@@ -75,10 +81,14 @@ public class BalanceExpiryJobConfig {
                         SELECT b FROM VacationBalance b
                         JOIN FETCH b.employee
                         JOIN FETCH b.vacationType
-                        WHERE b.expiresAt IS NOT NULL
+                        WHERE b.companyId = :companyId
+                          AND b.expiresAt IS NOT NULL
                           AND b.expiresAt <= :targetDate
+                          AND (b.totalDays - b.usedDays - b.pendingDays - b.expiredDays) > 0
                         """)
-                .parameterValues(Map.of("targetDate", targetDate))
+                .parameterValues(Map.of(
+                        "companyId", companyId,
+                        "targetDate", targetDate))
                 .build();
     }
 

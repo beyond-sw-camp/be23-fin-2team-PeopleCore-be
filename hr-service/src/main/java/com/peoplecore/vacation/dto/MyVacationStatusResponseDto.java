@@ -37,11 +37,15 @@ public class MyVacationStatusResponseDto {
 
     /* 연차 카드 - periodStart/periodEnd 는 balance 의 grantedAt/expiresAt 원본 */
     /* HIRE: 예) 2026-09-01 ~ 2027-08-31 / FISCAL: 예) 2026-01-01 ~ 2026-12-31 */
+    /* 입사 1년 미만으로 ANNUAL 이 아직 없으면 MONTHLY 로 채워짐 → typeCode 로 구분 */
     @Data
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
     public static class AnnualSummary {
+        /* ANNUAL / MONTHLY - 프론트 카드 제목 분기용 */
+        private String typeCode;
+        private String typeName;
         private LocalDate periodStart;
         /* null=무기한 */
         private LocalDate periodEnd;

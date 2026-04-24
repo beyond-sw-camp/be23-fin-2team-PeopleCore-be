@@ -94,7 +94,7 @@ public class MonthlyAccrualScheduler {
     }
 
     /* 회사 단위 처리 - MONTHLY 유형 조회 + 1~11개월차 대상 IN 쿼리 1회로 벌크 조회 */
-    /* 기존: n마다 개별 쿼리 11회 → 개선: IN (날짜11개) 1회 + 메모리 그룹핑 */
+    /* 월차 expiresAt 은 HIRE/FISCAL 무관 입사 1주년 (법정 월차 권리) - 정책 분기 불필요 */
     private void processCompany(Company company, LocalDate today) {
         UUID companyId = company.getCompanyId();
         VacationType monthlyType = vacationTypeRepository

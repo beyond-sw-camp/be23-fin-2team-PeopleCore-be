@@ -3,7 +3,7 @@ package com.peoplecore.vacation.controller;
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.vacation.dto.CancelRequest;
 import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
-import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
+import com.peoplecore.vacation.dto.VacationAdminPeriodPageResponse;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.service.VacationRequestService;
@@ -42,12 +42,12 @@ public class VacationRequestController {
         return ResponseEntity.ok(vacationRequestService.listForAdmin(companyId, status, pageable));
     }
 
-    /* 전사 휴가 관리 - 기간 + 상태 복수 필터 페이지 조회 */
-    /* 예: GET /vacation/requests/admin/period?startDate=2026-04-01&endDate=2026-04-05&statuses=PENDING,APPROVED&page=0&size=20 */
-    /* statuses 생략 시 전체 상태. 응답: 사원명/부서/유형/사용옵션/기간/일수/상태 */
+    /* 전사 휴가 관리 - 기간 + 상태 필터, 건별 페이지 + 메타 */
+    /* 예: GET /vacation/requests/admin/period?startDate=2026-04-01&endDate=2026-04-30&page=0&size=20 */
+    /* statuses 생략 시 서비스에서 APPROVED 강제. 응답: 건별 content + uniqueEmployeeCount + totalUseDays */
     @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
     @GetMapping("/admin/period")
-    public ResponseEntity<Page<VacationAdminPeriodResponseDto>> listForAdminByPeriod(
+    public ResponseEntity<VacationAdminPeriodPageResponse> listForAdminByPeriod(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
@@ -76,5 +76,15 @@ public class VacationRequestController {
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId) {
         return ResponseEntity.ok(vacationRequestService.listMyVacationTypes(companyId, empId));
+    }
+
+    /* 내 휴가 신청 이력 (페이지) - createdAt 내림차순 */
+    /* 응답: 신청일/유형/기간/일수/사유/상태(+반려사유)/처리일/requestId(취소용) */
+    @GetMapping("/me")
+    public ResponseEntity<Page<VacationRequestResponse>> listMine(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(vacationRequestService.listMine(companyId, empId, pageable));
     }
 }

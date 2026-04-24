@@ -2,11 +2,13 @@ package com.peoplecore.vacation.repository;
 
 import com.peoplecore.attendance.dto.VacationSlice;
 import com.peoplecore.employee.domain.QEmployee;
+import com.peoplecore.vacation.dto.VacationAdminPeriodPageResponse;
 import com.peoplecore.vacation.dto.VacationAdminPeriodResponseDto;
 import com.peoplecore.vacation.entity.QVacationRequest;
 import com.peoplecore.vacation.entity.QVacationType;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.entity.VacationRequest;
+import com.querydsl.core.Tuple;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
@@ -16,6 +18,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -102,57 +105,59 @@ public class VacationRequestQueryRepository {
     }
 
     /*
-     * 전사 휴가 관리 - 기간 교집합 + 상태 복수 필터 페이지 조회
-     * 용도: 관리자 전사 휴가 현황 화면 (기간별 PENDING/APPROVED 혼합 조회)
+     * 전사 휴가 관리 - 기간 교집합 + 상태 필터 / 건별 페이지 + 메타
+     * 용도: 관리자 전사 휴가 현황 화면 (건별 리스트 + "몇 명" / "총 며칠" 요약)
      * 조건: 휴가 기간 [startAt, endAt] 이 요청 [periodStart, periodEnd] 와 교집합
      *       즉 r.startAt <= periodEnd 그리고 r.endAt >= periodStart
-     * 상태: statuses 배열에 포함된 것만. 비어있으면 전체
-     * N+1 방지: VacationType fetch join (empName/deptName 은 스냅샷 컬럼 사용 → Employee 조인 불필요)
-     * 정렬: requestStartAt 오름차순 (일정순 - 달력 보기 편함)
+     * 상태: statuses 배열에 포함된 것만 (서비스에서 미지정 시 APPROVED 강제)
+     * 페이지: content = 건별 row (GROUP BY 없음, 사원 중복 허용)
+     * 메타: uniqueEmployeeCount = distinct empId / totalUseDays = sum(useDays)
+     * N+1 방지: VacationType join 으로 typeName 프로젝션 (DTO Projection 이라 fetch join 아님)
+     * 정렬: requestStartAt ASC (일정순 - 달력/타임라인 친화)
+     * 성능: 메타 3개(총 건수/휴가자 수/총 일수) 한 쿼리 Tuple 로 집계 → 총 2 쿼리
      */
-    /*
-     * 전사 휴가 관리 기간 조회 - 사원별 요약 (GROUP BY emp_id)
-     * 같은 사원이 기간 내 여러 슬롯/결재 있어도 1 entry 로 묶음 ("몇 명이 휴가인가" UX)
-     * 정렬: 사원의 MIN(requestStartAt) 오름차순
-     * totalElements = 기간 내 휴가자 distinct 수
-     */
-    public Page<VacationAdminPeriodResponseDto> findByCompanyAndPeriodAndStatuses(UUID companyId,
-                                                                                  LocalDateTime periodStart,
-                                                                                  LocalDateTime periodEnd,
-                                                                                  List<RequestStatus> statuses,
-                                                                                  Pageable pageable) {
+    public VacationAdminPeriodPageResponse findByCompanyAndPeriodAndStatuses(UUID companyId,
+                                                                              LocalDateTime periodStart,
+                                                                              LocalDateTime periodEnd,
+                                                                              List<RequestStatus> statuses,
+                                                                              Pageable pageable) {
         QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
 
+        // 상태 필터 - statuses 가 비어있으면 null (서비스에서 기본값 주입하므로 실제로는 비어오지 않음)
         BooleanExpression statusPredicate = (statuses == null || statuses.isEmpty())
                 ? null
                 : r.requestStatus.in(statuses);
 
-        // 1단계: 사원별 요약 페이지 - 합계/시점 범위/건수를 GROUP BY 로 한 번에 집계
+        // 1단계: 건별 페이지 - 각 신청 1 row. typeName 은 VacationType join 으로 가져옴
         List<VacationAdminPeriodResponseDto> content = queryFactory
                 .select(Projections.constructor(VacationAdminPeriodResponseDto.class,
+                        r.requestId,
                         r.employee.empId,
-                        r.requestEmpName.min(),           // 스냅샷 중 하나 (동일 empId 면 동일)
-                        r.requestEmpDeptName.min(),       // 스냅샷 중 하나
-                        r.requestUseDays.sum(),           // 기간 내 총 사용일수
-                        r.requestStartAt.min(),           // 최초 시작
-                        r.requestEndAt.max(),             // 최종 종료
-                        r.count()))                       // 기간 내 슬롯 건수
+                        r.requestEmpName,
+                        r.requestEmpDeptName,
+                        t.typeName,
+                        r.requestStartAt,
+                        r.requestEndAt,
+                        r.requestUseDays))
                 .from(r)
+                .join(r.vacationType, t)
                 .where(
                         r.companyId.eq(companyId),
                         r.requestStartAt.loe(periodEnd),
                         r.requestEndAt.goe(periodStart),
                         statusPredicate
                 )
-                .groupBy(r.employee.empId)
-                .orderBy(r.requestStartAt.min().asc())
+                .orderBy(r.requestStartAt.asc())
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
                 .fetch();
 
-        // 2단계: 총 휴가자 수 (distinct empId) - "몇 명" count 제공
-        Long total = queryFactory
-                .select(r.employee.empId.countDistinct())
+        // 2단계: 메타 3개(총 건수/휴가자 수/총 일수) 한 번에 집계
+        Tuple meta = queryFactory
+                .select(r.count(),
+                        r.employee.empId.countDistinct(),
+                        r.requestUseDays.sum())
                 .from(r)
                 .where(
                         r.companyId.eq(companyId),
@@ -162,7 +167,19 @@ public class VacationRequestQueryRepository {
                 )
                 .fetchOne();
 
-        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+        long totalRows = (meta != null && meta.get(r.count()) != null) ? meta.get(r.count()) : 0L;
+        Long uniqueEmpCount = (meta != null) ? meta.get(r.employee.empId.countDistinct()) : 0L;
+        BigDecimal totalUseDays = (meta != null && meta.get(r.requestUseDays.sum()) != null)
+                ? meta.get(r.requestUseDays.sum())
+                : BigDecimal.ZERO;
+
+        Page<VacationAdminPeriodResponseDto> page = new PageImpl<>(content, pageable, totalRows);
+
+        return VacationAdminPeriodPageResponse.builder()
+                .page(page)
+                .uniqueEmployeeCount(uniqueEmpCount != null ? uniqueEmpCount : 0L)
+                .totalUseDays(totalUseDays)
+                .build();
     }
 
     /*

@@ -56,16 +56,21 @@ public class MonthlyAccrualService {
             return;
         }
 
-        /* 잔여 회기 연도 = 오늘의 달력 연도 (FISCAL 정책은 추후 반영) */
+        /* balanceYear = 달력연도 (FIXED_FISCAL_START="01-01" 전제로 HIRE/FISCAL 모두 동일) */
+        /* expiresAt = 입사 1주년 전날 - 법정 월차 권리(근로기준법 제60조) 보장. 정책 타입과 무관 */
+        /* 연차 만료일 설정(AnnualGrantService.grantAndRecord: today.plusYears(1).minusDays(1)) 과 일관 */
+        /* → HIRE: AnnualTransitionScheduler(00:05) 가 1주년 시점에 소멸 + 1년차 연차 발생 */
+        /* → FISCAL: AnnualTransitionScheduler 가 1주년 시점에 월차 소멸. 연차는 AnnualGrantFiscalJob 이 1/1 에 비례지급 선처리 */
         Integer balanceYear = today.getYear();
+        LocalDate expiresAt = hireDate.plusYears(1).minusDays(1);
 
-        /* Balance 조회 - 없으면 createNew. expires_at = 1년 도달일 (AnnualTransitionScheduler 담당) */
+        /* Balance 조회 - 없으면 createNew */
         VacationBalance balance = vacationBalanceRepository
                 .findOne(companyId, emp.getEmpId(), monthlyType.getTypeId(), balanceYear)
                 .orElseGet(() -> vacationBalanceRepository.save(
                         VacationBalance.createNew(
                                 companyId, monthlyType, emp, balanceYear,
-                                today, hireDate.plusYears(1))));
+                                today, expiresAt)));
 
         /* 캡 체크 - 이미 11일 이상 적립돼있으면 추가 적립 skip */
         if (balance.getTotalDays().compareTo(BigDecimal.valueOf(MONTHLY_CAP_DAYS)) >= 0) {

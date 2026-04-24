@@ -29,9 +29,6 @@ public interface ApprovalDocumentRepository extends JpaRepository<ApprovalDocume
     /*문서함 내 문서 카운트 */
     int countByPersonalFolderIdAndCompanyId(Long personalFolderId, UUID companyId);
 
-    /*부서 문서함 내 문서 카운트 */
-    int countByDeptFolderIdAndCompanyId(Long deptFolderId, UUID companyId);
-
     /**
      * 문서 이동: personalFolderId 일괄 변경
      */
