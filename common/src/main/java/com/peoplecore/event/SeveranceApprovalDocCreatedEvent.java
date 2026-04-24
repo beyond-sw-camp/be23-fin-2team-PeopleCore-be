@@ -18,7 +18,8 @@ public class SeveranceApprovalDocCreatedEvent {
     private Long sevId;
     private Long empId;
     private Long drafterId;
-    private String formCode;          // "RETIREMENT_SEVERANCE"
+    private Long formId;
+    private String formCode;          // "RETIREMENT_RESOLUTION"
     private String htmlContent;       // dataMap 주입 + 사용자 수정 반영 HTML
     private List<ApprovalLineDto> approvalLine;
 }

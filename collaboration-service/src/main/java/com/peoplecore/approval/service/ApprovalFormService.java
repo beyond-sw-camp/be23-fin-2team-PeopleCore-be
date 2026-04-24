@@ -40,7 +40,7 @@ public class ApprovalFormService {
      */
     private static final java.util.Set<String> PROTECTED_FORM_KEYS = java.util.Set.of(
             "보고-시행문/급여지급결의서",
-            "보고-시행문/퇴직금지급결의서",
+            "보고-시행문/퇴직급여지급결의서",
             "휴가/초과근로신청서",
             "휴가/휴가신청서",
             "인사/사직서 #2",
@@ -59,7 +59,7 @@ public class ApprovalFormService {
             "휴가/휴가신청서", "VACATION_REQUEST",
             "인사/사직서 #2", "RESIGNATION",
             "보고-시행문/급여지급결의서", "PAYROLL_RESOLUTION",
-            "보고-시행문/퇴직금지급결의서", "SEVERANCE_RESOLUTION",
+            "보고-시행문/퇴직급여지급결의서", "SEVERANCE_RESOLUTION",
             "일반기안/근태정정신청서", "ATTENDANCE_MODIFY"
     );
 
@@ -243,7 +243,7 @@ public class ApprovalFormService {
 
         /*minio 오브젝트 이름 : forms/{companyId}/{formCode}_v{version}.html*/
         String objectName = String.format("forms/%s/%s_v%d.html", companyId, approvalForm.getFormCode(), approvalForm.getFormVersion());
-        String formHtml = minioService.getFormHtml(objectName);
+        String formHtml = minioService.getFormHtml(objectName); //MinIO 최신본
 
         FormDetailResponse response = FormDetailResponse.from(approvalForm);
         response.setFormHtml(formHtml); // minio 에서 가져온 html로 교체

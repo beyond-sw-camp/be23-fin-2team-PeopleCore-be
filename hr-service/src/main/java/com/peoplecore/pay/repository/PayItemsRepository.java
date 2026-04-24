@@ -26,4 +26,5 @@ public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
 
 //    법정 항목 조회
      Optional<PayItems> findByCompany_CompanyIdAndIsLegalTrueAndLegalCalcType(UUID companyId, LegalCalcType legalCalcType);
+
 }

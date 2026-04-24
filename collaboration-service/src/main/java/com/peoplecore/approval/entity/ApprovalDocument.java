@@ -16,7 +16,9 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(uniqueConstraints = @UniqueConstraint(columnNames = {"company_id", "doc_num"}))
+@Table(uniqueConstraints = {
+        @UniqueConstraint(columnNames = {"company_id", "doc_num"}),
+        @UniqueConstraint(name = "uk_approval_doc_hr_ref", columnNames = {"company_id", "hr_ref_type", "hr_ref_id"})})
 public class ApprovalDocument extends BaseTimeEntity {
 
     /**
@@ -145,6 +147,15 @@ public class ApprovalDocument extends BaseTimeEntity {
 
     /*결재 완성 시 저장되는 url*/
     private String docUrl;
+
+//    멱등성/실패 방어 컬럼 -> unique 제약
+    /** 외부(hr-service) 상신 원천 구분자 — "PAYROLL_RUN" / "SEVERANCE" / null(프론트 직접 상신) */
+    @Column(length = 20)
+    private String hrRefType;
+
+    /** 외부 원천 식별자 — PAYROLL_RUN → payrollRunId, SEVERANCE → sevId */
+    private Long hrRefId;
+
 
 
     public void changeStatus(ApprovalStatus approvalStatus) {

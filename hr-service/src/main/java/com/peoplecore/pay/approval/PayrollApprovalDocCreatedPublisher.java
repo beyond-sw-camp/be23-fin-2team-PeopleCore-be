@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class PayrollApprovalDocCreatedPublisher {
 
-    private static final String TOPIC = "salary-approval-doc-created";
+    private static final String TOPIC = "payroll-approval-doc-created";
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;

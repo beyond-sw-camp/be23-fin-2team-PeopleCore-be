@@ -26,6 +26,8 @@ public class DocumentCreateRequest {
     private Boolean isEmergency;
     private Long personalFolderId;
     private Long deptFolderId;
+    private String hrRefType;   // nullable — 프론트 직접 상신 시 null
+    private Long hrRefId;       // nullable
 
     //    결재선 목록
     private List<ApprovalLineRequest> approvalLines;
