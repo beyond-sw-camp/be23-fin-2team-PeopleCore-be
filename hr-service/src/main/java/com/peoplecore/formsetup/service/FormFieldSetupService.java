@@ -236,7 +236,7 @@ public class FormFieldSetupService {
 
         // 소속 및 고용 정보
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "hireDate", "입사일", "소속 및 고용 정보", FieldType.DATE, true, true, 1, null, null));
-        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "employType", "고용 형태", "소속 및 고용 정보", FieldType.SELECT, true, true, 2, "[\"정규직\",\"계약직\",\"시간제\"]", null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "employType", "고용 형태", "소속 및 고용 정보", FieldType.SELECT, true, true, 2, "[\"정규직\",\"계약직\"]", null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "contractEnd", "계약 만료일", "소속 및 고용 정보", FieldType.DATE, true, false, 3, null, null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "department", "부서", "소속 및 고용 정보", FieldType.SELECT, true, true, 4, null, null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "rank", "직급", "소속 및 고용 정보", FieldType.SELECT, true, true, 5, null, null));
