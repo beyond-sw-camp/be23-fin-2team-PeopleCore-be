@@ -232,6 +232,166 @@ Search API (/search-service/search)
 ---
 
 <details>
+<summary><h2>AI Copilot 통합검색 (벡터 + 하이브리드)</h2></summary>
+
+PeopleCore 통합검색의 검색·생성 레이어. PoC 로 검증된 **BM25 + kNN 하이브리드 검색** 과 **듀얼 LLM(클라우드 + 로컬) 구조** 를 채택했습니다.
+
+### 핵심 설계 결정
+
+| 항목 | 결정 | 근거 |
+|------|------|------|
+| 검색 범위 | 전 모듈 단일 색인 (`unified_search`) | 모듈 간 cross-search, 단일 쿼리로 일관 |
+| 멀티테넌트 | 모든 색인·쿼리에 `companyId` 강제 주입 | 회사별 데이터 격리 |
+| 보안 모델 | 애플리케이션 레이어 이중 필터 (`companyId` + `accessibleEmpIds`) | DB 격리 + 권한 격리 |
+| 검색 방식 | BM25 + kNN + RRF (Reciprocal Rank Fusion) | PoC 벤치 결과 (아래 표) |
+| 임베딩 모델 | OpenAI `text-embedding-3-small` (1536 dims) | 비용/정확도 균형 |
+| 비민감 생성 | Claude Haiku 4.5 (클라우드) | Tool Use(검색·작성) 활용 |
+| 민감 생성 | EXAONE 3.5 7.8B (Ollama 로컬) | 한국어 품질 + 외부 전송 차단 |
+| 회사별 커스터마이징 | `org_summary` / `glossary` / `copilot_config` 동적 시스템 프롬프트 | 회사별 용어·정책 반영 |
+
+### Phase 0 PoC — 하이브리드 검색 벤치마크
+
+골든 데이터셋 20문항(검색 18 + 멀티테넌트 격리 2) × 3사 × 500건 색인 환경에서 측정.
+
+![Phase 0 PoC — Hybrid Search Benchmark](picture/poc-hybrid-search-bench.png)
+
+| 방식 | Recall@5 | p50 latency |
+|------|----------|-------------|
+| BM25 단독 | 90% | 5ms |
+| kNN 단독 | 95% | 12ms |
+| **BM25 + kNN + RRF** | **95%** | **17ms** ← 채택 |
+
+**검증된 가설**
+
+- **하이브리드의 가치** : `Q13 "영업팀 회의 일정"` — BM25 실패 / kNN·RRF 성공
+- **격리 보장** : `I01·I02` — A사에서 B사 용어 검색 시 0 hits
+- **데이터 정책 보완점** : `Q03 "반려된 결재"` — `content` 가 영문 `REJECTED` 라 한국어 "반려" 미매칭. 색인 시 한국어 상태값 동시 저장 필요 (Phase 1 반영)
+
+**합격선** — Recall@5 ≥ 70% → **95%** ✅, latency ≤ 100ms → **17ms** ✅
+
+### Phase 0 PoC — LLM 모델 선정
+
+**듀얼 LLM 구조** (보안 우선)
+
+```
+[비민감 경로]   사용자 → Claude Haiku 4.5 → Tool Use → ES / MinIO / 메일
+                          (검색 + 작성 모두 가능)
+
+[민감 경로]    사용자 → SDK 가 ES 검색해 RAG 컨텍스트 주입 → EXAONE 3.5 (로컬)
+                          (Read-only, 외부 호출 차단)
+```
+
+**EXAONE 3.5 vs Qwen 2.5 비교 (둘 다 ~7B, Apple Silicon Ollama)**
+
+<details>
+<summary>EXAONE 3.5 7.8B 성능 테스트 결과</summary>
+
+![EXAONE 3.5 Bench](picture/poc-exaone-bench.png)
+
+</details>
+
+<details>
+<summary>Qwen 2.5 7B 성능 테스트 결과</summary>
+
+![Qwen 2.5 Bench](picture/poc-qwen-bench.png)
+
+</details>
+
+| 항목 | EXAONE 3.5 7.8B | Qwen 2.5 7B |
+|------|------------------|--------------|
+| 평균 tok/s | 52.0 | 54.8 |
+| 평균 TTFT | 182ms | 169ms |
+| 한국어 자연스러움 | 평가 답변·요약·금액 추출·RAG 모두 자연스러움 | 결재 요약을 중국어로 답변 (한국어 약점) |
+| Tool Use (Ollama) | ❌ 미지원 | ✅ 지원 |
+
+**EXAONE 채택 근거**
+
+- 한국어 품질 우위 — 결재·평가 도메인 답변 자연스러움
+- Tool Use 미지원은 민감 경로가 **Read-only**(SDK 가 검색 후 컨텍스트 전달, EXAONE 은 답변 생성만 담당)이므로 무관
+- 민감 데이터의 외부 API/Tool 호출 원천 차단 → 보안 스토리 강화
+
+**임베딩 모델 — `text-embedding-3-small` (1536 dims)**
+
+| 후보 | 차원 | 1M 토큰당 비용 | 특성 |
+|------|------|----------------|------|
+| **text-embedding-3-small** | 1536 (가변) | $0.02 | **선정** — 비용/정확도 균형 |
+| text-embedding-3-large | 3072 (가변) | $0.13 | 비용 6.5배, 정확도 소폭 우위 |
+| text-embedding-ada-002 | 1536 (고정) | $0.10 | 구세대, 비용 5배 |
+
+### 컴포넌트 구성
+
+| 계층 | 컴포넌트 | 역할 |
+|------|---------|------|
+| 외부 API | OpenAI Embeddings | 텍스트 → `float[1536]` |
+| 클라이언트 | `EmbeddingClient` | OpenAI 호출 래퍼, 배치(64), 타임아웃 5s/30s |
+| 저장 매핑 | `SearchDocument` | `@Field(name="content_vector", dense_vector, dims=1536)` 명시 매핑 |
+| 부팅 초기화 | `VectorMappingInitializer` | `PUT _mapping` 으로 dense_vector + HNSW(cosine) 적용 |
+| 신규 데이터 | `CdcEventListener.handleApproval` | Kafka CDC → `embedSafe(title+content)` → ES 색인 |
+| 기존 데이터 | `SearchBackfillService` | 벡터 누락 문서 페이지 단위 임베딩, `AtomicBoolean` 동시 실행 차단 |
+| 운영 트리거 | `POST /internal/search/backfill/embeddings` | 백필 수동 실행 |
+
+### 워크플로우
+
+**신규 문서 (CDC 자동 색인)**
+
+```
+MySQL INSERT/UPDATE → Debezium binlog → Kafka peoplecore.peoplecore.approval_document
+  → CdcEventListener.handleApproval
+     ├─ embedSafe(title + content) ──→ OpenAI Embeddings
+     └─ SearchDocument(contentVector=float[1536]) → ES unified_search
+```
+
+- DRAFT / CANCELLED 상태는 색인 제외
+- 임베딩 실패 시 벡터 없이 색인 진행 → BM25 검색은 유지
+
+**기존 문서 (수동 백필)**
+
+```
+POST /internal/search/backfill/embeddings?type=APPROVAL
+  → SearchBackfillService (AtomicBoolean 가드)
+     → ES 쿼리: type=APPROVAL AND must_not exists content_vector (PAGE_SIZE=50)
+        → embedBatch → doc.contentVector 세팅 → save
+           → 응답 { processed, failed, elapsedMs }
+```
+
+호출자가 `processed=0` 받을 때까지 반복 호출. 무한 루프를 호출자에 위임해 동시 실행 사고 원천 차단.
+
+### 측정 결과
+
+| 항목 | 통과 기준 | 결과 | 측정 |
+|------|---------|------|------|
+| Recall@5 (PoC) | ≥ 70% | **95%** ✅ | RRF, 골든 20문항 |
+| 검색 p50 latency (PoC) | ≤ 100ms | **17ms** ✅ | RRF |
+| 검색 p95 latency (Day 4) | < 100ms | **25ms** ✅ | `bench-search-latency.sh` (N=50) |
+| 벡터 색인 차원 | 1536 | **1536** ✅ | `_source.content_vector` 길이 |
+| CDC 색인 지연 | < 10s | Day 5 검증 | `bench-cdc.sh` (count 증가 감지) |
+
+### 트러블슈팅 — 주요 사고 사례
+
+| 증상 | 원인 | 해결 |
+|------|------|------|
+| 백필 무한 루프 | `save` 후에도 `must_not exists content_vector` 가 매치 | `@Field(name="content_vector")` 명시 — camelCase ↔ snake_case mismatch 가 silent save fail 유발 |
+| `parsing_exception "unknown query [query]"` | `StringQuery` 에 `{"query": {...}}` 외곽 wrapper 포함 (Spring Data ES 가 한 번 더 감쌈) | inner query body 만 전달 |
+| 동시 백필로 OpenAI 비용 폭주 위험 | `while(true)` + concurrent 호출 | `AtomicBoolean.compareAndSet` 으로 단일 실행 보장 |
+
+### 운영 명령어
+
+```bash
+# 백필 (응답 processed=0 = 완료)
+curl -X POST "http://localhost:<port>/internal/search/backfill/embeddings?type=APPROVAL"
+
+# 검색 latency 측정
+./search-service/scripts/bench/bench-search-latency.sh 100 테스트
+
+# CDC 지연 측정 (결재 1건 생성 필요)
+./search-service/scripts/bench/bench-cdc.sh
+```
+
+</details>
+
+---
+
+<details>
 <summary><h2>주요 기능</h2></summary>
 
 <details>

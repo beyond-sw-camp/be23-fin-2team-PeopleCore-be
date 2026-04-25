@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.document.SearchDocument;
+import com.peoplecore.embedding.EmbeddingClient;
 import com.peoplecore.repository.SearchRepository;
 import com.peoplecore.service.SearchService;
 import lombok.extern.slf4j.Slf4j;
@@ -41,12 +42,14 @@ public class CdcEventListener {
     private final SearchService searchService;
     private final SearchRepository searchRepository;
     private final CdcLookupCache cache;
+    private final EmbeddingClient embeddingClient;
     private final ObjectMapper objectMapper;
 
-    public CdcEventListener(SearchService searchService, SearchRepository searchRepository, CdcLookupCache cache) {
+    public CdcEventListener(SearchService searchService, SearchRepository searchRepository, CdcLookupCache cache, EmbeddingClient embeddingClient) {
         this.searchService = searchService;
         this.searchRepository = searchRepository;
         this.cache = cache;
+        this.embeddingClient = embeddingClient;
         this.objectMapper = new ObjectMapper();
     }
 
@@ -306,6 +309,8 @@ public class CdcEventListener {
 
             String createdAt = CdcEventParser.decodeMicroTimestampIso((Number) asNumber(row.path("doc_submitted_at")));
 
+            float[] contentVector = embedSafe(docTitle, content);
+
             SearchDocument doc = SearchDocument.builder()
                     .id("APPROVAL_" + sourceId)
                     .type("APPROVAL")
@@ -315,12 +320,25 @@ public class CdcEventListener {
                     .content(content)
                     .metadata(metadata)
                     .createdAt(createdAt)
+                    .contentVector(contentVector)
                     .build();
 
             searchService.indexDocument(doc);
 
         } catch (Exception e) {
             log.error("Failed to process approval CDC event", e);
+        }
+    }
+
+    // 임베딩 실패해도 색인은 진행 (벡터 없는 문서는 BM25로만 검색됨)
+    private float[] embedSafe(String title, String content) {
+        try {
+            String combined = ((title != null ? title : "") + "\n" + (content != null ? content : "")).trim();
+            if (combined.isBlank()) return null;
+            return embeddingClient.embed(combined);
+        } catch (Exception e) {
+            log.warn("Embedding failed, indexing without vector: {}", e.getMessage());
+            return null;
         }
     }
 
