@@ -11,25 +11,13 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class TaxWithholdingResDto {
+//급여계산용 (단건, 특정사원의 세액)
 
-    private Long taxId;
     private Integer taxYear;
-    private Long salaryFrom;
-    private Long salaryTo;
+    private Integer salaryMin;       // 천원
+    private Integer salaryMax;
     private Integer dependents;
-    private Long incomeTax;
-    private Long localIncomeTax;
+    private Long incomeTax;          // 원
+    private Long localIncomeTax;     // 원 (소득세 × 10%)
 
-    public static TaxWithholdingResDto fromEntity(TaxWithholdingTable t){
-        Long incomeTax = t.getIncomeTax();
-        return TaxWithholdingResDto.builder()
-                .taxId(t.getTaxId())
-                .taxYear(t.getTaxYear())
-                .salaryFrom(t.getSalaryFrom())
-                .salaryTo(t.getSalaryTo())
-                .dependents(t.getDependents())
-                .incomeTax(incomeTax)
-                .localIncomeTax(incomeTax != null ? Math.round(incomeTax * 0.1) : 0L)
-                .build();
-    }
 }

@@ -73,6 +73,9 @@ dependencies {
 
 //	Mail (SMTP)
 	implementation 'org.springframework.boot:spring-boot-starter-mail'
+
+//    excel 파싱
+    implementation 'org.apache.poi:poi-ooxml:5.3.0'
 }
 
 dependencyManagement {

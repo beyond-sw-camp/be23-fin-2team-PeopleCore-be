@@ -15,6 +15,7 @@ import com.peoplecore.pay.repository.*;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -28,7 +29,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class EmpSalaryService {
@@ -339,8 +340,13 @@ public class EmpSalaryService {
 //                고용보험(근로자 요율)
                 employment = calcAmount(monthlySalary, rates.getEmploymentInsurance());
 
+                log.info("[Tax 디버그] year={}, monthlySalary={}, dependents={}",
+                        currentYear, monthlySalary, emp.getDependentsCount());
 //                소득세(간이세액표 조회) - 해당구간없으면 0
                 TaxWithholdingResDto tax = taxWithholdingService.getTax(currentYear, monthlySalary, emp.getDependentsCount());
+                log.info("[Tax 디버그] 결과 incomeTax={}, localIncomeTax={}",
+                        tax != null ? tax.getIncomeTax() : "null",
+                        tax != null ? tax.getLocalIncomeTax() : "null");
                 if (tax != null) {
                     incomeTax = tax.getIncomeTax();
                     localIncomeTax = tax.getLocalIncomeTax();

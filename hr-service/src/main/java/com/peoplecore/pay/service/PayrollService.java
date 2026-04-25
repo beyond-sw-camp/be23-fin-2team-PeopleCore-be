@@ -443,7 +443,7 @@ public class PayrollService {
 //        해당 월 범위 계산
         YearMonth ym = YearMonth.parse(run.getPayYearMonth(), DateTimeFormatter.ofPattern("yyyy-MM"));
         LocalDate startDate = ym.atDay(1); //해당월의 1일
-        LocalDate endDate = ym.atEndOfMonth();       //해당월의  마지막날짜
+        LocalDate endDate = ym.atEndOfMonth();       //해당월의 마지막날짜
 
 //        CommuteRecord에서 인정된 초과근무 일별 기록 조회
         List<CommuteRecord> records = commuteRecordRepository.findRecognizedByMonth(empId, startDate, endDate);
@@ -461,7 +461,7 @@ public class PayrollService {
                     .workDate(cr.getWorkDate())
                     .recognizedExtendedMinutes(cr.getRecognizedExtendedMinutes())
                     .recognizedNightMinutes(cr.getRecognizedNightMinutes())
-                    .recognizedExtendedMinutes(cr.getRecognizedHolidayMinutes())
+                    .recognizedHolidayMinutes(cr.getRecognizedHolidayMinutes())
                     .actualWorkMinutes(cr.getActualWorkMinutes())
                     .build());
         }
