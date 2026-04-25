@@ -7,7 +7,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.cglib.core.Local;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -42,210 +41,184 @@ import java.util.UUID;
 public class CommuteRecord extends BaseTimeEntity {
 
     /*
-     * 출퇴근 기록 ID - JPA 매핑상 단일 PK (AUTO_INCREMENT).
+     * 출퇴근 기록 ID — JPA 매핑상 단일 PK (AUTO_INCREMENT).
      * DB 레벨에서는 Initializer 가 (com_rec_id, work_date) 복합 PK 로 재정의 (파티셔닝용).
      */
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "com_rec_id", nullable = false)
+    @Column(nullable = false)
     private Long comRecId;
 
     /*
      * 근무 일자 (월별 파티션 키).
      * insert 시 반드시 세팅 → 서비스 레이어에서 LocalDate.now() 주입.
-     * JPA 매핑상 @Id 아님 — DB 레벨 복합 PK 의 2번째 컬럼은 Initializer 담당.
      */
-    @Column(name = "work_date", nullable = false)
+    @Column(nullable = false)
     private LocalDate workDate;
 
-    /*
-     * 회사 ID
-     */
-    @Column(name = "company_id", nullable = false)
+    /* 회사 ID */
+    @Column(nullable = false)
     private UUID companyId;
 
     /*
-     * 사원 아이디
-     * mysql 파티션 테이블은 Fk 제약을 허용하지 않아 No_Constract 지정
-     * 참조 무결성은 애플리케이션 (서비스) 에서 보장
+     * 사원
+     * MySQL 파티션 테이블은 FK 제약 불허 → NO_CONSTRAINT.
+     * 참조 무결성은 서비스에서 보장.
      */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "emp_id", nullable = false, foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
+    @JoinColumn(name = "emp_id", nullable = false,
+            foreignKey = @ForeignKey(ConstraintMode.NO_CONSTRAINT))
     private Employee employee;
 
-    /*
-     * 출근 시각
-     */
+    /* 출근 시각 — ABSENT 행은 null */
     private LocalDateTime comRecCheckIn;
 
-    /*
-     * 퇴근 시각
-     */
+    /* 퇴근 시각 — ABSENT / 퇴근 미체크 시 null */
     private LocalDateTime comRecCheckOut;
 
-    /*
-     * 출근 체크인 시 클라이언트 IP.
-     * CompanyAllowedIp 매칭 결과에 따라 isOffsite 함께 기록.
-     */
-    @Column(name = "check_in_ip", length = 45)   // IPv6 최대 길이 대비
+    /* 출근 체크인 IP (IPv6 대비 45자) — ABSENT 행은 null */
+    @Column(length = 45)
     private String checkInIp;
 
-    /*
-     * 퇴근 체크아웃 시 클라이언트 IP
-     */
-    @Column(name = "check_out_ip", length = 45)
+    /* 퇴근 체크아웃 IP — ABSENT / 퇴근 미체크 행은 null */
+    @Column(length = 45)
     private String checkOutIp;
 
-    /*
-     * 근무지 외 체크 여부.
-     * 체크인 시점 IP 가 회사 허용 대역에 없으면 true.
-     * 대시보드 "근무지 외 근태체크" 카드 집계 기준.
-     */
-    @Column(name = "is_offsite", nullable = false)
-    @Builder.Default
-    private Boolean isOffsite = false;
-
-    /*체크인 상태 (ON_TIME/LATE/HOLIDAY_WORK) */
+    /* 휴일 이유 (NATIONAL/COMPANY/WEEKLY_OFF) — 평일 출근이면 null */
     @Enumerated(EnumType.STRING)
-    @Column(name = "check_in_status", length = 20)
-    private CheckInStatus checkInStatus;
-
-
-    /* 체크아웃 상태 (EARLY_LEAVE/ON_TIME/HOLIDAY_WORK_END). 체크아웃 전엔 null */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "check_out_status", length = 20)
-    private CheckOutStatus checkOutStatus;
-
-    /* 휴일 이유 (NATIONAL/COMPANY/WEEKLY_OFF). 평일이면 null */
-    @Enumerated(EnumType.STRING)
-    @Column(name = "holiday_reason", length = 20)
+    @Column(length = 20)
     private HolidayReason holidayReason;
 
     /*
-     * 실 근무 분 (휴게시간 차감 완료)   -- 급여 연동 컬럼
-     *  - 체크아웃 시점에 서비스가 계산해서 저장
-     *  - 계산: (checkOut - checkIn) - (WorkGroup 휴게구간 ∩ 재사구간)
+     * 하루 최종 근태 상태.
+     * 체크인 시 초기값(NORMAL/LATE/HOLIDAY_WORK) 설정 →
+     * 체크아웃 시 최종값(NORMAL/LATE/EARLY_LEAVE/LATE_AND_EARLY) 확정 →
+     * 배치 시 AUTO_CLOSED 또는 ABSENT 처리.
      */
-    @Column(name = "actual_work_minutes", nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private WorkStatus workStatus;
+
+    /*
+     * 실 근무 분 (휴게시간 차감 완료) — 급여 연동 컬럼.
+     * 계산: (checkOut - checkIn) - 휴게구간.
+     * ABSENT / AUTO_CLOSED 행은 0.
+     */
+    @Column(nullable = false)
     @Builder.Default
     private Long actualWorkMinutes = 0L;
 
     /*
-     * 중복 제거 총 초과분 (관리자 지표용, 수당 계산엔 불필요).
-     *  - 계산: max(0, checkOut - groupEndTime)
+     * 총 초과 분 — 관리자 지표 기준값.
+     * 계산: max(0, checkOut - groupEndTime).
      */
-    @Column(name = "overtime_minutes", nullable = false)
+    @Column(nullable = false)
     @Builder.Default
     private Long overtimeMinutes = 0L;
 
     /*
-     * 인정된 연장수당 대상 분.
-     *  - APPROVED OvertimeRequest 기간과 정시 초과 구간의 교집합
+     * 미인정 초과근무 분.
+     * 계산: overtimeMinutes - recognizedExtendedMinutes.
+     * 대시보드/급여 리포트 집계용.
      */
-    @Column(name = "recognized_extended_minutes", nullable = false)
+    @Column(nullable = false)
+    @Builder.Default
+    private Long unrecognizedOtMinutes = 0L;
+
+    /*
+     * 인정된 연장수당 분.
+     * APPROVED OvertimeRequest 구간 ∩ 정시 초과 구간.
+     */
+    @Column(nullable = false)
     @Builder.Default
     private Long recognizedExtendedMinutes = 0L;
 
     /*
-     * 인정된 야간수당 대상 분.
-     *  - 인정 구간과 야간(22:00~06:00) 교집합
-     *  - 연장분과 중복 카운트 가능 (근기법 가산수당 중복)
+     * 인정된 야간수당 분 (22:00~06:00 구간 ∩ 인정 구간).
+     * 연장수당과 중복 카운트 가능 (근기법 가산수당 중복).
      */
-    @Column(name = "recognized_night_minutes", nullable = false)
+    @Column(nullable = false)
     @Builder.Default
     private Long recognizedNightMinutes = 0L;
 
     /*
-     * 인정된 휴일수당 대상 분.
-     *  - 휴일(groupWorkDay 비트 OFF or HolidayLookup 매칭) 근무 구간
+     * 인정된 휴일수당 분.
+     * 휴일 근무 구간 중 인정된 시간.
      */
-    @Column(name = "recognized_holiday_minutes", nullable = false)
+    @Column(nullable = false)
     @Builder.Default
     private Long recognizedHolidayMinutes = 0L;
 
-    /*자동 마감 여부
-     * 배치가 강제 close한 경우에  true
-     * 근태 정정을 통해 변경될 경우 다시 false
-     * */
-    @Column(name = "is_auto_closed", nullable = false)
-    @Builder.Default
-    private Boolean isAutoClosed = false;
-
-    /* 출근 체크인 처리 - 시각/IP/offsite/상태/휴일이유 일괄 세팅 */
-    public void checkIn(LocalDateTime at, String ip, boolean offsite,
-                        CheckInStatus status, HolidayReason reason) {
+    /* 출근 체크인 처리 — 시각/IP/초기상태/휴일이유 일괄 세팅 */
+    public void checkIn(LocalDateTime at, String ip,
+                        WorkStatus initialStatus, HolidayReason reason) {
         if (this.comRecCheckIn != null) {
             throw new IllegalStateException(
-                    "이미 체크인된 레코드에 checkIn() 재호출 - comRecId=" + this.comRecId);
+                    "이미 체크인된 레코드에 checkIn() 재호출 — comRecId=" + this.comRecId);
         }
         this.comRecCheckIn = at;
         this.checkInIp = ip;
-        this.isOffsite = offsite;
-        this.checkInStatus = status;
+        this.workStatus = initialStatus; // 체크아웃 시 NORMAL/EARLY_LEAVE/LATE_AND_EARLY 로 확정
         this.holidayReason = reason;
     }
 
-
-    /* 퇴근 체크아웃 처리 - 시각/IP/상태 일괄 세팅
-     * 가드 : 체크인 없이 호출 붉가
-     * 이미 체크아웃된 레코드에 재호출 불가
-     *
-     * 지정 넘겨서 퇴근 찍을 시 허용 */
-    public void checkOut(LocalDateTime at, String ip, CheckOutStatus status) {
+    /*
+     * 퇴근 체크아웃 처리 — WorkStatus 최종 확정.
+     * 가드: 체크인 없이 불가 / 중복 체크아웃 불가 / 체크아웃 < 체크인 불가.
+     */
+    public void checkOut(LocalDateTime at, String ip, WorkStatus finalStatus) {
         if (this.comRecCheckIn == null) {
             throw new IllegalStateException(
-                    "체크인 없이 체크아웃 불가 - comRecId=" + this.comRecId);
+                    "체크인 없이 체크아웃 불가 — comRecId=" + this.comRecId);
         }
         if (this.comRecCheckOut != null) {
             throw new IllegalStateException(
-                    "이미 체크아웃된 레코드에 checkOut() 재호출 - comRecId=" + this.comRecId);
+                    "이미 체크아웃된 레코드에 checkOut() 재호출 — comRecId=" + this.comRecId);
         }
         if (at.isBefore(this.comRecCheckIn)) {
             throw new IllegalStateException(
-                    "체크아웃 시각이 체크인보다 이전 - comRecId=" + this.comRecId +
-                            ", checkIn=" + this.comRecCheckIn + ", checkOut=" + at);
+                    "체크아웃 시각이 체크인보다 이전 — comRecId=" + this.comRecId
+                            + ", checkIn=" + this.comRecCheckIn + ", checkOut=" + at);
         }
         this.comRecCheckOut = at;
         this.checkOutIp = ip;
-        this.checkOutStatus = status;
+        this.workStatus = finalStatus;
     }
 
-    /*배치에 의한 자동 마감 처리
-     * true일 경우에 실 근무 시간은 0분
-     * false로 리셋 시 다시 계산 */
-    public void markAutoClosed(LocalDateTime closedAt, CheckOutStatus status) {
+    /* 배치 자동마감 — workStatus = AUTO_CLOSED, 모든 근무분 0 */
+    public void markAutoClosed(LocalDateTime closedAt) {
         if (this.comRecCheckIn == null) {
-            throw new IllegalStateException("체크인 없이 자동 마감 불가 ");
+            throw new IllegalStateException("체크인 없이 자동마감 불가");
         }
         if (this.comRecCheckOut != null) {
-            throw new IllegalStateException("이미 체크아웃된 레코드에 자동 마감 재호출 ");
+            throw new IllegalStateException("이미 체크아웃된 레코드에 자동마감 불가");
         }
-
         this.comRecCheckOut = closedAt;
-        this.checkOutStatus = status;
-        this.isAutoClosed = true;
+        this.workStatus = WorkStatus.AUTO_CLOSED;
         this.actualWorkMinutes = 0L;
         this.overtimeMinutes = 0L;
+        this.unrecognizedOtMinutes = 0L;
         this.recognizedExtendedMinutes = 0L;
         this.recognizedNightMinutes = 0L;
         this.recognizedHolidayMinutes = 0L;
     }
 
-    /*
-     * 근태정정 승인 시 자동 마감 플래그 해제.
-     * 실제 근무 시간은 applyPayrollMinutes() 로 재계산해 반영.
-     */
-    public void resetAutoClosed() {
-        this.isAutoClosed = false;
+    /* 근태정정 승인 시 workStatus 재설정 */
+    public void applyCorrection(WorkStatus correctedStatus) {
+        this.workStatus = correctedStatus;
     }
 
-
-
     /* 급여연동 분 컬럼 일괄 갱신 */
-    public void applyPayrollMinutes(Long actualWork, Long overtime, Long extended, Long night, Long holiday) {
-        if (actualWork == null || overtime == null
+    public void applyPayrollMinutes(Long actualWork, Long overtime, Long unrecognizedOt,
+                                    Long extended, Long night, Long holiday) {
+        if (actualWork == null || overtime == null || unrecognizedOt == null
                 || extended == null || night == null || holiday == null) {
             throw new IllegalArgumentException("급여 연동 분 컬럼은 null 허용 안 됨");
+        }
+        if (unrecognizedOt < 0 || unrecognizedOt > overtime) {
+            throw new IllegalArgumentException(
+                    "unrecognizedOtMinutes 범위 위반: unrecognizedOt=" + unrecognizedOt
+                            + ", overtime=" + overtime);
         }
         long maxTyped = Math.max(extended, Math.max(night, holiday));
         if (overtime < maxTyped) {
@@ -260,10 +233,22 @@ public class CommuteRecord extends BaseTimeEntity {
         }
         this.actualWorkMinutes = actualWork;
         this.overtimeMinutes = overtime;
+        this.unrecognizedOtMinutes = unrecognizedOt;
         this.recognizedExtendedMinutes = extended;
         this.recognizedNightMinutes = night;
         this.recognizedHolidayMinutes = holiday;
     }
 
+    /*
+     * 결근 행 생성 팩토리 메서드.
+     * 배치가 호출 — comRecCheckIn/Out = null, 모든 근무분 = 0.
+     */
+    public static CommuteRecord absent(Employee employee, LocalDate workDate, UUID companyId) {
+        return CommuteRecord.builder()
+                .employee(employee)
+                .workDate(workDate)
+                .companyId(companyId)
+                .workStatus(WorkStatus.ABSENT)
+                .build();
+    }
 }
-
