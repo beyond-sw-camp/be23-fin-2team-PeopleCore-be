@@ -1,6 +1,8 @@
 package com.peoplecore.formsetup.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.attendance.entity.WorkGroup;
+import com.peoplecore.attendance.repository.WorkGroupRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.formsetup.domain.FieldType;
@@ -9,9 +11,9 @@ import com.peoplecore.formsetup.domain.FormType;
 import com.peoplecore.formsetup.dto.FormFieldSetupRequest;
 import com.peoplecore.formsetup.dto.FormFieldSetupResponse;
 import com.peoplecore.formsetup.repository.FormFieldSetupRepository;
+import com.peoplecore.pay.domain.InsuranceJobTypes;
 import com.peoplecore.pay.domain.PayItems;
-import com.peoplecore.pay.enums.PayItemCategory;
-import com.peoplecore.pay.enums.PayItemType;
+import com.peoplecore.pay.repository.InsuranceJobTypesRepository;
 import com.peoplecore.pay.repository.PayItemsRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -29,13 +31,17 @@ public class FormFieldSetupService {
     private final CompanyRepository companyRepository;
     private final ObjectMapper objectMapper;
     private final PayItemsRepository payItemsRepository;
+    private final InsuranceJobTypesRepository insuranceJobTypesRepository;
+    private final WorkGroupRepository workGroupRepository;
 
     @Autowired
-    public FormFieldSetupService(FormFieldSetupRepository repository, CompanyRepository companyRepository, ObjectMapper objectMapper, PayItemsRepository payItemsRepository) {
+    public FormFieldSetupService(FormFieldSetupRepository repository, CompanyRepository companyRepository, ObjectMapper objectMapper, PayItemsRepository payItemsRepository, InsuranceJobTypesRepository insuranceJobTypesRepository, WorkGroupRepository workGroupRepository) {
         this.repository = repository;
         this.companyRepository = companyRepository;
         this.objectMapper = objectMapper;
         this.payItemsRepository = payItemsRepository;
+        this.insuranceJobTypesRepository = insuranceJobTypesRepository;
+        this.workGroupRepository = workGroupRepository;
     }
 
 
@@ -55,13 +61,35 @@ public class FormFieldSetupService {
             if (formType == FormType.SALARY_CONTRACT && "급여".equals(entity.getSection())) {
                 continue;
             }
-            result.add(FormFieldSetupResponse.from(entity));
+            FormFieldSetupResponse dto = FormFieldSetupResponse.from(entity);
+
+//            사원등록 form: 업종 SELECT는 회사가 등록한 활성 산재보험 업종 목록을 동적 주입
+            if (formType == FormType.EMPLOYEE_REGISTER && "insuranceJobType".equals(entity.getFieldKey())) {
+                List<InsuranceJobTypes> jobTypes = insuranceJobTypesRepository
+                        .findByCompany_CompanyIdAndIsActiveTrueOrderByJobTypesIdAsc(companyId);
+                List<String> names = new ArrayList<>();
+                for (InsuranceJobTypes jt : jobTypes) {
+                    names.add(jt.getName());
+                }
+                dto.setOptions(names);
+            }
+
+//            사원등록 form: 근무그룹 SELECT는 회사가 등록한 근무그룹 목록을 동적 주입
+            if (formType == FormType.EMPLOYEE_REGISTER && "workGroup".equals(entity.getFieldKey())) {
+                List<WorkGroup> groups = workGroupRepository
+                        .findByCompany_CompanyIdAndGroupDeleteAtIsNullOrderByGroupNameAsc(companyId);
+                List<String> names = new ArrayList<>();
+                for (WorkGroup g : groups) {
+                    names.add(g.getGroupName());
+                }
+                dto.setOptions(names);
+            }
+            result.add(dto);
         }
 
-//        급여부분 동적생성 - 수당(ALLOWANCE) 만 연동 (기본급/상여는 연봉계약 폼에서 제외)
+//        급여부분 동적생성 - 지급항목 중 활성/비법정 항목만 연동
         if (formType == FormType.SALARY_CONTRACT) {
-            List<PayItems> payItems = payItemsRepository.findByCompany_CompanyIdAndPayItemTypeAndPayItemCategoryAndIsActiveTrueOrderBySortOrderAsc(
-                    companyId, PayItemType.PAYMENT, PayItemCategory.ALLOWANCE);
+            List<PayItems> payItems = payItemsRepository.findActiveNonLegalPaymentItems(companyId);
             int order = 1;
             for (PayItems items : payItems) {
                 result.add(FormFieldSetupResponse.builder()
@@ -210,6 +238,8 @@ public class FormFieldSetupService {
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "department", "부서", "소속 및 고용 정보", FieldType.SELECT, true, true, 4, null, null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "rank", "직급", "소속 및 고용 정보", FieldType.SELECT, true, true, 5, null, null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "position", "직책", "소속 및 고용 정보", FieldType.SELECT, true, true, 6, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "insuranceJobType", "업종", "소속 및 고용 정보", FieldType.SELECT, true, true, 7, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "workGroup", "근무그룹", "소속 및 고용 정보", FieldType.SELECT, true, true, 8, null, null));
 
         // 시스템 계정 설정
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "empId", "사번", "시스템 계정 설정", FieldType.AUTO, true, true, 1, null, null));
@@ -234,8 +264,7 @@ public class FormFieldSetupService {
         list.add(field(companyId, FormType.SALARY_CONTRACT, "department", "부서", "인적사항", FieldType.TEXT, true, true, 2, null, "department"));
         list.add(field(companyId, FormType.SALARY_CONTRACT, "rank", "직급", "인적사항", FieldType.TEXT, true, true, 3, null, "rank"));
         list.add(field(companyId, FormType.SALARY_CONTRACT, "position", "직책", "인적사항", FieldType.TEXT, true, true, 4, null, "position"));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "jobTitle", "직무", "인적사항", FieldType.TEXT, true, true, 5, null, "jobTitle"));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "employType", "근로형태", "인적사항", FieldType.TEXT, true, true, 6, null, "employType"));
+        list.add(field(companyId, FormType.SALARY_CONTRACT, "employType", "근로형태", "인적사항", FieldType.TEXT, true, true, 5, null, "employType"));
 
         // 계약기간
         list.add(field(companyId, FormType.SALARY_CONTRACT, "contractYear", "계약 연도", "계약기간", FieldType.SELECT, true, true, 1, "[\"2026\",\"2025\",\"2024\"]", null));

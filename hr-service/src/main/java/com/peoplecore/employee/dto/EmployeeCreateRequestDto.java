@@ -3,12 +3,10 @@ package com.peoplecore.employee.dto;
 import com.peoplecore.employee.domain.EmpGender;
 import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.EmpType;
-import com.peoplecore.employee.domain.JobType;
 import com.peoplecore.employee.domain.PasswordIssueType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Pattern;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -55,8 +53,6 @@ public class EmployeeCreateRequestDto {
     @NotNull
     private EmpType empType;
 
-    private JobType jobType;
-
     @NotNull
     private String deptName;
 
@@ -65,6 +61,9 @@ public class EmployeeCreateRequestDto {
 
     @NotNull
     private String titleName;
+
+    @NotBlank
+    private String insuranceJobTypeName;
 
 //    권한설정
     @NotNull

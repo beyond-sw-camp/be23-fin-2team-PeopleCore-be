@@ -32,6 +32,7 @@ public class EmpDetailResponseDto {
     private String    deptName;
     private String    gradeName;
     private String    titleName;
+    private String    insuranceJobTypeName;
     private String    empStatus;
 
     // 시스템 계정 정보
@@ -55,10 +56,10 @@ public class EmpDetailResponseDto {
                 .empAddressDetail(emp.getEmpAddressDetail())
                 .empHireDate(emp.getEmpHireDate())
                 .empType(emp.getEmpType() != null ? emp.getEmpType().name() : null)
-                .jobType(emp.getJobType() != null ? emp.getJobType().name() : null)
                 .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
                 .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)
                 .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
+                .insuranceJobTypeName(emp.getJobTypes() != null ? emp.getJobTypes().getName() : null)
                 .empStatus(emp.getEmpStatus() != null ? emp.getEmpStatus().name() : null)
                 .empNum(emp.getEmpNum())
                 .empEmail(emp.getEmpEmail())
