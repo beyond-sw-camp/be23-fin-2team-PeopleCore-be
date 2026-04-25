@@ -50,13 +50,13 @@ public class EmployeeUpdateRequestDto {
     private EmpType empType;
 
     @NotNull
-    private String deptName;
+    private Long deptId;
 
     @NotNull
-    private String gradeName;
+    private Long gradeId;
 
     @NotNull
-    private String titleName;
+    private Long titleId;
 
     @NotBlank
     private String insuranceJobTypeName;
