@@ -14,6 +14,8 @@ import com.peoplecore.formsetup.domain.FormType;
 import com.peoplecore.formsetup.dto.FormFieldSetupResponse;
 import com.peoplecore.formsetup.service.FormFieldSetupService;
 import com.peoplecore.minio.service.MinioService;
+import com.peoplecore.pay.domain.PayItems;
+import com.peoplecore.pay.repository.PayItemsRepository;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.domain.SalaryContractSortField;
@@ -45,13 +47,15 @@ public class SalaryContractService {
     private final FormFieldSetupService formFieldSetupService;
     private final ObjectMapper objectMapper;
     private final MinioService minioService;
+    private final PayItemsRepository payItemsRepository;
 
-    public SalaryContractService(SalaryContractRepository salaryContractRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, ObjectMapper objectMapper, MinioService minioService) {
+    public SalaryContractService(SalaryContractRepository salaryContractRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, ObjectMapper objectMapper, MinioService minioService, PayItemsRepository payItemsRepository) {
         this.salaryContractRepository = salaryContractRepository;
         this.employeeRepository = employeeRepository;
         this.formFieldSetupService = formFieldSetupService;
         this.objectMapper = objectMapper;
         this.minioService = minioService;
+        this.payItemsRepository = payItemsRepository;
     }
 
     //    1. 목록 조회
@@ -88,6 +92,7 @@ public class SalaryContractService {
 //       급여항목 분리 + totalAmount계산
         List<SalaryContractDetail> details = new ArrayList<>();
         BigDecimal totalAmount = BigDecimal.ZERO;
+        Map<Long, Integer> payItemAmountMap = new LinkedHashMap<>();
 
         Iterator<Map.Entry<String, String>> it = fieldMap.entrySet().iterator();
         while (it.hasNext()) {
@@ -100,10 +105,30 @@ public class SalaryContractService {
                         .payItemId(payItemId)
                         .amount(amount)
                         .build());
+                payItemAmountMap.put(payItemId, amount);
 //                총액 누적
                 totalAmount = totalAmount.add(BigDecimal.valueOf(amount));
 //                처리항목 fieldMap에서 제거 //나머지값 toJson(fieldValue에 저장)
                 it.remove();
+            }
+        }
+
+//        연봉 하한선 검증 — 고정수당(isFixed=true) 합 × 12 ≤ annualSalary
+        String annualSalaryStr = fieldMap.get("annualSalary");
+        if (annualSalaryStr != null && !annualSalaryStr.isBlank() && !payItemAmountMap.isEmpty()) {
+            List<PayItems> payItemEntities = payItemsRepository.findByPayItemIdInAndCompany_CompanyId(
+                    new ArrayList<>(payItemAmountMap.keySet()), companyId);
+            long fixedMonthlySum = 0L;
+            for (PayItems pi : payItemEntities) {
+                if (Boolean.TRUE.equals(pi.getIsFixed())) {
+                    Integer amt = payItemAmountMap.get(pi.getPayItemId());
+                    if (amt != null) fixedMonthlySum += amt;
+                }
+            }
+            long minAnnual = fixedMonthlySum * 12L;
+            long annualSalary = Long.parseLong(annualSalaryStr);
+            if (annualSalary < minAnnual) {
+                throw new CustomException(ErrorCode.ANNUAL_SALARY_BELOW_MINIMUM);
             }
         }
 

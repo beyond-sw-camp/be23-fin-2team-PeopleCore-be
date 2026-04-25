@@ -57,8 +57,10 @@ public class FormFieldSetupService {
 
         List<FormFieldSetupResponse> result = new ArrayList<>();
         for (FormFieldSetup entity : entities) {
-//            연봉 form 조회 시 급여부분 skip
-            if (formType == FormType.SALARY_CONTRACT && "급여".equals(entity.getSection())) {
+//            연봉 form 조회 시 급여부분 skip (단, 고정필드 annualSalary는 통과)
+            if (formType == FormType.SALARY_CONTRACT
+                    && "급여".equals(entity.getSection())
+                    && !"annualSalary".equals(entity.getFieldKey())) {
                 continue;
             }
             FormFieldSetupResponse dto = FormFieldSetupResponse.from(entity);
@@ -101,6 +103,7 @@ public class FormFieldSetupService {
                         .required(false)
                         .sortOrder(order++)
                         .locked(false)
+                        .isFixed(Boolean.TRUE.equals(items.getIsFixed()))
                         .build());
             }
 
@@ -111,11 +114,11 @@ public class FormFieldSetupService {
     }
     // 2. 폼 설정 일괄 저장 (기존 삭제 -> 새로 insert)
     public List<FormFieldSetupResponse> saveSetup(UUID companyId, FormType formType, List<FormFieldSetupRequest> requests) {
-        // 급여부분 제외 후 값 덮어쓰기
+        // 급여부분 제외 후 값 덮어쓰기 (단, 고정필드 annualSalary는 통과)
         if(formType == FormType.SALARY_CONTRACT){
             List<FormFieldSetupRequest>filtered = new ArrayList<>();
             for(FormFieldSetupRequest req : requests){
-                if(!"급여".equals(req.getSection())){
+                if(!"급여".equals(req.getSection()) || "annualSalary".equals(req.getFieldKey())){
                     filtered.add(req);
                 }
             }
@@ -271,6 +274,9 @@ public class FormFieldSetupService {
         list.add(field(companyId, FormType.SALARY_CONTRACT, "contractStart", "계약 시작일", "계약기간", FieldType.DATE, true, true, 2, null, null));
         list.add(field(companyId, FormType.SALARY_CONTRACT, "contractEnd", "계약 종료일", "계약기간", FieldType.DATE, true, false, 3, null, null));
         list.add(field(companyId, FormType.SALARY_CONTRACT, "weeklyHours", "주당 근로시간", "계약기간", FieldType.SELECT, true, true, 4, "[\"40시간 (주 5일)\",\"35시간\",\"30시간\",\"20시간 (시간제)\",\"15시간 (단시간)\"]", null));
+
+        // 급여 (고정 필드 — 동적 PayItems 보다 항상 앞)
+        list.add(field(companyId, FormType.SALARY_CONTRACT, "annualSalary", "연봉", "급여", FieldType.NUMBER, true, false, 0, null, null));
 
         // 기타사항
         list.add(field(companyId, FormType.SALARY_CONTRACT, "memo", "특약사항 / 메모", "기타사항", FieldType.TEXTAREA, true, false, 1, null, null));
