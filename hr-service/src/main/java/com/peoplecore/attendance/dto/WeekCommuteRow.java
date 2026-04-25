@@ -1,9 +1,8 @@
 package com.peoplecore.attendance.dto;
 
+/* 주 범위 CommuteRecord 행 — AttendanceAggregateQueryRepository 조회 결과 */
 
-/* 주 범위 CoummuteRecord 행 */
-
-import com.peoplecore.attendance.entity.CheckInStatus;
+import com.peoplecore.attendance.entity.WorkStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -17,15 +16,15 @@ import java.time.LocalDate;
 @Builder
 public class WeekCommuteRow {
 
-    /*사원 PK */
+    /* 사원 PK */
     private Long empId;
 
-    /*근무일 */
+    /* 근무일 */
     private LocalDate workDate;
 
-    /*체크인 상태 */
-    private CheckInStatus checkInStatus;
+    /* 하루 최종 근태 상태 (ABSENT/NORMAL/LATE 등). 체크인 없으면 null */
+    private WorkStatus workStatus;
 
-    /*체크인 체크아웃 분 체크 아웃전이면 null*/
+    /* 체크인~체크아웃 분. 체크아웃 전이면 null */
     private Long minutes;
 }

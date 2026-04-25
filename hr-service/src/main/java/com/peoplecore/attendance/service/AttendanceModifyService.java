@@ -7,6 +7,7 @@ import com.peoplecore.attendance.entity.AttendanceModify;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.HolidayReason;
 import com.peoplecore.attendance.entity.ModifyStatus;
+import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.publisher.AttendanceModifyRejectedByHrPublisher;
 import com.peoplecore.attendance.repository.AttendanceModifyRepository;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
@@ -89,8 +90,8 @@ public class AttendanceModifyService {
                 .workDate(cr.getWorkDate())
                 .currentCheckIn(cr.getComRecCheckIn())
                 .currentCheckOut(cr.getComRecCheckOut())
-                .isAutoClosed(cr.getIsAutoClosed())
-                .checkInStatusLabel(cr.getCheckInStatus() != null ? cr.getCheckInStatus().name() : null)
+                .isAutoClosed(cr.getWorkStatus() == WorkStatus.AUTO_CLOSED)
+                .workStatusLabel(cr.getWorkStatus() != null ? cr.getWorkStatus().getLabel() : null)
                 .empId(emp.getEmpId())
                 .empName(emp.getEmpName())
                 .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
@@ -341,7 +342,7 @@ public class AttendanceModifyService {
                                 ? cr.getActualWorkMinutes() : 0L)
                         .recognizedOvertimeMinutes(recognized)
                         .unrecognizedOvertimeMinutes(unrecognized)
-                        .isAutoClosed(cr.getIsAutoClosed())
+                        .isAutoClosed(cr.getWorkStatus() == WorkStatus.AUTO_CLOSED)
                         .build());
             } else {
                 boolean isWeekend = (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY);

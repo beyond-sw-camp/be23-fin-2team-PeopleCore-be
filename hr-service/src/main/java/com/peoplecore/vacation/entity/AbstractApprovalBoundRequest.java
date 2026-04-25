@@ -14,7 +14,6 @@ import java.util.Objects;
 import java.util.UUID;
 
 /* 결재 연동 휴가 요청 공통 상위 - USE(VacationRequest) / GRANT(VacationGrantRequest) 공통 필드/행위 보유 */
-/* @MappedSuperclass: 자체 테이블 X, 자식 테이블에 공통 컬럼 물리 복사 */
 @MappedSuperclass
 @Getter
 @NoArgsConstructor

@@ -35,11 +35,11 @@ public class AttendanceModifyPrefillResDto {
     /* 현재 퇴근 시각 (nullable) */
     private LocalDateTime currentCheckOut;
 
-    /*자동마감 여부 — true 면 모달에 "자동마감 복구" 뱃지 노출 권장 */
+    /* 자동마감 여부 — true 면 모달에 "자동마감 복구" 뱃지 노출 권장 */
     private Boolean isAutoClosed;
 
-    /* 출근 상태 라벨 — "정시"/"지각"/"휴일근무" 등 (모달 태그 UI, nullable) */
-    private String checkInStatusLabel;
+    /* 근태 상태 라벨 — "정상"/"지각"/"자동마감" 등 WorkStatus.getLabel() 값 (모달 태그 UI, nullable) */
+    private String workStatusLabel;
 
     /* 신청자 사원 ID */
     private Long empId;

@@ -6,6 +6,7 @@ import com.peoplecore.attendance.dto.WeekVacationRow;
 import com.peoplecore.attendance.entity.EmploymentFilter;
 import com.peoplecore.attendance.entity.QCommuteRecord;
 import com.peoplecore.attendance.entity.QWorkGroup;
+import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.QEmployee;
 import com.peoplecore.vacation.entity.QVacationRequest;
@@ -64,7 +65,7 @@ public class AttendanceAggregateQueryRepository {
         NumberExpression<Long> minutes = Expressions.numberTemplate(Long.class, "CASE WHEN {0} IS NULL THEN NULL ELSE TIMESTAMPDIFF(MINUTE, {1}, {0}) END",
                 cr.comRecCheckOut, cr.comRecCheckIn);
 
-        return queryFactory.select(Projections.fields(WeekCommuteRow.class, cr.employee.empId.as("empId"), cr.workDate, cr.checkInStatus, minutes.as("minutes"))).from(cr).where(cr.companyId.eq(companyId), cr.employee.empId.in(empIds), cr.workDate.between(weekStart, weekEnd)).fetch();
+        return queryFactory.select(Projections.fields(WeekCommuteRow.class, cr.employee.empId.as("empId"), cr.workDate, cr.workStatus, minutes.as("minutes"))).from(cr).where(cr.companyId.eq(companyId), cr.employee.empId.in(empIds), cr.workDate.between(weekStart, weekEnd)).fetch();
     }
 
     /*3차 쿼리 */

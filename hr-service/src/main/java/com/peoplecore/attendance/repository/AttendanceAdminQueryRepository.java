@@ -2,6 +2,7 @@ package com.peoplecore.attendance.repository;
 
 import com.peoplecore.attendance.dto.AttendanceAdminRow;
 import com.peoplecore.attendance.entity.*;
+import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.department.domain.QDepartment;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.QEmployee;
@@ -120,10 +121,8 @@ public class AttendanceAdminQueryRepository {
                         cr.comRecId,
                         cr.comRecCheckIn.as("checkInAt"),
                         cr.comRecCheckOut.as("checkOutAt"),
-                        cr.isOffsite,
-                        cr.checkInIp,               // OFFSITE 카드 drilldown 에서 IP 노출용
-                        cr.checkInStatus,
-                        cr.checkOutStatus,
+                        cr.checkInIp,               // IP 로그/drilldown 노출용
+                        cr.workStatus,
                         cr.holidayReason
                 ))
                 .from(e)
