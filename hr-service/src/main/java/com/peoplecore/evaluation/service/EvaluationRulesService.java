@@ -158,7 +158,7 @@ public class EvaluationRulesService {
                 if (!Boolean.TRUE.equals(item.getLocked())) continue;
                 Map<String, Object> copy = new LinkedHashMap<>();
                 copy.put("id", item.getId());
-                copy.put("name", item.getName());
+                copy.put("jobTypeName", item.getName());
                 copy.put("weight", item.getWeight());
                 copy.put("locked", true);
                 copy.put("enabled", item.getEnabled() != null ? item.getEnabled() : Boolean.TRUE);
@@ -173,7 +173,7 @@ public class EvaluationRulesService {
                 if (lockedIds.contains(item.getId())) continue;  // locked ID 는 스킵 (덮어쓰기 차단)
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("id", item.getId());
-                m.put("name", item.getName());
+                m.put("jobTypeName", item.getName());
                 m.put("weight", item.getWeight());
                 m.put("locked", false);
                 m.put("enabled", item.getEnabled() != null ? item.getEnabled() : Boolean.TRUE);
@@ -218,7 +218,7 @@ public class EvaluationRulesService {
             }
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("id", lockedId);
-            m.put("name", base.getName());
+            m.put("jobTypeName", base.getName());
             m.put("points", base.getPoints());
             m.put("enabled", enabled);
             m.put("locked", true);
@@ -233,7 +233,7 @@ public class EvaluationRulesService {
                 if (seenLocked.contains(r.getId())) continue;
                 Map<String, Object> m = new LinkedHashMap<>();
                 m.put("id", r.getId());
-                m.put("name", r.getName());
+                m.put("jobTypeName", r.getName());
                 m.put("points", r.getPoints());
                 m.put("enabled", r.getEnabled() != null ? r.getEnabled() : Boolean.TRUE);
                 result.add(m);
@@ -260,8 +260,8 @@ public class EvaluationRulesService {
 
         // 평가 항목 — 자기평가 30, 상위자평가 70
         form.put("itemList", List.of(
-                Map.of("id", "self",    "name", "자기평가",   "weight", 30, "locked", true, "enabled", true),
-                Map.of("id", "manager", "name", "상위자평가", "weight", 70, "locked", true, "enabled", true)
+                Map.of("id", "self",    "jobTypeName", "자기평가",   "weight", 30, "locked", true, "enabled", true),
+                Map.of("id", "manager", "jobTypeName", "상위자평가", "weight", 70, "locked", true, "enabled", true)
         ));
 
         // 등급 체계 — S/A/B/C/D 표준 강제배분 비율
@@ -275,8 +275,8 @@ public class EvaluationRulesService {
 
         // 가감점 — 지각 / 무단결근 (근태 이벤트 기반, FE LOCKED_ADJUST_IDS 와 id 일치 필수)
         form.put("adjustments", List.of(
-                Map.of("id", "late",   "name", "지각",     "points", -2, "enabled", true, "locked", true),
-                Map.of("id", "absent", "name", "무단결근", "points", -5, "enabled", true, "locked", true)
+                Map.of("id", "late",   "jobTypeName", "지각",     "points", -2, "enabled", true, "locked", true),
+                Map.of("id", "absent", "jobTypeName", "무단결근", "points", -5, "enabled", true, "locked", true)
         ));
 
         // 등급 원점수 변환표 — 팀장 등급 → managerScore

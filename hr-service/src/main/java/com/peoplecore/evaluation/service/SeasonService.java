@@ -112,7 +112,7 @@ public class SeasonService {
                 .status(EvalSeasonStatus.DRAFT)
                 .build());
 
-//        동적 단계 저장 (name + type + 날짜)
+//        동적 단계 저장 (jobTypeName + type + 날짜)
         List<SeasonCreateRequestDto.StageInput> stageInputs = requestDto.getStages();
         for (int i = 0; i < stageSpecs.size(); i++) {
             StageSpec spec = stageSpecs.get(i);
@@ -197,7 +197,7 @@ public class SeasonService {
         return specs;
     }
 
-    // 이름+타입 페어 컬럼명 (EVALUATION 만 name 채움, 고정 3종은 null)
+    // 이름+타입 페어 컬럼명 (EVALUATION 만 jobTypeName 채움, 고정 3종은 null)
     private record StageSpec(String name, StageType type) {}
 
 

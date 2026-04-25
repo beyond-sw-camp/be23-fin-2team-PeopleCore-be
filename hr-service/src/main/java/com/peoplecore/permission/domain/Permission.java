@@ -9,7 +9,7 @@ import lombok.*;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "permission")
+@Table(jobTypeName = "permission")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
@@ -18,39 +18,39 @@ public class Permission {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "permission_id")
+    @Column(jobTypeName = "permission_id")
     private Long permissionId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "emp_id", nullable = false)
+    @JoinColumn(jobTypeName = "emp_id", nullable = false)
     private Employee employee;
 
-    @Column(name = "emp_name")
+    @Column(jobTypeName = "emp_name")
     private String empName;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "requested_role")
+    @Column(jobTypeName = "requested_role")
     private EmpRole requestedRole;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "emp_current_role")
+    @Column(jobTypeName = "emp_current_role")
     private EmpRole currentRole;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status")
+    @Column(jobTypeName = "status")
     private PermissionStatus status;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "grantor_id")
+    @JoinColumn(jobTypeName = "grantor_id")
     private Employee grantor;        // 권한 부여/회수 수행자
 
-    @Column(name = "reason")
+    @Column(jobTypeName = "reason")
     private String reason;
 
-    @Column(name = "created_at")
+    @Column(jobTypeName = "created_at")
     private LocalDateTime createdAt;
 
-    @Column(name = "processed_at")
+    @Column(jobTypeName = "processed_at")
     private LocalDateTime processedAt;
 }
 */

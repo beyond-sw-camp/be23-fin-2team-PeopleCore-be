@@ -20,7 +20,7 @@ public class MinioService {
         this.minioClient = minioClient;
     }
 
-    @Value("${minio.bucket-name}")
+    @Value("${minio.bucket-jobTypeName}")
     private String bucketName;
 
 //  파일 업로드

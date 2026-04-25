@@ -38,7 +38,7 @@ public class StompAuthInterceptor implements ChannelInterceptor {
 
             Claims claims = jwtProvider.parseAccessToken(token);
             Long empId = Long.parseLong(claims.getSubject());
-            String empName = claims.get("name", String.class);
+            String empName = claims.get("jobTypeName", String.class);
 
             accessor.getSessionAttributes().put("empId", empId);
             accessor.getSessionAttributes().put("empName", empName);

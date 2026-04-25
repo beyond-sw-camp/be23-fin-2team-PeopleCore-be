@@ -16,8 +16,8 @@ import java.math.BigDecimal;
 @Builder
 @Table(name = "insurance_job_types"     //업종(산재보험구분용)
 //    indexes = {
-//        @Index(name="idx_settlement_emp_month", columnList = "emp_id, pay_year_month"),
-//        @Index(name = "idx_settlement_payroll_run", columnList = "payroll_run_id")
+//        @Index(jobTypeName="idx_settlement_emp_month", columnList = "emp_id, pay_year_month"),
+//        @Index(jobTypeName = "idx_settlement_payroll_run", columnList = "payroll_run_id")
 //        }
     )
 public class InsuranceJobTypes {
@@ -27,7 +27,7 @@ public class InsuranceJobTypes {
     private Long jobTypesId;
 
     @Column(nullable = false, length = 50)
-    private String name;
+    private String jobTypeName;
 
 //    산재보험요율
     @Column(precision = 5, scale = 4)
@@ -47,7 +47,7 @@ public class InsuranceJobTypes {
 
 
     public void update(String name,String description, BigDecimal industrialAccidentRate){
-        this.name = name;
+        this.jobTypeName = name;
         this.description = description;
         this.industrialAccidentRate =industrialAccidentRate;
     }

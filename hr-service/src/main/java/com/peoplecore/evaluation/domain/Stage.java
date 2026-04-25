@@ -24,7 +24,7 @@ public class Stage extends BaseTimeEntity {
     @JoinColumn(name = "season_id", nullable = false)
     private Season season; // 소속 시즌
 
-    @Column(name = "name", length = 50)
+    @Column(name = "jobTypeName", length = 50)
     private String name; // 단계명
 
     @Column(name = "order_no")

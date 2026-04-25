@@ -8,6 +8,7 @@ import com.peoplecore.calendar.repository.*;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.*;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class CalendarEventService {
@@ -118,12 +120,16 @@ public class CalendarEventService {
 //        2. 내일정        //List.of() : 빈리스트 반환
         List<Events> myEvents = visibleCalIds.isEmpty() ? List.of() : eventsRepository.findByCalendarIdsAndPeriod(visibleCalIds, companyId, start, end);
 
+        log.info("=== A 진입 ===");
+        log.info("empId={}, companyId={}", empId, companyId);
 //        3. 관심캘린더 일정 (공개일정만)
         List<InterestCalendars> interestCalendars = interestCalendarsRepository.findByViewerEmpIdWithRequest(empId, companyId);
+        log.info("interestCalendars count={}", interestCalendars.size());
         List<Events> interestEvents = interestCalendars.stream()
                 .filter(ic -> Boolean.TRUE.equals(ic.getIsVisible()))
                 .flatMap(ic -> eventsRepository.findPublicEventsByEmpId(ic.getTargetEmpId(), companyId, start, end).stream())
                 .toList();
+        log.info("interestEvents 총={}", interestEvents.size());
 
 //        4. 전사일정
         List<Events> companyEvents = eventsRepository.findCompanyEvents(companyId, start, end);

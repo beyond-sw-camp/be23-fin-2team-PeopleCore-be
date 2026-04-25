@@ -52,11 +52,11 @@ public class DiscordNotifier {
                         "title", "[FAIL] " + jobName,
                         "color", COLOR_FAIL,
                         "fields", List.of(
-                                Map.of("name", "Company", "value", nullToNA(companyLabel), "inline", true),
-                                Map.of("name", "Exit Code", "value", nullToNA(exitCode), "inline", true),
-                                Map.of("name", "Failure Count", "value", String.valueOf(failureCount), "inline", true),
-                                Map.of("name", "Parameters", "value", "```" + truncate(params, 900) + "```"),
-                                Map.of("name", "Root Cause", "value", "```" + truncate(nullToNA(rootCauseMessage), 900) + "```")
+                                Map.of("jobTypeName", "Company", "value", nullToNA(companyLabel), "inline", true),
+                                Map.of("jobTypeName", "Exit Code", "value", nullToNA(exitCode), "inline", true),
+                                Map.of("jobTypeName", "Failure Count", "value", String.valueOf(failureCount), "inline", true),
+                                Map.of("jobTypeName", "Parameters", "value", "```" + truncate(params, 900) + "```"),
+                                Map.of("jobTypeName", "Root Cause", "value", "```" + truncate(nullToNA(rootCauseMessage), 900) + "```")
                         ),
                         "timestamp", OffsetDateTime.now(ZoneOffset.UTC).toString()
                 ))
@@ -80,11 +80,11 @@ public class DiscordNotifier {
                         "title", "[WARN] " + jobName,
                         "color", COLOR_WARN,
                         "fields", List.of(
-                                Map.of("name", "Company", "value", nullToNA(companyLabel), "inline", true),
-                                Map.of("name", "Read", "value", String.valueOf(readCount), "inline", true),
-                                Map.of("name", "Write", "value", String.valueOf(writeCount), "inline", true),
-                                Map.of("name", "Skip", "value", String.valueOf(skipCount), "inline", true),
-                                Map.of("name", "Parameters", "value", "```" + truncate(params, 900) + "```")
+                                Map.of("jobTypeName", "Company", "value", nullToNA(companyLabel), "inline", true),
+                                Map.of("jobTypeName", "Read", "value", String.valueOf(readCount), "inline", true),
+                                Map.of("jobTypeName", "Write", "value", String.valueOf(writeCount), "inline", true),
+                                Map.of("jobTypeName", "Skip", "value", String.valueOf(skipCount), "inline", true),
+                                Map.of("jobTypeName", "Parameters", "value", "```" + truncate(params, 900) + "```")
                         ),
                         "timestamp", OffsetDateTime.now(ZoneOffset.UTC).toString()
                 ))

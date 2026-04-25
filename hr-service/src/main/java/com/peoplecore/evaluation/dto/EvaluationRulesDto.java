@@ -32,7 +32,7 @@ public class EvaluationRulesDto {
     private Long formVersion;                      // 폼 버전 (스냅샷 뜰 때마다 ++) — 엔티티 컬럼
 
 
-    // 평가항목 (예: {id:"self", name:"자기평가", weight:30})
+    // 평가항목 (예: {id:"self", jobTypeName:"자기평가", weight:30})
     @Data
     @Builder
     @AllArgsConstructor
@@ -73,7 +73,7 @@ public class EvaluationRulesDto {
     }
 
 
-    // 가감점 (예: {id:"attendance", name:"근태 감점", points:-2, enabled:true})
+    // 가감점 (예: {id:"attendance", jobTypeName:"근태 감점", points:-2, enabled:true})
     @Data
     @Builder
     @AllArgsConstructor
