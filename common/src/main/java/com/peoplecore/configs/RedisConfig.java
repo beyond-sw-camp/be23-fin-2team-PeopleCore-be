@@ -88,6 +88,7 @@ public class RedisConfig {
                         .allowIfSubType("com.peoplecore")
                         .allowIfSubType("java.util")
                         .allowIfSubType("java.time")
+                        .allowIfSubType("java.math")
                         .build(),
                 ObjectMapper.DefaultTyping.NON_FINAL);
 

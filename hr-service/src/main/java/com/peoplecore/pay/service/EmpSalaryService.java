@@ -41,9 +41,10 @@ public class EmpSalaryService {
     private final InsuranceRatesRepository insuranceRatesRepository;
     private final TaxWithholdingService taxWithholdingService;
     private final RetirementRepository retirementRepository;
+    private final EmpSalaryCacheService empSalaryCacheService;
 
     @Autowired
-    public EmpSalaryService(EmployeeRepository employeeRepository, EmpAccountsRepository empAccountsRepository, SalaryContractRepository salaryContractRepository, PayItemsRepository payItemsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementRepository retirementRepository) {
+    public EmpSalaryService(EmployeeRepository employeeRepository, EmpAccountsRepository empAccountsRepository, SalaryContractRepository salaryContractRepository, PayItemsRepository payItemsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementRepository retirementRepository, EmpSalaryCacheService empSalaryCacheService) {
         this.employeeRepository = employeeRepository;
         this.empAccountsRepository = empAccountsRepository;
         this.salaryContractRepository = salaryContractRepository;
@@ -52,24 +53,27 @@ public class EmpSalaryService {
         this.insuranceRatesRepository = insuranceRatesRepository;
         this.taxWithholdingService = taxWithholdingService;
         this.retirementRepository = retirementRepository;
+        this.empSalaryCacheService = empSalaryCacheService;
     }
 
 /// 사원 급여 목록
-    public Page<EmpSalaryResDto> getEmpSalaryList(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, Pageable pageable) {
+    public Page<EmpSalaryResDto> getEmpSalaryList(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, Integer year, Pageable pageable) {
 
-//        1. Employee 페이징 조회
+//        1. Employee 페이지 조회
         Page<Employee> employees = employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, null, null, pageable);
 
         if (employees.isEmpty()) {
-            return employees.map(emp -> EmpSalaryResDto.fromEmployee(emp, null, null, null, null));
+            return employees.map(employee -> {
+                return EmpSalaryResDto.fromEmployee(employee, null, null);
+            });
         }
-
+//
         List<Long> empIds = employees.getContent().stream().map(Employee::getEmpId).collect(Collectors.toList());
 
-//        2. SalaryContract 배치 조회(사원별로 최신 계약만)
-        Map<Long, SalaryContract> contractMap = buildLastestContrackMap(companyId, empIds);
+//        2.사원별 유효 계약 일괄 조회 → Map (N+1 제거)
+        Map<Long, SalaryContract> contractMap = buildActiveContractMap(companyId, empIds, year);
 
-//        3. EmpAccounts 배치 조회
+//        3. 사원별 계좌 일괄 조회 → Map
         Map<Long, EmpAccounts> accountsMap = empAccountsRepository.findByEmployee_EmpIdInAndCompany_CompanyId(empIds, companyId)
                 .stream().collect(Collectors.toMap(
                         a -> a.getEmployee().getEmpId(),
@@ -80,44 +84,45 @@ public class EmpSalaryService {
 //        4. DTO 조립
         return employees.map(employee -> {
             SalaryContract contract = contractMap.get(employee.getEmpId());
-            BigDecimal annual = contract != null ? contract.getTotalAmount() : null;
-            Long monthly = annual != null ? annual.divide(BigDecimal.valueOf(12), 0, RoundingMode.HALF_UP).longValue() : null;
-
-            EmpAccounts accounts = accountsMap.get(employee.getEmpId());
-
-            return EmpSalaryResDto.fromEmployee(
-                    employee, annual, monthly, accounts != null ? accounts.getBankName() : null, accounts != null ? accounts.getAccountNumber() : null);
+            EmpAccounts accounts   = accountsMap.get(employee.getEmpId());
+            return EmpSalaryResDto.fromEmployee(employee, contract, accounts);
         });
     }
 
 
-///    급여 상세
-    public EmpSalaryDetailResDto getEmpSalaryDetail(UUID companyId, Long empId) {
+///    급여 상세 (redis cache 사용하여 조회)
+    public EmpSalaryDetailResDto getEmpSalaryDetail(UUID companyId, Long empId, Integer year) {
+
+        // 1) 캐시 확인
+        EmpSalaryDetailResDto cached = empSalaryCacheService.getDetailCache(companyId, empId, year);
+        if (cached != null) return cached;
+
+        // 2) DB 조회
         Employee employee = employeeRepository.findById(empId).orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
 //        최신 연봉계약
-        List<SalaryContract> contract = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(companyId, empId);
+        Map<Long, SalaryContract> contractMap = buildActiveContractMap(companyId, List.of(empId), year);
+        SalaryContract contract = contractMap.get(empId);
 
         BigDecimal annualSalary = null;
         Long monthlySalary = null;
         List<ContractPayItemResDto> fixedPayItems = List.of();
 
-        if (!contract.isEmpty()) {
-            SalaryContract latestContract = contract.get(0);
-            annualSalary = latestContract.getTotalAmount();
+        if (contract != null) {
+            annualSalary = contract.getTotalAmount();
             monthlySalary = annualSalary.divide(BigDecimal.valueOf(12), 0, RoundingMode.HALF_UP).longValue();
-
-            fixedPayItems = buildFixedPayItems(companyId, latestContract);
+            fixedPayItems = buildFixedPayItems(companyId, contract);
         }
 
 //        급여계좌
         Optional<EmpAccounts> empAccount = empAccountsRepository.findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
-
-//        퇴직연금 계좌
+//        퇴직연금 계좌/설정
         Optional<EmpRetirementAccount> retAccount = empRetirementAccountRepository.findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
+        RetirementSettings settings = retirementRepository
+                .findByCompany_CompanyId(companyId).orElse(null);
 
-        return EmpSalaryDetailResDto.builder()
-                .empAccountId(employee.getEmpId())
+        EmpSalaryDetailResDto result = EmpSalaryDetailResDto.builder()
+                .empId(employee.getEmpId())
                 .empName(employee.getEmpName())
                 .empNum(employee.getEmpNum())
                 .empEmail(employee.getEmpEmail())
@@ -129,6 +134,9 @@ public class EmpSalaryService {
                 .empHireDate(employee.getEmpHireDate())
                 .annualSalary(annualSalary)
                 .monthlySalary(monthlySalary)
+                .contractYear(contract != null ? contract.getContractYear() : null)
+                .contractStartDate(contract != null ? contract.getApplyFrom() : null)
+                .contractEndDate(contract != null ? contract.getApplyTo() : null)
                 .fixedPayItems(fixedPayItems)
                 .empAccountId(empAccount.map(EmpAccounts::getEmpAccountId).orElse(null))
                 .bankName(empAccount.map(EmpAccounts::getBankName).orElse(null))
@@ -138,10 +146,17 @@ public class EmpSalaryService {
                 .empRetirementType(retAccount.map(EmpRetirementAccount::getRetirementType).orElse(null))
                 .pensionProvider(retAccount.map(EmpRetirementAccount::getPensionProvider).orElse(null))
                 .retirementAccountNumber(retAccount.map(EmpRetirementAccount::getAccountNumber).orElse(null))
+                .companyPensionType(settings != null ? settings.getPensionType() : null)
+                .companyPensionProvider(settings != null ? settings.getPensionProvider() : null)
+                .empResignDate(employee.getEmpResignDate())
                 .build();
+
+        // 3) 캐시 적재
+        empSalaryCacheService.cacheDetail(companyId, empId, year, result);
+        return result;
     }
 
-//    급여계좌 변경
+//    급여계좌 변경 (캐시 무효화 evict)
     @Transactional
     public void updateEmpAccount(UUID companyId, Long empId, EmpAccountReqDto reqDto){
 
@@ -167,6 +182,9 @@ public class EmpSalaryService {
                     .build();
             empAccountsRepository.save(newAccount);
         }
+
+        // ★ 캐시 무효화
+        empSalaryCacheService.evictByEmpId(companyId, empId);
     }
 
 //    퇴직연금계좌 변경
@@ -189,6 +207,9 @@ public class EmpSalaryService {
 
             empRetirementAccountRepository.save(newAccount);
         }
+
+        // ★ 캐시 무효화
+        empSalaryCacheService.evictByEmpId(companyId, empId);
     }
 
 //    퇴직연금 유형 변경 (회사설정 DB_DC 일때만)
@@ -210,20 +231,30 @@ public class EmpSalaryService {
         }
 
         emp.updateRetirementType(reqDto.getRetirementType());
+
+        // ★ 캐시 무효화
+        empSalaryCacheService.evictByEmpId(companyId, empId);
     }
 
 
 
 ///     월급여 예상지급공제
     public ExpectedDeductionSummaryResDto getExpectedDeductions(UUID companyId) {
+        // 1) 캐시 확인
+        ExpectedDeductionSummaryResDto cached = empSalaryCacheService.getExpectedCache(companyId);
+        if (cached != null) return cached;
+
+        // 2) 기존 그대로
         List<Employee> employees = employeeRepository.findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(companyId, List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE));
 
         if (employees.isEmpty()) {
-            return ExpectedDeductionSummaryResDto.builder()
-                    .totalEmployees(0)
-                    .totalExpectedNetPay(0L)
-                    .employees(List.of())
-                    .build();
+            ExpectedDeductionSummaryResDto empty =  ExpectedDeductionSummaryResDto.builder()
+                                                    .totalEmployees(0)
+                                                    .totalExpectedNetPay(0L)
+                                                    .employees(List.of())
+                                                    .build();
+            empSalaryCacheService.cacheExpected(companyId, empty);
+            return empty;
         }
 
 //        현재 연도 보험요율
@@ -232,7 +263,7 @@ public class EmpSalaryService {
 
 //        사원별 최신 연봉계약
         List<Long> empIds = employees.stream().map(Employee::getEmpId).collect(Collectors.toList());
-        Map<Long, SalaryContract> contractMap = buildLastestContrackMap(companyId, empIds);
+        Map<Long, SalaryContract> contractMap = buildActiveContractMap(companyId, empIds, null);
 
         List<ExpectedDeductionResDto> result = new ArrayList<>();
 //        예상 실수령액 합계
@@ -280,12 +311,12 @@ public class EmpSalaryService {
 //                고용보험(근로자 요율)
                 employment = calcAmount(monthlySalary, rates.getEmploymentInsurance());
 
-//                소득세(간이세액표 조회)
-                try{
-                    TaxWithholdingResDto tax = taxWithholdingService.getTax(currentYear, monthlySalary, emp.getDependentsCount());
+//                소득세(간이세액표 조회) - 해당구간없으면 0
+                TaxWithholdingResDto tax = taxWithholdingService.getTax(currentYear, monthlySalary, emp.getDependentsCount());
+                if (tax != null) {
                     incomeTax = tax.getIncomeTax();
                     localIncomeTax = tax.getLocalIncomeTax();
-                } catch (Exception e){
+                } else {
 //                    세액표에 해당구간이 없으면 0
                     incomeTax = 0L;
                     localIncomeTax = 0L;
@@ -318,27 +349,52 @@ public class EmpSalaryService {
                             .expectedNetPay(expectedNetPay)
                     .build());
         }
-            return ExpectedDeductionSummaryResDto.builder()
-                    .totalEmployees(employees.size())
-                    .totalExpectedNetPay(grandTotalNet)
-                    .employees(result)
-                    .build();
+        ExpectedDeductionSummaryResDto built =  ExpectedDeductionSummaryResDto.builder()
+                                                .totalEmployees(employees.size())
+                                                .totalExpectedNetPay(grandTotalNet)
+                                                .employees(result)
+                                                .build();
+
+        // 3) 캐시 적재
+        empSalaryCacheService.cacheExpected(companyId, built);
+        return built;
     }
 
 
 
 
-//사원별 최신 연봉계약
-    private Map<Long, SalaryContract> buildLastestContrackMap(UUID companyId, List<Long> empIds){
-        Map<Long, SalaryContract> map = new HashMap<>();
-        for (Long empId : empIds){
-            List<SalaryContract> contracts = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(companyId, empId);  //첫번째가 최신
-            if (!contracts.isEmpty()){
-                map.put(empId, contracts.get(0));
-            }
+
+//    조회기준 기간 산출  (year 미지정 → 오늘, 지정 → YYYY-01-01 ~ YYYY-12-31)
+    private LocalDate[] resolvePeriod(Integer year){
+        if (year == null) {
+            LocalDate today = LocalDate.now();
+            return new LocalDate[]{today, today};
         }
-        return map;
+        return new LocalDate[]{
+                LocalDate.of(year, 1, 1),
+                LocalDate.of(year, 12, 31)
+        };
     }
+
+//    사원별 유효 계약 일괄 조회 (N+1 해결).
+//    year=null: 오늘 유효한 계약,  year=YYYY: 해당 연도에 적용된 계약(없으면 빠짐)
+    private Map<Long, SalaryContract> buildActiveContractMap(UUID companyId, List<Long> empIds, Integer year){
+        if (empIds == null || empIds.isEmpty()) return Map.of();
+
+        LocalDate[] period = resolvePeriod(year);
+        List<SalaryContract> contracts = salaryContractRepository.findActiveContractsByEmpIds(
+                companyId, empIds, period[0], period[1]
+        );
+
+        //   SQL이 applyFrom DESC 로 정렬 → empId별 첫 번째가 최신. (같은연도중에서도 최근의 계약건 조회시 사용)
+        return contracts.stream()
+                .collect(Collectors.toMap(
+                        c -> c.getEmployee().getEmpId(),
+                        Function.identity(),
+                        (a, b) -> a
+                ));
+    }
+
 
 //    연봉계약 상세
     private List<ContractPayItemResDto> buildFixedPayItems(UUID companyId, SalaryContract contract){

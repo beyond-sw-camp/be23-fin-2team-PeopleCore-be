@@ -1,12 +1,15 @@
 package com.peoplecore.pay.dtos;
 
 import com.peoplecore.employee.domain.Employee;
+import com.peoplecore.pay.domain.EmpAccounts;
+import com.peoplecore.salarycontract.domain.SalaryContract;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 
 @Data
@@ -27,11 +30,20 @@ public class EmpSalaryResDto {
     private BigDecimal annualSalary;
     private Long monthlySalary;
 
+    private Integer contractYear;
+    private LocalDate contractStartDate;   // applyFrom
+    private LocalDate contractEndDate;     // applyTo (정규직 등은 null)
+
     private String bankName;
     private String accountNumber;
 
 
-    public static  EmpSalaryResDto fromEmployee(Employee emp, BigDecimal annualSalary, Long monthlySalary, String bankName, String accountNumber){
+    public static EmpSalaryResDto fromEmployee(Employee emp, SalaryContract contract, EmpAccounts accounts) {
+        BigDecimal annualSalary = contract != null ? contract.getTotalAmount() : null;
+        Long monthlySalary = annualSalary != null
+                ? annualSalary.divide(BigDecimal.valueOf(12), 0, RoundingMode.HALF_UP).longValue()
+                : null;
+
         return EmpSalaryResDto.builder()
                 .empId(emp.getEmpId())
                 .empStatus(emp.getEmpStatus().name())
@@ -43,8 +55,11 @@ public class EmpSalaryResDto {
                 .empType(emp.getEmpType().name())
                 .annualSalary(annualSalary)
                 .monthlySalary(monthlySalary)
-                .bankName(bankName)
-                .accountNumber(accountNumber)
+                .contractYear(contract != null ? contract.getContractYear() : null)
+                .contractStartDate(contract != null ? contract.getApplyFrom() : null)
+                .contractEndDate(contract != null ? contract.getApplyTo() : null)
+                .bankName(accounts != null ? accounts.getBankName() : null)
+                .accountNumber(accounts != null ? accounts.getAccountNumber() : null)
                 .build();
     }
 

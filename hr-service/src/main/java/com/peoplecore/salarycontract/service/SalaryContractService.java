@@ -14,6 +14,7 @@ import com.peoplecore.formsetup.domain.FormType;
 import com.peoplecore.formsetup.dto.FormFieldSetupResponse;
 import com.peoplecore.formsetup.service.FormFieldSetupService;
 import com.peoplecore.minio.service.MinioService;
+import com.peoplecore.pay.service.EmpSalaryCacheService;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.domain.SalaryContractSortField;
@@ -45,13 +46,15 @@ public class SalaryContractService {
     private final FormFieldSetupService formFieldSetupService;
     private final ObjectMapper objectMapper;
     private final MinioService minioService;
+    private final EmpSalaryCacheService empSalaryCacheService;
 
-    public SalaryContractService(SalaryContractRepository salaryContractRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, ObjectMapper objectMapper, MinioService minioService) {
+    public SalaryContractService(SalaryContractRepository salaryContractRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, ObjectMapper objectMapper, MinioService minioService, EmpSalaryCacheService empSalaryCacheService) {
         this.salaryContractRepository = salaryContractRepository;
         this.employeeRepository = employeeRepository;
         this.formFieldSetupService = formFieldSetupService;
         this.objectMapper = objectMapper;
         this.minioService = minioService;
+        this.empSalaryCacheService = empSalaryCacheService;
     }
 
     //    1. 목록 조회
@@ -145,6 +148,12 @@ public class SalaryContractService {
             d.assignContract(contract);
         }
         salaryContractRepository.save(contract);
+
+
+        // 캐시 무효화 (사원 급여조회시 redis캐싱값으로 저장하여 보고있었던걸 무효화 시킴 by 진희) //TODO
+        empSalaryCacheService.evictByEmpId(companyId, emp.getEmpId());
+        empSalaryCacheService.evictExpected(companyId);
+
         return toDetailRes(contract);
     }
 

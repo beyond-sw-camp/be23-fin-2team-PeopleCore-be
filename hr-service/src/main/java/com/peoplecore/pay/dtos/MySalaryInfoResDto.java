@@ -1,6 +1,8 @@
 package com.peoplecore.pay.dtos;
 
 import com.peoplecore.employee.domain.EmpType;
+import com.peoplecore.pay.enums.PensionType;
+import com.peoplecore.pay.enums.RetirementType;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,6 +32,12 @@ public class MySalaryInfoResDto {
     private SalaryInfoDto  salaryInfo;
     private AccountDto  salaryAccount;
     private RetirementAccountDto  retirementAccount;
+
+    private PensionType companyPensionType;    // 회사 퇴직연금 설정 (severance/DB/DC/DB_DC)
+    private RetirementType empRetirementType;     // 사원 퇴직연금 유형 (severance/DB/DC)
+
+    // 회사 통합 운용사/계좌 (DB/DB_DC일 때만 의미 있음)
+    private String companyPensionProvider;
 
 
     @Data @Builder @AllArgsConstructor @NoArgsConstructor

@@ -22,10 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -44,9 +41,10 @@ public class MySalaryService {
         private final RetirementPensionDepositsRepository pensionDepositsRepository;
     private final MySalaryCacheService mySalaryCacheService;
     private final PayrollDetailsRepository payrollDetailsRepository;
+    private final RetirementRepository retirementRepository;
 
     @Autowired
-    public MySalaryService(EmployeeRepository employeeRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, MySalaryCacheService cacheService, PayStubsRepository payStubsRepository, MySalaryQueryRepository mySalaryQueryRepository, RetirementPensionDepositsRepository pensionDepositsRepository, MySalaryCacheService mySalaryCacheService, PayrollDetailsRepository payrollDetailsRepository) {
+    public MySalaryService(EmployeeRepository employeeRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, MySalaryCacheService cacheService, PayStubsRepository payStubsRepository, MySalaryQueryRepository mySalaryQueryRepository, RetirementPensionDepositsRepository pensionDepositsRepository, MySalaryCacheService mySalaryCacheService, PayrollDetailsRepository payrollDetailsRepository, RetirementRepository retirementRepository) {
         this.employeeRepository = employeeRepository;
         this.salaryContractRepository = salaryContractRepository;
         this.salaryContractDetailRepository = salaryContractDetailRepository;
@@ -59,6 +57,7 @@ public class MySalaryService {
         this.pensionDepositsRepository = pensionDepositsRepository;
         this.mySalaryCacheService = mySalaryCacheService;
         this.payrollDetailsRepository = payrollDetailsRepository;
+        this.retirementRepository = retirementRepository;
     }
 
 
@@ -91,6 +90,12 @@ public class MySalaryService {
                 .map(this::toRetirementAccountDto)
                 .orElse(null);
 
+//        퇴직연금 계좌/설정
+        Optional<EmpRetirementAccount> retAccount = empRetirementAccountRepository.findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
+        RetirementSettings settings = retirementRepository
+                .findByCompany_CompanyId(companyId).orElse(null);
+
+
         // 6. DTO 빌드
         MySalaryInfoResDto result = MySalaryInfoResDto.builder()
                 .empId(emp.getEmpId())
@@ -107,6 +112,9 @@ public class MySalaryService {
                 .salaryInfo(salaryInfo)
                 .salaryAccount(salaryAccount)
                 .retirementAccount(retirementAccount)
+                .empRetirementType(retAccount.map(EmpRetirementAccount::getRetirementType).orElse(null))
+                .companyPensionType(settings != null ? settings.getPensionType() : null)
+                .companyPensionProvider(settings != null ? settings.getPensionProvider() : null)
                 .build();
 
         // 7. 캐시 저장

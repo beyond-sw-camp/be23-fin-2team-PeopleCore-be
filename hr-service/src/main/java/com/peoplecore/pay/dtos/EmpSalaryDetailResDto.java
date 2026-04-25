@@ -32,6 +32,10 @@ public class EmpSalaryDetailResDto {
     private BigDecimal annualSalary;
     private Long monthlySalary;
 
+    private Integer contractYear;
+    private LocalDate contractStartDate;
+    private LocalDate contractEndDate;
+
     // 고정수당 항목
     private List<ContractPayItemResDto> fixedPayItems;
 
@@ -43,9 +47,12 @@ public class EmpSalaryDetailResDto {
     private PensionType companyPensionType;    // 회사 퇴직연금 설정 (severance/DB/DC/DB_DC)
     private RetirementType empRetirementType;     // 사원 퇴직연금 유형 (severance/DB/DC)
 
+    // 회사 통합 운용사/계좌 (DB/DB_DC일 때만 의미 있음)
+    private String companyPensionProvider;
+
     private Long retirementAccountId;
-    private String pensionProvider;     //퇴직연금 운용사
-    private String retirementAccountNumber;
+    private String pensionProvider;     //퇴직연금 운용사 : 개인용 DC
+    private String retirementAccountNumber; // 개인용 DC
 
 }
 

@@ -40,11 +40,11 @@ public class TaxWithholdingService {
     }
 
 //    세액 조회(급여계산시 호출용 : 급여+부양가족수 -> 세액)
+//    해당 구간 데이터가 없을 수도 있는 정상 상황 → 예외 대신 null 반환
     public TaxWithholdingResDto getTax(Integer taxYear, Long monthlySalary, Integer dependents){
-        TaxWithholdingTable taxTable = taxWithholdingRepository.findByTaxYearAndSalaryFromLessThanEqualAndSalaryToGreaterThanAndDependents(taxYear, monthlySalary, monthlySalary,dependents)
-                .orElseThrow(()-> new CustomException(ErrorCode.TAX_TABLE_LOOKUP_FAILED));
-
-        return TaxWithholdingResDto.fromEntity(taxTable);
+        return taxWithholdingRepository.findByTaxYearAndSalaryFromLessThanEqualAndSalaryToGreaterThanAndDependents(taxYear, monthlySalary, monthlySalary, dependents)
+                .map(TaxWithholdingResDto :: fromEntity)
+                .orElse(null);
     }
 
 }
