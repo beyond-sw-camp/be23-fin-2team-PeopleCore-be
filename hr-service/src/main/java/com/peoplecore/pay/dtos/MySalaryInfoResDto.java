@@ -30,6 +30,9 @@ public class MySalaryInfoResDto {
     private String titleName;
     private String profileImageUrl;
     private SalaryInfoDto  salaryInfo;
+
+    private Integer dependentsCount;
+
     private AccountDto  salaryAccount;
     private RetirementAccountDto  retirementAccount;
 

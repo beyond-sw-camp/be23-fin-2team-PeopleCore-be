@@ -66,6 +66,18 @@ public class EmpSalaryController {
         return ResponseEntity.ok().build();
     }
 
+
+    //    부양가족수 변경
+    @PutMapping("/{empId}/dependents")
+    public ResponseEntity<Void> updateDependents(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long empId,
+            @RequestBody @Valid DependentsUpdateReqDto reqDto){
+
+        empSalaryService.updateDependents(companyId, empId, reqDto.getDependentsCount());
+        return ResponseEntity.ok().build();
+    }
+
 //    퇴직연금계좌 변경
     @PutMapping("/{empId}/retirement-account")
     public ResponseEntity<Void> updateRetirementAccount(

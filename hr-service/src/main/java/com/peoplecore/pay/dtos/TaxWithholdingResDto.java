@@ -21,14 +21,15 @@ public class TaxWithholdingResDto {
     private Long localIncomeTax;
 
     public static TaxWithholdingResDto fromEntity(TaxWithholdingTable t){
+        Long incomeTax = t.getIncomeTax();
         return TaxWithholdingResDto.builder()
                 .taxId(t.getTaxId())
                 .taxYear(t.getTaxYear())
                 .salaryFrom(t.getSalaryFrom())
                 .salaryTo(t.getSalaryTo())
                 .dependents(t.getDependents())
-                .incomeTax(t.getIncomeTax())
-                .localIncomeTax(t.getIncomeTax())
+                .incomeTax(incomeTax)
+                .localIncomeTax(incomeTax != null ? Math.round(incomeTax * 0.1) : 0L)
                 .build();
     }
 }

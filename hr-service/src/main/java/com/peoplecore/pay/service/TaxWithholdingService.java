@@ -16,6 +16,7 @@ import java.util.List;
 @Service
 @Transactional(readOnly = true)
 public class TaxWithholdingService {
+// 회사별 등록 X, 시스템 전역
 
     private final TaxWithholdingRepository taxWithholdingRepository;
 

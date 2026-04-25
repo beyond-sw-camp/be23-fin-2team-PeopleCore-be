@@ -29,6 +29,8 @@ public class EmpSalaryDetailResDto {
     private LocalDate empResignDate;
     private String empType;     //직원구분
 
+    private Integer dependentsCount;
+
     private BigDecimal annualSalary;
     private Long monthlySalary;
 

@@ -120,6 +120,17 @@ public class EmpSalaryService {
         Optional<EmpRetirementAccount> retAccount = empRetirementAccountRepository.findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
         RetirementSettings settings = retirementRepository
                 .findByCompany_CompanyId(companyId).orElse(null);
+        // effectiveType 계산
+        RetirementType effectiveEmpType = null;
+        if (settings != null) {
+            if (settings.getPensionType() == PensionType.DB_DC) {
+                // DB_DC: 사원 본인이 선택. EmpRetirementAccount에 저장된 값 사용.
+                effectiveEmpType = retAccount.map(EmpRetirementAccount::getRetirementType).orElse(null);
+            } else {
+                // 그 외: 회사값을 그대로 매핑
+                effectiveEmpType = mapPensionToRetirement(settings.getPensionType());
+            }
+        }
 
         EmpSalaryDetailResDto result = EmpSalaryDetailResDto.builder()
                 .empId(employee.getEmpId())
@@ -132,6 +143,7 @@ public class EmpSalaryService {
                 .gradeName(employee.getGrade().getGradeName())
                 .titleName(employee.getTitle() != null ? employee.getTitle().getTitleName() : null)
                 .empHireDate(employee.getEmpHireDate())
+                .dependentsCount(employee.getDependentsCount())
                 .annualSalary(annualSalary)
                 .monthlySalary(monthlySalary)
                 .contractYear(contract != null ? contract.getContractYear() : null)
@@ -143,7 +155,7 @@ public class EmpSalaryService {
                 .accountNumber(empAccount.map(EmpAccounts::getAccountNumber).orElse(null))
                 .accountHolder(empAccount.map(EmpAccounts::getAccountHolder).orElse(null))
                 .retirementAccountId(retAccount.map(EmpRetirementAccount::getRetirementAccountId).orElse(null))
-                .empRetirementType(retAccount.map(EmpRetirementAccount::getRetirementType).orElse(null))
+                .empRetirementType(effectiveEmpType)
                 .pensionProvider(retAccount.map(EmpRetirementAccount::getPensionProvider).orElse(null))
                 .retirementAccountNumber(retAccount.map(EmpRetirementAccount::getAccountNumber).orElse(null))
                 .companyPensionType(settings != null ? settings.getPensionType() : null)
@@ -155,6 +167,22 @@ public class EmpSalaryService {
         empSalaryCacheService.cacheDetail(companyId, empId, year, result);
         return result;
     }
+
+
+    //    부양가족수 변경
+    @Transactional
+    public void updateDependents(UUID companyId, Long empId, Integer dependentsCount){
+        Employee emp = employeeRepository.findById(empId)
+                .filter(e -> e.getCompany().getCompanyId().equals(companyId))
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        emp.updateDependentsCount(dependentsCount);
+
+        // 캐시 무효화 (상세 + 예상공제)
+        empSalaryCacheService.evictByEmpId(companyId, empId);
+        empSalaryCacheService.evictExpected(companyId);
+    }
+
 
 //    급여계좌 변경 (캐시 무효화 evict)
     @Transactional
@@ -420,7 +448,6 @@ public class EmpSalaryService {
 
 
 //        보험료계산
-
         private long calcAmount(long base, BigDecimal rate){
         if (rate == null){
             return  0L;
@@ -430,6 +457,17 @@ public class EmpSalaryService {
                 .setScale(0, RoundingMode.HALF_UP)
                 .longValue();
         }
+
+//        퇴직연금 타입 설정
+    private RetirementType mapPensionToRetirement(PensionType pt) {
+        if (pt == null) return null;
+        return switch (pt) {
+            case DB -> RetirementType.DB;
+            case DC -> RetirementType.DC;
+            case severance -> RetirementType.severance;
+            case DB_DC -> null;
+        };
+    }
 
         private long calcHalf(long base, BigDecimal rate){
         if (rate == null){
