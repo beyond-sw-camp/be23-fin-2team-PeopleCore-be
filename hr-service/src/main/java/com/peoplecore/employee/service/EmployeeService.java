@@ -104,8 +104,6 @@ public class EmployeeService {
                 .onLeave(onLeave)
                 .hiredThisMonth(hiredThisMonth)
                 .build();
-
-
         //재직자 수: 퇴직자 제외
 
 
@@ -117,19 +115,14 @@ public class EmployeeService {
 //        연관 entity조회
         Company company = companyRepository.getReferenceById(companyId);
 
-        // id + companyId 로 단건 보장 + 테넌트 격리
-        Department dept = departmentRepository.findByDeptIdAndCompany_CompanyId(requestDto.getDeptId(), companyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        // id + companyId로 테넌트 격리
+        Department dept = departmentRepository.findByDeptIdAndCompany_CompanyId(requestDto.getDeptId(), companyId).orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Grade grade = gradeRepository.findByGradeIdAndCompanyId(requestDto.getGradeId(), companyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        Grade grade = gradeRepository.findByGradeIdAndCompanyId(requestDto.getGradeId(), companyId).orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Title title = titleRepository.findByTitleIdAndCompanyId(requestDto.getTitleId(), companyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        Title title = titleRepository.findByTitleIdAndCompanyId(requestDto.getTitleId(), companyId).orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        InsuranceJobTypes jobTypes = insuranceJobTypesRepository
-                .findByCompany_CompanyIdAndName(companyId, requestDto.getInsuranceJobTypeName())
-                .orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
+        InsuranceJobTypes jobTypes = insuranceJobTypesRepository.findByCompany_CompanyIdAndJobTypeName(companyId, requestDto.getInsuranceJobTypeName()).orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
 
         String empNum = generateEmpNum(companyId, requestDto.getEmpHireDate());
 
@@ -138,16 +131,12 @@ public class EmployeeService {
         String rawPassword = resolvePassword(requestDto);
 
 
-        /* 회사 근무 그룹 조회 - 미선택 시 기본 그룹(DEFAULT) 자동 배정 */
+//        회사 근무 그룹 조회 - 미선택 시 기본 그룹(DEFAULT) 자동 배정
         WorkGroup workGroup;
         if (requestDto.getWorkGroupId() == null) {
-            workGroup = workGroupRepository
-                    .findByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(companyId, "DEFAULT")
-                    .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+            workGroup = workGroupRepository.findByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(companyId, "DEFAULT").orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
         } else {
-            workGroup = workGroupRepository
-                    .findByWorkGroupIdAndGroupDeleteAtIsNull(requestDto.getWorkGroupId())
-                    .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+            workGroup = workGroupRepository.findByWorkGroupIdAndGroupDeleteAtIsNull(requestDto.getWorkGroupId()).orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
         }
 
 
@@ -281,7 +270,7 @@ public class EmployeeService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
         InsuranceJobTypes jobTypes = insuranceJobTypesRepository
-                .findByCompany_CompanyIdAndName(companyId, requestDto.getInsuranceJobTypeName())
+                .findByCompany_CompanyIdAndJobTypeName(companyId, requestDto.getInsuranceJobTypeName())
                 .orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
 
         employee.updateInfo(

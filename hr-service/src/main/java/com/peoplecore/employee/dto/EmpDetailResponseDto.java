@@ -67,7 +67,7 @@ public class EmpDetailResponseDto {
                 .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)
                 .titleId(emp.getTitle() != null ? emp.getTitle().getTitleId() : null)
                 .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
-                .insuranceJobTypeName(emp.getJobTypes() != null ? emp.getJobTypes().getName() : null)
+                .insuranceJobTypeName(emp.getJobTypes() != null ? emp.getJobTypes().getJobTypeName() : null)
                 .empStatus(emp.getEmpStatus() != null ? emp.getEmpStatus().name() : null)
                 .empNum(emp.getEmpNum())
                 .empEmail(emp.getEmpEmail())

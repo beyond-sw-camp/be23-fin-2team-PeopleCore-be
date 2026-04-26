@@ -71,7 +71,7 @@ public class FormFieldSetupService {
                         .findByCompany_CompanyIdAndIsActiveTrueOrderByJobTypesIdAsc(companyId);
                 List<String> names = new ArrayList<>();
                 for (InsuranceJobTypes jt : jobTypes) {
-                    names.add(jt.getName());
+                    names.add(jt.getJobTypeName());
                 }
                 dto.setOptions(names);
             }
