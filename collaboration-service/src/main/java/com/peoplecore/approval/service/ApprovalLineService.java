@@ -291,13 +291,10 @@ public class ApprovalLineService {
     }
 
 
-    /*pending 상태 문서 조회 (낙관적 락으로 방어)*/
+    /*pending 상태 문서 조회 (낙관적 락으로 방어) — 상태 가드는 State 패턴에 위임 */
     private ApprovalDocument findPendingDocument(UUID companyId, Long docId) {
         ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId).orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
-
-        if (document.getApprovalStatus() != ApprovalStatus.PENDING) {
-            throw new BusinessException("결재 진행 중인 문서만 처리할 수 있스빈다, ");
-        }
+        document.requireOpenForApproval();
         return document;
     }
 

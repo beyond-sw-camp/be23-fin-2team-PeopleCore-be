@@ -195,6 +195,16 @@ public class ApprovalDocument extends BaseTimeEntity {
         this.approvalStatus.getState().recall(this);
     }
 
+    /* 결재 처리(승인/반려/회수) 진입 가드 — PENDING 외 상태는 throw */
+    public void requireOpenForApproval() {
+        this.approvalStatus.getState().ensureOpenForApproval();
+    }
+
+    /* 재기안 진입 가드 — REJECTED 외 상태는 throw */
+    public void requireResubmittable() {
+        this.approvalStatus.getState().ensureResubmittable();
+    }
+
     /*임시 저장 문서 수정 */
     public void updateDraft(String docTitle, String docData, Boolean isEmergency) {
         this.docTitle = docTitle;

@@ -362,10 +362,8 @@ public class ApprovalDocumentService {
         if (!prev.getEmpId().equals(empId)) {
             throw new BusinessException("본인의 문서만 재기안할 수 있습니다.", HttpStatus.FORBIDDEN);
         }
-        /* REJECTED 상태에서만 재기안 */
-        if (prev.getApprovalStatus() != ApprovalStatus.REJECTED) {
-            throw new BusinessException("반려된 문서만 재기안할 수 있습니다.");
-        }
+        /* REJECTED 외 상태는 State 가 throw */
+        prev.requireResubmittable();
 
         /* 이전 문서는 손대지 않음 - REJECTED/docNum/docCompleteAt 그대로 보존 */
 
@@ -519,9 +517,8 @@ public class ApprovalDocumentService {
     public void recallDocument(UUID companyId, Long empId, Long docId) {
         ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId)
                 .orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        if (document.getApprovalStatus() != ApprovalStatus.PENDING) {
-            throw new BusinessException("결재 진행 중인 문서만 회수할 수 있습니다.");
-        }
+        /* PENDING 외 상태는 State 가 throw */
+        document.requireOpenForApproval();
         /* 본인 문서인지 확인 */
         if (!document.getEmpId().equals(empId)) {
             throw new BusinessException("본인의 문서만 회수할 수 있습니다.", HttpStatus.FORBIDDEN);
