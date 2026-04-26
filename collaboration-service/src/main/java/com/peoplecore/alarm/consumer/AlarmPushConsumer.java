@@ -34,7 +34,8 @@ public class AlarmPushConsumer {
             AlarmEvent event = objectMapper.readValue(message, AlarmEvent.class);
             alarmService.push(event);
         } catch (Exception e) {
-            log.error("알림 SSE push 실패 : {} ", e.getMessage());
+            // 끊긴 SSE 에 send 시도하면 AsyncRequestNotUsableException 등이 빈번히 발생 → warn 으로 노이즈 축소
+            log.warn("알림 SSE push 실패 ({}): {}", e.getClass().getSimpleName(), e.getMessage());
         }
     }
 }
