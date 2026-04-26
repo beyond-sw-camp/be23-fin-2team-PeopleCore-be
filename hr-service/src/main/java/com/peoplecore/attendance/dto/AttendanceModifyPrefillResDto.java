@@ -1,5 +1,6 @@
 package com.peoplecore.attendance.dto;
 
+import com.peoplecore.attendance.entity.WorkStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -35,10 +36,13 @@ public class AttendanceModifyPrefillResDto {
     /* 현재 퇴근 시각 (nullable) */
     private LocalDateTime currentCheckOut;
 
-    /* 자동마감 여부 — true 면 모달에 "자동마감 복구" 뱃지 노출 권장 */
+    /* 자동마감 여부 — true 면 모달에 "자동마감 복구" 뱃지 노출 권장 (workStatus == AUTO_CLOSED 파생 편의 필드) */
     private Boolean isAutoClosed;
 
-    /* 근태 상태 라벨 — "정상"/"지각"/"자동마감" 등 WorkStatus.getLabel() 값 (모달 태그 UI, nullable) */
+    /* 근태 상태 enum — FE 스타일 매핑/뱃지 키 (i18n 안전). nullable */
+    private WorkStatus workStatus;
+
+    /* 근태 상태 한글 라벨 — workStatus.getLabel() 값 (deprecated 예정, FE enum 전환 후 제거) */
     private String workStatusLabel;
 
     /* 신청자 사원 ID */

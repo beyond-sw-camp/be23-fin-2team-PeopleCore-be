@@ -129,7 +129,7 @@ public class AutoCloseBatchService {
                 Employee emp = record.getEmployee();
                 log.info("[AutoClose] 자동마감 — comRecId={}, empId={}, workDate={}",
                         record.getComRecId(), emp.getEmpId(), targetDate);
-                publishAutoCloseAlarm(companyId, emp, targetDate, hrAdminEmpIds);
+                publishAutoCloseAlarm(companyId, emp, targetDate, record.getComRecId(), hrAdminEmpIds);
                 success++;
             } catch (IllegalStateException e) {
                 /* markAutoClosed 내부 가드 위반(중복 체크아웃 등) — 로그만 남기고 계속 */
@@ -153,18 +153,20 @@ public class AutoCloseBatchService {
         }
 
         for (Employee emp : absentTargets) {
-            commuteRecordRepository.save(CommuteRecord.absent(emp, targetDate, companyId));
-            log.info("[AutoClose] 결근 삽입 — empId={}, empName={}, workDate={}",
-                    emp.getEmpId(), emp.getEmpName(), targetDate);
-            publishAbsentAlarm(companyId, emp, targetDate, hrAdminEmpIds);
+            /* save 결과 캡처 — 알림 refId 로 comRecId(도메인 PK) 사용 (codebase 알림 컨벤션) */
+            CommuteRecord saved = commuteRecordRepository.save(
+                    CommuteRecord.absent(emp, targetDate, companyId));
+            log.info("[AutoClose] 결근 삽입 — comRecId={}, empId={}, empName={}, workDate={}",
+                    saved.getComRecId(), emp.getEmpId(), emp.getEmpName(), targetDate);
+            publishAbsentAlarm(companyId, emp, targetDate, saved.getComRecId(), hrAdminEmpIds);
         }
         log.info("[AutoClose] 결근 처리 완료 — workGroupId={}, targetDate={}, count={}",
                 workGroupId, targetDate, absentTargets.size());
     }
 
-    /* 자동마감 알림 — 본인 + HR 관리자 */
+    /* 자동마감 알림 — 본인 + HR 관리자. refId 는 CommuteRecord PK (codebase 알림 컨벤션) */
     private void publishAutoCloseAlarm(UUID companyId, Employee emp, LocalDate targetDate,
-                                       List<Long> hrAdminEmpIds) {
+                                       Long comRecId, List<Long> hrAdminEmpIds) {
         Set<Long> recipientSet = new HashSet<>(hrAdminEmpIds);
         recipientSet.add(emp.getEmpId());
 
@@ -176,14 +178,14 @@ public class AutoCloseBatchService {
                         + " 근무 기록이 자동 마감되었습니다. 근태 정정 신청이 필요합니다.")
                 .alarmLink("/attendance")
                 .alarmRefType("COMMUTE_AUTO_CLOSED")
-                .alarmRefId(emp.getEmpId())
+                .alarmRefId(comRecId)
                 .empIds(new ArrayList<>(recipientSet))
                 .build());
     }
 
-    /* 결근 알림 — 본인 + HR 관리자 */
+    /* 결근 알림 — 본인 + HR 관리자. refId 는 CommuteRecord PK (codebase 알림 컨벤션) */
     private void publishAbsentAlarm(UUID companyId, Employee emp, LocalDate targetDate,
-                                    List<Long> hrAdminEmpIds) {
+                                    Long comRecId, List<Long> hrAdminEmpIds) {
         Set<Long> recipientSet = new HashSet<>(hrAdminEmpIds);
         recipientSet.add(emp.getEmpId());
 
@@ -195,7 +197,7 @@ public class AutoCloseBatchService {
                         + " 근무 예정일에 출근 기록이 없어 결근 처리되었습니다.")
                 .alarmLink("/attendance")
                 .alarmRefType("COMMUTE_ABSENT")
-                .alarmRefId(emp.getEmpId())
+                .alarmRefId(comRecId)
                 .empIds(new ArrayList<>(recipientSet))
                 .build());
     }

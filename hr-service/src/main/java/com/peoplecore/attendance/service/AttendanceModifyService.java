@@ -91,6 +91,7 @@ public class AttendanceModifyService {
                 .currentCheckIn(cr.getComRecCheckIn())
                 .currentCheckOut(cr.getComRecCheckOut())
                 .isAutoClosed(cr.getWorkStatus() == WorkStatus.AUTO_CLOSED)
+                .workStatus(cr.getWorkStatus())
                 .workStatusLabel(cr.getWorkStatus() != null ? cr.getWorkStatus().getLabel() : null)
                 .empId(emp.getEmpId())
                 .empName(emp.getEmpName())
