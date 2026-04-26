@@ -20,4 +20,7 @@ public interface TitleRepository extends JpaRepository<Title, Long> {
 
 
     Optional<Title> findByTitleName(String titleName);
+
+    // id 로 직책 조회, 회사 스코프 동시 검증 (테넌트 우회 방지)
+    Optional<Title> findByTitleIdAndCompanyId(Long titleId, UUID companyId);
 }
