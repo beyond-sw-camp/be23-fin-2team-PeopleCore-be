@@ -576,16 +576,15 @@ public class ApprovalDocumentService {
         // @Version 낙관적 락: 동시에 결재자가 승인하면 OptimisticLockingFailureException 발생
     }
 
-    /*본인의 임시 저장 문서 조회*/
+    /*본인의 임시 저장 문서 조회 — 상태 가드는 State 패턴에 위임 */
     private ApprovalDocument findOwnDraftDocument(UUID companyId, Long empId, Long docId) {
         ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId).orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
         if (!document.getEmpId().equals(empId)) {
             throw new BusinessException("본인의 문서만 수정할 수 있습니다.", HttpStatus.FORBIDDEN);
         }
-        if (document.getApprovalStatus() != ApprovalStatus.DRAFT) {
-            throw new BusinessException("임시 저장 문서만 수정/ 삭제할 수 있습니다. ");
-        }
+        /* DRAFT 외 상태는 State 가 throw */
+        document.requireDraftStage();
         return document;
     }
 

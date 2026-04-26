@@ -205,6 +205,11 @@ public class ApprovalDocument extends BaseTimeEntity {
         this.approvalStatus.getState().ensureResubmittable();
     }
 
+    /* 임시저장 단계 작업(수정/삭제/상신) 진입 가드 — DRAFT 외 상태는 throw */
+    public void requireDraftStage() {
+        this.approvalStatus.getState().ensureDraftStage();
+    }
+
     /*임시 저장 문서 수정 */
     public void updateDraft(String docTitle, String docData, Boolean isEmergency) {
         this.docTitle = docTitle;

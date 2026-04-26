@@ -24,4 +24,9 @@ public interface ApprovalState {
     default void ensureResubmittable() {
         throw new BusinessException("반려된 문서만 재기안할 수 있습니다.");
     }
+
+    /* 임시저장 단계 작업(수정/삭제/정식 상신) 가능 여부 — DRAFT 만 통과 */
+    default void ensureDraftStage() {
+        throw new BusinessException("임시 저장 문서만 수정/삭제/상신할 수 있습니다.");
+    }
 }
