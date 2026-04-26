@@ -1,5 +1,7 @@
-package com.peoplecore.approval.entity;
+package com.peoplecore.approval.entity.status;
 
+import com.peoplecore.approval.entity.ApprovalDocument;
+import com.peoplecore.approval.entity.ApprovalStatus;
 import com.peoplecore.exception.BusinessException;
 
 public class DraftState implements ApprovalState {
