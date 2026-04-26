@@ -156,7 +156,7 @@ public class InsuranceJobTypesService {
                 .jobTypeName(jobTypeName)
                 .description(description)
                 .industrialAccidentRate(new BigDecimal(rate))
-                .isActive(true)
+                .isActive("기본업종".equals(jobTypeName))
                 .build();
     }
 
