@@ -44,4 +44,9 @@ public class SearchDocument {
 
     @Field(type = FieldType.Date, format = DateFormat.date_optional_time)
     private String createdAt;
+
+    // AI Copilot: OpenAI text-embedding-3-small (1536 dims, cosine similarity)
+    // 실제 매핑(similarity/index_options)은 PUT _mapping 스크립트에서 관리
+    @Field(name = "content_vector", type = FieldType.Dense_Vector, dims = 1536)
+    private float[] contentVector;
 }

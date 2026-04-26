@@ -218,6 +218,7 @@ public class PayItemsService {
                         .isTaxable(true).isFixed(false)
                         .isActive(true).sortOrder(9)
                         .taxExemptLimit(0)
+                        .isProtected(true)
                         .build(),
                 // 교육비지원금 — 고정, 비활성
                 PayItems.builder()

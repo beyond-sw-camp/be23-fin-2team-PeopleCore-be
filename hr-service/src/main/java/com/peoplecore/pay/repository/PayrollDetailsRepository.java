@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, Long> {
@@ -60,14 +61,6 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
             ") " +
             "FROM PayrollDetails pd " +
             "WHERE pd.payrollRuns.payrollRunId = :payrollRunId " +
-            "GROUP BY pd.payItemName, pd.payItems.isTaxable")
-    List<PayrollItemSummaryDto> summarizeByPayItem(@Param("payrollRunId") Long payrollRunId);
-
-    @Query("SELECT new com.peoplecore.pay.approval.PayrollItemSummaryDto( " +
-            "   pd.payItemName, pd.payItems.isTaxable, SUM(pd.amount) " +
-            ") " +
-            "FROM PayrollDetails pd " +
-            "WHERE pd.payrollRuns.payrollRunId = :payrollRunId " +
             "  AND pd.payItemType = :payItemType " +
             "GROUP BY pd.payItemName, pd.payItems.isTaxable")
     List<PayrollItemSummaryDto> summarizeByPayItem(
@@ -78,5 +71,19 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
     @Query("SELECT DISTINCT pd.employee.empId FROM PayrollDetails pd WHERE pd.payrollRuns.payrollRunId = :payrollRunId")
     List<Long> findDistinctEmpIdsByPayrollRunId(@Param("payrollRunId") Long payrollRunId);
 
+//    위에 summarizeByPayItem + empIds를 받음
+    @Query("""
+    SELECT new com.peoplecore.pay.approval.PayrollItemSummaryDto(
+        pd.payItemName, pd.payItems.isTaxable, SUM(pd.amount))
+    FROM PayrollDetails pd
+    WHERE pd.payrollRuns.payrollRunId = :runId
+      AND pd.payItemType = :type
+      AND pd.employee.empId IN :empIds
+    GROUP BY pd.payItemName, pd.payItems.isTaxable
+    """)
+    List<PayrollItemSummaryDto> summarizeByPayItemForEmployees(
+            @Param("runId") Long runId,
+            @Param("type") PayItemType type,
+            @Param("empIds") Set<Long> empIds);
 
 }

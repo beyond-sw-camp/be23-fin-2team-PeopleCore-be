@@ -19,6 +19,7 @@ import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.KpiDirection;
 import com.peoplecore.evaluation.domain.ManagerEvaluation;
 import com.peoplecore.evaluation.domain.MyResultStatus;
+import com.peoplecore.evaluation.domain.SelfEvalApprovalStatus;
 import com.peoplecore.evaluation.domain.SelfEvaluation;
 import com.peoplecore.evaluation.domain.SelfEvaluationFile;
 import com.peoplecore.evaluation.domain.TaskGrade;
@@ -1407,6 +1408,7 @@ public class EvalGradeService {
         for (Goal go : goals) {
             SelfEvaluation se = selfByGoal.get(go.getGoalId());
             if (se == null) continue;
+            if (se.getApprovalStatus() != SelfEvalApprovalStatus.APPROVED) continue;
             List<SelfEvaluationFile> fs = filesBySelfEvalId.get(se.getSelfEvalId());
             List<SelfEvaluationResponse.FileResponse> fileDtos = new ArrayList<>();
             if (fs != null) {

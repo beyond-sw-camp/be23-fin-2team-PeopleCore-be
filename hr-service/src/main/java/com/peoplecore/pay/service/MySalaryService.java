@@ -8,9 +8,7 @@ import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.*;
 import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.dtos.MySalaryInfoResDto.AccountDto;
-import com.peoplecore.pay.enums.DepStatus;
-import com.peoplecore.pay.enums.PayItemCategory;
-import com.peoplecore.pay.enums.PayItemType;
+import com.peoplecore.pay.enums.*;
 import com.peoplecore.pay.repository.*;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.domain.SalaryContractDetail;
@@ -22,10 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -44,9 +39,11 @@ public class MySalaryService {
         private final RetirementPensionDepositsRepository pensionDepositsRepository;
     private final MySalaryCacheService mySalaryCacheService;
     private final PayrollDetailsRepository payrollDetailsRepository;
+    private final RetirementRepository retirementRepository;
+    private final EmpSalaryCacheService empSalaryCacheService;
 
     @Autowired
-    public MySalaryService(EmployeeRepository employeeRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, MySalaryCacheService cacheService, PayStubsRepository payStubsRepository, MySalaryQueryRepository mySalaryQueryRepository, RetirementPensionDepositsRepository pensionDepositsRepository, MySalaryCacheService mySalaryCacheService, PayrollDetailsRepository payrollDetailsRepository) {
+    public MySalaryService(EmployeeRepository employeeRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, MySalaryCacheService cacheService, PayStubsRepository payStubsRepository, MySalaryQueryRepository mySalaryQueryRepository, RetirementPensionDepositsRepository pensionDepositsRepository, MySalaryCacheService mySalaryCacheService, PayrollDetailsRepository payrollDetailsRepository, RetirementRepository retirementRepository, EmpSalaryCacheService empSalaryCacheService) {
         this.employeeRepository = employeeRepository;
         this.salaryContractRepository = salaryContractRepository;
         this.salaryContractDetailRepository = salaryContractDetailRepository;
@@ -59,6 +56,8 @@ public class MySalaryService {
         this.pensionDepositsRepository = pensionDepositsRepository;
         this.mySalaryCacheService = mySalaryCacheService;
         this.payrollDetailsRepository = payrollDetailsRepository;
+        this.retirementRepository = retirementRepository;
+        this.empSalaryCacheService = empSalaryCacheService;
     }
 
 
@@ -91,6 +90,23 @@ public class MySalaryService {
                 .map(this::toRetirementAccountDto)
                 .orElse(null);
 
+//        퇴직연금 계좌/설정
+        Optional<EmpRetirementAccount> retAccount = empRetirementAccountRepository.findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
+        RetirementSettings settings = retirementRepository
+                .findByCompany_CompanyId(companyId).orElse(null);
+        // effectiveType 계산
+        RetirementType effectiveEmpType = null;
+        if (settings != null) {
+            if (settings.getPensionType() == PensionType.DB_DC) {
+                // DB_DC: 사원 본인이 선택. EmpRetirementAccount에 저장된 값 사용.
+                effectiveEmpType = retAccount.map(EmpRetirementAccount::getRetirementType).orElse(null);
+            } else {
+                // 그 외: 회사값을 그대로 매핑
+                effectiveEmpType = mapPensionToRetirement(settings.getPensionType());
+            }
+        }
+
+
         // 6. DTO 빌드
         MySalaryInfoResDto result = MySalaryInfoResDto.builder()
                 .empId(emp.getEmpId())
@@ -105,8 +121,12 @@ public class MySalaryService {
                 .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
                 .profileImageUrl(emp.getEmpProfileImageUrl())
                 .salaryInfo(salaryInfo)
+                .dependentsCount(emp.getDependentsCount())
                 .salaryAccount(salaryAccount)
                 .retirementAccount(retirementAccount)
+                .empRetirementType(effectiveEmpType)
+                .companyPensionType(settings != null ? settings.getPensionType() : null)
+                .companyPensionProvider(settings != null ? settings.getPensionProvider() : null)
                 .build();
 
         // 7. 캐시 저장
@@ -321,6 +341,24 @@ public PayStubDetailResDto getPayStubDetail(UUID companyId, Long empId, Long stu
         return result;
     }
 
+
+    //    부양가족수 변경
+    @Transactional
+    public void updateMyDependents(UUID companyId, Long empId, Integer dependentsCount){
+        Employee emp = employeeRepository.findById(empId)
+                .filter(e -> e.getCompany().getCompanyId().equals(companyId))
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        emp.updateDependentsCount(dependentsCount);
+
+        // 캐시 무효화 (내 급여 + 관리자측 둘 다)
+        mySalaryCacheService.evictSalaryInfoCache(companyId, empId);
+        empSalaryCacheService.evictByEmpId(companyId, empId);
+        empSalaryCacheService.evictExpected(companyId);
+    }
+
+
+
 //    급여 계좌 변경
     @Transactional
     public void updateSalaryAccount(UUID companyId, Long empId, AccountUpdateReqDto req) {
@@ -345,5 +383,14 @@ public PayStubDetailResDto getPayStubDetail(UUID companyId, Long empId, Long stu
     }
 
 
-
+//    퇴직연금 타입 설정
+    private RetirementType mapPensionToRetirement(PensionType pt) {
+        if (pt == null) return null;
+        return switch (pt) {
+            case DB -> RetirementType.DB;
+            case DC -> RetirementType.DC;
+            case severance -> RetirementType.severance;
+            case DB_DC -> null;   // 호출 측에서 처리
+        };
+    }
 }

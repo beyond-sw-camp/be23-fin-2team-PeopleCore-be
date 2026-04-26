@@ -9,7 +9,7 @@ import java.util.UUID;
 
 public interface InsuranceJobTypesRepository extends JpaRepository<InsuranceJobTypes, Long> {
 
-    Optional<InsuranceJobTypes> findByCompany_CompanyIdAndName(UUID companyId, String name);
+    Optional<InsuranceJobTypes> findByCompany_CompanyIdAndJobTypeName(UUID companyId, String name);
 
 //    회사 전체 업종 목록
     List<InsuranceJobTypes> findByCompany_CompanyIdOrderByJobTypesIdAsc(UUID companyId);

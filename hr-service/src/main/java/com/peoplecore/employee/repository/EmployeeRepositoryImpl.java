@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
@@ -62,6 +63,9 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
 
     @Override
     public List<Employee> findAllForPayroll(UUID companyId, YearMonth payMonth) {
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd = payMonth.atEndOfMonth();
+
         return queryFactory
                 .selectFrom(qEmployee)
                 .join(qEmployee.dept).fetchJoin()
@@ -69,7 +73,11 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
                 .leftJoin(qEmployee.title).fetchJoin()
                 .where(
                         qEmployee.company.companyId.eq(companyId),
-                        qEmployee.empStatus.ne(EmpStatus.RESIGNED)
+                        qEmployee.empStatus.in(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE)
+                .or(qEmployee.empResignDate.between(monthStart, monthEnd)),
+                        qEmployee.empHireDate.loe(monthEnd),                            // 입사일 ≤ 월말
+                        qEmployee.empResignDate.isNull()
+                                .or(qEmployee.empResignDate.goe(monthStart))                // 퇴사일 없거나 ≥ 월초
                 )
                 .orderBy(qEmployee.empId.asc())
                 .fetch();

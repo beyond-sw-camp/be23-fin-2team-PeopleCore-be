@@ -46,6 +46,9 @@ public class PayrollRuns {
 
     private Long approvalDocId; // 전자결재 문서 ID (결재 상신 시 저장)
 
+    @Column
+    private Long totalIndustrialAccident;    // 회사 산재료 합계 (월별, 회사 100% 부담)
+
 
 
 //    합계 갱신
@@ -115,6 +118,10 @@ public class PayrollRuns {
         }
         this.payrollStatus = PayrollStatus.CONFIRMED;
         this.approvalDocId = null;
+    }
+
+    public void setIndustrialAccidentTotal(Long total) {
+        this.totalIndustrialAccident = total;
     }
 
 }

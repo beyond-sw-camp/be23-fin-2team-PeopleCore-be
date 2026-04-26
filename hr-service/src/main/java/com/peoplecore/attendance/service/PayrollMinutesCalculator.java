@@ -64,10 +64,11 @@ public class PayrollMinutesCalculator {
             recExt = rec[0]; recNight = rec[1]; recHoliday = rec[2];
         }
 
-        record.applyPayrollMinutes(actual, overtime, recExt, recNight, recHoliday);
-        log.debug("[Payroll-base] comRecId={}, recognize={}, actual={}, ot={}, ext={}, night={}, holiday={}",
+        // unrecognizedOt = 총 초과분 - 인정된 연장/휴일분 (야간은 중복 카운트라 제외)
+        record.applyPayrollMinutes(actual, overtime, overtime - recExt - recHoliday, recExt, recNight, recHoliday);
+        log.debug("[Payroll-base] comRecId={}, recognize={}, actual={}, ot={}, unrecognizedOt={}, ext={}, night={}, holiday={}",
                 record.getComRecId(), wg.getGroupOvertimeRecognize(),
-                actual, overtime, recExt, recNight, recHoliday);
+                actual, overtime, overtime - recExt - recHoliday, recExt, recNight, recHoliday);
     }
 
     /**
@@ -90,10 +91,10 @@ public class PayrollMinutesCalculator {
             recExt = rec[0]; recNight = rec[1]; recHoliday = rec[2];
         }
 
-        record.applyPayrollMinutes(actual, overtime, recExt, recNight, recHoliday);
-        log.debug("[Payroll-recog] comRecId={}, recognize={}, actual={}, ot={}, ext={}, night={}, holiday={}",
+        record.applyPayrollMinutes(actual, overtime, overtime - recExt - recHoliday, recExt, recNight, recHoliday);
+        log.debug("[Payroll-recog] comRecId={}, recognize={}, actual={}, ot={}, unrecognizedOt={}, ext={}, night={}, holiday={}",
                 record.getComRecId(), wg.getGroupOvertimeRecognize(),
-                actual, overtime, recExt, recNight, recHoliday);
+                actual, overtime, overtime - recExt - recHoliday, recExt, recNight, recHoliday);
     }
 
     /**

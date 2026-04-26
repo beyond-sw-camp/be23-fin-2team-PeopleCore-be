@@ -13,13 +13,12 @@ import com.peoplecore.attendance.dto.AttendancePeriodListRowResDto;
 import com.peoplecore.attendance.dto.AttendanceWeeklyDailyStatsResDto;
 import com.peoplecore.attendance.dto.PagedResDto;
 import com.peoplecore.attendance.entity.AttendanceCardType;
-import com.peoplecore.attendance.entity.CheckInStatus;
-import com.peoplecore.attendance.entity.CheckOutStatus;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.EmploymentFilter;
 import com.peoplecore.attendance.entity.OvertimePolicy;
 import com.peoplecore.attendance.entity.WeeklyWorkStatus;
 import com.peoplecore.attendance.entity.WorkGroup;
+import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.repository.AttendanceAdminQueryRepository;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import com.peoplecore.attendance.repository.OverTimePolicyRepository;
@@ -40,7 +39,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -72,31 +70,32 @@ public class AttendanceAdminService {
     /* OvertimePolicy 미존재 회사용 기본 경고 기준 분 (45h = 2700) */
     private static final int DEFAULT_WEEKLY_WARNING_MINUTE = 2700;
 
-    /**
-     * 시각 표시용 HH:mm 포맷터 (LATE/EARLY_LEAVE detail 등에 사용)
-     */
-    private static final DateTimeFormatter HHMM = DateTimeFormatter.ofPattern("HH:mm");
-
     private final AttendanceAdminQueryRepository queryRepository;
     private final OverTimePolicyRepository overtimePolicyRepository;
     private final AttendanceStatusJudge judge;
+    private final HistoricalDayJudge historicalDayJudge;
     private final EmployeeRepository employeeRepository;
     private final CommuteRecordRepository commuteRecordRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
+    private final CardDetailFormatter cardDetailFormatter;
 
     @Autowired
     public AttendanceAdminService(AttendanceAdminQueryRepository queryRepository,
                                   OverTimePolicyRepository overtimePolicyRepository,
                                   AttendanceStatusJudge judge,
+                                  HistoricalDayJudge historicalDayJudge,
                                   EmployeeRepository employeeRepository,
                                   CommuteRecordRepository commuteRecordRepository,
-                                  OvertimeRequestRepository overtimeRequestRepository) {
+                                  OvertimeRequestRepository overtimeRequestRepository,
+                                  CardDetailFormatter cardDetailFormatter) {
         this.queryRepository = queryRepository;
         this.overtimePolicyRepository = overtimePolicyRepository;
         this.judge = judge;
+        this.historicalDayJudge = historicalDayJudge;
         this.employeeRepository = employeeRepository;
         this.commuteRecordRepository = commuteRecordRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
+        this.cardDetailFormatter = cardDetailFormatter;
     }
 
     /**
@@ -257,87 +256,14 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /*
-     * 카드 타입별 detail 텍스트 생성.
-     * 프론트 UI 스펙에 맞춘 고정 포맷. 결측 데이터는 안전 기본값으로 대체.
-     */
+    /* 카드 타입별 detail 텍스트 — CardDetailFormatter 위임 (EnumMap 상태 패턴) */
     private String formatDetail(AttendanceCardType cardType, AttendanceAdminRow r, int weeklyMaxMinutes) {
-        // switch expression — 각 분기 return 이 detail 문자열
-        return switch (cardType) {
-
-            // 정상: 지각/조퇴 없는 사원. 체크아웃 전에도 "정시 출근 · 정시 퇴근" 으로 표기 (UI 통일성)
-            case NORMAL -> "정시 출근 · 정시 퇴근";
-
-            // 종일근무: 체크아웃 여부로 "근무중"/"퇴근" 분기
-            case WORKING -> (r.getCheckOutAt() != null) ? "퇴근" : "근무중";
-
-            // 지각: 체크인시각 + (체크인 - groupStartTime) 분
-            case LATE -> {
-                long lateMin = (r.getCheckInAt() != null && r.getGroupStartTime() != null)
-                        ? Duration.between(r.getGroupStartTime(), r.getCheckInAt().toLocalTime()).toMinutes()
-                        : 0L;
-                // "HH:mm 출근 (N분 지각)" — 음수 방어
-                yield String.format("%s 출근 (%d분 지각)",
-                        r.getCheckInAt() != null ? r.getCheckInAt().toLocalTime().format(HHMM) : "--:--",
-                        Math.max(0, lateMin));
-            }
-
-            // 조퇴: 체크아웃시각 + (groupEndTime - 체크아웃) 분
-            case EARLY_LEAVE -> {
-                long earlyMin = (r.getCheckOutAt() != null && r.getGroupEndTime() != null)
-                        ? Duration.between(r.getCheckOutAt().toLocalTime(), r.getGroupEndTime()).toMinutes()
-                        : 0L;
-                yield String.format("%s 퇴근 (%d분 조퇴)",
-                        r.getCheckOutAt() != null ? r.getCheckOutAt().toLocalTime().format(HHMM) : "--:--",
-                        Math.max(0, earlyMin));
-            }
-
-            // 휴가 중 출근: 휴가유형명 + " 중 출근" (유형명 없으면 "휴가" 기본)
-            case VACATION_ATTEND -> {
-                String type = (r.getVacationTypeName() != null) ? r.getVacationTypeName() : "휴가";
-                yield type + " 중 출근";
-            }
-
-            // 출퇴근 누락: 체크인 자체 없음 → "출근 누락", 체크인 있는데 체크아웃 없음 → "퇴근 누락"
-            case MISSING_COMMUTE -> (r.getComRecId() == null) ? "출근 누락" : "퇴근 누락";
-
-            // 1일 소정근로 미달: 실근무분 / 소정근로분 ("Xh Ym / Xh Ym 소정")
-            case UNDER_MIN_HOUR -> {
-                long workedMin = (r.getCheckInAt() != null && r.getCheckOutAt() != null)
-                        ? Duration.between(r.getCheckInAt(), r.getCheckOutAt()).toMinutes() : 0L;
-                long scheduledMin = (r.getGroupStartTime() != null && r.getGroupEndTime() != null)
-                        ? Duration.between(r.getGroupStartTime(), r.getGroupEndTime()).toMinutes() : 0L;
-                yield String.format("%s / %s 소정", formatHm(workedMin), formatHm(scheduledMin));
-            }
-
-            // 근무지 외: IP 가 있으면 IP 노출, 없으면 기본 문구
-            case OFFSITE -> (r.getCheckInIp() != null && !r.getCheckInIp().isBlank())
-                    ? r.getCheckInIp()
-                    : "근무지 외 체크인";
-
-            // 미승인 초과근무: (체크아웃 - groupEndTime) 분을 "Xh Ym 초과 (미승인)" 로 표기
-            case UNAPPROVED_OT -> {
-                long overMin = (r.getCheckOutAt() != null && r.getGroupEndTime() != null)
-                        ? Duration.between(r.getGroupEndTime(), r.getCheckOutAt().toLocalTime()).toMinutes()
-                        : 0L;
-                yield String.format("%s 초과 (미승인)", formatHm(Math.max(0, overMin)));
-            }
-
-            // 주간 최대근무시간 초과: 사원 주간(h) / 정책(h) 표기 — 정책값은 분이라 /60 변환
-            case MAX_HOUR_EXCEED -> {
-                long weekMin = (r.getWeekWorkedMinutes() != null) ? r.getWeekWorkedMinutes() : 0L;
-                yield String.format("%dh / %dh 정책", weekMin / 60, weeklyMaxMinutes / 60);
-            }
-        };
+        return cardDetailFormatter.format(cardType, r, weeklyMaxMinutes);
     }
 
-    /*
-     * 분 단위 값을 "Xh Ym" 문자열로 변환 (음수는 0 으로 간주하지 않고 그대로 표시 — 호출측에서 Math.max 처리).
-     */
+    /* "Xh Ym" 포맷 — CardDetailFormatter 위임 */
     private String formatHm(long minutes) {
-        long h = minutes / 60;     // 시간 부분
-        long m = minutes % 60;     // 분 부분
-        return h + "h " + m + "m"; // 예: "7h 30m"
+        return CardDetailFormatter.formatHm(minutes);
     }
 
     /**
@@ -515,7 +441,7 @@ public class AttendanceAdminService {
 
                 // 결근: 소정근무일 && 출근기록 없음 && 휴가 아님
                 boolean scheduled = isScheduledWorkDay(r, day);
-                boolean noCheckIn = (r.getComRecId() == null);
+                boolean noCheckIn = !hasCheckIn(r);
                 if (scheduled && noCheckIn && !hasVac) absent++;
 
                 // 초과근무: 승인 OT 존재 OR 미승인 OT 카드
@@ -568,13 +494,13 @@ public class AttendanceAdminService {
                 List<AttendanceCardType> cards = judge.judge(r, d, weeklyMaxMinutes);
                 boolean hasVac = Boolean.TRUE.equals(r.getHasApprovedVacationToday());
                 boolean scheduled = isScheduledWorkDay(r, d);
-                boolean hasCheckIn = (r.getComRecId() != null);
+                boolean checkedIn = hasCheckIn(r);
 
                 if (scheduled && !hasVac) {
                     a.scheduledEmpDays++;
-                    if (hasCheckIn) a.attendedDays++;
+                    if (checkedIn) a.attendedDays++;
                     if (cards.contains(AttendanceCardType.LATE)) a.lateCount++;
-                    if (!hasCheckIn) a.absentCount++;
+                    if (!checkedIn) a.absentCount++;
                 }
 
                 long dayWorked = computeDayWorkedMinutes(r, d);
@@ -735,13 +661,13 @@ public class AttendanceAdminService {
     private long computeDayWorkedMinutes(AttendanceAdminRow r, LocalDate day) {
         boolean hasVac = Boolean.TRUE.equals(r.getHasApprovedVacationToday());
         boolean scheduled = isScheduledWorkDay(r, day);
-        boolean hasCheckIn = (r.getComRecId() != null);
+        boolean checkedIn = hasCheckIn(r);
         long approvedOt = (r.getApprovedOtMinutesToday() != null) ? r.getApprovedOtMinutesToday() : 0L;
 
         // 1. 휴가/비근무요일: OT 만 반영
         if (hasVac || !scheduled) return approvedOt;
         // 2. 결근: 0 분
-        if (!hasCheckIn) return 0L;
+        if (!checkedIn) return 0L;
         // 3. 정상: 소정 - 지각 - 조퇴 + OT
         long sched = scheduledMinutes(r);
         long late = extractLateMinutes(r);
@@ -769,22 +695,25 @@ public class AttendanceAdminService {
         return (r.getGroupWorkDay() & bit) != 0;
     }
 
-    /*
-     * 지각 분 = max(0, checkInAt.time - groupStartTime). checkInStatus == LATE 일 때만 유효.
-     */
+    /* 체크인 여부 — checkInAt 기반. ABSENT 레코드는 comRecId 있어도 checkInAt null */
+    private boolean hasCheckIn(AttendanceAdminRow r) {
+        return r.getCheckInAt() != null;
+    }
+
+    /* 지각 분 = max(0, checkInAt.time - groupStartTime). LATE / LATE_AND_EARLY 일 때만 유효 */
     private long extractLateMinutes(AttendanceAdminRow r) {
         if (r.getCheckInAt() == null || r.getGroupStartTime() == null) return 0L;
-        if (r.getCheckInStatus() != CheckInStatus.LATE) return 0L;
+        WorkStatus ws = r.getWorkStatus();
+        if (ws != WorkStatus.LATE && ws != WorkStatus.LATE_AND_EARLY) return 0L;
         long diff = Duration.between(r.getGroupStartTime(), r.getCheckInAt().toLocalTime()).toMinutes();
         return Math.max(0, diff);
     }
 
-    /*
-     * 조퇴 분 = max(0, groupEndTime - checkOutAt.time). checkOutStatus == EARLY_LEAVE 일 때만 유효.
-     */
+    /* 조퇴 분 = max(0, groupEndTime - checkOutAt.time). EARLY_LEAVE / LATE_AND_EARLY 일 때만 유효 */
     private long extractEarlyLeaveMinutes(AttendanceAdminRow r) {
         if (r.getCheckOutAt() == null || r.getGroupEndTime() == null) return 0L;
-        if (r.getCheckOutStatus() != CheckOutStatus.EARLY_LEAVE) return 0L;
+        WorkStatus ws = r.getWorkStatus();
+        if (ws != WorkStatus.EARLY_LEAVE && ws != WorkStatus.LATE_AND_EARLY) return 0L;
         long diff = Duration.between(r.getCheckOutAt().toLocalTime(), r.getGroupEndTime()).toMinutes();
         return Math.max(0, diff);
     }
@@ -926,7 +855,7 @@ public class AttendanceAdminService {
         Long otMin = (approvedOt > 0) ? approvedOt : null;
         String otText = (approvedOt > 0) ? formatHm(approvedOt) : null;
 
-        List<AttendanceCardType> cards = judgeHistoricalDay(c, wg, approvedOt);
+        List<AttendanceCardType> cards = historicalDayJudge.judge(c, wg, approvedOt);
 
         return AttendanceEmployeeHistoryRowResDto.builder()
                 .workDate(c.getWorkDate())
@@ -941,31 +870,4 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /*
-     * 일별 단건 판정 — 주간 컨텍스트가 없으므로 MAX_HOUR_EXCEED/UNDER_MIN_HOUR/VACATION_ATTEND 미적용.
-     */
-    private List<AttendanceCardType> judgeHistoricalDay(CommuteRecord c, WorkGroup wg, long approvedOt) {
-        List<AttendanceCardType> out = new ArrayList<>(3);
-        boolean hasCheckIn = (c.getComRecCheckIn() != null);
-        boolean hasCheckOut = (c.getComRecCheckOut() != null);
-
-        if (hasCheckIn) out.add(AttendanceCardType.WORKING);
-        if (c.getCheckInStatus() == CheckInStatus.LATE) out.add(AttendanceCardType.LATE);
-        if (c.getCheckOutStatus() == CheckOutStatus.EARLY_LEAVE) out.add(AttendanceCardType.EARLY_LEAVE);
-        if (Boolean.TRUE.equals(c.getIsOffsite())) out.add(AttendanceCardType.OFFSITE);
-        if (hasCheckIn && !hasCheckOut) out.add(AttendanceCardType.MISSING_COMMUTE);
-
-        if (hasCheckOut && wg != null && wg.getGroupEndTime() != null && approvedOt == 0) {
-            LocalTime endTime = wg.getGroupEndTime();
-            if (c.getComRecCheckOut().toLocalTime().isAfter(endTime)) {
-                out.add(AttendanceCardType.UNAPPROVED_OT);
-            }
-        }
-
-        if (hasCheckIn && out.size() == 1 && out.get(0) == AttendanceCardType.WORKING) {
-            out.add(0, AttendanceCardType.NORMAL);
-        }
-
-        return out;
-    }
 }
