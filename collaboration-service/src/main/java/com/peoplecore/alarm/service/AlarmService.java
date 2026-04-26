@@ -15,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -31,9 +32,9 @@ public class AlarmService {
         this.sseEmitterManager = sseEmitterManager;
     }
 
-    /* 카프카 컨슈머에서 호출 -> db 저장 -> sse 푸시 */
+    /* persist consumer 전용: DB 저장만. 같은 group 내 1 pod 만 실행되어 중복 insert 방지 */
     @Transactional
-    public void createAndPush(AlarmEvent event) {
+    public void persist(AlarmEvent event) {
         List<CommonAlarm> alarms = event.getEmpIds().stream()
                 .map(empId -> CommonAlarm.builder()
                         .companyId(event.getCompanyId())
@@ -46,12 +47,26 @@ public class AlarmService {
                         .alarmRefId(event.getAlarmRefId())
                         .build())
                 .toList();
-
         alarmRepository.saveAll(alarms);
+    }
 
-        /* sse 실시간 푸시 결재 라인에 많아봤자 3~4명이기 때문에 for문으로 해도 괜찮을거라 생각함 */
-        for (CommonAlarm alarm : alarms) {
-            sseEmitterManager.send(alarm.getAlarmEmpId(), AlarmListResponseDto.from(alarm));
+    /* push consumer 전용: pod-local emitterMap 에만 push. DB 안 건드림.
+       alarmId/createdAt 은 DB 거치지 않으므로 트랜잭션과 무관한 화면 표시용 값으로 채움 */
+    public void push(AlarmEvent event) {
+        LocalDateTime now = LocalDateTime.now();
+        for (Long empId : event.getEmpIds()) {
+            AlarmListResponseDto dto = AlarmListResponseDto.builder()
+                    .alarmId(null)                       // push 시점엔 PK 모름
+                    .alarmType(event.getAlarmType())
+                    .alarmTitle(event.getAlarmTitle())
+                    .alarmContent(event.getAlarmContent())
+                    .alarmLink(event.getAlarmLink())
+                    .alarmRefType(event.getAlarmRefType())
+                    .alarmRefId(event.getAlarmRefId())
+                    .alarmIsRead(false)                  // 방금 도착
+                    .createdAt(now)
+                    .build();
+            sseEmitterManager.send(empId, dto);          // 이 pod 의 emitterMap 에 없으면 그냥 통과
         }
     }
 

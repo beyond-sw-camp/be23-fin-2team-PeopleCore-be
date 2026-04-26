@@ -3,10 +3,14 @@ package com.peoplecore.attendance.repository;
 import com.peoplecore.attendance.dto.WeeklyCommuteAggregate;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.QCommuteRecord;
+import com.peoplecore.attendance.entity.WorkStatus;
+import com.peoplecore.employee.domain.EmpStatus;
+import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.domain.QEmployee;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberExpression;
+import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Repository;
@@ -18,7 +22,7 @@ import java.util.UUID;
 /*
  * 사원 개인 주간요약 API 전용 QueryDSL Repository.
  * 단일 쿼리로 4개 집계 동시 계산:
- *  - 실근무 분 (자동마감/미체크아웃 제외)
+ *  - 실근무 분 (자동마감/결근 제외)
  *  - 출근 일수
  *  - 인정 초과 분 (extended + night + holiday)
  *  - 자동마감 일수
@@ -36,17 +40,18 @@ public class MyAttendanceQueryRepository {
 
     /**
      * 주간 통합 집계.
+     * AUTO_CLOSED/ABSENT 행은 실근무 분에서 제외.
      */
     public WeeklyCommuteAggregate aggregateWeeklyStats(UUID companyId, Long empId,
                                                        LocalDate from, LocalDate to) {
         QCommuteRecord c = QCommuteRecord.commuteRecord;
 
-        // 실근무 분: TIMESTAMPDIFF + 가드 (자동마감 / 미체크아웃 제외)
-        // JPQL 표준에 TIMESTAMPDIFF 없어서 native function template 사용.
+        // 실근무 분: AUTO_CLOSED/ABSENT 제외 + 체크인/아웃 모두 있을 때만 합산
         NumberExpression<Long> workedSum = Expressions.numberTemplate(Long.class,
-                "COALESCE(SUM(CASE WHEN {0} IS NOT NULL AND {1} IS NOT NULL AND {2} = FALSE " +
-                        "THEN TIMESTAMPDIFF(MINUTE, {0}, {1}) ELSE 0 END), 0)",
-                c.comRecCheckIn, c.comRecCheckOut, c.isAutoClosed);
+                "COALESCE(SUM(CASE WHEN {0} IS NOT NULL AND {1} IS NOT NULL" +
+                        " AND {2} != 'AUTO_CLOSED' AND {2} != 'ABSENT'" +
+                        " THEN TIMESTAMPDIFF(MINUTE, {0}, {1}) ELSE 0 END), 0)",
+                c.comRecCheckIn, c.comRecCheckOut, c.workStatus);
 
         // 출근 일수: COUNT(DISTINCT workDate WHERE checkIn IS NOT NULL)
         NumberExpression<Long> attendedDays = Expressions.numberTemplate(Long.class,
@@ -62,8 +67,8 @@ public class MyAttendanceQueryRepository {
 
         // 자동마감 일수
         NumberExpression<Long> autoClosedDays = Expressions.numberTemplate(Long.class,
-                "COALESCE(SUM(CASE WHEN {0} = TRUE THEN 1 ELSE 0 END), 0)",
-                c.isAutoClosed);
+                "COALESCE(SUM(CASE WHEN {0} = 'AUTO_CLOSED' THEN 1 ELSE 0 END), 0)",
+                c.workStatus);
 
         return queryFactory
                 .select(Projections.constructor(WeeklyCommuteAggregate.class,
@@ -75,9 +80,10 @@ public class MyAttendanceQueryRepository {
                 .fetchOne();
     }
 
-    /*
+    /**
      * 특정 근무그룹 + 특정 날짜의 자동마감 대상 조회.
-     * 조건: checkIn 있음 + checkOut 없음 + 자동마감 아님 + 해당 wg 소속.
+     * 조건: checkIn 있음 + checkOut 없음 + 해당 wg 소속.
+     * AUTO_CLOSED 레코드는 checkOut 이 세팅되므로 별도 조건 불필요.
      */
     public List<CommuteRecord> findAutoCloseTargets(UUID companyId, Long workGroupId, LocalDate targetDate) {
         QCommuteRecord c = QCommuteRecord.commuteRecord;
@@ -90,10 +96,32 @@ public class MyAttendanceQueryRepository {
                         .and(c.workDate.eq(targetDate))
                         .and(c.comRecCheckIn.isNotNull())
                         .and(c.comRecCheckOut.isNull())
-                        .and(c.isAutoClosed.isFalse())
                         .and(e.workGroup.workGroupId.eq(workGroupId)))
                 .fetch();
     }
 
+    /**
+     * 특정 근무그룹 + 특정 날짜의 결근 대상 사원 조회.
+     * 조건: 해당 wg 소속 + 퇴사 아님 + 해당 날짜 CommuteRecord(어떤 상태든) 없음.
+     * 호출부에서 해당 날짜가 wg 소정근무요일인지 확인 후 호출할 것.
+     */
+    public List<Employee> findAbsentTargets(UUID companyId, Long workGroupId, LocalDate targetDate) {
+        QEmployee e = QEmployee.employee;
+        QCommuteRecord cr = QCommuteRecord.commuteRecord;
 
+        return queryFactory
+                .selectFrom(e)
+                .where(
+                        e.company.companyId.eq(companyId),
+                        e.workGroup.workGroupId.eq(workGroupId),
+                        e.empStatus.ne(EmpStatus.RESIGNED),
+                        // 해당 날짜 CommuteRecord 없음 (결근 배치 중복 실행 방지 포함)
+                        JPAExpressions.selectOne()
+                                .from(cr)
+                                .where(cr.employee.empId.eq(e.empId)
+                                        .and(cr.workDate.eq(targetDate)))
+                                .notExists()
+                )
+                .fetch();
+    }
 }
