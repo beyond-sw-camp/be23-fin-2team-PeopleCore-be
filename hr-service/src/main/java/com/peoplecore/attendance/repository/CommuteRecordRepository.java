@@ -80,14 +80,16 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
                                  @Param("from") LocalDate from,
                                  @Param("to") LocalDate to);
 
-    /* 근태 정정 승인 native UPDATE — check-in/out 교체 + is_auto_closed 해제 일괄.
+    /* 근태 정정 승인 native UPDATE — check-in/out 교체 + AUTO_CLOSED 였으면 NORMAL 로 해제.
+     * (구 is_auto_closed 컬럼은 workStatus enum 으로 대체되어 제거됨)
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
             UPDATE commute_record
                SET com_rec_check_in  = :newCheckIn,
                    com_rec_check_out = :newCheckOut,
-                   is_auto_closed    = false
+                   work_status       = CASE WHEN work_status = 'AUTO_CLOSED'
+                                            THEN 'NORMAL' ELSE work_status END
              WHERE com_rec_id = :comRecId
                AND work_date  = :workDate
             """, nativeQuery = true)

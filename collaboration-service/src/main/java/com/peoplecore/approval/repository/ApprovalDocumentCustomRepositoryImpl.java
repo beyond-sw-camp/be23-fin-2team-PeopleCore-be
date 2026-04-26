@@ -155,7 +155,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
                         doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
+                        doc.formId.formName, doc.formId.formId, doc.formId.formCode,
+                        doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
@@ -191,7 +192,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
                         doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
+                        doc.formId.formName, doc.formId.formId, doc.formId.formCode,
+                        doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
@@ -238,7 +240,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
                         doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
+                        doc.formId.formName, doc.formId.formId, doc.formId.formCode,
+                        doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
@@ -269,6 +272,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         doc.approvalStatus.stringValue(),
                         doc.isEmergency,
                         doc.formId.formName,
+                        doc.formId.formId,
+                        doc.formId.formCode,
                         doc.empName,
                         doc.empDeptName,
                         doc.createdAt,
@@ -303,6 +308,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         doc.approvalStatus.stringValue(),
                         doc.isEmergency,
                         doc.formId.formName,
+                        doc.formId.formId,
+                        doc.formId.formCode,
                         doc.empName,
                         doc.empDeptName,
                         doc.createdAt,
@@ -341,7 +348,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
                         doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
+                        doc.formId.formName, doc.formId.formId, doc.formId.formCode,
+                        doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
@@ -364,7 +372,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
                         doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
+                        doc.formId.formName, doc.formId.formId, doc.formId.formCode,
+                        doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
@@ -403,7 +412,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
                         doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
+                        doc.formId.formName, doc.formId.formId, doc.formId.formCode,
+                        doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
@@ -439,7 +449,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
                         doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
+                        doc.formId.formName, doc.formId.formId, doc.formId.formCode,
+                        doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
@@ -483,7 +494,8 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
                         doc.approvalStatus.stringValue(), doc.isEmergency,
-                        doc.formId.formName, doc.empName, doc.empDeptName,
+                        doc.formId.formName, doc.formId.formId, doc.formId.formCode,
+                        doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
