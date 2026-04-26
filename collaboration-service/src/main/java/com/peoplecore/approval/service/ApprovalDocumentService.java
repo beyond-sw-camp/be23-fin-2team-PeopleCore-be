@@ -1,6 +1,8 @@
 package com.peoplecore.approval.service;
 
 import com.peoplecore.alarm.publisher.AlarmEventPublisher;
+import com.peoplecore.approval.handler.ApprovalFormHandler;
+import com.peoplecore.approval.handler.ApprovalFormHandlerRegistry;
 import com.peoplecore.approval.publisher.ApprovalEventPublisher;
 import com.peoplecore.approval.dto.DocumentCreateRequest;
 import com.peoplecore.approval.dto.DocumentDetailResponse;
@@ -51,8 +53,9 @@ public class ApprovalDocumentService {
     private final ApprovalEventPublisher approvalEventPublisher;
     private final HrServiceClient hrServiceClient;
     private final ApprovalDocumentRepository approvalDocumentRepository;
+    private final ApprovalFormHandlerRegistry formHandlerRegistry;
 
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalDocumentRepository approvalDocumentRepository) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalDocumentRepository approvalDocumentRepository, ApprovalFormHandlerRegistry formHandlerRegistry) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -68,6 +71,7 @@ public class ApprovalDocumentService {
         this.approvalEventPublisher = approvalEventPublisher;
         this.hrServiceClient = hrServiceClient;
         this.approvalDocumentRepository = approvalDocumentRepository;
+        this.formHandlerRegistry = formHandlerRegistry;
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번 + 첨부 업로드 */
@@ -75,9 +79,11 @@ public class ApprovalDocumentService {
     public Long createDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request, List<MultipartFile> files) {
         log.info("[기안] empId={}, formId={}, filesReceived={}", empId, request.getFormId(), files != null ? files.size() : 0);
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        /* 근태 정정 / 휴가 부여 신청 양식이면 결재선에 HR 사원 포함 여부 검증 */
-        String formCode = form.getFormCode();
-        if ("ATTENDANCE_MODIFY".equals(formCode) || "VACATION_GRANT_REQUEST".equals(formCode)) {
+        /* 멱등키 필요 폼(근태정정/휴가부여)이면 결재선에 HR 사원 포함 여부 검증 */
+        boolean needIdempotency = formHandlerRegistry.findByForm(form)
+                .map(ApprovalFormHandler::requiresIdempotencyKey)
+                .orElse(false);
+        if (needIdempotency) {
             validateHrApproverIncluded(companyId, request.getApprovalLines());
         }
         CompanyInfoResponse companyInfoResponse = hrCacheService.getCompany(companyId);
