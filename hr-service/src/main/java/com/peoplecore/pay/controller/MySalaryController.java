@@ -4,9 +4,11 @@ import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.service.MySalaryService;
 import jakarta.validation.Valid;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -57,6 +59,18 @@ public class MySalaryController {
         return ResponseEntity.ok(mySalaryService.getPensionInfo(companyId, empId));
     }
 
+    /** 내 예상 퇴직금 (근속기준 추계액) */
+    @GetMapping("/severance-estimate")
+    public ResponseEntity<MySeveranceEstimateResDto> getMySeveranceEstimate(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam(required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate baseDate) {
+        return ResponseEntity.ok(
+                mySalaryService.getMySeveranceEstimate(companyId, empId, baseDate)
+        );
+    }
+
     //    내 부양가족수 변경
     @PutMapping("/dependents")
     public ResponseEntity<Void> updateMyDependents(
@@ -77,5 +91,7 @@ public class MySalaryController {
         mySalaryService.updateSalaryAccount(companyId, empId, req);
         return ResponseEntity.noContent().build();
     }
+
+//
 
 }
