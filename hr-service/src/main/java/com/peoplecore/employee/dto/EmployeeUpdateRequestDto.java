@@ -3,7 +3,6 @@ package com.peoplecore.employee.dto;
 import com.peoplecore.employee.domain.EmpGender;
 import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.EmpType;
-import com.peoplecore.employee.domain.JobType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -43,14 +42,15 @@ public class EmployeeUpdateRequestDto {
 
     private String empAddressDetail;
 
+    @NotBlank
+    private String empResidentNumber;
+
     // 소속 및 고용 정보
     @NotNull
     private LocalDate empHireDate;
 
     @NotNull
     private EmpType empType;
-
-    private JobType jobType;
 
     @NotNull
     private Long deptId;
@@ -60,6 +60,9 @@ public class EmployeeUpdateRequestDto {
 
     @NotNull
     private Long titleId;
+
+    @NotBlank
+    private String insuranceJobTypeName;
 
     // 권한
     @NotNull

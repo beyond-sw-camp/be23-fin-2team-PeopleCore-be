@@ -34,7 +34,7 @@ public class HrOrderController {
         return ResponseEntity.ok(hrOrderService.list(companyId, keyword, orderType, status, pageable));
     }
 
-    // 2. 발령 등록 (status = PENDING)
+    // 2. 발령 등록 (status = SCHEDULED, 발령일이 오늘 이전이면 즉시 반영)
     @PostMapping
     public ResponseEntity<?> create(@RequestHeader("X-User-Company") UUID companyId,
                                     @RequestHeader("X-User-Id") Long userId,
@@ -50,7 +50,7 @@ public class HrOrderController {
         return ResponseEntity.ok(hrOrderService.detail(companyId, orderId));
     }
 
-    // 4. 수정 (PENDING 상태만)
+    // 4. 수정 (SCHEDULED 상태만)
     @PutMapping("/{orderId}")
     public ResponseEntity<?> update(@RequestHeader("X-User-Company") UUID companyId,
                                     @PathVariable Long orderId,
@@ -58,47 +58,23 @@ public class HrOrderController {
         return ResponseEntity.ok(hrOrderService.update(companyId,orderId,req));
     }
 
-    // 5. 삭제 (PENDING 상태만)
+    // 5. 삭제 (SCHEDULED 상태만)
     @DeleteMapping("/{orderId}")
     public ResponseEntity<Void> delete(@RequestHeader("X-User-Company") UUID companyId,
                                        @PathVariable Long orderId) {
         hrOrderService.delete(companyId, orderId);
         return ResponseEntity.noContent().build();
     }
-//
-    // 6. 승인 (PENDING -> CONFIRMED, HR_SUPER_ADMIN만)
-    @PutMapping("/{orderId}/confirm")
-    public ResponseEntity<Void> confirm(@RequestHeader("X-User-Company") UUID companyId,
-                                        @RequestHeader("X-User-Role") String role,
-                                        @PathVariable Long orderId) {
-        if (!"HR_SUPER_ADMIN".equals(role)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-        hrOrderService.confirm(companyId, orderId);
-        return ResponseEntity.ok().build();
-    }
-//
-    // 7. 반려 (PENDING → REJECTED, HR_SUPER_ADMIN만)
-    @PutMapping("/{orderId}/reject")
-    public ResponseEntity<Void> reject(@RequestHeader("X-User-Company") UUID companyId,
-                                       @RequestHeader("X-User-Role") String role,
-                                       @PathVariable Long orderId) {
-        if (!"HR_SUPER_ADMIN".equals(role)) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        }
-        hrOrderService.reject(companyId, orderId);
-        return ResponseEntity.ok().build();
-    }
 
-    // 8. 통보 (CONFIRMED 상태만)
+    // 6. 통보
     @PutMapping("/{orderId}/notify")
     public ResponseEntity<Void> notifyOrder(@RequestHeader("X-User-Company") UUID companyId,
                                             @PathVariable Long orderId) {
         hrOrderService.notifyOrder(companyId, orderId);
         return ResponseEntity.ok().build();
     }
-//
-    // 9. 발령일 도래 건 일괄 반영 (스케줄러 호출용, CONFIRMED + effectiveDate(오늘), -> employee 반영 + APPLIED)
+
+    // 7. 발령일 도래 건 일괄 반영 (스케줄러 호출용, SCHEDULED + effectiveDate <= 오늘 -> employee 반영 + APPLIED)
     @PostMapping("/apply-scheduled")
     public ResponseEntity<Integer> applyScheduled() {
         return ResponseEntity.ok(hrOrderService.applyAllScheduledOrders());

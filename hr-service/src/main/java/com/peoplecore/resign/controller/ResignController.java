@@ -50,7 +50,7 @@ public class ResignController {
 
 //    4. 퇴직처리(결재완료건 중 재직->퇴직)
     @PutMapping("/{resignId}")
-    public ResponseEntity<Void>processResign(@RequestHeader("X-User-CompanyId")UUID companyId,
+    public ResponseEntity<Void>processResign(@RequestHeader("X-User-Company")UUID companyId,
                                             @PathVariable Long resignId){
         resignService.processResign(companyId, resignId);
         return ResponseEntity.ok().build();
@@ -58,7 +58,7 @@ public class ResignController {
 //
 //    5. 삭제(퇴직완료건만 softDelete)
     @DeleteMapping("/{resignId}")
-    public ResponseEntity<Void>deleteResign(@RequestHeader("X-User-CompanyId")UUID companyId,
+    public ResponseEntity<Void>deleteResign(@RequestHeader("X-User-Company")UUID companyId,
                                             @PathVariable Long resignId){
         resignService.deleteResign(companyId, resignId);
         return ResponseEntity.ok().build();

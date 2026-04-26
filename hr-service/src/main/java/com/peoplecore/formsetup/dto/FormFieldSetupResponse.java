@@ -25,6 +25,7 @@ public class FormFieldSetupResponse {
     private List<String> options;
     private String autoFillFrom;
     private Boolean locked;
+    private Boolean isFixed;  // payItem 동적 필드 전용 — 고정항목 여부 (연봉 하한 계산용)
 
     private static final ObjectMapper mapper = new ObjectMapper();
 

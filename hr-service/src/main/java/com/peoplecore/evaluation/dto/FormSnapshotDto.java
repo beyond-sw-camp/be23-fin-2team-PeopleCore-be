@@ -57,6 +57,7 @@ public class FormSnapshotDto {
         private String id;
         private String name;
         private BigDecimal points; //가감점수
+        private Integer threshold; //면제 횟수 - 이 횟수까지는 무감점, 초과분에만 points 적용 (null/0이면 면제 없음)
         private Boolean enabled; //사용여부
     }
 

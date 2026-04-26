@@ -9,6 +9,7 @@ import com.peoplecore.salarycontract.dto.SalaryContractListResDto;
 import com.peoplecore.salarycontract.service.SalaryContractService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -58,6 +59,13 @@ public class SalaryContractController {
     public ResponseEntity<SalaryContractDetailResDto> detail(@RequestHeader("X-User-Company") String companyId,
                                                           @PathVariable Long id) {
         return ResponseEntity.ok(salaryContractService.detail(UUID.fromString(companyId), id));
+    }
+
+    //  3-1. 첨부 파일 다운로드
+    @GetMapping("/{id}/file")
+    public ResponseEntity<Resource> downloadFile(@RequestHeader("X-User-Company") String companyId,
+                                                 @PathVariable Long id) {
+        return salaryContractService.downloadFile(UUID.fromString(companyId), id);
     }
 
 //    4.사원별 계약 이력

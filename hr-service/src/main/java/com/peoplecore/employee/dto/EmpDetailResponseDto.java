@@ -24,6 +24,7 @@ public class EmpDetailResponseDto {
     private String    empZipCode;
     private String    empAddressBase;
     private String    empAddressDetail;
+    private String    empResidentNumber;
 
     // 소속 및 고용 정보
     private LocalDate empHireDate;
@@ -35,6 +36,7 @@ public class EmpDetailResponseDto {
     private String    gradeName;
     private Long      titleId;
     private String    titleName;
+    private String    insuranceJobTypeName;
     private String    empStatus;
 
     // 시스템 계정 정보
@@ -56,15 +58,16 @@ public class EmpDetailResponseDto {
                 .empZipCode(emp.getEmpZipCode())
                 .empAddressBase(emp.getEmpAddressBase())
                 .empAddressDetail(emp.getEmpAddressDetail())
+                .empResidentNumber(emp.getEmpResidentNumber())
                 .empHireDate(emp.getEmpHireDate())
                 .empType(emp.getEmpType() != null ? emp.getEmpType().name() : null)
-                .jobType(emp.getJobType() != null ? emp.getJobType().name() : null)
                 .deptId(emp.getDept() != null ? emp.getDept().getDeptId() : null)
                 .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
                 .gradeId(emp.getGrade() != null ? emp.getGrade().getGradeId() : null)
                 .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)
                 .titleId(emp.getTitle() != null ? emp.getTitle().getTitleId() : null)
                 .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
+                .insuranceJobTypeName(emp.getJobTypes() != null ? emp.getJobTypes().getJobTypeName() : null)
                 .empStatus(emp.getEmpStatus() != null ? emp.getEmpStatus().name() : null)
                 .empNum(emp.getEmpNum())
                 .empEmail(emp.getEmpEmail())

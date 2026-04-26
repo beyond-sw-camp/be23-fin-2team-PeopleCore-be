@@ -86,7 +86,7 @@ public class HrOrderService {
                 .orderType(req.getOrderType()) //발령유형
                 .effectiveDate(req.getEffectiveDate()) //발령일
                 .isNotified(false) //통보여부
-                .status(OrderStatus.PENDING) //승인대기로 시작
+                .status(OrderStatus.SCHEDULED) //발령예정으로 시작
                 .formValues(toJson(req.getFormValues()))    //동적 폼입력값
                 .formSnapshot(formSnapshot) //폼설정 스냅샷 //->json
                 .formVersion(formVersion) //폼 버전
@@ -101,6 +101,11 @@ public class HrOrderService {
                     .beforeId(item.getBeforeId()) //변경전
                     .afterId(item.getAfterId()) //변경후
                     .build());
+        }
+
+//        발령일이 오늘이거나 이전이면 즉시 employee 반영 (스케줄러는 다음 자정에 실행되므로)
+        if (!req.getEffectiveDate().isAfter(LocalDate.now())) {
+            applyOrder(hrOrder);
         }
         return hrOrder.getOrderId();
     }
@@ -147,11 +152,11 @@ public class HrOrderService {
     }
 
 
-    //    4. 수정(pending상태만)
+    //    4. 수정(반영 전만)
     public Long update(UUID companyId, Long orderId, HrOrderUpdateReqDto reqDto) {
 
-//        발령조회 + pending상태 검증 else ->예외
-        HrOrder order = getOrderAndValidate(companyId, orderId, OrderStatus.PENDING, "승인대기  상태만 수정이 가능합니다");
+//        발령조회 + 반영 전 상태 검증 else ->예외
+        HrOrder order = getOrderAndValidate(companyId, orderId, OrderStatus.SCHEDULED, "반영 전 발령만 수정이 가능합니다");
 
 //        기존 변경상세 삭제
         hrOrderDetailRepository.deleteByHrOrder_OrderId(orderId);
@@ -170,30 +175,21 @@ public class HrOrderService {
     }
 
 
-    //    5.삭제(soft)
+    //    5.삭제(soft, 반영 전만)
     public void delete(UUID companyId, Long orderId) {
         HrOrder order = hrOrderRepository.findByOrderIdAndCompanyId(orderId, companyId).orElseThrow(() -> new IllegalArgumentException("발령정보를 찾을 수 없습니다"));
         if (order.isDeleted()) {
             throw new IllegalStateException("이미 삭제된 발령입니다");
         }
+        if (order.getStatus() != OrderStatus.SCHEDULED) {
+            throw new IllegalStateException("반영 전 발령만 삭제가 가능합니다");
+        }
         order.softDelete();
     }
 
-    //    6.승인
-    public void confirm(UUID companyId, Long orderId) {
-        HrOrder order = getOrderAndValidate(companyId, orderId, OrderStatus.PENDING, "승인대기 상태만 승인이 가능합니다");
-        order.updateStatus(OrderStatus.CONFIRMED);
-    }
-
-    //    7.반려
-    public void reject(UUID companyId, Long orderId) {
-        HrOrder order = getOrderAndValidate(companyId, orderId, OrderStatus.PENDING, "승인대기 상태만 승인이 가능합니다");
-        order.updateStatus(OrderStatus.REJECTED);
-    }
-
-    //    8.통보 //TODO: 알림서비스 호출
+    //    6.통보 //TODO: 알림서비스 호출
     public void notifyOrder(UUID companyId, Long orderId) {
-        HrOrder order = getOrderAndValidate(companyId, orderId, OrderStatus.CONFIRMED, "승인 완료된 상태만 통보가 가능합니다");
+        HrOrder order = hrOrderRepository.findByOrderIdAndCompanyId(orderId, companyId).orElseThrow(() -> new IllegalArgumentException("발령 정보를 찾을 수 없습니다"));
 
         Employee employee = order.getEmployee();
 
@@ -231,33 +227,34 @@ public class HrOrderService {
 
     }
 
-    //    9. 발령일 도래 시 일괄 반영 (confirmed상태, 발령일이 오늘 이전인 건 조회)
+    //    7. 발령일 도래 시 일괄 반영 (SCHEDULED + 발령일이 오늘 이전인 건 -> employee 반영 + APPLIED)
     public int applyAllScheduledOrders() {
         List<HrOrder> orders = hrOrderRepository.findByStatusAndEffectiveDateLessThanEqual(
-                OrderStatus.CONFIRMED, LocalDate.now());
-        int count = 0;
+                OrderStatus.SCHEDULED, LocalDate.now());
         for (HrOrder order : orders) {
-//            해당발령 변경상세 조회
-            List<HrOrderDetail> details = hrOrderDetailRepository.findByHrOrder_OrderId(order.getOrderId());
-            Employee employee = order.getEmployee();
-
-//            변경 상세별 employee 실반영
-            for (HrOrderDetail d : details) {
-                if (d.getTargetType() == OrderDetailTargetType.DEPARTMENT) {
-                    Department department = departmentRepository.findById(d.getAfterId()).orElse(null);
-                    if (department != null) employee.updateDept(department);
-                } else if (d.getTargetType() == OrderDetailTargetType.GRADE) {
-                    Grade grade = gradeRepository.findById(d.getAfterId()).orElse(null);
-                    if (grade != null) employee.updateGrade(grade);
-                } else if (d.getTargetType() == OrderDetailTargetType.TITLE) {
-                    Title title = titleRepository.findById(d.getAfterId()).orElse(null);
-                    if (title != null) employee.updateTitle(title);
-                }
-            }
-            order.updateStatus(OrderStatus.APPLIED);
-            count++;
+            applyOrder(order);
         }
-        return count;
+        return orders.size();
+    }
+
+    //    단건 employee 반영 (등록 시 즉시 반영 + 스케줄러에서 공통 사용)
+    private void applyOrder(HrOrder order) {
+        List<HrOrderDetail> details = hrOrderDetailRepository.findByHrOrder_OrderId(order.getOrderId());
+        Employee employee = order.getEmployee();
+
+        for (HrOrderDetail d : details) {
+            if (d.getTargetType() == OrderDetailTargetType.DEPARTMENT) {
+                Department department = departmentRepository.findById(d.getAfterId()).orElse(null);
+                if (department != null) employee.updateDept(department);
+            } else if (d.getTargetType() == OrderDetailTargetType.GRADE) {
+                Grade grade = gradeRepository.findById(d.getAfterId()).orElse(null);
+                if (grade != null) employee.updateGrade(grade);
+            } else if (d.getTargetType() == OrderDetailTargetType.TITLE) {
+                Title title = titleRepository.findById(d.getAfterId()).orElse(null);
+                if (title != null) employee.updateTitle(title);
+            }
+        }
+        order.updateStatus(OrderStatus.APPLIED);
     }
 
 

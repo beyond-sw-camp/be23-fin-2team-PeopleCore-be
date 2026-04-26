@@ -141,7 +141,7 @@ public class SeasonService {
 
         java.time.LocalDate seasonStart = req.getStartDate();
         java.time.LocalDate seasonEnd = req.getEndDate();
-        java.time.LocalDate prevStart = null;
+        java.time.LocalDate prevEnd = null;
 
         for (int i = 0; i < stages.size(); i++) {
             SeasonCreateRequestDto.StageInput s = stages.get(i);
@@ -155,11 +155,11 @@ public class SeasonService {
             if (s.getStartDate().isBefore(seasonStart) || s.getEndDate().isAfter(seasonEnd)) {
                 throw new IllegalArgumentException((i + 1) + "번째 단계는 시즌 기간 내여야 합니다");
             }
-            // 이전 단계보다 반드시 이후여야 함 (같은 날짜 불허)
-            if (prevStart != null && !s.getStartDate().isAfter(prevStart)) {
-                throw new IllegalArgumentException((i + 1) + "번째 단계 시작일은 이전 단계 시작일보다 이후여야 합니다");
+            // 이전 단계 종료일 이후로만 다음 단계 시작 가능 (같은 날짜 불허)
+            if (prevEnd != null && !s.getStartDate().isAfter(prevEnd)) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계 시작일은 이전 단계 종료일 이후여야 합니다");
             }
-            prevStart = s.getStartDate();
+            prevEnd = s.getEndDate();
         }
 
         // 첫 단계 시작일 = 시즌 시작일
@@ -203,6 +203,8 @@ public class SeasonService {
 
 
     //    5.시즌 수정 -closed는 수정 불가
+    //    - req.stages 동봉 시: 시즌 + 단계를 한 트랜잭션에서 원자 업데이트, 새 상태 기준 검증
+    //    - 미동봉 시: 기존 DB 단계 그대로 새 시즌 범위와 정합성 검증
     public SeasonResponseDto updateSeason(UUID companyId, Long seasonId, SeasonUpdateRequestDto req) {
 
         // 기간 유효성
@@ -223,13 +225,88 @@ public class SeasonService {
         // 시즌 간 기간 겹침 금지 (자기 자신 제외)
         validateNoOverlap(companyId, req.getStartDate(), req.getEndDate(), seasonId);
 
-        // 기존 단계 일정과 정합성 검증 - 단계 먼저 조정 후 시즌 수정하도록 유도
-        validateStagesAgainstSeasonRange(seasonId, req.getStartDate(), req.getEndDate());
+        // 단계 동봉 — 새 상태로 통합 검증 후 일괄 dirty-update
+        if (req.getStages() != null && !req.getStages().isEmpty()) {
+            applyAndValidateStages(seasonId, req);
+        } else {
+            // 단계 미동봉 — DB 단계와 새 시즌 범위 정합성만 검증
+            validateStagesAgainstSeasonRange(seasonId, req.getStartDate(), req.getEndDate());
+        }
 
         // 기본정보 갱신 (dirty checking 으로 UPDATE 발행)
         season.updateBasicInfo(req.getName(), req.getPeriod(), req.getStartDate(), req.getEndDate());
 
         return SeasonResponseDto.from(season);
+    }
+
+    // 시즌 + 단계 원자 업데이트 — 화면이 보낸 새 상태 기준으로 검증 후 dirty-update
+    private void applyAndValidateStages(Long seasonId, SeasonUpdateRequestDto req) {
+        // DB 단계를 orderNo 오름차순으로 정렬 (스트림/람다 미사용)
+        List<Stage> stages = new ArrayList<>(stageRepository.findBySeason_SeasonId(seasonId));
+        for (int i = 0; i < stages.size(); i++) {
+            for (int j = i + 1; j < stages.size(); j++) {
+                Integer oi = stages.get(i).getOrderNo();
+                Integer oj = stages.get(j).getOrderNo();
+                int vi = (oi == null) ? 0 : oi;
+                int vj = (oj == null) ? 0 : oj;
+                if (vi > vj) {
+                    Stage tmp = stages.get(i);
+                    stages.set(i, stages.get(j));
+                    stages.set(j, tmp);
+                }
+            }
+        }
+
+        if (req.getStages().size() != stages.size()) {
+            throw new IllegalArgumentException("단계 수가 맞지 않습니다");
+        }
+
+        // 입력을 stageId 로 인덱싱
+        java.util.Map<Long, SeasonUpdateRequestDto.StageInput> byId = new java.util.HashMap<>();
+        for (SeasonUpdateRequestDto.StageInput in : req.getStages()) {
+            byId.put(in.getStageId(), in);
+        }
+
+        java.time.LocalDate seasonStart = req.getStartDate();
+        java.time.LocalDate seasonEnd = req.getEndDate();
+        java.time.LocalDate prevEnd = null;
+
+        for (int i = 0; i < stages.size(); i++) {
+            Stage stage = stages.get(i);
+            SeasonUpdateRequestDto.StageInput in = byId.get(stage.getStageId());
+            if (in == null) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계 입력이 누락되었습니다");
+            }
+            java.time.LocalDate s = in.getStartDate();
+            java.time.LocalDate e = in.getEndDate();
+
+            if (e.isBefore(s)) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계: 종료일이 시작일보다 빠를 수 없습니다");
+            }
+            if (s.isBefore(seasonStart) || e.isAfter(seasonEnd)) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계는 시즌 기간 내여야 합니다");
+            }
+            if (prevEnd != null && !s.isAfter(prevEnd)) {
+                throw new IllegalArgumentException((i + 1) + "번째 단계 시작일은 이전 단계 종료일 이후여야 합니다");
+            }
+            prevEnd = e;
+        }
+
+        // 첫 단계 시작일 = 시즌 시작일, 마지막 단계 종료일 = 시즌 종료일 (생성 시 invariant 유지)
+        SeasonUpdateRequestDto.StageInput firstIn = byId.get(stages.get(0).getStageId());
+        SeasonUpdateRequestDto.StageInput lastIn = byId.get(stages.get(stages.size() - 1).getStageId());
+        if (!firstIn.getStartDate().equals(seasonStart)) {
+            throw new IllegalArgumentException("첫 단계 시작일은 시즌 시작일과 같아야 합니다");
+        }
+        if (!lastIn.getEndDate().equals(seasonEnd)) {
+            throw new IllegalArgumentException("마지막 단계 종료일은 시즌 종료일과 같아야 합니다");
+        }
+
+        // 검증 통과 — dirty-update
+        for (Stage stage : stages) {
+            SeasonUpdateRequestDto.StageInput in = byId.get(stage.getStageId());
+            stage.updateDates(in.getStartDate(), in.getEndDate());
+        }
     }
 
     // 시즌 수정 시 기존 단계 일정과 새 날짜 범위 정합성 검증

@@ -188,7 +188,10 @@ public enum ErrorCode {
     SALARY_CONTRACT_NOT_FOUND(404, "계약서를 찾을 수 없습니다."),
     SALARY_CONTRACT_ALREADY_DELETED(400, "이미 삭제된 계약서입니다."),
     EMPLOYEE_NOT_RESIGNED(400, "퇴직 상태인 사원의 계약서만 삭제할 수 있습니다."),
+    ANNUAL_SALARY_BELOW_MINIMUM(400, "연봉이 고정수당 합계(월) × 12 미만입니다."),
     FILE_UPLOAD_FAILED(500, "파일 업로드에 실패했습니다."),
+    FILE_NOT_FOUND(404, "첨부 파일이 없습니다."),
+    FILE_DOWNLOAD_FAILED(500, "파일 다운로드에 실패했습니다."),
 
     /*워크 그룹 */
     WORK_GROUP_NOT_FOUND(404, "근무 그룹을 찾을 수 없습니다."),
