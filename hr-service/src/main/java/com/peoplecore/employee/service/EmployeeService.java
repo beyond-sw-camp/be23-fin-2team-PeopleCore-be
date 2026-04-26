@@ -167,6 +167,7 @@ public class EmployeeService {
                 .empZipCode(requestDto.getEmpZipCode())
                 .empAddressBase(requestDto.getEmpAddressBase())
                 .empAddressDetail(requestDto.getEmpAddressDetail())
+                .empResidentNumber(requestDto.getEmpResidentNumber())
                 .empHireDate(requestDto.getEmpHireDate())
                 .empType(requestDto.getEmpType())
                 .empNum(empNum)
@@ -293,6 +294,7 @@ public class EmployeeService {
                 requestDto.getEmpZipCode(),
                 requestDto.getEmpAddressBase(),
                 requestDto.getEmpAddressDetail(),
+                requestDto.getEmpResidentNumber(),
                 requestDto.getEmpHireDate(),
                 requestDto.getEmpType(),
                 dept,

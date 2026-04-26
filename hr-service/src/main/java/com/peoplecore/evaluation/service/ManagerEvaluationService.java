@@ -10,6 +10,7 @@ import com.peoplecore.evaluation.domain.GoalType;
 import com.peoplecore.evaluation.domain.ManagerEvaluation;
 import com.peoplecore.evaluation.domain.MyResultStatus;
 import com.peoplecore.evaluation.domain.Season;
+import com.peoplecore.evaluation.domain.SelfEvalApprovalStatus;
 import com.peoplecore.evaluation.domain.SelfEvaluation;
 import com.peoplecore.evaluation.domain.Stage;
 import com.peoplecore.evaluation.domain.StageStatus;
@@ -184,25 +185,26 @@ public class ManagerEvaluationService {
             selfByGoalId.put(se.getGoal().getGoalId(), se);
         }
 
-//        KPI / OKR 분리 DTO 조립
+//        KPI / OKR 분리 DTO 조립 - 자기평가 APPROVED 인 것만 노출 (패널 헤더 "승인된 달성도"와 일치)
         List<ManagerEvalAchievementDto.KpiItem> kpiList = new ArrayList<>();
         List<ManagerEvalAchievementDto.OkrItem> okrList = new ArrayList<>();
         for (Goal g : goals) {
             SelfEvaluation se = selfByGoalId.get(g.getGoalId());
+            if (se == null || se.getApprovalStatus() != SelfEvalApprovalStatus.APPROVED) continue;
+
             if (g.getGoalType() == GoalType.KPI) {
                 kpiList.add(ManagerEvalAchievementDto.KpiItem.builder()
                         .category(g.getCategory())
                         .title(g.getTitle())
                         .targetValue(g.getTargetValue())
                         .targetUnit(g.getTargetUnit())
-                        .actualValue(se != null ? se.getActualValue() : null)
+                        .actualValue(se.getActualValue())
                         .direction(g.getKpiDirection())
                         .build());
             } else if (g.getGoalType() == GoalType.OKR) {
-                String selfLevel = null;
-                if (se != null && se.getAchievementLevel() != null) {
-                    selfLevel = se.getAchievementLevel().name();
-                }
+                String selfLevel = se.getAchievementLevel() != null
+                        ? se.getAchievementLevel().name()
+                        : null;
                 okrList.add(ManagerEvalAchievementDto.OkrItem.builder()
                         .category(g.getCategory())
                         .title(g.getTitle())

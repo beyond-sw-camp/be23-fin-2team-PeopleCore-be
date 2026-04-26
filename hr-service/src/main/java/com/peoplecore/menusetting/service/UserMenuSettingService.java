@@ -32,6 +32,7 @@ public class UserMenuSettingService {
             initDefault(empId);
         }
         List<UserMenuSetting> list = repository.findByEmpIdOrderBySortOrderAsc(empId);
+        list = ensureAllMenusPresent(empId, list);
 
         List<UserMenuItemResponse> result = new ArrayList<>(list.size());
         for (UserMenuSetting e : list) {
@@ -59,9 +60,11 @@ public class UserMenuSettingService {
             initDefault(empId);
         }
 
-        // 기존 설정을 menu_code 로 인덱싱
+        // 기존 설정을 menu_code 로 인덱싱 (신규 enum 누락분은 lazy-insert)
+        List<UserMenuSetting> current = ensureAllMenusPresent(empId,
+                repository.findByEmpIdOrderBySortOrderAsc(empId));
         Map<SidebarMenu, UserMenuSetting> existing = new EnumMap<>(SidebarMenu.class);
-        for (UserMenuSetting e : repository.findByEmpIdOrderBySortOrderAsc(empId)) {
+        for (UserMenuSetting e : current) {
             existing.put(e.getMenuCode(), e);
         }
 
@@ -89,6 +92,30 @@ public class UserMenuSettingService {
         }
 
         return getMySettings(empId, role);
+    }
+
+    /**
+     * enum에 새 메뉴가 추가되었는데 기존 사용자에게 row가 없는 경우 lazy-insert.
+     * - initDefault 이후 enum 항목이 늘어났을 때 자동 동기화 용도
+     * - sortOrder 는 defaultOrder, isVisible 은 true 로 시작 (사용자가 모달에서 끌 수 있음)
+     */
+    private List<UserMenuSetting> ensureAllMenusPresent(Long empId, List<UserMenuSetting> existing) {
+        if (existing.size() == SidebarMenu.values().length) return existing;
+        Set<SidebarMenu> have = EnumSet.noneOf(SidebarMenu.class);
+        for (UserMenuSetting e : existing) have.add(e.getMenuCode());
+        List<UserMenuSetting> missing = new ArrayList<>();
+        for (SidebarMenu menu : SidebarMenu.values()) {
+            if (!have.contains(menu)) {
+                missing.add(UserMenuSetting.builder()
+                        .empId(empId)
+                        .menuCode(menu)
+                        .isVisible(true)
+                        .sortOrder(menu.getDefaultOrder())
+                        .build());
+            }
+        }
+        repository.saveAll(missing);
+        return repository.findByEmpIdOrderBySortOrderAsc(empId);
     }
 
     /**

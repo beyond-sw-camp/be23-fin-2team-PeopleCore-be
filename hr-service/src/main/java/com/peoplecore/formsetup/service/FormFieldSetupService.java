@@ -229,10 +229,11 @@ public class FormFieldSetupService {
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "empName", "성명", "기본 인적사항", FieldType.TEXT, true, true, 1, null, null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "empNameEn", "영문명", "기본 인적사항", FieldType.TEXT, true, false, 2, null, null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "birthDate", "생년월일", "기본 인적사항", FieldType.DATE, true, true, 3, null, null));
-        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "gender", "성별", "기본 인적사항", FieldType.RADIO, true, true, 4, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "residentNumber", "주민등록번호", "기본 인적사항", FieldType.TEXT, true, true, 4, null, null));
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "phone", "연락처", "기본 인적사항", FieldType.TEXT, true, true, 5, null, null));
-        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "personalEmail", "개인 이메일", "기본 인적사항", FieldType.TEXT, true, true, 6, null, null));
-        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "address", "주소", "기본 인적사항", FieldType.TEXT, true, false, 7, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "gender", "성별", "기본 인적사항", FieldType.RADIO, true, true, 6, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "personalEmail", "개인 이메일", "기본 인적사항", FieldType.TEXT, true, true, 7, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "address", "주소", "기본 인적사항", FieldType.TEXT, true, false, 8, null, null));
 
         // 소속 및 고용 정보
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "hireDate", "입사일", "소속 및 고용 정보", FieldType.DATE, true, true, 1, null, null));

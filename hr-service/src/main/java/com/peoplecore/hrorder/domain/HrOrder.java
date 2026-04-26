@@ -52,7 +52,7 @@ public class HrOrder {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     @Builder.Default
-    private OrderStatus status = OrderStatus.PENDING;
+    private OrderStatus status = OrderStatus.SCHEDULED;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)

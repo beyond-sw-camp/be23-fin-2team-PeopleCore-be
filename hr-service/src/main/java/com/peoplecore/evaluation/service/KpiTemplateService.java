@@ -2,14 +2,21 @@ package com.peoplecore.evaluation.service;
 
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.department.repository.DepartmentRepository;
+import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.KpiOption;
 import com.peoplecore.evaluation.domain.KpiOptionType;
 import com.peoplecore.evaluation.domain.KpiTemplate;
+import com.peoplecore.evaluation.domain.Season;
+import com.peoplecore.evaluation.domain.Stage;
+import com.peoplecore.evaluation.domain.StageStatus;
+import com.peoplecore.evaluation.domain.StageType;
 import com.peoplecore.evaluation.dto.KpiTemplateRequest;
 import com.peoplecore.evaluation.dto.KpiTemplateResponse;
 import com.peoplecore.evaluation.repository.GoalRepository;
 import com.peoplecore.evaluation.repository.KpiOptionRepository;
 import com.peoplecore.evaluation.repository.KpiTemplateRepository;
+import com.peoplecore.evaluation.repository.SeasonRepository;
+import com.peoplecore.evaluation.repository.StageRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -28,17 +35,35 @@ public class KpiTemplateService {
     private final DepartmentRepository departmentRepository;
     private final DepartmentDepthResolver departmentDepthResolver;
     private final GoalRepository goalRepository;
+    private final SeasonRepository seasonRepository;
+    private final StageRepository stageRepository;
 
     public KpiTemplateService(KpiTemplateRepository kpiTemplateRepository,
                               KpiOptionRepository kpiOptionRepository,
                               DepartmentRepository departmentRepository,
                               DepartmentDepthResolver departmentDepthResolver,
-                              GoalRepository goalRepository) {
+                              GoalRepository goalRepository,
+                              SeasonRepository seasonRepository,
+                              StageRepository stageRepository) {
         this.kpiTemplateRepository = kpiTemplateRepository;
         this.kpiOptionRepository = kpiOptionRepository;
         this.departmentRepository = departmentRepository;
         this.departmentDepthResolver = departmentDepthResolver;
         this.goalRepository = goalRepository;
+        this.seasonRepository = seasonRepository;
+        this.stageRepository = stageRepository;
+    }
+
+    // 회사의 OPEN 시즌에서 GOAL_ENTRY 단계가 IN_PROGRESS 면 KPI 템플릿 변경 차단
+    // — 박제 시점 보호: 사원이 등록 중인 Goal 의 박제값이 시점에 따라 달라지는 사고 방지
+    private void requireGoalEntryNotInProgress(UUID companyId) {
+        Season openSeason = seasonRepository.findByCompany_CompanyIdAndStatus(companyId, EvalSeasonStatus.OPEN).orElse(null);
+        if (openSeason == null) return; // OPEN 시즌 없음 — 자유
+        Stage goalEntry = stageRepository.findBySeason_SeasonIdAndType(openSeason.getSeasonId(), StageType.GOAL_ENTRY).orElse(null);
+        if (goalEntry == null) return;
+        if (goalEntry.getStatus() == StageStatus.IN_PROGRESS) {
+            throw new IllegalStateException("목표 등록 단계 진행 중에는 KPI 지표를 변경할 수 없습니다");
+        }
     }
 
     // 1번 - depth 정책 기반 부서 IN 필터 적용
@@ -58,6 +83,9 @@ public class KpiTemplateService {
 
 //    3번 신규등록 -DepartmentDepthResolver호출
     public KpiTemplateResponse createTemplate(UUID companyId, KpiTemplateRequest req){
+
+        // 목표 등록 단계 진행 중에는 신규 등록 차단 (사원 폼별로 보이는 옵션이 달라지는 것 방지)
+        requireGoalEntryNotInProgress(companyId);
 
         // depth 정책 검증
         Set<Long> validDeptIds = departmentDepthResolver.resolveValidDeptIds(companyId);
@@ -108,6 +136,9 @@ public class KpiTemplateService {
     // 4번 수정 - 회사 검증 + 도메인 메서드로 갱신
     public KpiTemplateResponse updateTemplate(UUID companyId, Long id, KpiTemplateRequest req) {
 
+        // 목표 등록 단계 진행 중에는 변경 차단 (박제 시점 보호)
+        requireGoalEntryNotInProgress(companyId);
+
         // 기존 row 로드 (회사 스코프 강제)
         KpiTemplate t = kpiTemplateRepository.findOneByCompany(id, companyId).orElse(null);
         if (t == null) {
@@ -149,6 +180,9 @@ public class KpiTemplateService {
 
     // 5번 삭제 - hybrid: 사용 이력 0건이면 hard delete, 있으면 soft delete
     public void deleteTemplate(UUID companyId, Long id) {
+
+        // 목표 등록 단계 진행 중에는 삭제 차단 (사원 등록 중 옵션 사라지는 것 방지)
+        requireGoalEntryNotInProgress(companyId);
 
         // 기존 row 로드 (회사 스코프 강제)
         KpiTemplate t = kpiTemplateRepository.findOneByCompany(id, companyId).orElse(null);

@@ -10,6 +10,7 @@ import com.peoplecore.evaluation.dto.TeamMemberGoalResponse;
 import com.peoplecore.evaluation.repository.GoalRepository;
 import com.peoplecore.evaluation.repository.KpiTemplateRepository;
 import com.peoplecore.evaluation.repository.SeasonRepository;
+import com.peoplecore.evaluation.repository.StageRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,18 +31,30 @@ public class GoalService {
 
     private final GoalRepository goalRepository;
     private final SeasonRepository seasonRepository;
+    private final StageRepository stageRepository;
     private final EmployeeRepository employeeRepository;
     private final KpiTemplateRepository kpiTemplateRepository;
     private final EvaluationRulesService rulesService;
 
     public GoalService(GoalRepository goalRepository,
-                       SeasonRepository seasonRepository, EmployeeRepository employeeRepository,
+                       SeasonRepository seasonRepository, StageRepository stageRepository,
+                       EmployeeRepository employeeRepository,
                        KpiTemplateRepository kpiTemplateRepository, EvaluationRulesService rulesService) {
         this.goalRepository = goalRepository;
         this.seasonRepository = seasonRepository;
+        this.stageRepository = stageRepository;
         this.employeeRepository = employeeRepository;
         this.kpiTemplateRepository = kpiTemplateRepository;
         this.rulesService = rulesService;
+    }
+
+    // GOAL_ENTRY 단계가 IN_PROGRESS 인지 검증 — 박제 시점 보호 (template 변경 전후 박제값 일관성)
+    private void requireGoalEntryInProgress(Long seasonId) {
+        Stage goalEntry = stageRepository.findBySeason_SeasonIdAndType(seasonId, StageType.GOAL_ENTRY)
+                .orElseThrow(() -> new IllegalStateException("목표 등록 단계를 찾을 수 없습니다"));
+        if (goalEntry.getStatus() != StageStatus.IN_PROGRESS) {
+            throw new IllegalStateException("목표 등록 단계가 진행 중일 때만 목표를 변경할 수 있습니다");
+        }
     }
 
     // 1번 본인 목표 목록 조회 - 회사의 OPEN 시즌만
@@ -119,6 +132,9 @@ public class GoalService {
         if (status != GoalApprovalStatus.DRAFT && status != GoalApprovalStatus.REJECTED) {
             throw new IllegalStateException("제출완료/승인된 목표는 수정할 수 없습니다");
         }
+
+        // 목표 등록 단계가 IN_PROGRESS 일 때만 허용 — 박제 시점 보호
+        requireGoalEntryInProgress(goal.getSeason().getSeasonId());
 
         applyRequestToGoal(goal, companyId, request, request.getGrade());
 

@@ -24,6 +24,7 @@ public class EmpDetailResponseDto {
     private String    empZipCode;
     private String    empAddressBase;
     private String    empAddressDetail;
+    private String    empResidentNumber;
 
     // 소속 및 고용 정보
     private LocalDate empHireDate;
@@ -57,6 +58,7 @@ public class EmpDetailResponseDto {
                 .empZipCode(emp.getEmpZipCode())
                 .empAddressBase(emp.getEmpAddressBase())
                 .empAddressDetail(emp.getEmpAddressDetail())
+                .empResidentNumber(emp.getEmpResidentNumber())
                 .empHireDate(emp.getEmpHireDate())
                 .empType(emp.getEmpType() != null ? emp.getEmpType().name() : null)
                 .deptId(emp.getDept() != null ? emp.getDept().getDeptId() : null)

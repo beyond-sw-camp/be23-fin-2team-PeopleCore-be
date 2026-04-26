@@ -42,6 +42,9 @@ public class EmployeeUpdateRequestDto {
 
     private String empAddressDetail;
 
+    @NotBlank
+    private String empResidentNumber;
+
     // 소속 및 고용 정보
     @NotNull
     private LocalDate empHireDate;

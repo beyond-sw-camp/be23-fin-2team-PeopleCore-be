@@ -24,14 +24,22 @@ import com.peoplecore.salarycontract.dto.SalaryContractDetailResDto;
 import com.peoplecore.salarycontract.dto.SalaryContractHisToryResDto;
 import com.peoplecore.salarycontract.dto.SalaryContractListResDto;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.*;
 
@@ -139,13 +147,19 @@ public class SalaryContractService {
 //        계약서 저장
 
 
-//        첨부파일 처리 — 계약서 build 전에 업로드해서 fileName 을 함께 세팅
+//        첨부파일 처리 — 계약서 build 전에 업로드해서 메타 함께 세팅
         String fileName = null;
+        String originalFileName = null;
+        String contentType = null;
+        Long fileSize = null;
         if (file != null && !file.isEmpty()) {
             try {
                 fileName = minioService.uploadFile(file, "salary-contract");
+                originalFileName = file.getOriginalFilename();
+                contentType = file.getContentType();
+                fileSize = file.getSize();
             } catch (Exception e) {
-                throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED);
+                throw new CustomException(ErrorCode.FILE_UPLOAD_FAILED, e);
             }
         }
 
@@ -162,6 +176,9 @@ public class SalaryContractService {
                 .applyFrom(applyFrom)
                 .applyTo(applyTo)
                 .fileName(fileName)
+                .originalFileName(originalFileName)
+                .contentType(contentType)
+                .fileSize(fileSize)
                 .details(details)
                 .build();
 
@@ -185,6 +202,45 @@ public class SalaryContractService {
             throw new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND);
         }
         return toDetailRes(contract);
+    }
+
+    //    3-1. 첨부 파일 다운로드 — MinIO 객체를 가져와 원본 파일명/Content-Type/Length 헤더와 함께 스트리밍
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> downloadFile(UUID companyId, Long contractId) {
+        SalaryContract contract = salaryContractRepository.findById(contractId)
+                .orElseThrow(() -> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
+
+        if (!contract.getCompanyId().equals(companyId)) {
+            throw new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND);
+        }
+        if (contract.getFileName() == null || contract.getFileName().isBlank()) {
+            throw new CustomException(ErrorCode.FILE_NOT_FOUND);
+        }
+
+        InputStream in;
+        try {
+            in = minioService.downloadFile(contract.getFileName());
+        } catch (Exception e) {
+            throw new CustomException(ErrorCode.FILE_DOWNLOAD_FAILED, e);
+        }
+
+        String original = contract.getOriginalFileName() != null
+                ? contract.getOriginalFileName()
+                : "salary-contract";
+        // 한글 파일명 RFC 5987 인코딩
+        String encodedName = URLEncoder.encode(original, StandardCharsets.UTF_8)
+                .replaceAll("\\+", "%20");
+        String ct = contract.getContentType() != null
+                ? contract.getContentType()
+                : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedName)
+                .contentType(MediaType.parseMediaType(ct));
+        if (contract.getFileSize() != null) {
+            builder = builder.contentLength(contract.getFileSize());
+        }
+        return builder.body(new InputStreamResource(in));
     }
 
     //    domain -> dto
@@ -227,6 +283,7 @@ public class SalaryContractService {
                 .empName(emp.getEmpName())
                 .fields(fields)
                 .fileName(contract.getFileName())
+                .originalFileName(contract.getOriginalFileName())
                 .registeredDate(contract.getCreatedAt() != null ? contract.getCreatedAt().toLocalDate() : null)
                 .build();
 
