@@ -1,6 +1,7 @@
 package com.peoplecore.attendance.repository;
 
 import com.peoplecore.attendance.entity.CommuteRecord;
+import com.peoplecore.attendance.entity.WorkStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -11,6 +12,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -119,4 +121,10 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
                                                     @Param("empId") Long empId,
                                                     @Param("from") LocalDate from,
                                                     @Param("to") LocalDate to);
+
+
+//     사원의 workStatus 카운트.
+    long countByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndWorkStatusIn(
+            UUID companyId, Long empId, LocalDate from, LocalDate to,
+            Collection<WorkStatus> statuses);
 }

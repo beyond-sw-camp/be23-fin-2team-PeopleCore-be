@@ -19,6 +19,7 @@ import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.KpiDirection;
 import com.peoplecore.evaluation.domain.ManagerEvaluation;
 import com.peoplecore.evaluation.domain.MyResultStatus;
+import com.peoplecore.evaluation.domain.SelfEvalApprovalStatus;
 import com.peoplecore.evaluation.domain.SelfEvaluation;
 import com.peoplecore.evaluation.domain.SelfEvaluationFile;
 import com.peoplecore.evaluation.domain.TaskGrade;
@@ -36,6 +37,8 @@ import com.peoplecore.evaluation.repository.SeasonRepository;
 import com.peoplecore.evaluation.repository.SelfEvaluationFileRepository;
 import com.peoplecore.evaluation.repository.SelfEvaluationRepository;
 import com.peoplecore.evaluation.repository.StageRepository;
+import com.peoplecore.attendance.entity.WorkStatus;
+import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -46,6 +49,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -69,6 +73,7 @@ public class EvalGradeService {
     private final ManagerEvaluationRepository mgrEvalRepository;
     private final EvaluationRulesService rulesService;
     private final HrAlarmPublisher hrAlarmPublisher;
+    private final CommuteRecordRepository commuteRecordRepository;
 
     public EvalGradeService(EvalGradeRepository evalGradeRepository,
                             SeasonRepository seasonRepository,
@@ -82,7 +87,8 @@ public class EvalGradeService {
                             SelfEvaluationFileRepository selfEvaluationFileRepository,
                             ManagerEvaluationRepository mgrEvalRepository,
                             EvaluationRulesService rulesService,
-                            HrAlarmPublisher hrAlarmPublisher) {
+                            HrAlarmPublisher hrAlarmPublisher,
+                            CommuteRecordRepository commuteRecordRepository) {
         this.evalGradeRepository = evalGradeRepository;
         this.seasonRepository = seasonRepository;
         this.departmentRepository = departmentRepository;
@@ -96,6 +102,7 @@ public class EvalGradeService {
         this.mgrEvalRepository = mgrEvalRepository;
         this.rulesService = rulesService;
         this.hrAlarmPublisher = hrAlarmPublisher;
+        this.commuteRecordRepository = commuteRecordRepository;
     }
 
     @Transactional(readOnly = true)
@@ -200,8 +207,9 @@ public class EvalGradeService {
             BigDecimal weighted = weightedSum.divide(weightTotal, 2, RoundingMode.HALF_UP);
 
 
-//            조정점수(근태 등)
-            BigDecimal adjustment = aggregateAdustment(empId, seasonId, snapshot);
+//            조정점수(근태 등) - 시즌 기간 내 지각/결근 카운트 × 항목별 점수
+            BigDecimal adjustment = aggregateAdustment(empId, companyId,
+                    season.getStartDate(), season.getEndDate(), snapshot);
 
 //            종합점수
             BigDecimal total = weighted.add(adjustment);
@@ -341,21 +349,52 @@ public class EvalGradeService {
         return 0;
     }
 
-    //    조정점수 집계 -enabled항목만 합산(조정점수 합산)
-    private BigDecimal aggregateAdustment(Long empId, Long seasonId, FormSnapshotDto snapshot) {
+    //    조정점수 집계 - enabled 항목만 합산
+    //      - 'late'   : workStatus IN (LATE, LATE_AND_EARLY) 카운트
+    //      - 'absent' : workStatus = ABSENT 카운트
+    //    threshold 면제 횟수까지는 무감점, 초과분(count - threshold)에만 points 적용.
+    private BigDecimal aggregateAdustment(Long empId, UUID companyId,
+                                          LocalDate from, LocalDate to,
+                                          FormSnapshotDto snapshot) {
         BigDecimal sum = BigDecimal.ZERO;
+        if (from == null || to == null) return sum;
+
         for (FormSnapshotDto.Adjustment adj : snapshot.getAdjustments()) {
-//            비활성 스킵
-            if (!Boolean.TRUE.equals(adj.getEnabled())) {
-                continue;
+            if (!Boolean.TRUE.equals(adj.getEnabled())) continue;
+
+            long count;
+            if ("late".equals(adj.getId())) {
+                count = countLate(companyId, empId, from, to);
+            } else if ("absent".equals(adj.getId())) {
+                count = countAbsent(companyId, empId, from, to);
+            } else {
+                count = 0;
             }
-//            TODO: 항목별 발생건후 조회 후 건당 point환산(부호로 가/감 자연 반영)
-            long count = 0;
-            if (count > 0) {
-                sum = sum.add(adj.getPoints().multiply(BigDecimal.valueOf(count)));
+
+            long threshold = adj.getThreshold() != null ? Math.max(0, adj.getThreshold()) : 0;
+            long effective = Math.max(0, count - threshold);
+
+            if (effective > 0) {
+                sum = sum.add(adj.getPoints().multiply(BigDecimal.valueOf(effective)));
             }
         }
         return sum;
+    }
+
+    //    지각 카운트 - LATE_AND_EARLY (지각+조퇴) 도 지각 1회로 집계
+    private long countLate(UUID companyId, Long empId, LocalDate from, LocalDate to) {
+        return commuteRecordRepository
+                .countByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndWorkStatusIn(
+                        companyId, empId, from, to,
+                        EnumSet.of(WorkStatus.LATE, WorkStatus.LATE_AND_EARLY));
+    }
+
+    //    결근 카운트 - 배치가 미출근일에 CommuteRecord.absent() 로 row 적재
+    private long countAbsent(UUID companyId, Long empId, LocalDate from, LocalDate to) {
+        return commuteRecordRepository
+                .countByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndWorkStatusIn(
+                        companyId, empId, from, to,
+                        EnumSet.of(WorkStatus.ABSENT));
     }
 
 
@@ -1407,6 +1446,7 @@ public class EvalGradeService {
         for (Goal go : goals) {
             SelfEvaluation se = selfByGoal.get(go.getGoalId());
             if (se == null) continue;
+            if (se.getApprovalStatus() != SelfEvalApprovalStatus.APPROVED) continue;
             List<SelfEvaluationFile> fs = filesBySelfEvalId.get(se.getSelfEvalId());
             List<SelfEvaluationResponse.FileResponse> fileDtos = new ArrayList<>();
             if (fs != null) {

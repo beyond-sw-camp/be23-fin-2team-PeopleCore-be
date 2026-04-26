@@ -18,7 +18,8 @@ public class SalaryContractDetailResDto {
     private String empNum;
     private String empName;
     private List<FieldDetail> fields; //폼설정+저장된 값 key=form, value=create
-    private String fileName; //첨부파일명
+    private String fileName; //MinIO 객체 키 (디버그용)
+    private String originalFileName; //화면에 표시할 원본 파일명
     private LocalDate registeredDate; //등록일
 
     @AllArgsConstructor

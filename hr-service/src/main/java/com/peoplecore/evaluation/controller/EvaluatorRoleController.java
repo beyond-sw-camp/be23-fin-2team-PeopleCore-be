@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-// 평가자 역할 설정 API. /config 은 GET/PUT 둘 다 HR_SUPER_ADMIN 전용. /me 는 전 사원 호출 가능.
+// 평가자 역할 설정 API. /config, /preview 는 HR_ADMIN 이상 (HR_ADMIN | HR_SUPER_ADMIN). /me 는 전 사원 호출 가능.
 @RestController
 @RequestMapping("/evaluator-role")
 @RequiredArgsConstructor
@@ -21,13 +21,17 @@ public class EvaluatorRoleController {
 
     private final EvaluatorRoleService service;
 
+    private static boolean isHrAdminOrAbove(String role) {
+        return "HR_ADMIN".equals(role) || "HR_SUPER_ADMIN".equals(role);
+    }
+
     // 회사 현재 평가자 설정 조회.
     @GetMapping("/config")
     public ResponseEntity<EvaluatorRoleConfigResponse> getConfig(
         @RequestHeader("X-User-Company") UUID companyId,
         @RequestHeader("X-User-Role") String role
     ) {
-        if (!"HR_SUPER_ADMIN".equals(role)) {
+        if (!isHrAdminOrAbove(role)) {
             return ResponseEntity.status(403).build();
         }
         return ResponseEntity.ok(service.getConfig(companyId));
@@ -40,7 +44,7 @@ public class EvaluatorRoleController {
         @RequestHeader("X-User-Role") String role,
         @Valid @RequestBody EvaluatorRoleUpdateRequest request
     ) {
-        if (!"HR_SUPER_ADMIN".equals(role)) {
+        if (!isHrAdminOrAbove(role)) {
             return ResponseEntity.status(403).build();
         }
         return ResponseEntity.ok(service.updateConfig(companyId, request));
@@ -54,7 +58,7 @@ public class EvaluatorRoleController {
         @RequestParam EvaluatorRoleMode mode,
         @RequestParam Long targetId
     ) {
-        if (!"HR_SUPER_ADMIN".equals(role)) {
+        if (!isHrAdminOrAbove(role)) {
             return ResponseEntity.status(403).build();
         }
         return ResponseEntity.ok(service.preview(companyId, mode, targetId));

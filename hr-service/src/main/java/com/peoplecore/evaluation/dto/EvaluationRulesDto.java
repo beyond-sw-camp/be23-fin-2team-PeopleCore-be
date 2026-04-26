@@ -73,7 +73,7 @@ public class EvaluationRulesDto {
     }
 
 
-    // 가감점 (예: {id:"attendance", name:"근태 감점", points:-2, enabled:true})
+    // 가감점 (예: {id:"attendance", name:"근태 감점", points:-2, threshold:0, enabled:true})
     @Data
     @Builder
     @AllArgsConstructor
@@ -83,6 +83,7 @@ public class EvaluationRulesDto {
         private String id;         // 항목 식별자
         private String name;       // 항목명
         private Integer points;    // 점수 (음수=감점 / 양수=가산)
+        private Integer threshold; // 면제 횟수 - 이 횟수까지는 무감점, 초과분에만 points 적용 (null/0이면 면제 없음)
         private Boolean enabled;   // 활성 여부
     }
 
