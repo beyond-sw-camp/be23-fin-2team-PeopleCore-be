@@ -293,10 +293,9 @@ public class EvaluationRulesService {
                 Map.of("gradeId", "D", "rawScore", 60)
         ));
 
-        // KPI 점수 환산 규칙 — 업계 표준 (cap 120, 100점 만점 리스케일)
+        // KPI 점수 환산 규칙 — 업계 표준 (cap 120, 자기평가 만점 100 고정)
         form.put("kpiScoring", Map.of(
                 "cap", 120,
-                "scaleTo", 100,
                 "maintainTolerance", 0,
                 "underperformanceThreshold", 0,
                 "underperformanceFactor", 1.0

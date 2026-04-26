@@ -101,8 +101,8 @@ public class EvaluationRulesDto {
     }
 
 
-    // KPI 점수 환산 규칙 (예: {cap:120, scaleTo:100, maintainTolerance:0, ...})
-    // 달성률 → 점수 변환 시 적용되는 상한·리스케일·MAINTAIN 허용오차·미달 패널티
+    // KPI 점수 환산 규칙  {cap:120, maintainTolerance:0, ...}
+    // 달성률 -> 점수 변환 시 적용되는 상한·MAINTAIN 허용오차·미달 패널티
     @Data
     @Builder
     @AllArgsConstructor
@@ -110,7 +110,6 @@ public class EvaluationRulesDto {
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class KpiScoringConfig {
         private Integer cap;                       // 점수 상한 % (기본 120)
-        private Integer scaleTo;                   // 리스케일 만점 (기본 100)
         private Integer maintainTolerance;         // MAINTAIN 허용 ±n% (기본 0 = 선형)
         private Integer underperformanceThreshold; // 미달 기준 % (기본 0 = 비활성)
         private BigDecimal underperformanceFactor; // 미달 구간 점수 배율 (기본 1.0)
@@ -184,10 +183,9 @@ public class EvaluationRulesDto {
                         .중(jung)
                         .하(ha)
                         .build())
-                // KPI 환산 규칙 — JSON에 없으면 기본값(120/100/0/0/1.0)으로 fallback
+                // KPI 환산 규칙 — JSON에 없으면 기본값(120/0/0/1.0)으로 fallback (자기평가 만점은 100 고정)
                 .kpiScoring(snap.kpiScoring != null ? snap.kpiScoring : KpiScoringConfig.builder()
                         .cap(120)
-                        .scaleTo(100)
                         .maintainTolerance(0)
                         .underperformanceThreshold(0)
                         .underperformanceFactor(BigDecimal.ONE)
