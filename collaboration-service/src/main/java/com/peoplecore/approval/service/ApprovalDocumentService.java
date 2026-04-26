@@ -1,6 +1,8 @@
 package com.peoplecore.approval.service;
 
 import com.peoplecore.alarm.publisher.AlarmEventPublisher;
+import com.peoplecore.approval.handler.ApprovalFormHandler;
+import com.peoplecore.approval.handler.ApprovalFormHandlerRegistry;
 import com.peoplecore.approval.publisher.ApprovalEventPublisher;
 import com.peoplecore.approval.dto.DocumentCreateRequest;
 import com.peoplecore.approval.dto.DocumentDetailResponse;
@@ -51,8 +53,9 @@ public class ApprovalDocumentService {
     private final ApprovalEventPublisher approvalEventPublisher;
     private final HrServiceClient hrServiceClient;
     private final ApprovalDocumentRepository approvalDocumentRepository;
+    private final ApprovalFormHandlerRegistry formHandlerRegistry;
 
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalDocumentRepository approvalDocumentRepository) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalDocumentRepository approvalDocumentRepository, ApprovalFormHandlerRegistry formHandlerRegistry) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -68,6 +71,7 @@ public class ApprovalDocumentService {
         this.approvalEventPublisher = approvalEventPublisher;
         this.hrServiceClient = hrServiceClient;
         this.approvalDocumentRepository = approvalDocumentRepository;
+        this.formHandlerRegistry = formHandlerRegistry;
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번 + 첨부 업로드 */
@@ -75,9 +79,11 @@ public class ApprovalDocumentService {
     public Long createDocument(UUID companyId, Long empId, String empName, Long deptId, String empGrade, String empTitle, DocumentCreateRequest request, List<MultipartFile> files) {
         log.info("[기안] empId={}, formId={}, filesReceived={}", empId, request.getFormId(), files != null ? files.size() : 0);
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        /* 근태 정정 / 휴가 부여 신청 양식이면 결재선에 HR 사원 포함 여부 검증 */
-        String formCode = form.getFormCode();
-        if ("ATTENDANCE_MODIFY".equals(formCode) || "VACATION_GRANT_REQUEST".equals(formCode)) {
+        /* 멱등키 필요 폼(근태정정/휴가부여)이면 결재선에 HR 사원 포함 여부 검증 */
+        boolean needIdempotency = formHandlerRegistry.findByForm(form)
+                .map(ApprovalFormHandler::requiresIdempotencyKey)
+                .orElse(false);
+        if (needIdempotency) {
             validateHrApproverIncluded(companyId, request.getApprovalLines());
         }
         CompanyInfoResponse companyInfoResponse = hrCacheService.getCompany(companyId);
@@ -362,10 +368,8 @@ public class ApprovalDocumentService {
         if (!prev.getEmpId().equals(empId)) {
             throw new BusinessException("본인의 문서만 재기안할 수 있습니다.", HttpStatus.FORBIDDEN);
         }
-        /* REJECTED 상태에서만 재기안 */
-        if (prev.getApprovalStatus() != ApprovalStatus.REJECTED) {
-            throw new BusinessException("반려된 문서만 재기안할 수 있습니다.");
-        }
+        /* REJECTED 외 상태는 State 가 throw */
+        prev.requireResubmittable();
 
         /* 이전 문서는 손대지 않음 - REJECTED/docNum/docCompleteAt 그대로 보존 */
 
@@ -519,9 +523,8 @@ public class ApprovalDocumentService {
     public void recallDocument(UUID companyId, Long empId, Long docId) {
         ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId)
                 .orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        if (document.getApprovalStatus() != ApprovalStatus.PENDING) {
-            throw new BusinessException("결재 진행 중인 문서만 회수할 수 있습니다.");
-        }
+        /* PENDING 외 상태는 State 가 throw */
+        document.requireOpenForApproval();
         /* 본인 문서인지 확인 */
         if (!document.getEmpId().equals(empId)) {
             throw new BusinessException("본인의 문서만 회수할 수 있습니다.", HttpStatus.FORBIDDEN);
@@ -579,16 +582,15 @@ public class ApprovalDocumentService {
         // @Version 낙관적 락: 동시에 결재자가 승인하면 OptimisticLockingFailureException 발생
     }
 
-    /*본인의 임시 저장 문서 조회*/
+    /*본인의 임시 저장 문서 조회 — 상태 가드는 State 패턴에 위임 */
     private ApprovalDocument findOwnDraftDocument(UUID companyId, Long empId, Long docId) {
         ApprovalDocument document = documentRepository.findByDocIdAndCompanyId(docId, companyId).orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
         if (!document.getEmpId().equals(empId)) {
             throw new BusinessException("본인의 문서만 수정할 수 있습니다.", HttpStatus.FORBIDDEN);
         }
-        if (document.getApprovalStatus() != ApprovalStatus.DRAFT) {
-            throw new BusinessException("임시 저장 문서만 수정/ 삭제할 수 있습니다. ");
-        }
+        /* DRAFT 외 상태는 State 가 throw */
+        document.requireDraftStage();
         return document;
     }
 

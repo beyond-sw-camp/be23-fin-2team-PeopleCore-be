@@ -4,8 +4,8 @@ import com.peoplecore.attendance.dto.AttendanceWeeklyHeadlineResDto;
 import com.peoplecore.attendance.dto.WeekCommuteRow;
 import com.peoplecore.attendance.dto.WeekEmpRow;
 import com.peoplecore.attendance.dto.WeekVacationRow;
-import com.peoplecore.attendance.entity.CheckInStatus;
 import com.peoplecore.attendance.entity.EmploymentFilter;
+import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.entity.OvertimePolicy;
 import com.peoplecore.attendance.repository.AttendanceAggregateQueryRepository;
 import com.peoplecore.attendance.repository.OverTimePolicyRepository;
@@ -60,14 +60,14 @@ public class AttendanceAggregateService {
 
         /*메모리 인덱싱 */
         /* commuteMap[empId][workDate]하루 한건 보장 (unique 제약)*/
-        // 3. commutes 단일 순회 — (사원→(날짜→상태)) 맵 + 주간 누적분 맵 동시 구축
-        //    체크아웃 전(minutes=null) 은 주간 누적에서 0 처리
-        Map<Long, Map<LocalDate, CheckInStatus>> checkInMap = new HashMap<>();
+        // 3. commutes 단일 순회 — (사원→(날짜→WorkStatus)) 맵 + 주간 누적분 맵 동시 구축
+        //    체크아웃 전(minutes=null) 은 주간 누적에서 0 처리. ABSENT 레코드도 포함
+        Map<Long, Map<LocalDate, WorkStatus>> statusMap = new HashMap<>();
         Map<Long, Long> weekMinutesMap = new HashMap<>();
         for (WeekCommuteRow c : commutes) {
-            checkInMap
+            statusMap
                     .computeIfAbsent(c.getEmpId(), k -> new HashMap<>())
-                    .put(c.getWorkDate(), c.getCheckInStatus());
+                    .put(c.getWorkDate(), c.getWorkStatus());
             if (c.getMinutes() != null) {
                 weekMinutesMap.merge(c.getEmpId(), c.getMinutes(), Long::sum);
             }
@@ -117,7 +117,7 @@ public class AttendanceAggregateService {
             if (gwd == null) continue;
 
             // 6-c. 사원별 맵 참조 1회
-            Map<LocalDate, CheckInStatus> empCin = checkInMap.getOrDefault(empId, Map.of());
+            Map<LocalDate, WorkStatus> empCin = statusMap.getOrDefault(empId, Map.of());
             Map<LocalDate, Double> empVac = vacFracMap.getOrDefault(empId, Map.of());
 
             // 6-d. 7일 루프 — 근무예정일(bit AND) 만 내부 진입
@@ -131,10 +131,13 @@ public class AttendanceAggregateService {
                 // 분모: 종일휴가 제외 (반차/반반차는 포함)
                 if (!fullDay) denom++;
 
-                CheckInStatus status = empCin.get(day);
-                if (status != null) {
-                    // 체크인 있음 → 지각/정상
-                    if (status == CheckInStatus.LATE) lateCnt++;
+                WorkStatus status = empCin.get(day);
+                /* 체크인 부재: 레코드 없음(null) 또는 결근 레코드(ABSENT) */
+                boolean noCheckIn = (status == null) || (status == WorkStatus.ABSENT);
+
+                if (!noCheckIn) {
+                    // 체크인 있는 레코드 — 지각 vs 정상 (LATE_AND_EARLY 도 지각으로 카운트)
+                    if (status == WorkStatus.LATE || status == WorkStatus.LATE_AND_EARLY) lateCnt++;
                     else normalCnt++;
                 } else if (frac == 0.0) {
                     // 체크인 없음 + 승인휴가 전무 → 결근 누적 (반차라도 휴가 있으면 제외)
@@ -161,21 +164,6 @@ public class AttendanceAggregateService {
                 .build();
     }
 
-
-    /* 사원의 주간 휴가 리스트에서 특정 날짜의 휴가 계산  */
-    private BigDecimal vacationFractionOnDate(List<WeekVacationRow> vacs, LocalDate day) {
-        BigDecimal max = BigDecimal.ZERO;
-        for (WeekVacationRow v : vacs) {
-            LocalDate s = v.getStartAt().toLocalDate();
-            LocalDate e = v.getEndAt().toLocalDate();
-            /* 범위 밖은 스킵*/
-            if (day.isBefore(s) || day.isAfter(e)) continue;
-            /* 다일 휴가는 종일 취급, 하루짜리는 useDay 그대로 */
-            BigDecimal frac = s.equals(e) ? v.getVacReqUseDay() : BigDecimal.ONE;
-            if (frac != null && frac.compareTo(max) > 0) max = frac;
-        }
-        return max;
-    }
 
     /*회사별 주간 최대 근무시간 조회 */
     private int resolveWeekMaxMinutes(UUID companyId) {

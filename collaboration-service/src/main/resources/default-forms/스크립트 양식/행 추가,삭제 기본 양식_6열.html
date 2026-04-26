@@ -1,94 +1,85 @@
-<!-- Page Wrapping (start) : Style retention -->
 <div id="divCustomWrapper">
-	<!-- 1. Title Section (start) -->
-	<div class="titleSection">양식명</div>
-	<!-- 1. Title Section (end) -->
-	<!-- 2. Draft Section (Start) -->
-	<div class="partition">
-		<!-- 2.1 Drafter Information (Start) -->
-		<div class="left">
-			<table style="width:335px; height:131px;">
-				<colgroup><col width="65"><col width="270"></colgroup>
-				<tbody>
-					<tr><td class="ACel">문서번호</td><td class="BCel"><span data-dsl="{{label:docNo}}"></span></td></tr>
-					<tr><td class="ACel">작 성 일</td><td class="BCel"><span data-dsl="{{label:draftDate}}"></span></td></tr>
-					<tr><td class="ACel">작성부서</td><td class="BCel"><span data-dsl="{{label:draftDept}}"></span></td></tr>
-					<tr><td class="ACel">작 성 자</td><td class="BCel"><span data-dsl="{{label:draftUser}}"></span></td></tr>
-				</tbody>
-			</table>
-		</div>
-		<!-- 2.1 Drafter Information (end) -->
-		<!-- 2.2 Draft Line (start) -->
-		<div class="inaRowRight">
-			<!-- 결재선 Start--><span unselectable="on" contenteditable="false" class="comp_wrap"><span class="sign_type1_inline" data-group-seq="0" data-group-name="결재" data-group-max-count="4" data-group-type="type1" data-is-reception=""><span class="sign_tit_wrap"><span class="sign_tit"><strong>결재</strong></span></span><!-- 결재방 1EA Start --><span class="sign_member_wrap"><span class="sign_member" ><span class="sign_rank_wrap" ><span class="sign_rank" ></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span><!-- 결재방 1EA End--><!-- 결재방 1EA Start --><span class="sign_member_wrap"><span class="sign_member" ><span class="sign_rank_wrap" ><span class="sign_rank" ></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span><!-- 결재방 1EA End--><!-- 결재방 1EA Start --><span class="sign_member_wrap"><span class="sign_member" ><span class="sign_rank_wrap" ><span class="sign_rank" ></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span><!-- 결재방 1EA End--><!-- 결재방 1EA Start --><span class="sign_member_wrap"><span class="sign_member" ><span class="sign_rank_wrap" ><span class="sign_rank" ></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span><!-- 결재방 1EA End--></span></span><!-- 결재선 End-->
-			<!-- 합의 Start --><span class="sign_type1_inline" data-group-seq="10" data-group-name="합의" data-group-max-count="1" data-group-type="type1" data-is-agreement="true" id="agreementWrap"><span class="sign_tit_wrap"><span class="sign_tit"><strong>합의</strong></span></span><span class="sign_member_wrap"><span class="sign_member"><span class="sign_rank_wrap"><span class="sign_rank"></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span></span><!-- 합의 End -->
-		</div>
-		<!-- 2.2 Draft Line (end) -->
-	</div>
-	<!-- 2. Draft Section (end) -->
-	<!-- 3. Detail Section (start) -->
-	<table class="detailSection">
-		<colgroup>
-			<col width="100">
-			<col width="700">
-		</colgroup>
-		<tbody>
-			<tr>
-				<td colspan="1" class="ACel">제목</td>
-				<td colspan="1" class="BCel">
-					<span data-dsl="{{text:subject}}"></span>
-				</td>
-			</tr>
-		</tbody>
-	</table>
-	<table class="detailSection">
-		<colgroup>
-			<col width="40">
-			<col width="160">
-			<col width="150">
-			<col width="150">
-			<col width="150">
-			<col width="150">
-		</colgroup>
-		<tbody id="dynamic_table1"><!-- 기능 삽입 부분 -->
-			<tr><!-- 행 추가 삭제 버튼 -->
-				<td colspan="4" class="noneborder BCel">테이블명</td>
-				<td colspan="2" class="BCel viewModeHiddenPart noneborder right">
-					<a class="button" id="plus1">추가</a> <a class="button" id="minus1">삭제</a>
-				</td>
-			</tr>
-			<tr>
-				<td class="ACel">NO</td>
-				<td class="ACel">구분1</td>
-				<td class="ACel">구분2</td>
-				<td class="ACel">구분3</td>
-				<td class="ACel">구분4</td>
-				<td class="ACel">구분5</td>
-			</tr>
-			<tr class="copyRow1">
-				<td class="BCel center copyRowNo1">1</td>
-				<td class="BCel center">
-					<span data-dsl="{{text}}"></span>
-				</td>
-				<td class="BCel center">
-					<span data-dsl="{{text}}"></span>
-				</td>
-				<td class="BCel center">
-					<span data-dsl="{{text}}"></span>
-				</td>
-				<td class="BCel center">
-					<span data-dsl="{{text}}"></span>
-				</td>
-				<td class="BCel center">
-					<span data-dsl="{{text}}"></span>
-				</td>
-			</tr>
-		</tbody>
-	</table>
-	<!-- 3. Detail Section (end) -->
+<!-- 1. Title Section (start) -->
+<div class="titleSection">양식명</div>
+<!-- 1. Title Section (end) -->
+<!-- 2. Draft Section (Start) -->
+<div class="partition">
+<!-- 2.1 Drafter Information (Start) -->
+<div class="left">
+
 </div>
-<!-- Page Wrapping (end) -->
-<!----------------------------------------Style Start---------------------------------------->
+<!-- 2.1 Drafter Information (end) -->
+<!-- 2.2 Draft Line (start) -->
+<div class="inaRowRight">
+<!-- 결재선 Start--><span class="comp_wrap" contenteditable="false" unselectable="on"><span class="sign_type1_inline" data-group-max-count="4" data-group-name="결재" data-group-seq="0" data-group-type="type1" data-is-reception=""><span class="sign_tit_wrap"><span class="sign_tit"><strong>결재</strong></span></span><!-- 결재방 1EA Start --><span class="sign_member_wrap"><span class="sign_member"><span class="sign_rank_wrap"><span class="sign_rank"></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span><!-- 결재방 1EA End--><!-- 결재방 1EA Start --><span class="sign_member_wrap"><span class="sign_member"><span class="sign_rank_wrap"><span class="sign_rank"></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span><!-- 결재방 1EA End--><!-- 결재방 1EA Start --><span class="sign_member_wrap"><span class="sign_member"><span class="sign_rank_wrap"><span class="sign_rank"></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span><!-- 결재방 1EA End--><!-- 결재방 1EA Start --><span class="sign_member_wrap"><span class="sign_member"><span class="sign_rank_wrap"><span class="sign_rank"></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span><!-- 결재방 1EA End--></span></span><!-- 결재선 End-->
+<!-- 합의 Start --><span class="sign_type1_inline" data-group-max-count="1" data-group-name="합의" data-group-seq="10" data-group-type="type1" data-is-agreement="true" id="agreementWrap"><span class="sign_tit_wrap"><span class="sign_tit"><strong>합의</strong></span></span><span class="sign_member_wrap"><span class="sign_member"><span class="sign_rank_wrap"><span class="sign_rank"></span></span><span class="sign_wrap"></span><span class="sign_date_wrap"><span class="sign_date"></span></span></span></span></span><!-- 합의 End -->
+</div>
+<!-- 2.2 Draft Line (end) -->
+</div>
+<!-- 2. Draft Section (end) -->
+<!-- 3. Detail Section (start) -->
+<table class="detailSection">
+<colgroup>
+<col width="100"/>
+<col width="700"/>
+</colgroup>
+<tbody>
+<tr>
+<td class="ACel" colspan="1">제목</td>
+<td class="BCel" colspan="1">
+<span data-dsl="{{text:subject}}"></span>
+</td>
+</tr>
+</tbody>
+</table>
+<table class="detailSection">
+<colgroup>
+<col width="40"/>
+<col width="160"/>
+<col width="150"/>
+<col width="150"/>
+<col width="150"/>
+<col width="150"/>
+</colgroup>
+<tbody id="dynamic_table1"><!-- 기능 삽입 부분 -->
+<tr><!-- 행 추가 삭제 버튼 -->
+<td class="noneborder BCel" colspan="4">테이블명</td>
+<td class="BCel viewModeHiddenPart noneborder right" colspan="2">
+<a class="button" id="plus1">추가</a> <a class="button" id="minus1">삭제</a>
+</td>
+</tr>
+<tr>
+<td class="ACel">NO</td>
+<td class="ACel">구분1</td>
+<td class="ACel">구분2</td>
+<td class="ACel">구분3</td>
+<td class="ACel">구분4</td>
+<td class="ACel">구분5</td>
+</tr>
+<tr class="copyRow1">
+<td class="BCel center copyRowNo1">1</td>
+<td class="BCel center">
+<span data-dsl="{{text}}"></span>
+</td>
+<td class="BCel center">
+<span data-dsl="{{text}}"></span>
+</td>
+<td class="BCel center">
+<span data-dsl="{{text}}"></span>
+</td>
+<td class="BCel center">
+<span data-dsl="{{text}}"></span>
+</td>
+<td class="BCel center">
+<span data-dsl="{{text}}"></span>
+</td>
+</tr>
+</tbody>
+</table>
+<!-- 3. Detail Section (end) -->
+</div>
+ Page Wrapping (end) 
+--------------------------------------Style Start--------------------------------------
 <style type="text/css">
 #divCustomWrapper { word-break: break-all; font-family: malgun gothic, dotum, arial, tahoma; width:802px !important; }
 #divCustomWrapper * { max-width: 800px !important; }

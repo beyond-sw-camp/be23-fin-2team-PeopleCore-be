@@ -1,5 +1,6 @@
 package com.peoplecore.approval.entity;
 
+import com.peoplecore.approval.entity.status.*;
 import lombok.Getter;
 
 @Getter

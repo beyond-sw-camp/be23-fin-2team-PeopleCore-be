@@ -3,8 +3,8 @@ package com.peoplecore.attendance.entity;
 import lombok.Getter;
 
 /**
- * 휴일 이유 (CheckInStatus 와 직교).
- * HOLIDAY_WORK 로 판정됐을 때 근거 기록. null 이면 평일 근무일.
+ * 휴일 이유 (WorkStatus 와 직교).
+ * WorkStatus.HOLIDAY_WORK 로 판정됐을 때 근거 기록. null 이면 평일 근무일.
  */
 @Getter
 public enum HolidayReason {
