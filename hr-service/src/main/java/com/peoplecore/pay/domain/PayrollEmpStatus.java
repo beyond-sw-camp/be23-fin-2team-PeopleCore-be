@@ -1,6 +1,7 @@
 package com.peoplecore.pay.domain;
 
 import com.peoplecore.employee.domain.Employee;
+import com.peoplecore.pay.enums.PayrollEmpStatusType;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -12,7 +13,7 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor
 @Builder
-@Table(name = "payroll_emp_status",
+@Table(name = "payroll_emp_status", //사원별 급여산정 상태
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_payroll_emp",
                 columnNames = {"payroll_run_id", "emp_id"}

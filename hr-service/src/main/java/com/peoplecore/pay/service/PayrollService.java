@@ -57,10 +57,11 @@ public class PayrollService {
     private final TaxWithholdingService taxWithholdingService;
     private final RetirementPensionDepositsRepository depositRepository;
     private final MySalaryCacheService mySalaryCacheService;
+    private final PayrollEmpStatusRepository payrollEmpStatusRepository;
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -76,6 +77,7 @@ public class PayrollService {
         this.taxWithholdingService = taxWithholdingService;
         this.depositRepository = depositRepository;
         this.mySalaryCacheService = mySalaryCacheService;
+        this.payrollEmpStatusRepository = payrollEmpStatusRepository;
     }
 
 ///       급여대장 조회(특정 월)
@@ -135,7 +137,7 @@ public class PayrollService {
         // 보험요율 (해당 연도)
         InsuranceRates rates = insuranceRatesRepository.findByCompany_CompanyIdAndYear(companyId, year).orElse(null);
 
-        // 공제 항목(시스템 마스터) 일괄 조회 → jobTypeName → PayItems 맵
+        // 공제 항목(시스템 마스터) 일괄 조회 → name → PayItems 맵
         List<String> deductionNames = List.of("국민연금", "건강보험", "장기요양보험", "고용보험", "소득세", "지방소득세", "산재보험");
         Map<String, PayItems> deductionMap = payItemsRepository
                 .findByCompany_CompanyIdAndPayItemTypeAndPayItemNameIn(companyId, PayItemType.DEDUCTION, deductionNames)
@@ -185,6 +187,15 @@ public class PayrollService {
                         .amount(detail.getAmount().longValue())
                         .company(company)
                         .build();
+
+                // 사원별 산정 상태 (기본 CALCULATING)
+                payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
+                        .payrollRuns(run)
+                        .employee(emp)
+                        .status(PayrollEmpStatusType.CALCULATING)
+                        .companyId(companyId)
+                        .build());
+
                 payrollDetailsRepository.save(payrollDetail);
 
                 if (payItem.getPayItemType() == PayItemType.PAYMENT) {
@@ -314,6 +325,24 @@ public class PayrollService {
     public void confirmPayroll(UUID companyId, Long payrollRunId){
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
         run.confirm();
+    }
+
+///    급여 확정(사원별)
+    @Transactional
+    public void confirmEmployee(UUID companyId, Long payrollRunId, Long empId, Long actorEmpId) {
+        PayrollEmpStatus pes = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndEmployee_EmpId(payrollRunId, empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_EMP_NOT_FOUND));
+        pes.confirm(actorEmpId);
+    }
+
+///     확정 되돌리기(사원별)
+    @Transactional
+    public void revertEmployee(UUID companyId, Long payrollRunId, Long empId) {
+        PayrollEmpStatus pes = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndEmployee_EmpId(payrollRunId, empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_EMP_NOT_FOUND));
+        pes.revert();
     }
 
 /// 전자결재 상신은 PayrollApprovalDraftService 로직에서 처리

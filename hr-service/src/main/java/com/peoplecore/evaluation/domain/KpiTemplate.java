@@ -30,7 +30,7 @@ public class KpiTemplate extends BaseTimeEntity {
     @JoinColumn(name = "category_option_id", nullable = false)
     private KpiOption category; // 카테고리 옵션 (KpiOption CATEGORY)
 
-    @Column(name = "jobTypeName", length = 100, nullable = false)
+    @Column(name = "name", length = 100, nullable = false)
     private String name; // 지표명
 
     @Column(name = "description", length = 300, nullable = false)

@@ -26,7 +26,7 @@ public class Season extends BaseTimeEntity {
     @JoinColumn(name = "company_id", nullable = false)
     private Company company; // 소속 회사
 
-    @Column(name = "jobTypeName", nullable = false, length = 100)
+    @Column(name = "name", nullable = false, length = 100)
     private String name; // 시즌명
 
     @Enumerated(EnumType.STRING)

@@ -125,7 +125,7 @@ public class ResignService {
         try{
 //            json문자열을 map<키,값>으로 파싱
             Map<String, String> docData = objectMapper.readValue(event.getDocData(), new TypeReference<Map<String, String>>() {});
-//            양식에 jobTypeName= "resignDate"있으면 해당 값 사용
+//            양식에 name= "resignDate"있으면 해당 값 사용
             String dateStr = docData.get("resignDate");
             if(dateStr == null){
 //                없으면 자동부여된 키 사용

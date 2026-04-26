@@ -20,5 +20,5 @@ public class PayStubListResDto {
     private Long totalPay;
     private Long totalDeduction;
     private Long netPay;
-    private String sendStatus;          // entity: sendStatus.jobTypeName()
+    private String sendStatus;          // entity: sendStatus.name()
 }

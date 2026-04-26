@@ -85,13 +85,13 @@
 //
 //        Map result = response.getBody();
 //
-//        String jobTypeName = result.getOrDefault("account_holder_name", "").toString();
+//        String name = result.getOrDefault("account_holder_name", "").toString();
 //        String check = result.getOrDefault("account_holder_name_check", "N").toString();
 //
 //        if ("Y".equals(check)) {
-//            return new VerifyResponse(true, "실명 확인 성공", jobTypeName);
+//            return new VerifyResponse(true, "실명 확인 성공", name);
 //        }
 //
-//        return new VerifyResponse(false, "실명 불일치", jobTypeName);
+//        return new VerifyResponse(false, "실명 불일치", name);
 //    }
 //}

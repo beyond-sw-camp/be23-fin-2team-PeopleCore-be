@@ -1,6 +1,7 @@
 package com.peoplecore.pay.repository;
 
 import com.peoplecore.pay.domain.PayrollEmpStatus;
+import com.peoplecore.pay.enums.PayrollEmpStatusType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;

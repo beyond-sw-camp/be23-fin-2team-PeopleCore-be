@@ -16,8 +16,8 @@ import java.math.BigDecimal;
 @Builder
 @Table(name = "insurance_job_types"     //업종(산재보험구분용)
 //    indexes = {
-//        @Index(jobTypeName="idx_settlement_emp_month", columnList = "emp_id, pay_year_month"),
-//        @Index(jobTypeName = "idx_settlement_payroll_run", columnList = "payroll_run_id")
+//        @Index(name="idx_settlement_emp_month", columnList = "emp_id, pay_year_month"),
+//        @Index(name = "idx_settlement_payroll_run", columnList = "payroll_run_id")
 //        }
     )
 public class InsuranceJobTypes {

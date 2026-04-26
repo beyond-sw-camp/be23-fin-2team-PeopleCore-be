@@ -46,7 +46,7 @@ public class InsuranceJobTypesService {
         Company company = companyRepository.findById(companyId).orElseThrow(()-> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
 //        동일업종명 중복검사
-        if(insuranceJobTypesRepository.findByCompany_CompanyIdAndName(companyId, reqDto.getName()).isPresent()){
+        if(insuranceJobTypesRepository.findByCompany_CompanyIdAndJobTypeName(companyId, reqDto.getName()).isPresent()){
             throw new CustomException(ErrorCode.INSURANCE_JOB_TYPE_DUPLICATE);
         }
 
@@ -112,7 +112,7 @@ public class InsuranceJobTypesService {
 
     public void initDefault(Company company) {
         List<InsuranceJobTypes> defaults = List.of(
-                // 사무직 (기본 — 신규 사원 매핑 안 됐을 때 fallback 가능)
+                // 사무직 (기본 — 신규 사원 매핑 안 됐을 때 fallback)
                 buildJobType(company, "기본업종",         "0.0070", "일반 사무직 (미분류 사원 기본값)"),
 
                 // 1차 산업
@@ -150,17 +150,15 @@ public class InsuranceJobTypesService {
     }
 
     // 업종 entity 빌더 헬퍼
-    private InsuranceJobTypes buildJobType(Company company, String name, String rate, String description) {
+    private InsuranceJobTypes buildJobType(Company company, String jobTypeName, String rate, String description) {
         return InsuranceJobTypes.builder()
                 .company(company)
-                .jobTypeName(name)
+                .jobTypeName(jobTypeName)
                 .description(description)
                 .industrialAccidentRate(new BigDecimal(rate))
                 .isActive(true)
                 .build();
     }
-
-
 
 }
 

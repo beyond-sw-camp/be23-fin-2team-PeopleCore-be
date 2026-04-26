@@ -37,7 +37,7 @@ public class UserMenuSetting extends BaseTimeEntity {
     @Column(name = "emp_id", nullable = false)
     private Long empId;
 
-    /* 메뉴 코드 - SidebarMenu enum jobTypeName 저장 */
+    /* 메뉴 코드 - SidebarMenu enum name 저장 */
     @Enumerated(EnumType.STRING)
     @Column(name = "menu_code", nullable = false, length = 30)
     private SidebarMenu menuCode;

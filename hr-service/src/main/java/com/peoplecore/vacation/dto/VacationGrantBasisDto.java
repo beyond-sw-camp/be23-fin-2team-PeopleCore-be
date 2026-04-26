@@ -14,7 +14,7 @@ import lombok.NoArgsConstructor;
 @Builder
 public class VacationGrantBasisDto {
 
-    /* 연차 발생 기준 - "HIRE" / "FISCAL" (PolicyBaseType enum jobTypeName) */
+    /* 연차 발생 기준 - "HIRE" / "FISCAL" (PolicyBaseType enum name) */
     private String grantBasis;
 
     /* 회계연도 시작일 - FISCAL 이면 항상 "01-01", HIRE 면 null. 요청 시 값은 무시되고 서버가 강제 */

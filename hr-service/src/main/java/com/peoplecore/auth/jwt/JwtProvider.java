@@ -44,7 +44,7 @@ public class JwtProvider {
         return Jwts.builder()
                 .setSubject(String.valueOf(employee.getEmpId()))
                 .claim("companyId", employee.getCompany().getCompanyId())
-                .claim("jobTypeName", employee.getEmpName())
+                .claim("name", employee.getEmpName())
                 .claim("role", employee.getEmpRole().name())
                 .claim("departmentId", employee.getDept().getDeptId())
                 .claim("gradeId", employee.getGrade().getGradeId())
