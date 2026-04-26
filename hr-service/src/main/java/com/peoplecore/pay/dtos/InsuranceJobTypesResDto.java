@@ -23,7 +23,7 @@ public class InsuranceJobTypesResDto {
     public static InsuranceJobTypesResDto fromEntity(InsuranceJobTypes j){
         return InsuranceJobTypesResDto.builder()
                 .jobTypesId(j.getJobTypesId())
-                .name(j.getName())
+                .name(j.getJobTypeName())
                 .description(j.getDescription())
                 .industrialAccidentRate(j.getIndustrialAccidentRate())
                 .isActive(j.getIsActive())

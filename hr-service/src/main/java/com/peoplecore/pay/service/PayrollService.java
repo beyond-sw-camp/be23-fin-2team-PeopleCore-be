@@ -57,10 +57,11 @@ public class PayrollService {
     private final TaxWithholdingService taxWithholdingService;
     private final RetirementPensionDepositsRepository depositRepository;
     private final MySalaryCacheService mySalaryCacheService;
+    private final PayrollEmpStatusRepository payrollEmpStatusRepository;
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -76,6 +77,7 @@ public class PayrollService {
         this.taxWithholdingService = taxWithholdingService;
         this.depositRepository = depositRepository;
         this.mySalaryCacheService = mySalaryCacheService;
+        this.payrollEmpStatusRepository = payrollEmpStatusRepository;
     }
 
 ///       급여대장 조회(특정 월)
@@ -130,6 +132,17 @@ public class PayrollService {
 //        급여대상 사원(재직+휴직) 목록 (퇴직 제외)
         YearMonth payMonth = YearMonth.parse(payYearMonth);
         List<Employee> employees = employeeRepository.findAllForPayroll(companyId, payMonth);
+        int year = payMonth.getYear();
+
+        // 보험요율 (해당 연도)
+        InsuranceRates rates = insuranceRatesRepository.findByCompany_CompanyIdAndYear(companyId, year).orElse(null);
+
+        // 공제 항목(시스템 마스터) 일괄 조회 → name → PayItems 맵
+        List<String> deductionNames = List.of("국민연금", "건강보험", "장기요양보험", "고용보험", "소득세", "지방소득세", "산재보험");
+        Map<String, PayItems> deductionMap = payItemsRepository
+                .findByCompany_CompanyIdAndPayItemTypeAndPayItemNameIn(companyId, PayItemType.DEDUCTION, deductionNames)
+                .stream()
+                .collect(Collectors.toMap(PayItems::getPayItemName, Function.identity()));
 
 //        payrollRuns 생성
         PayrollRuns run = PayrollRuns.builder()
@@ -152,7 +165,7 @@ public class PayrollService {
 
             if (contract == null) continue;
 
-//            계약 상세 항목 목록
+//            1. 계약 상세 항목 (지급항목 위주)
             List<SalaryContractDetail> contractDetails = salaryContractDetailRepository.findByContract_ContractId(contract.getContractId());
 
 //            스냅샷 payItemId -> payItems 매핑
@@ -174,14 +187,33 @@ public class PayrollService {
                         .amount(detail.getAmount().longValue())
                         .company(company)
                         .build();
+
+                // 사원별 산정 상태 (기본 CALCULATING)
+                payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
+                        .payrollRuns(run)
+                        .employee(emp)
+                        .status(PayrollEmpStatusType.CALCULATING)
+                        .companyId(companyId)
+                        .build());
+
                 payrollDetailsRepository.save(payrollDetail);
 
                 if (payItem.getPayItemType() == PayItemType.PAYMENT) {
-                    totalPay += detail.getAmount();
+                    totalPay += detail.getAmount().longValue();
                 } else {
-                    totalDeduction += detail.getAmount();
+                    totalDeduction += detail.getAmount().longValue();
                 }
             }
+
+            // 2. 4대보험 + 세금 자동 계산 (공제항목)
+            long monthlySalary = (contract.getTotalAmount() != null)
+                    ? contract.getTotalAmount()
+                    .divide(BigDecimal.valueOf(12), 0, RoundingMode.HALF_UP)
+                    .longValue()
+                    : 0L;
+
+            long calcDed = insertCalculatedDeductions(run, emp, company, monthlySalary, year, rates, deductionMap);
+            totalDeduction += calcDed;
         }
 //        합계 갱신
         run.updateTotals(employees.size(), totalPay, totalDeduction, totalPay - totalDeduction);
@@ -293,6 +325,24 @@ public class PayrollService {
     public void confirmPayroll(UUID companyId, Long payrollRunId){
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
         run.confirm();
+    }
+
+///    급여 확정(사원별)
+    @Transactional
+    public void confirmEmployee(UUID companyId, Long payrollRunId, Long empId, Long actorEmpId) {
+        PayrollEmpStatus pes = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndEmployee_EmpId(payrollRunId, empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_EMP_NOT_FOUND));
+        pes.confirm(actorEmpId);
+    }
+
+///     확정 되돌리기(사원별)
+    @Transactional
+    public void revertEmployee(UUID companyId, Long payrollRunId, Long empId) {
+        PayrollEmpStatus pes = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndEmployee_EmpId(payrollRunId, empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_EMP_NOT_FOUND));
+        pes.revert();
     }
 
 /// 전자결재 상신은 PayrollApprovalDraftService 로직에서 처리
@@ -443,7 +493,7 @@ public class PayrollService {
 //        해당 월 범위 계산
         YearMonth ym = YearMonth.parse(run.getPayYearMonth(), DateTimeFormatter.ofPattern("yyyy-MM"));
         LocalDate startDate = ym.atDay(1); //해당월의 1일
-        LocalDate endDate = ym.atEndOfMonth();       //해당월의  마지막날짜
+        LocalDate endDate = ym.atEndOfMonth();       //해당월의 마지막날짜
 
 //        CommuteRecord에서 인정된 초과근무 일별 기록 조회
         List<CommuteRecord> records = commuteRecordRepository.findRecognizedByMonth(empId, startDate, endDate);
@@ -461,7 +511,7 @@ public class PayrollService {
                     .workDate(cr.getWorkDate())
                     .recognizedExtendedMinutes(cr.getRecognizedExtendedMinutes())
                     .recognizedNightMinutes(cr.getRecognizedNightMinutes())
-                    .recognizedExtendedMinutes(cr.getRecognizedHolidayMinutes())
+                    .recognizedHolidayMinutes(cr.getRecognizedHolidayMinutes())
                     .actualWorkMinutes(cr.getActualWorkMinutes())
                     .build());
         }
@@ -596,6 +646,93 @@ public class PayrollService {
                 .build();
         }
 
+
+
+    // 4대보험 + 세금 자동 계산 후 PayrollDetails INSERT
+    private long insertCalculatedDeductions(PayrollRuns run, Employee emp, Company company, long monthlySalary, int year, InsuranceRates rates, Map<String, PayItems> deductionMap) {
+        if (monthlySalary <= 0) return 0L;
+
+        long total = 0L;
+
+        // 4대보험 (요율 데이터 있을 때만)
+        if (rates != null) {
+            // 국민연금 (상하한 적용)
+            long pensionBase = monthlySalary;
+            if (rates.getPensionUpperLimit() != null && pensionBase > rates.getPensionUpperLimit()) {
+                pensionBase = rates.getPensionUpperLimit();
+            }
+            if (rates.getPensionLowerLimit() != null && pensionBase < rates.getPensionLowerLimit()) {
+                pensionBase = rates.getPensionLowerLimit();
+            }
+            long pension = calcHalf(pensionBase, rates.getNationalPension());
+            total += saveDeductionDetail(run, emp, company, "국민연금", pension, deductionMap);
+
+            // 건강보험
+            long health = calcHalf(monthlySalary, rates.getHealthInsurance());
+            total += saveDeductionDetail(run, emp, company, "건강보험", health, deductionMap);
+
+            // 장기요양 (건강보험 전액 × 요율 / 2)
+            long ltcTotal = calcAmount(health * 2, rates.getLongTermCare());
+            long ltc = ltcTotal / 2;
+            total += saveDeductionDetail(run, emp, company, "장기요양보험", ltc, deductionMap);
+
+            // 고용보험
+            long employment = calcAmount(monthlySalary, rates.getEmploymentInsurance());
+            total += saveDeductionDetail(run, emp, company, "고용보험", employment, deductionMap);
+        }
+
+        // 소득세 + 지방소득세 (간이세액표)
+        TaxWithholdingResDto tax = taxWithholdingService.getTax(year, monthlySalary, emp.getDependentsCount());
+        if (tax != null) {
+            total += saveDeductionDetail(run, emp, company, "소득세", tax.getIncomeTax(), deductionMap);
+            total += saveDeductionDetail(run, emp, company, "지방소득세", tax.getLocalIncomeTax(), deductionMap);
+        }
+        //산재보험 (회사 100% 부담 — 사원 실수령액 무관, totalDeduction 가산 X)
+        if (emp.getJobTypes() != null && emp.getJobTypes().getIndustrialAccidentRate() != null) {
+            long industrialAccident = calcAmount(monthlySalary, emp.getJobTypes().getIndustrialAccidentRate());
+            // INSERT만 — total에 가산 X
+            saveDeductionDetail(run, emp, company, "산재보험", industrialAccident, deductionMap);
+        }
+        return total;
+    }
+
+    // PayItems 찾아서 PayrollDetails INSERT (없으면 skip)
+    private long saveDeductionDetail(PayrollRuns run, Employee emp, Company company, String itemName, long amount, Map<String, PayItems> deductionMap) {
+        if (amount <= 0) return 0L;
+
+        PayItems item = deductionMap.get(itemName);
+        if (item == null) {
+            log.warn("[Payroll] PayItem '{}' 미존재 — skip", itemName);
+            return 0L;
+        }
+
+        PayrollDetails detail = PayrollDetails.builder()
+                .payrollRuns(run)
+                .employee(emp)
+                .payItems(item)
+                .payItemName(itemName)
+                .payItemType(PayItemType.DEDUCTION)
+                .amount(amount)
+                .company(company)
+                .build();
+        payrollDetailsRepository.save(detail);
+        return amount;
+    }
+
+    // 보험료 계산 (EmpSalaryService에 있는 것과 동일)
+    private long calcAmount(long base, BigDecimal rate) {
+        if (rate == null) return 0L;
+        return BigDecimal.valueOf(base).multiply(rate)
+                .setScale(0, RoundingMode.HALF_UP)
+                .longValue();
+    }
+
+    private long calcHalf(long base, BigDecimal rate) {
+        if (rate == null) return 0L;
+        return BigDecimal.valueOf(base).multiply(rate)
+                .divide(BigDecimal.valueOf(2), 0, RoundingMode.HALF_UP)
+                .longValue();
+    }
 
 //    합계 재계산
     private void recalculateTotals(PayrollRuns run){

@@ -57,6 +57,17 @@ public class MySalaryController {
         return ResponseEntity.ok(mySalaryService.getPensionInfo(companyId, empId));
     }
 
+    //    내 부양가족수 변경
+    @PutMapping("/dependents")
+    public ResponseEntity<Void> updateMyDependents(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestBody @Valid DependentsUpdateReqDto reqDto){
+
+        mySalaryService.updateMyDependents(companyId, empId, reqDto.getDependentsCount());
+        return ResponseEntity.ok().build();
+    }
+
     /** 급여 계좌 변경 */
     @PutMapping("/account")
     public ResponseEntity<Void> updateAccount(

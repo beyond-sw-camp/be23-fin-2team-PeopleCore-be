@@ -63,7 +63,7 @@ public class SuperAdminAccountService {
         Department defaultDepartment = departmentRepository.findByCompany_CompanyIdAndDeptName(company.getCompanyId(), "미배정").orElseThrow(() -> new CustomException(ErrorCode.DEPARTMENT_NOT_FOUND));
         Grade defaultGrade = gradeRepository.findByCompanyIdAndGradeName(company.getCompanyId(), "미배정").orElseThrow(() -> new CustomException(ErrorCode.GRADE_NOT_FOUND));
         Title defaultTitle = titleRepository.findByCompanyIdAndTitleName(company.getCompanyId(), "미배정").orElseThrow(() -> new CustomException(ErrorCode.TITLE_NOT_FOUND));
-        InsuranceJobTypes defaultJobType = insuranceJobTypesRepository.findByCompany_CompanyIdAndName(company.getCompanyId(), "기본업종").orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
+        InsuranceJobTypes defaultJobType = insuranceJobTypesRepository.findByCompany_CompanyIdAndJobTypeName(company.getCompanyId(), "기본업종").orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
 
         WorkGroup defaultWorkGroup = workGroupRepository
                 .findByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(company.getCompanyId(), "DEFAULT")

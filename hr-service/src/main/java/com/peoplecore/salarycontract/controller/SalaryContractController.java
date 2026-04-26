@@ -1,5 +1,6 @@
 package com.peoplecore.salarycontract.controller;
 
+import com.peoplecore.pay.service.EmpSalaryCacheService;
 import com.peoplecore.salarycontract.domain.SalaryContractSortField;
 import com.peoplecore.salarycontract.dto.SalaryContractCreateReqDto;
 import com.peoplecore.salarycontract.dto.SalaryContractDetailResDto;
@@ -26,6 +27,7 @@ import static org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE;
 public class SalaryContractController {
 
     private final SalaryContractService salaryContractService;
+
 
     @Autowired
     public SalaryContractController(SalaryContractService salaryContractService) {
@@ -57,14 +59,15 @@ public class SalaryContractController {
                                                           @PathVariable Long id) {
         return ResponseEntity.ok(salaryContractService.detail(UUID.fromString(companyId), id));
     }
+
 //    4.사원별 계약 이력
     @GetMapping("/history/{empId}")
     public ResponseEntity<List<SalaryContractHisToryResDto>>historysnap(@RequestHeader("X-User-Company") String companyId,
                                                                     @PathVariable Long empId){
         return ResponseEntity.ok(salaryContractService.historysnap(UUID.fromString(companyId),empId));
     }
-//
-//    5.삭제(softDelete
+
+//    5.삭제(softDelete)
     @DeleteMapping("/{id}")
     public ResponseEntity<Void>delete(@RequestHeader("X-User-Company") String companyId,
                                       @PathVariable Long id) {

@@ -36,10 +36,11 @@ public class EmpSalaryController {
             @RequestParam(required = false) Long deptId,
             @RequestParam(required = false) EmpType empType,
             @RequestParam(required = false) EmpStatus empStatus,
-            @PageableDefault(size = 10) Pageable pageable) {
+            @RequestParam(required = false) Integer year,
+            @PageableDefault(size = 10, sort = {"empName"}) Pageable pageable) {
 
         return ResponseEntity.ok(empSalaryService.getEmpSalaryList(
-                companyId, keyword, deptId, empType, empStatus, pageable
+                companyId, keyword, deptId, empType, empStatus, year, pageable
         ));
     }
 
@@ -47,10 +48,10 @@ public class EmpSalaryController {
     @GetMapping("/{empId}")
     public ResponseEntity<EmpSalaryDetailResDto> getEmpSalaryDetail(
             @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long empId
+            @PathVariable Long empId,
+            @RequestParam(required = false) Integer year
             ){
-
-        return ResponseEntity.ok(empSalaryService.getEmpSalaryDetail(companyId, empId));
+        return ResponseEntity.ok(empSalaryService.getEmpSalaryDetail(companyId, empId, year));
 }
 
 //    계좌 변경
@@ -62,6 +63,18 @@ public class EmpSalaryController {
             ) {
 
         empSalaryService.updateEmpAccount(companyId, empId, reqDto);
+        return ResponseEntity.ok().build();
+    }
+
+
+    //    부양가족수 변경
+    @PutMapping("/{empId}/dependents")
+    public ResponseEntity<Void> updateDependents(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long empId,
+            @RequestBody @Valid DependentsUpdateReqDto reqDto){
+
+        empSalaryService.updateDependents(companyId, empId, reqDto.getDependentsCount());
         return ResponseEntity.ok().build();
     }
 

@@ -461,7 +461,7 @@ public class ApprovalLineService {
                 .companyId(companyId)
                 .empIds(List.of(document.getEmpId()))
                 .alarmType("APPROVAL")
-                .alarmTitle(myInfo.getDeptName() + " " + myInfo.getEmpName() + " " + myInfo.getGradeName() + "이(가) 결재 문서르르 승인하였습니다.")
+                .alarmTitle(myInfo.getDeptName() + " " + myInfo.getEmpName() + " " + myInfo.getGradeName() + "이(가) 결재 문서를 승인하였습니다.")
 
                 .alarmContent("[" + document.getDocNum() + "]" + document.getDocTitle())
                 .alarmLink("/approval")

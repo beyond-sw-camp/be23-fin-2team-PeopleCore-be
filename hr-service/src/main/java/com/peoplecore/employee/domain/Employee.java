@@ -260,4 +260,10 @@ public class Employee extends BaseTimeEntity {
         this.workGroupAssignedAt = (workGroup != null) ? LocalDateTime.now() : null;
     }
 
+    // 부양가족수 수정
+    public void updateDependentsCount(int count){
+        this.dependentsCount = count;
+    }
+
+
 }

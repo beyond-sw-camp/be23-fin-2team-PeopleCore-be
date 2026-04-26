@@ -27,7 +27,7 @@ public class InsuranceJobTypes {
     private Long jobTypesId;
 
     @Column(nullable = false, length = 50)
-    private String name;
+    private String jobTypeName;
 
 //    산재보험요율
     @Column(precision = 5, scale = 4)
@@ -47,7 +47,7 @@ public class InsuranceJobTypes {
 
 
     public void update(String name,String description, BigDecimal industrialAccidentRate){
-        this.name = name;
+        this.jobTypeName = name;
         this.description = description;
         this.industrialAccidentRate =industrialAccidentRate;
     }
