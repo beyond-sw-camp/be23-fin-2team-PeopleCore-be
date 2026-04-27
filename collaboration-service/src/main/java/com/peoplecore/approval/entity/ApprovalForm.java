@@ -32,15 +32,16 @@ public class ApprovalForm extends BaseTimeEntity {
     private UUID companyId;
 
     /**
-     * 양식 명
+     * 양식 명 — 회사별 unique 는 클래스 레벨 @Table(uniqueConstraints) 로 보장.
+     * 컬럼 단위 unique 는 글로벌 unique 가 되어 회사 간 충돌을 일으키므로 사용 X.
      */
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String formName;
 
     /**
-     * 양식 코드
+     * 양식 코드 — 회사별 unique 는 클래스 레벨 @Table(uniqueConstraints) 로 보장.
      */
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String formCode;
 
     /**

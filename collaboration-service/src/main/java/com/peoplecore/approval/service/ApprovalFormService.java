@@ -468,6 +468,16 @@ public class ApprovalFormService {
                 throw new BusinessException("기본 양식 리소스 조회 실패: " + folderName, HttpStatus.INTERNAL_SERVER_ERROR);
             }
 
+            // [DEBUG] 클래스패스에서 같은 파일이 여러 번 반환되는지 확인
+            log.info("[initFormFolder] folder={} resources.length={}", folderName, resources.length);
+            for (Resource r : resources) {
+                try {
+                    log.info("[initFormFolder]   - filename={}, url={}", r.getFilename(), r.getURL());
+                } catch (IOException e) {
+                    log.info("[initFormFolder]   - filename={}, url=<unavailable>", r.getFilename());
+                }
+            }
+
             for (int j = 0; j < resources.length; j++) {
                 Resource resource = resources[j];
 
@@ -561,6 +571,7 @@ public class ApprovalFormService {
                                    String formHtml,
                                    boolean isProtectedForm,
                                    int sortOrder) {
+
         Optional<ApprovalForm> existing = approvalFormRepository
                 .findByCompanyIdAndFormNameAndIsCurrent(companyId, formName, true);
         if (existing.isPresent()) {
