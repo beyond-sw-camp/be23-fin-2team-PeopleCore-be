@@ -79,6 +79,7 @@ public class SalaryContractController {
     @DeleteMapping("/{id}")
     public ResponseEntity<Void>delete(@RequestHeader("X-User-Company") String companyId,
                                       @PathVariable Long id) {
+        salaryContractService.delete(UUID.fromString(companyId), id);
         return ResponseEntity.noContent().build();
     }
 }
