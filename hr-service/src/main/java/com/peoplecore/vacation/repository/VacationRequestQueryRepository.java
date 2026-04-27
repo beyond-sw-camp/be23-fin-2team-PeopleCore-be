@@ -235,4 +235,98 @@ public class VacationRequestQueryRepository {
                 )
                 .fetch();
     }
+
+    /*
+     * 사원 "예정 휴가" 페이지 조회 - 휴가현황 페이지 upcoming 탭
+     * 조건: year 기간과 겹치는 신청 중
+     *   - PENDING (대기 전부)
+     *   - APPROVED 이고 requestEndAt >= now (진행중 포함)
+     * 정렬: requestStartAt 오름차순 (가까운 일정 먼저)
+     * N+1 방지: VacationType fetch join (typeName 표시용)
+     * fetch join + paging 충돌 방지: count 쿼리 분리
+     */
+    public Page<VacationRequest> findUpcomingPage(UUID companyId, Long empId,
+                                                  LocalDateTime yearStart, LocalDateTime yearEnd,
+                                                  LocalDateTime now, Pageable pageable) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
+
+        BooleanExpression upcomingCond = r.requestStatus.eq(RequestStatus.PENDING)
+                .or(r.requestStatus.eq(RequestStatus.APPROVED).and(r.requestEndAt.goe(now)));
+
+        List<VacationRequest> content = queryFactory
+                .selectFrom(r)
+                .join(r.vacationType, t).fetchJoin()
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart),
+                        upcomingCond
+                )
+                .orderBy(r.requestStartAt.asc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(r.count())
+                .from(r)
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart),
+                        upcomingCond
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+
+    /*
+     * 사원 "지난 휴가" 페이지 조회 - 휴가현황 페이지 past 탭
+     * 조건: year 기간과 겹치는 신청 중
+     *   - REJECTED / CANCELED (종결)
+     *   - APPROVED 이고 requestEndAt < now (종료됨)
+     * 정렬: requestEndAt 내림차순 (최근 종료 먼저)
+     */
+    public Page<VacationRequest> findPastPage(UUID companyId, Long empId,
+                                              LocalDateTime yearStart, LocalDateTime yearEnd,
+                                              LocalDateTime now, Pageable pageable) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
+
+        BooleanExpression pastCond = r.requestStatus.in(RequestStatus.REJECTED, RequestStatus.CANCELED)
+                .or(r.requestStatus.eq(RequestStatus.APPROVED).and(r.requestEndAt.lt(now)));
+
+        List<VacationRequest> content = queryFactory
+                .selectFrom(r)
+                .join(r.vacationType, t).fetchJoin()
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart),
+                        pastCond
+                )
+                .orderBy(r.requestEndAt.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(r.count())
+                .from(r)
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart),
+                        pastCond
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
 }
