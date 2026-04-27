@@ -3,10 +3,10 @@ package com.peoplecore.employee.dto;
 import com.peoplecore.employee.domain.EmpGender;
 import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.EmpType;
-import com.peoplecore.employee.domain.PasswordIssueType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import lombok.*;
 
 import java.time.LocalDate;
@@ -75,9 +75,14 @@ public class EmployeeCreateRequestDto {
 
     //시스템 계정 설정
 
-    @NotNull
-    private PasswordIssueType passwordIssueType;
+    @NotBlank
+    @Pattern(
+            regexp = "^[a-z0-9._-]{3,15}$",
+            message = "사내 이메일 아이디는 영문 소문자/숫자/._- 조합 3~15자여야 합니다"
+    )
+    private String empEmailLocal;
 
+    @NotBlank
     private String initialPassword;
 
     private Long workGroupId;
