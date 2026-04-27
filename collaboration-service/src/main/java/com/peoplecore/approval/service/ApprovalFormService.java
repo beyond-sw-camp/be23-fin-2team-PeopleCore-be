@@ -21,6 +21,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StreamUtils;
 
@@ -448,7 +449,9 @@ public class ApprovalFormService {
                               CommonCodeGroup codeGroup) {}
 
     /* 회사 생성 시 결재 양식 일괄 초기화 — 트랜잭션 없는 조율자.
+     * 클래스 레벨 @Transactional(readOnly=true) 영향을 받지 않도록 NOT_SUPPORTED 로 명시.
      * 폴더/codeGroup 은 한 트랜잭션, 양식은 양식별로 별도 트랜잭션, MinIO 는 트랜잭션 밖. */
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void initFormFolder(UUID companyId) {
         // 1. 폴더 + codeGroup ensure (짧은 단일 트랜잭션)
         InitContext ctx = self.ensureFoldersAndCodeGroup(companyId);
