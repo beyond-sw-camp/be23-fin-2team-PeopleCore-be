@@ -14,6 +14,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.List;
 
 @Component
@@ -51,12 +52,53 @@ public class SeasonScheduler {
     }
 
 //    TODO: 지우기
-//    수동 실행 (임시/개발용) — 프론트에서 즉시 전이가 필요할 때 호출
+//    test용 시즌 수동 실행 — 시즌 OPEN + 1단계 자동 시작만 수행. 나머지 단계는 WAITING 유지하고 단계 버튼으로 전진.
     public void runNow(){
         LocalDate today = LocalDate.now();
         transitionSeasons(today);
-        transitionStages(today);
-        log.info("수동 스케줄러 실행 완료 (today={})", today);
+        log.info("수동 시즌 스케줄러 실행 완료 (today={})", today);
+    }
+
+//    TODO: 지우기
+//    test용 단일 단계 수동 실행 — 날짜 무시하고 즉시 다음 상태로.
+//      WAITING -> IN_PROGRESS: 같은 시즌의 IN_PROGRESS 단계를 먼저 마감 후 이 단계 시작
+//      IN_PROGRESS -> FINISHED: 그대로 마감
+//      FINISHED 는 무시
+    public void runStageNow(Long stageId){
+        Stage st = stageRepository.findById(stageId)
+                .orElseThrow(() -> new IllegalArgumentException("단계를 찾을 수 없습니다: " + stageId));
+        StageStatus current = st.getStatus();
+        if (current == StageStatus.WAITING) {
+//            같은 시즌에 진행중인 단계가 있으면 먼저 마감 (한 시즌에 IN_PROGRESS 는 하나만 유지)
+            Long seasonId = st.getSeason().getSeasonId();
+            List<Stage> siblings = stageRepository.findBySeason_SeasonId(seasonId);
+            for (Stage prev : siblings) {
+                if (prev.getStatus() == StageStatus.IN_PROGRESS) {
+                    try {
+                        transitionExecutor.finishStage(prev.getStageId());
+                        log.info("이전 단계 자동 마감: {} (id={})", prev.getName(), prev.getStageId());
+                    } catch (Exception e) {
+                        log.error("이전 단계 자동 마감 실패 (id={})", prev.getStageId(), e);
+                        throw e;
+                    }
+                }
+            }
+            try {
+                transitionExecutor.startStage(stageId);
+                log.info("단계 수동 시작: {} (id={})", st.getName(), stageId);
+            } catch (Exception e) {
+                log.error("단계 수동 시작 실패 (id={})", stageId, e);
+                throw e;
+            }
+        } else if (current == StageStatus.IN_PROGRESS) {
+            try {
+                transitionExecutor.finishStage(stageId);
+                log.info("단계 수동 마감: {} (id={})", st.getName(), stageId);
+            } catch (Exception e) {
+                log.error("단계 수동 마감 실패 (id={})", stageId, e);
+                throw e;
+            }
+        }
     }
 //시즌상태 전이 — 1건 실패가 다른 건을 막지 않도록 try/catch 로 격리
     private void transitionSeasons(LocalDate today){
@@ -66,6 +108,7 @@ public class SeasonScheduler {
             try {
                 seasonService.openSeason(s.getSeasonId());
                 log.info("시즌 OPEN: {} (id={})", s.getName(), s.getSeasonId());
+                autoStartFirstStage(s.getSeasonId());
             } catch (Exception e) {
                 log.error("시즌 OPEN 실패 (id={})", s.getSeasonId(), e);
             }
@@ -80,6 +123,22 @@ public class SeasonScheduler {
                 log.error("시즌 종료 처리 실패 (id={})", s.getSeasonId(), e);
             }
         }
+    }
+
+//    시즌 OPEN 직후 1단계(orderNo 최소 WAITING) 자동 시작
+    private void autoStartFirstStage(Long seasonId){
+        stageRepository.findBySeason_SeasonId(seasonId).stream()
+                .filter(st -> st.getStatus() == StageStatus.WAITING)
+                .filter(st -> st.getOrderNo() != null)
+                .min(Comparator.comparing(Stage::getOrderNo))
+                .ifPresent(first -> {
+                    try {
+                        transitionExecutor.startStage(first.getStageId());
+                        log.info("시즌 OPEN 시 1단계 자동 시작: {} (id={})", first.getName(), first.getStageId());
+                    } catch (Exception e) {
+                        log.error("1단계 자동 시작 실패 (id={})", first.getStageId(), e);
+                    }
+                });
     }
 
     //        단계상태 전이 — 건별 트랜잭션, 예외 격리

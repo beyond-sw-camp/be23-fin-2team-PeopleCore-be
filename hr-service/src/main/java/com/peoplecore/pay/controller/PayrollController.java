@@ -76,6 +76,29 @@ public class PayrollController {
         return ResponseEntity.ok().build();
     }
 
+//    급여 확정(개인별)
+    @PutMapping("/{payrollRunId}/employees/{empId}/confirm")
+    public ResponseEntity<Void> confirmEmployee(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long actorEmpId,
+            @PathVariable Long payrollRunId,
+            @PathVariable Long empId) {
+        payrollService.confirmEmployee(companyId, payrollRunId, empId, actorEmpId);
+        return ResponseEntity.ok().build();
+    }
+
+//    확정급여 되돌리기(개인별)
+    @PutMapping("/{payrollRunId}/employees/{empId}/revert")
+    public ResponseEntity<Void> revertEmployee(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long payrollRunId,
+            @PathVariable Long empId) {
+        payrollService.revertEmployee(companyId, payrollRunId, empId);
+        return ResponseEntity.ok().build();
+    }
+
+
+
 ///    전자결재
 //  1. 전자결재 미리보기 데이터 조회 (모달 열때 호출)
     @GetMapping("/{payrollRunId}/approval/draft")

@@ -21,6 +21,8 @@ import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.grade.repository.GradeRepository;
 import com.peoplecore.minio.service.MinioService;
+import com.peoplecore.pay.domain.InsuranceJobTypes;
+import com.peoplecore.pay.repository.InsuranceJobTypesRepository;
 import com.peoplecore.title.domain.Title;
 import com.peoplecore.title.repository.TitleRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -55,11 +57,12 @@ public class EmployeeService {
     private final EmployeeFileRepository employeeFileRepository;
     private final WorkGroupRepository workGroupRepository;
     private final FaceAuthService faceAuthService;
+    private final InsuranceJobTypesRepository insuranceJobTypesRepository;
 
     public static final String DEFAULT_CODE = "DEFAULT";
 
     @Autowired
-    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService) {
+    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService, InsuranceJobTypesRepository insuranceJobTypesRepository) {
         this.employeeRepository = employeeRepository;
         this.companyRepository = companyRepository;
         this.departmentRepository = departmentRepository;
@@ -70,6 +73,7 @@ public class EmployeeService {
         this.employeeFileRepository = employeeFileRepository;
         this.workGroupRepository = workGroupRepository;
         this.faceAuthService = faceAuthService;
+        this.insuranceJobTypesRepository = insuranceJobTypesRepository;
     }
 
     private static final String EMAIL_DOMAIN = "@peoplecore.com";
@@ -100,8 +104,6 @@ public class EmployeeService {
                 .onLeave(onLeave)
                 .hiredThisMonth(hiredThisMonth)
                 .build();
-
-
         //재직자 수: 퇴직자 제외
 
 
@@ -113,15 +115,14 @@ public class EmployeeService {
 //        연관 entity조회
         Company company = companyRepository.getReferenceById(companyId);
 
-        // id + companyId 로 단건 보장 + 테넌트 격리
-        Department dept = departmentRepository.findByDeptIdAndCompany_CompanyId(requestDto.getDeptId(), companyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        // id + companyId로 테넌트 격리
+        Department dept = departmentRepository.findByDeptIdAndCompany_CompanyId(requestDto.getDeptId(), companyId).orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Grade grade = gradeRepository.findByGradeIdAndCompanyId(requestDto.getGradeId(), companyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        Grade grade = gradeRepository.findByGradeIdAndCompanyId(requestDto.getGradeId(), companyId).orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Title title = titleRepository.findByTitleIdAndCompanyId(requestDto.getTitleId(), companyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        Title title = titleRepository.findByTitleIdAndCompanyId(requestDto.getTitleId(), companyId).orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+
+        InsuranceJobTypes jobTypes = insuranceJobTypesRepository.findByCompany_CompanyIdAndJobTypeName(companyId, requestDto.getInsuranceJobTypeName()).orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
 
         String empNum = generateEmpNum(companyId, requestDto.getEmpHireDate());
 
@@ -130,16 +131,12 @@ public class EmployeeService {
         String rawPassword = resolvePassword(requestDto);
 
 
-        /* 회사 근무 그룹 조회 - 미선택 시 기본 그룹(DEFAULT) 자동 배정 */
+//        회사 근무 그룹 조회 - 미선택 시 기본 그룹(DEFAULT) 자동 배정
         WorkGroup workGroup;
         if (requestDto.getWorkGroupId() == null) {
-            workGroup = workGroupRepository
-                    .findByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(companyId, "DEFAULT")
-                    .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+            workGroup = workGroupRepository.findByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(companyId, "DEFAULT").orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
         } else {
-            workGroup = workGroupRepository
-                    .findByWorkGroupIdAndGroupDeleteAtIsNull(requestDto.getWorkGroupId())
-                    .orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
+            workGroup = workGroupRepository.findByWorkGroupIdAndGroupDeleteAtIsNull(requestDto.getWorkGroupId()).orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
         }
 
 
@@ -149,6 +146,7 @@ public class EmployeeService {
                 .dept(dept)
                 .grade(grade)
                 .title(title)
+                .jobTypes(jobTypes)
                 .empName(requestDto.getEmpName())
                 .empNameEn(requestDto.getEmpNameEn())
                 .empBirthDate(requestDto.getEmpBirthDate())
@@ -158,9 +156,9 @@ public class EmployeeService {
                 .empZipCode(requestDto.getEmpZipCode())
                 .empAddressBase(requestDto.getEmpAddressBase())
                 .empAddressDetail(requestDto.getEmpAddressDetail())
+                .empResidentNumber(requestDto.getEmpResidentNumber())
                 .empHireDate(requestDto.getEmpHireDate())
                 .empType(requestDto.getEmpType())
-                .jobType(requestDto.getJobType())
                 .empNum(empNum)
                 .empEmail(fullEmail)
                 .empRole(requestDto.getEmpRole())
@@ -271,6 +269,10 @@ public class EmployeeService {
         Title title = titleRepository.findByTitleIdAndCompanyId(requestDto.getTitleId(), companyId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
+        InsuranceJobTypes jobTypes = insuranceJobTypesRepository
+                .findByCompany_CompanyIdAndJobTypeName(companyId, requestDto.getInsuranceJobTypeName())
+                .orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
+
         employee.updateInfo(
                 requestDto.getEmpName(),
                 requestDto.getEmpNameEn(),
@@ -281,14 +283,15 @@ public class EmployeeService {
                 requestDto.getEmpZipCode(),
                 requestDto.getEmpAddressBase(),
                 requestDto.getEmpAddressDetail(),
+                requestDto.getEmpResidentNumber(),
                 requestDto.getEmpHireDate(),
                 requestDto.getEmpType(),
-                requestDto.getJobType(),
                 dept,
                 grade,
                 title,
                 requestDto.getEmpRole()
         );
+        employee.updateInsuranceJobType(jobTypes);
 
         return EmpDetailResponseDto.from(employee);
     }

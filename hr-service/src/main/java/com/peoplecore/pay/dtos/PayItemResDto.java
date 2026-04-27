@@ -26,6 +26,7 @@ public class PayItemResDto {
     private Boolean isActive;
     private Boolean isLegal;
     private LegalCalcType legalCalcType;
+    private Boolean isProtect;
 
     public static PayItemResDto fromEntity(PayItems p){
         return PayItemResDto.builder()
@@ -40,6 +41,7 @@ public class PayItemResDto {
                 .isActive(p.getIsActive())
                 .isLegal(p.getIsLegal())
                 .legalCalcType(p.getLegalCalcType())
+                .isProtect(p.getIsProtected())
                 .build();
     }
 

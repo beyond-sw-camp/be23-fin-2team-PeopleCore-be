@@ -73,12 +73,18 @@ public class InterestCalenderService {
 
         calendarShareRequestsRepository.save(shareRequest);
 
+//        보낸 사람 정보 (부서/이름/직급)
+        EmployeeSimpleResDto fromEmp = hrCacheService.getEmployees(List.of(fromEmpId))
+                .stream().findFirst().orElse(null);
+        String fromEmpDisplay = formatEmpDisplay(fromEmp);
+
+
         // 상대방에게 알람
         alarmEventPublisher.publisher(AlarmEvent.builder()
                         .companyId(companyId)
                         .alarmType("Calendar")
                         .alarmTitle("캘린더 공유 요청")
-                        .alarmContent("캘린더 공유 요청이 도착했습니다")
+                        .alarmContent(fromEmpDisplay + "님이 캘린더 공유를 요청했습니다")
                         .alarmLink("/calendar/settings")
                         .alarmRefType("CALENDAR_SHARE")
                         .alarmRefId(shareRequest.getCalendarShareReqId())
@@ -115,9 +121,16 @@ public class InterestCalenderService {
                     .ifPresent(interestCalendarsRepository::delete);
         }
 
+//      사원 정보 일괄 조회 (요청자 + 응답자)
+        Map<Long, EmployeeSimpleResDto> empMap = getEmpMap(
+                List.of(shareRequest.getFromEmpId(), shareRequest.getToEmpId()));
+
+//        응답자(수신자 toEmp)
+        String responderDisplay = formatEmpDisplay(empMap.get(shareRequest.getToEmpId()));
+
 //        요청자에게 알림
         String title = accepted ? "캘린더 공유 승인" : "캘린더 공유 거절";
-        String content = accepted ? "캘린더 공유 요청이 승인되었습니다" : "캘린더 공유 요청이 거절되었습니다" ;
+        String content = accepted ? responderDisplay + "님이 캘린더 공유 요청을 승인했습니다" : responderDisplay + "님이 캘린더 공유 요청이 거절했습니다" ;
 
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
@@ -130,9 +143,6 @@ public class InterestCalenderService {
                 .empIds(List.of(shareRequest.getFromEmpId()))
                 .build());
 
-//      사원 이름조회
-        Map<Long, EmployeeSimpleResDto> empMap = getEmpMap(
-                List.of(shareRequest.getFromEmpId(), shareRequest.getToEmpId()));
 
         return ShareRequestResDto.fromEntity(shareRequest, getEmpName(empMap, shareRequest.getFromEmpId()),getEmpName(empMap, shareRequest.getToEmpId()));
     }
@@ -246,5 +256,19 @@ public class InterestCalenderService {
     private String getEmpName(Map<Long, EmployeeSimpleResDto> empMap, Long empId){
         EmployeeSimpleResDto emp = empMap.get(empId);
         return emp != null ? emp.getEmpName() : null;
+    }
+
+//    알림 표시용 (부서/이름/직급 포맷)
+    private String formatEmpDisplay(EmployeeSimpleResDto emp){
+        if(emp == null) return "동료";
+        StringBuilder sb = new StringBuilder();
+        if (emp.getDeptName() != null && !emp.getDeptName().isBlank()){
+            sb.append(emp.getDeptName()).append(" ");
+        }
+        sb.append(emp.getEmpName() != null ? emp.getEmpName() : "동료");
+        if (emp.getGradeName() != null && !emp.getGradeName().isBlank()){
+            sb.append(" ").append(emp.getGradeName());
+        }
+        return sb.toString();
     }
 }

@@ -72,10 +72,6 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "emp_type", nullable = false)
     private EmpType empType;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "job_type")
-    private JobType jobType;
-
     @Column(name = "emp_resign")
     private LocalDate empResignDate;
 
@@ -140,6 +136,9 @@ public class Employee extends BaseTimeEntity {
     @Column(name = "emp_address_detail")
     private String empAddressDetail;
 
+    @Column(name = "emp_resident_number", length = 14)
+    private String empResidentNumber;
+
 
 //    사원이 비밀번호 변경을 필수로 해야하는지 여부
     @Builder.Default
@@ -184,7 +183,8 @@ public class Employee extends BaseTimeEntity {
     public void updateInfo(String empName, String empNameEn, LocalDate empBirthDate,
                            EmpGender empGender, String empPhone, String empPersonalEmail,
                            String empZipCode, String empAddressBase, String empAddressDetail,
-                           LocalDate empHireDate, EmpType empType, JobType jobType,
+                           String empResidentNumber,
+                           LocalDate empHireDate, EmpType empType,
                            Department dept, Grade grade, Title title,
                            EmpRole empRole) {
         this.empName = empName;
@@ -196,9 +196,9 @@ public class Employee extends BaseTimeEntity {
         this.empZipCode = empZipCode;
         this.empAddressBase = empAddressBase;
         this.empAddressDetail = empAddressDetail;
+        this.empResidentNumber = empResidentNumber;
         this.empHireDate = empHireDate;
         this.empType = empType;
-        this.jobType = jobType;
         this.dept = dept;
         this.grade = grade;
         this.title = title;
@@ -243,6 +243,11 @@ public class Employee extends BaseTimeEntity {
         this.title = title;
     }
 
+//    업종 변경
+    public void updateInsuranceJobType(InsuranceJobTypes jobTypes){
+        this.jobTypes = jobTypes;
+    }
+
     /* 인사통합 PIN */
     public void updateHrAdminPin(String pinHash) {
         this.hrAdminPinHash = pinHash;
@@ -259,5 +264,11 @@ public class Employee extends BaseTimeEntity {
         this.workGroup = workGroup;
         this.workGroupAssignedAt = (workGroup != null) ? LocalDateTime.now() : null;
     }
+
+    // 부양가족수 수정
+    public void updateDependentsCount(int count){
+        this.dependentsCount = count;
+    }
+
 
 }

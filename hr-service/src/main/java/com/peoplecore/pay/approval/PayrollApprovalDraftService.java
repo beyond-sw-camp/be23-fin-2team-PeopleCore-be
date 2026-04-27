@@ -7,8 +7,10 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.PayrollRuns;
 import com.peoplecore.pay.enums.PayItemType;
+import com.peoplecore.pay.enums.PayrollEmpStatusType;
 import com.peoplecore.pay.enums.PayrollStatus;
 import com.peoplecore.pay.repository.PayrollDetailsRepository;
+import com.peoplecore.pay.repository.PayrollEmpStatusRepository;
 import com.peoplecore.pay.repository.PayrollRunsRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,10 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.peoplecore.pay.approval.ApprovalFormatter.*;
 
@@ -34,14 +34,16 @@ public class PayrollApprovalDraftService {
     private final EmployeeRepository employeeRepository;
     private final PayrollApprovalDocCreatedPublisher docCreatedPublisher;
     private final ApprovalFormCache approvalFormCache;
+    private final PayrollEmpStatusRepository payrollEmpStatusRepository;
 
     @Autowired
-    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, PayrollApprovalDocCreatedPublisher docCreatedPublisher, ApprovalFormCache approvalFormCache) {
+    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, PayrollApprovalDocCreatedPublisher docCreatedPublisher, ApprovalFormCache approvalFormCache, PayrollEmpStatusRepository payrollEmpStatusRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
         this.docCreatedPublisher = docCreatedPublisher;
         this.approvalFormCache = approvalFormCache;
+        this.payrollEmpStatusRepository = payrollEmpStatusRepository;
     }
 
     private static final DateTimeFormatter YMD = DateTimeFormatter.ISO_LOCAL_DATE;
@@ -75,24 +77,34 @@ public class PayrollApprovalDraftService {
         Map<String, String> m = new HashMap<>();
         Long runId = run.getPayrollRunId();
 
-        // ── 헤더 ──
+        // 확정된 사원 ID Set 미리 추출
+        Set<Long> confirmedEmpIds = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndStatus(runId, PayrollEmpStatusType.CONFIRMED)
+                .stream()
+                .map(p -> p.getEmployee().getEmpId())
+                .collect(Collectors.toSet());
+
+        if (confirmedEmpIds.isEmpty()) {
+            throw new CustomException(ErrorCode.NO_CONFIRMED_EMPLOYEES);
+        }
+        // 헤더
         m.put("drafterName", drafter.getEmpName());
         m.put("drafterDept", drafter.getDept() != null ? drafter.getDept().getDeptName() : "");
         m.put("draftDate",   LocalDate.now().format(YMD));
         m.put("docNo",       String.format("PAY-%s-%d", run.getPayYearMonth(), runId));
         m.put("approvalLineHtml", "");  //프론트에서 결재선 선택후 채움
 
-        // ── 지급 기본 정보 ──
+        // 지급 기본 정보
         m.put("payMonth",         run.getPayYearMonth());
         m.put("payScheduledDate", date(run.getPayDate()));
-        m.put("payHeadcount",
-                payrollDetailsRepository.countDistinctEmployees(runId) + "명");
+        // 확정된 사원 수만
+        m.put("payHeadcount", confirmedEmpIds.size() + "명");
 
-        // ── PayItem별 합계 조회 (지급/공제 분리) ──
+        // PayItem별 합계 조회 (확정 사원만, 지급/공제 분리)
         List<PayrollItemSummaryDto> paymentSummary = payrollDetailsRepository
-                .summarizeByPayItem(runId, PayItemType.PAYMENT);
+                .summarizeByPayItemForEmployees(runId, PayItemType.PAYMENT, confirmedEmpIds);
         List<PayrollItemSummaryDto> deductionSummary = payrollDetailsRepository
-                .summarizeByPayItem(runId, PayItemType.DEDUCTION);
+                .summarizeByPayItemForEmployees(runId, PayItemType.DEDUCTION, confirmedEmpIds);
 
         // 지급 — 과세/비과세 분리
         Map<String, Long> taxable = new HashMap<>();
@@ -156,7 +168,7 @@ public class PayrollApprovalDraftService {
     }
 
 
-//    전자결재 상신 (Kafka 발행)
+///    전자결재 상신 (Kafka 발행)
     @Transactional
     public void submit(UUID companyId, Long userId, ApprovalSubmitReqDto reqDto) {
 
@@ -168,6 +180,13 @@ public class PayrollApprovalDraftService {
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
 
+//  확정된 사원이 1명 이상 있어야 결재 상신 가능
+        long confirmedCount = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndStatus(reqDto.getLedgerId(), PayrollEmpStatusType.CONFIRMED)
+                .size();
+        if (confirmedCount == 0) {
+            throw new CustomException(ErrorCode.NO_CONFIRMED_EMPLOYEES);
+        }
         ApprovalFormCache.CachedForm form =
                 approvalFormCache.get(companyId, ApprovalFormType.SALARY);
 

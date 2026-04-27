@@ -87,7 +87,9 @@ public class PayItems {
             throw new CustomException(ErrorCode.SYSTEM_PAY_ITEM_NOT_EDITABLE);
         }
         if (Boolean.TRUE.equals(this.isProtected)) {
-            throw new CustomException(ErrorCode.PROTECTED_PAY_ITEM_NOT_EDITABLE);
+            // 보호 항목: 비과세한도만 변경 허용
+            this.taxExemptLimit = taxExemptLimit;
+            return;
         }
         this.payItemName = payItemName;
         this.isFixed = isFixed;
@@ -98,7 +100,14 @@ public class PayItems {
 
 //    사용여부 토글
     public void toggleActive(){
-        this.isActive = !this.isActive;
+
+        if (Boolean.TRUE.equals(this.isSystem)){
+            throw new CustomException(ErrorCode.SYSTEM_PAY_ITEM_NOT_EDITABLE);
+        }
+        if (Boolean.TRUE.equals(this.isProtected)) {
+            throw new CustomException(ErrorCode.PROTECTED_PAY_ITEM_NOT_EDITABLE);
+
+        }this.isActive = !this.isActive;
     }
 
     public void softDelete(){

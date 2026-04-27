@@ -35,7 +35,16 @@ public class SalaryContract {
     private UUID companyId;
 
     @Column(name = "file_name")
-    private String fileName; //첨부파일명
+    private String fileName; //MinIO 객체 키 (folder/uuid_원본파일명)
+
+    @Column(name = "original_file_name")
+    private String originalFileName; //사용자에게 보여줄 원본 파일명
+
+    @Column(name = "content_type")
+    private String contentType;
+
+    @Column(name = "file_size")
+    private Long fileSize;
 
     @OneToMany(mappedBy =  "contract", cascade = CascadeType.ALL)
     private List<SalaryContractDetail> details; //급여상세
