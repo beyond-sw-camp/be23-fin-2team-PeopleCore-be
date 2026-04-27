@@ -219,11 +219,13 @@ public class VacationRequestQueryRepository {
                                                         LocalDateTime weekStart,
                                                         LocalDateTime weekEnd) {
         QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
 
         return queryFactory
                 .select(Projections.constructor(VacationSlice.class,
-                        r.requestStartAt, r.requestEndAt, r.requestUseDays))
+                        r.requestStartAt, r.requestEndAt, r.requestUseDays, t.typeName))
                 .from(r)
+                .join(r.vacationType, t)
                 .where(
                         r.companyId.eq(companyId),
                         r.employee.empId.eq(empId),
