@@ -1,8 +1,10 @@
 package com.peoplecore.pay.service;
 
 import com.peoplecore.attendance.entity.CommuteRecord;
+import com.peoplecore.attendance.entity.OvertimeRequest;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
+import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.employee.domain.EmpStatus;
@@ -21,16 +23,14 @@ import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.repository.SalaryContractDetailRepository;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
+import com.peoplecore.vacation.service.BusinessDayCalculator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.YearMonth;
+import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.function.Function;
@@ -53,6 +53,8 @@ public class PayrollService {
     private final BankTransferFileFactory bankTransferFileFactory;
     private final EmpAccountsRepository empAccountsRepository;
     private final CommuteRecordRepository commuteRecordRepository;
+    private final OvertimeRequestRepository overtimeRequestRepository;
+    private final BusinessDayCalculator businessDayCalculator;
     private final InsuranceRatesRepository insuranceRatesRepository;
     private final TaxWithholdingService taxWithholdingService;
     private final RetirementPensionDepositsRepository depositRepository;
@@ -61,7 +63,7 @@ public class PayrollService {
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -73,6 +75,8 @@ public class PayrollService {
         this.bankTransferFileFactory = bankTransferFileFactory;
         this.empAccountsRepository = empAccountsRepository;
         this.commuteRecordRepository = commuteRecordRepository;
+        this.overtimeRequestRepository = overtimeRequestRepository;
+        this.businessDayCalculator = businessDayCalculator;
         this.insuranceRatesRepository = insuranceRatesRepository;
         this.taxWithholdingService = taxWithholdingService;
         this.depositRepository = depositRepository;
@@ -100,6 +104,15 @@ public class PayrollService {
                     .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
                     .mapToLong(PayrollDetails::getAmount).sum();
 
+            // 사원별 산정 상태 일괄 조회
+            Map<Long, String> empStatusMap = payrollEmpStatusRepository
+                    .findByPayrollRuns_PayrollRunId(run.getPayrollRunId())
+                    .stream()
+                    .collect(Collectors.toMap(
+                            s -> s.getEmployee().getEmpId(),
+                            s -> s.getStatus().name()
+                    ));
+
             return PayrollEmpResDto.builder()
                     .empId(emp.getEmpId())
                     .empName(emp.getEmpName())
@@ -107,6 +120,8 @@ public class PayrollService {
                     .gradeName(emp.getGrade().getGradeName())
                     .empType(emp.getEmpType().name())
                     .status(run.getPayrollStatus().name())
+                    .payrollEmpStatus(empStatusMap.getOrDefault(emp.getEmpId(), "CALCULATING"))
+                    .empStatus(emp.getEmpStatus().name())
                     .totalPay(pay)
                     .totalDeduction(deduction)
                     .netPay(pay-deduction)
@@ -138,7 +153,7 @@ public class PayrollService {
         InsuranceRates rates = insuranceRatesRepository.findByCompany_CompanyIdAndYear(companyId, year).orElse(null);
 
         // 공제 항목(시스템 마스터) 일괄 조회 → name → PayItems 맵
-        List<String> deductionNames = List.of("국민연금", "건강보험", "장기요양보험", "고용보험", "소득세", "지방소득세", "산재보험");
+        List<String> deductionNames = List.of("국민연금", "건강보험", "장기요양보험", "고용보험", "근로소득세", "근로지방소득세", "산재보험");
         Map<String, PayItems> deductionMap = payItemsRepository
                 .findByCompany_CompanyIdAndPayItemTypeAndPayItemNameIn(companyId, PayItemType.DEDUCTION, deductionNames)
                 .stream()
@@ -162,10 +177,9 @@ public class PayrollService {
         for (Employee emp : employees) {
 //            최신 연봉계약 조회
             SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByContractYearDesc(emp.getEmpId()).orElse(null);
-
             if (contract == null) continue;
 
-            // 사원별 산정 상태 (기본 CALCULATING) - uk_payroll_emp(run_id, emp_id) 제약상 사원당 1회만 저장
+            // 사원별 산정 상태 (기본 CALCULATING)
             payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
                     .payrollRuns(run)
                     .employee(emp)
@@ -300,6 +314,7 @@ public class PayrollService {
                 .filter(d-> d.getPayItemType() == PayItemType.DEDUCTION)
                 .map(d-> PayrollEmpDetailResDto.PayrollItemDto.builder()
                         .payItemId(d.getPayItems().getPayItemId())
+                        .payItemName(d.getPayItemName())
                         .amount(d.getAmount())
                         .build())
                 .toList();
@@ -319,11 +334,63 @@ public class PayrollService {
                 .build();
     }
 
-
-///    급여 확정
+///    급여 수정
     @Transactional
-    public void confirmPayroll(UUID companyId, Long payrollRunId){
+    public void updateEmpDetails(UUID companyId, Long payrollRunId, Long empId, PayrollDetailUpdateReqDto reqDto){
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
+
+        // 결재 단계 이상이면 차단
+        if (run.getPayrollStatus() != PayrollStatus.CALCULATING
+                && run.getPayrollStatus() != PayrollStatus.CONFIRMED) {
+            throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
+        }
+
+        // 해당 사원이 이미 CONFIRMED 면 차단
+        PayrollEmpStatus empStatus = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndEmployee_EmpId(payrollRunId, empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+        if (empStatus.getStatus() == PayrollEmpStatusType.CONFIRMED) {
+            throw new CustomException(ErrorCode.PAYROLL_EMP_ALREADY_CONFIRMED);
+        }
+
+        // 기존 detail 조회 → payItemId 로 매핑
+        List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRunsAndEmployee_EmpId(run, empId);
+        Map<Long, PayrollDetails> detailMap = details.stream()
+                .collect(Collectors.toMap(d -> d.getPayItems().getPayItemId(), Function.identity()));
+
+        // 요청 항목 갱신 (없는 항목은 무시)
+        for (PayrollDetailUpdateReqDto.Item item : reqDto.getItems()) {
+            PayrollDetails d = detailMap.get(item.getPayItemId());
+            if (d == null) continue;
+            d.updateAmount(item.getAmount());
+        }
+
+        // run 합계 재집계
+        List<PayrollDetails> all = payrollDetailsRepository.findByPayrollRuns(run);
+        long totalPay = all.stream()
+                .filter(d -> d.getPayItemType() == PayItemType.PAYMENT)
+                .mapToLong(PayrollDetails::getAmount).sum();
+        long totalDeduction = all.stream()
+                .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
+                .mapToLong(PayrollDetails::getAmount).sum();
+        run.updateTotals(run.getTotalEmployees(), totalPay, totalDeduction, totalPay - totalDeduction);
+
+    }
+
+
+///    급여 확정(전체)
+    @Transactional
+    public void confirmPayroll(UUID companyId, Long actorEmpId, Long payrollRunId){
+        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
+
+        // 모든 사원 산정중 → 확정 (이미 확정된 사원은 건드리지 않음)
+        List<PayrollEmpStatus> allEmps = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunId(payrollRunId);
+        for (PayrollEmpStatus pes : allEmps) {
+            if (pes.getStatus() == PayrollEmpStatusType.CALCULATING) {
+                pes.confirm(actorEmpId);
+            }
+        }
         run.confirm();
     }
 
@@ -485,37 +552,52 @@ public class PayrollService {
                 .build();
     }
 
-///    이달 승인된 초과근무 조회(CommuteRecord 기반)
+///    이달 승인된 초과근무 조회(OvertimeRequest 기반)
     public ApprovedOvertimeResDto getApprovedOvertime(UUID companyId, Long payrollRunId, Long empId){
 
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
 
 //        해당 월 범위 계산
         YearMonth ym = YearMonth.parse(run.getPayYearMonth(), DateTimeFormatter.ofPattern("yyyy-MM"));
-        LocalDate startDate = ym.atDay(1); //해당월의 1일
-        LocalDate endDate = ym.atEndOfMonth();       //해당월의 마지막날짜
+        LocalDateTime monthStart = ym.atDay(1).atStartOfDay(); //해당월의 1일
+        LocalDateTime monthEnd = ym.atEndOfMonth().atTime(LocalTime.MAX);       //해당월의 마지막날짜
 
-//        CommuteRecord에서 인정된 초과근무 일별 기록 조회
-        List<CommuteRecord> records = commuteRecordRepository.findRecognizedByMonth(empId, startDate, endDate);
+//        OvertimeRequest에서 승인된 초과근무 신청 (당사자 + APPROVED + 해당월)
+        List<OvertimeRequest> approved = overtimeRequestRepository
+                .findApprovedByEmpAndDateRange(empId, monthStart, monthEnd);
+
+        Employee emp = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+        WorkGroup wg = emp.getWorkGroup();
 
 //        월간 합계 집계
         long totalExtMin = 0L, totalNightMin = 0L, totalHolidayMin = 0L;
         List<ApprovedOvertimeResDto.DailyOvertimeDto> dailyItems = new ArrayList<>();
 
-        for(CommuteRecord cr : records){
-            totalExtMin += cr.getRecognizedExtendedMinutes();
-            totalNightMin += cr.getRecognizedNightMinutes();
-            totalHolidayMin += cr.getRecognizedHolidayMinutes();
+        for(OvertimeRequest ot : approved){
+            long minutes = Duration.between(ot.getOtPlanStart(), ot.getOtPlanEnd()).toMinutes();
+            if (minutes <= 0) continue;
+
+            LocalDate otDate = ot.getOtDate().toLocalDate();
+            boolean holiday = isHolidayForWorkGroup(companyId, otDate, wg);
+            long nightMin = nightOverlapMinutes(ot.getOtPlanStart(), ot.getOtPlanEnd());
+
+            long extMin = 0L, holMin = 0L;
+            if (holiday) holMin = minutes;
+            else         extMin = minutes;
+
+            totalExtMin     += extMin;
+            totalHolidayMin += holMin;
+            totalNightMin   += nightMin;
 
             dailyItems.add(ApprovedOvertimeResDto.DailyOvertimeDto.builder()
-                    .workDate(cr.getWorkDate())
-                    .recognizedExtendedMinutes(cr.getRecognizedExtendedMinutes())
-                    .recognizedNightMinutes(cr.getRecognizedNightMinutes())
-                    .recognizedHolidayMinutes(cr.getRecognizedHolidayMinutes())
-                    .actualWorkMinutes(cr.getActualWorkMinutes())
+                    .workDate(otDate)
+                    .recognizedExtendedMinutes(extMin)
+                    .recognizedNightMinutes(nightMin)
+                    .recognizedHolidayMinutes(holMin)
+                    .actualWorkMinutes(minutes)
                     .build());
         }
-
 
 //        시급조회 + 수당 계산
         WageInfoResDto wageInfo = getWageInfo(companyId, payrollRunId, empId);
@@ -574,7 +656,7 @@ public class PayrollService {
             payMap.put(LegalCalcType.OVERTIME, overtime.getExtendedPay());
         }
         if (overtime.getNightPay() > 0) {
-            payMap.put(LegalCalcType.NIGHT, overtime.getExtendedPay());
+            payMap.put(LegalCalcType.NIGHT, overtime.getNightPay());
         }
         if (overtime.getHolidayPay() > 0) {
             payMap.put(LegalCalcType.HOLIDAY, overtime.getHolidayPay());
@@ -628,8 +710,8 @@ public class PayrollService {
         Employee emp = employeeRepository.findById(reqDto.getEmpId()).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         TaxWithholdingResDto tax = taxWithholdingService.getTax(currentYear, totalPay, emp.getDependentsCount());
 
-        long incomeTax = tax.getIncomeTax();
-        long localIncomeTax = tax.getLocalIncomeTax();
+        long incomeTax = tax != null ? tax.getIncomeTax() : 0L;
+        long localIncomeTax = tax != null ? tax.getLocalIncomeTax() : 0L;
 
 //        합계
         long totalDeduction = pension + health + ltc + employment + incomeTax + localIncomeTax;
@@ -684,8 +766,8 @@ public class PayrollService {
         // 소득세 + 지방소득세 (간이세액표)
         TaxWithholdingResDto tax = taxWithholdingService.getTax(year, monthlySalary, emp.getDependentsCount());
         if (tax != null) {
-            total += saveDeductionDetail(run, emp, company, "소득세", tax.getIncomeTax(), deductionMap);
-            total += saveDeductionDetail(run, emp, company, "지방소득세", tax.getLocalIncomeTax(), deductionMap);
+            total += saveDeductionDetail(run, emp, company, "근로소득세", tax.getIncomeTax(), deductionMap);
+            total += saveDeductionDetail(run, emp, company, "근로지방소득세", tax.getLocalIncomeTax(), deductionMap);
         }
         //산재보험 (회사 100% 부담 — 사원 실수령액 무관, totalDeduction 가산 X)
         if (emp.getJobTypes() != null && emp.getJobTypes().getIndustrialAccidentRate() != null) {
@@ -798,4 +880,36 @@ public class PayrollService {
         }
     }
 
+
+
+    private boolean isHolidayForWorkGroup(UUID companyId, LocalDate date, WorkGroup wg) {
+        // 회사 공휴일 캐시
+        Set<LocalDate> monthHolidays = businessDayCalculator
+                .getHolidaysInMonth(companyId, YearMonth.from(date));
+        if (monthHolidays.contains(date)) return true;
+        // 근무요일 비트마스크: 월=bit0 ~ 일=bit6. 비트가 안 켜져있으면 비근무일=휴일
+        int bit = 1 << (date.getDayOfWeek().getValue() - 1);
+        return wg == null || (wg.getGroupWorkDay() & bit) == 0;
+    }
+
+    private static final LocalTime NIGHT_START = LocalTime.of(22, 0);
+    private static final LocalTime NIGHT_END   = LocalTime.of(6, 0);
+
+    private long nightOverlapMinutes(LocalDateTime s, LocalDateTime e) {
+        long total = 0L;
+        LocalDate d = s.toLocalDate();
+        while (!d.isAfter(e.toLocalDate())) {
+            LocalDateTime ns = d.atTime(NIGHT_START);
+            LocalDateTime ne = d.plusDays(1).atTime(NIGHT_END);
+            total += overlapMin(s, e, ns, ne);
+            d = d.plusDays(1);
+        }
+        return total;
+    }
+
+    private long overlapMin(LocalDateTime aS, LocalDateTime aE, LocalDateTime bS, LocalDateTime bE) {
+        LocalDateTime s = aS.isAfter(bS) ? aS : bS;
+        LocalDateTime e = aE.isBefore(bE) ? aE : bE;
+        return e.isAfter(s) ? Duration.between(s, e).toMinutes() : 0L;
+    }
 }

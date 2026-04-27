@@ -95,7 +95,7 @@ public enum ErrorCode {
     UNSUPPORTED_BANK(400, "지원하지 않는 은행입니다."),
     PAYROLL_EMP_NOT_FOUND(404, "해당 직원의 급여산정정보를 찾을 수 없습니다."),
     NO_CONFIRMED_EMPLOYEES(400, "확정된 사원이 없습니다."),
-
+    PAYROLL_EMP_ALREADY_CONFIRMED(404, "이미 확정된 사원입니다. 되돌리기 후 수정하세요."),
     OVERTIME_ALREADY_APPLIED(400, "이미 초과근무 수당이 적용되어있는 건입니다."),
 
     // ── 정산보험료 ──

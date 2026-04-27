@@ -19,7 +19,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 @Slf4j
@@ -41,9 +44,12 @@ public class MySalaryService {
     private final PayrollDetailsRepository payrollDetailsRepository;
     private final RetirementRepository retirementRepository;
     private final EmpSalaryCacheService empSalaryCacheService;
+    private final SeveranceService severanceService;
+    private final SeveranceEstimateService severanceEstimateService;
+    private final SeverancePaysRepository severancePaysRepository;
 
     @Autowired
-    public MySalaryService(EmployeeRepository employeeRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, MySalaryCacheService cacheService, PayStubsRepository payStubsRepository, MySalaryQueryRepository mySalaryQueryRepository, RetirementPensionDepositsRepository pensionDepositsRepository, MySalaryCacheService mySalaryCacheService, PayrollDetailsRepository payrollDetailsRepository, RetirementRepository retirementRepository, EmpSalaryCacheService empSalaryCacheService) {
+    public MySalaryService(EmployeeRepository employeeRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, MySalaryCacheService cacheService, PayStubsRepository payStubsRepository, MySalaryQueryRepository mySalaryQueryRepository, RetirementPensionDepositsRepository pensionDepositsRepository, MySalaryCacheService mySalaryCacheService, PayrollDetailsRepository payrollDetailsRepository, RetirementRepository retirementRepository, EmpSalaryCacheService empSalaryCacheService, SeveranceService severanceService, SeveranceEstimateService severanceEstimateService, SeverancePaysRepository severancePaysRepository) {
         this.employeeRepository = employeeRepository;
         this.salaryContractRepository = salaryContractRepository;
         this.salaryContractDetailRepository = salaryContractDetailRepository;
@@ -58,6 +64,9 @@ public class MySalaryService {
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.retirementRepository = retirementRepository;
         this.empSalaryCacheService = empSalaryCacheService;
+        this.severanceService = severanceService;
+        this.severanceEstimateService = severanceEstimateService;
+        this.severancePaysRepository = severancePaysRepository;
     }
 
 
@@ -342,6 +351,73 @@ public PayStubDetailResDto getPayStubDetail(UUID companyId, Long empId, Long stu
     }
 
 
+    /**
+     * 내 예상 퇴직금 (근속기준 추계액)
+     * - 1년 미만은 그대로 계산해서 돌려주되, 화면에서 안내 (serviceDays < 365 경고)
+     * - 회사 제도 / 사원 개인설정에 따라 retirementType 자동 결정 (severance / DB / DC)
+     * - DC형: dcDepositedTotal = COMPLETED 적립 누적,
+     *         displayAmount    = max(0, estimated - dcDeposited)
+     * - severance / DB: displayAmount = estimated
+     */
+    public MySeveranceEstimateResDto getMySeveranceEstimate(
+            UUID companyId, Long empId, LocalDate baseDate) {
+
+        if (baseDate == null) baseDate = LocalDate.now();
+
+        // 1) 사원
+        Employee emp = employeeRepository
+                .findByEmpIdAndCompany_CompanyId(empId, companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        // 2) 퇴직제도 결정 (사원 개인설정 우선, 없으면 회사 설정)
+        RetirementType rt = severanceService.resolveRetirementType(emp, companyId);
+
+        // 3) 평균임금 산정 기초데이터 (3개월 급여, 1년 상여금)
+        YearMonth baseYm = YearMonth.from(baseDate);
+        List<String> last3Months = buildMonthRange(
+                baseYm.minusMonths(3), baseYm.minusMonths(1));
+        List<String> last12Months = buildMonthRange(
+                baseYm.minusMonths(12), baseYm.minusMonths(1));
+
+        Long last3MonthPay = nz(severancePaysRepository.sumLast3MonthPay(empId, companyId, last3Months));
+        Long lastYearBonus = nz(severancePaysRepository.sumLastYearBonus(empId, companyId, last12Months));
+
+        // 4) DC 누적 적립금 (DC 사원만 의미 있음)
+        Long dcDeposited = (rt == RetirementType.DC)
+                ? nz(severancePaysRepository.sumDcDepositedTotal(empId, companyId))
+                : 0L;
+
+        // 5) 기존 추계 로직 재사용 (SeveranceEstimateService.calculateOneRow)
+        SeveranceEstimateRowDto row = severanceEstimateService.calculateOneRow(
+                emp, baseDate, rt, last3MonthPay, lastYearBonus, dcDeposited);
+
+        // 6) DTO 매핑
+        long serviceDays = ChronoUnit.DAYS.between(emp.getEmpHireDate(), baseDate);
+        int last3MonthDays = (int) ChronoUnit.DAYS.between(baseDate.minusMonths(3), baseDate);
+
+        return MySeveranceEstimateResDto.builder()
+                .empId(emp.getEmpId())
+                .empName(emp.getEmpName())
+                .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
+                .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)
+                .retirementType(rt.name())
+                .hireDate(emp.getEmpHireDate())
+                .baseDate(baseDate)
+                .serviceDays(serviceDays)
+                .serviceYears(row.getServiceYears())
+                .last3MonthPay(last3MonthPay)
+                .lastYearBonus(lastYearBonus)
+                .annualLeaveAllowance(0L) // TODO: 연차수당 모듈 연동 시 교체
+                .last3MonthDays(last3MonthDays)
+                .avgDailyWage(row.getAvgDailyWage())
+                .estimatedSeverance(row.getEstimatedSeverance())
+                .dcDepositedTotal(rt == RetirementType.DC ? dcDeposited : null)
+                .dcDiffAmount(row.getDcDiffAmount())
+                .displayAmount(row.getDisplayAmount())
+                .calculatedAt(LocalDateTime.now())
+                .build();
+    }
+
     //    부양가족수 변경
     @Transactional
     public void updateMyDependents(UUID companyId, Long empId, Integer dependentsCount){
@@ -392,5 +468,18 @@ public PayStubDetailResDto getPayStubDetail(UUID companyId, Long empId, Long stu
             case severance -> RetirementType.severance;
             case DB_DC -> null;   // 호출 측에서 처리
         };
+    }
+
+    private static long nz(Long v) { return v == null ? 0L : v; }
+
+
+    private List<String> buildMonthRange(YearMonth from, YearMonth to) {
+        List<String> acc = new ArrayList<>();
+        YearMonth cur = from;
+        while (!cur.isAfter(to)) {
+            acc.add(cur.toString());
+            cur = cur.plusMonths(1);
+        }
+        return acc;
     }
 }

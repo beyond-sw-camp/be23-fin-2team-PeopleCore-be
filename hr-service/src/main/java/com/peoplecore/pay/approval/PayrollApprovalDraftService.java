@@ -54,8 +54,9 @@ public class PayrollApprovalDraftService {
     public ApprovalDraftResDto draft(UUID companyId, Long userId, Long payrollRunId){
         PayrollRuns run = payrollRunsRepository.findByPayrollRunIdAndCompany_CompanyId(payrollRunId, companyId).orElseThrow(()-> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
 
-//        결재 가능 상태 검증 (Confirmed만 가능)
-        if (run.getPayrollStatus() != PayrollStatus.APPROVED){
+//        결재 가능 상태 검증 (Confirmed 또는 PENDING_APPROVAL(재상신 케이스) 가능)
+        if (run.getPayrollStatus() != PayrollStatus.CONFIRMED
+                && run.getPayrollStatus() != PayrollStatus.PENDING_APPROVAL){
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
 
@@ -176,7 +177,7 @@ public class PayrollApprovalDraftService {
                 .findByPayrollRunIdAndCompany_CompanyId(reqDto.getLedgerId(), companyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
 
-        if (run.getPayrollStatus() != PayrollStatus.APPROVED) {
+        if (run.getPayrollStatus() != PayrollStatus.CONFIRMED) {
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
 
@@ -203,8 +204,8 @@ public class PayrollApprovalDraftService {
         log.info("[PayrollApproval] 상신 발행 - payrollRunId={}, formId={}, drafterId={}",
                 run.getPayrollRunId(), form.formId(), userId);
 
-        // 상태 전이: APPROVED → IN_APPROVAL (요구사항에 따라 조정)
-        // run.changeStatus(PayrollStatus.IN_APPROVAL);
+        // 상태 전이: APPROVED → PENDING_APPROVAL (요구사항에 따라 조정)
+         run.submitApproval(null);
 
     }
 

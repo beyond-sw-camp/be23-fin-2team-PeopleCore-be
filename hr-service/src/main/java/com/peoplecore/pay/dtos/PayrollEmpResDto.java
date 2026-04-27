@@ -23,4 +23,7 @@ public class PayrollEmpResDto {
     private Long totalDeduction;    //공제합계
     private Long netPay;            //공제후 금액
     private Long unpaid;            //미지급액
+
+    private String payrollEmpStatus;   // CALCULATING / CONFIRMED 산정중/확정
+    private String empStatus;          // ACTIVE / ON_LEAVE / RESIGNED 재직/휴직/퇴직
 }
