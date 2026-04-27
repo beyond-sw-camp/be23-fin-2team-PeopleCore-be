@@ -388,7 +388,7 @@ public class SalaryContractService {
 
 //        퇴직 상태의 사원 계약서만 삭제가능
         if(contract.getEmployee().getEmpStatus() != EmpStatus.RESIGNED){
-            throw new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND);
+            throw new CustomException(ErrorCode.EMPLOYEE_NOT_RESIGNED);
         }
 
 //        soft delete처리(deleteAt에 현재 날짜 세팅)
