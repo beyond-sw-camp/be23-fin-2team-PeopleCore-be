@@ -31,13 +31,4 @@ public class ApprovalDraftController {
     }
 
 
-//    전자결재 상신
-    @PostMapping("/submit")
-    public ResponseEntity<Void> submit(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long userId,
-            @RequestBody @Valid ApprovalSubmitReqDto reqDto){
-        facade.submit(companyId, userId, reqDto);
-        return ResponseEntity.ok().build();
-    }
 }

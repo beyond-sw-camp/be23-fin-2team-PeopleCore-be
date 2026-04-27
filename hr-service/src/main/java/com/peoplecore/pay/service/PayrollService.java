@@ -235,57 +235,6 @@ public class PayrollService {
         return getPayroll(companyId, payYearMonth);
     }
 
-///        전월복사
-        @Transactional
-        public PayrollRunResDto copyFromPreviousMonth(UUID companyId, String payYearMonth){
-
-//            중복체크
-            if(payrollRunsRepository.existsByCompany_CompanyIdAndPayYearMonth(companyId, payYearMonth)){
-                throw new CustomException(ErrorCode.PAYROLL_ALREADY_EXISTS);
-            }
-
-//            전월 계산
-            YearMonth current = YearMonth.parse(payYearMonth, DateTimeFormatter.ofPattern("yyyy-MM"));
-            String prevMonth = current.minusMonths(1).format(DateTimeFormatter.ofPattern("yyyy-MM"));
-
-            PayrollRuns prevRun = payrollRunsRepository.findByCompany_CompanyIdAndPayYearMonth(companyId, prevMonth).orElseThrow(()-> new CustomException(ErrorCode.PAYROLL_PREV_NOT_FOUND));
-
-            Company company = prevRun.getCompany();
-
-//            신규 PayrollRuns 생성
-            PayrollRuns newRun = PayrollRuns.builder()
-                    .payYearMonth(payYearMonth)
-                    .payrollStatus(PayrollStatus.CALCULATING)
-                    .company(company)
-                    .totalEmployees(prevRun.getTotalEmployees())
-                    .totalPay(prevRun.getTotalPay())
-                    .totalDeduction(prevRun.getTotalDeduction())
-                    .totalNetPay(prevRun.getTotalNetPay())
-                    .build();
-            payrollRunsRepository.save(newRun);
-
-//            전월 상세 복사
-            List<PayrollDetails> prevDetails = payrollDetailsRepository.findByPayrollRuns(prevRun);
-
-            for (PayrollDetails prev : prevDetails){
-//                퇴직자 제외
-                if (prev.getEmployee().getEmpStatus() == EmpStatus.RESIGNED) continue;
-
-                PayrollDetails copy = PayrollDetails.builder()
-                        .payrollRuns(newRun)
-                        .employee(prev.getEmployee())
-                        .payItems(prev.getPayItems())
-                        .payItemName(prev.getPayItemName())
-                        .payItemType(prev.getPayItemType())
-                        .amount(prev.getAmount())
-                        .company(company)
-                        .build();
-
-                payrollDetailsRepository.save(copy);
-            }
-
-            return getPayroll(companyId, payYearMonth);
-        }
 
 
 ///        사원별 급여 상세 조회
@@ -852,6 +801,7 @@ public class PayrollService {
 
             RetirementPensionDeposits deposits = RetirementPensionDeposits.builder()
                     .employee(emp)
+                    .payYearMonth(run.getPayYearMonth())
                     .baseAmount(baseAmount)
                     .depositAmount(depositAmount)
                     .depositDate(LocalDateTime.now())

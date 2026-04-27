@@ -19,7 +19,7 @@ public class SeveranceApprovalResultEvent { //퇴직금 전자결재 결과
 
     private Long approvalDocId;
 
-//    결재 결과 : APPROVED / REJECTED
+//    결재 결과 : DRAFT / PENDING / APPROVED / REJECTED / CANCELED
     private String status;
 
 //    최종승인자ID

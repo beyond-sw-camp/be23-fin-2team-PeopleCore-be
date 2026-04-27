@@ -2,7 +2,6 @@ package com.peoplecore.pay.approval;
 
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
-import com.peoplecore.event.PayrollApprovalDocCreatedEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.PayrollRuns;
@@ -32,16 +31,15 @@ public class PayrollApprovalDraftService {
     private final PayrollRunsRepository payrollRunsRepository;
     private final PayrollDetailsRepository payrollDetailsRepository;
     private final EmployeeRepository employeeRepository;
-    private final PayrollApprovalDocCreatedPublisher docCreatedPublisher;
+//    private final PayrollApprovalDocCreatedPublisher docCreatedPublisher;
     private final ApprovalFormCache approvalFormCache;
     private final PayrollEmpStatusRepository payrollEmpStatusRepository;
 
     @Autowired
-    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, PayrollApprovalDocCreatedPublisher docCreatedPublisher, ApprovalFormCache approvalFormCache, PayrollEmpStatusRepository payrollEmpStatusRepository) {
+    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository,  ApprovalFormCache approvalFormCache, PayrollEmpStatusRepository payrollEmpStatusRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
-        this.docCreatedPublisher = docCreatedPublisher;
         this.approvalFormCache = approvalFormCache;
         this.payrollEmpStatusRepository = payrollEmpStatusRepository;
     }
@@ -170,47 +168,4 @@ public class PayrollApprovalDraftService {
     }
 
 
-///    전자결재 상신 (Kafka 발행)
-    @Transactional
-    public void submit(UUID companyId, Long userId, ApprovalSubmitReqDto reqDto) {
-        System.out.println("=== submit 진입");   // 임시
-        PayrollRuns run = payrollRunsRepository
-                .findByPayrollRunIdAndCompany_CompanyId(reqDto.getLedgerId(), companyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
-        if (run.getPayrollStatus() != PayrollStatus.CALCULATING
-                && run.getPayrollStatus() != PayrollStatus.CONFIRMED) {
-            throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
-        }
-
-//  확정된 사원이 1명 이상 있어야 결재 상신 가능
-        long confirmedCount = payrollEmpStatusRepository
-                .findByPayrollRuns_PayrollRunIdAndStatus(reqDto.getLedgerId(), PayrollEmpStatusType.CONFIRMED)
-                .size();
-        if (confirmedCount == 0) {
-            throw new CustomException(ErrorCode.NO_CONFIRMED_EMPLOYEES);
-        }
-        System.out.println("=== submit 진입");   // 임시
-
-        ApprovalFormCache.CachedForm form =
-                approvalFormCache.get(companyId, ApprovalFormType.SALARY);
-        System.out.println("=== form 가져옴, formId=" + form.formId());   // 임시
-        docCreatedPublisher.publish(PayrollApprovalDocCreatedEvent.builder()
-                .companyId(companyId)
-                .payrollRunId(run.getPayrollRunId())
-                .drafterId(userId)
-                .formId(form.formId())
-                .formCode(ApprovalFormType.SALARY.getFormCode())   // "PAYROLL_RESOLUTION"
-                .htmlContent(reqDto.getHtmlContent())
-                .approvalLine(reqDto.getApprovalLine())
-                .build());
-
-        log.info("[PayrollApproval] 상신 발행 - payrollRunId={}, formId={}, drafterId={}",
-                run.getPayrollRunId(), form.formId(), userId);
-
-        // 상태 전이: APPROVED → PENDING_APPROVAL (요구사항에 따라 조정)
-         run.submitApproval(null);
-
-    }
-
-    // currency, format helpers는 공용 유틸로 추출 권장
 }
