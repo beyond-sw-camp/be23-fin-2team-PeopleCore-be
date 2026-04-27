@@ -378,22 +378,6 @@ public class PayrollService {
     }
 
 
-///    급여 확정(전체)
-    @Transactional
-    public void confirmPayroll(UUID companyId, Long actorEmpId, Long payrollRunId){
-        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
-
-        // 모든 사원 산정중 → 확정 (이미 확정된 사원은 건드리지 않음)
-        List<PayrollEmpStatus> allEmps = payrollEmpStatusRepository
-                .findByPayrollRuns_PayrollRunId(payrollRunId);
-        for (PayrollEmpStatus pes : allEmps) {
-            if (pes.getStatus() == PayrollEmpStatusType.CALCULATING) {
-                pes.confirm(actorEmpId);
-            }
-        }
-        run.confirm();
-    }
-
 ///    급여 확정(사원별)
     @Transactional
     public void confirmEmployee(UUID companyId, Long payrollRunId, Long empId, Long actorEmpId) {

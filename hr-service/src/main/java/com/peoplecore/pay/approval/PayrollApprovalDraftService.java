@@ -173,12 +173,12 @@ public class PayrollApprovalDraftService {
 ///    전자결재 상신 (Kafka 발행)
     @Transactional
     public void submit(UUID companyId, Long userId, ApprovalSubmitReqDto reqDto) {
-
+        System.out.println("=== submit 진입");   // 임시
         PayrollRuns run = payrollRunsRepository
                 .findByPayrollRunIdAndCompany_CompanyId(reqDto.getLedgerId(), companyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
-
-        if (run.getPayrollStatus() != PayrollStatus.CONFIRMED) {
+        if (run.getPayrollStatus() != PayrollStatus.CALCULATING
+                && run.getPayrollStatus() != PayrollStatus.CONFIRMED) {
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
 
@@ -189,9 +189,11 @@ public class PayrollApprovalDraftService {
         if (confirmedCount == 0) {
             throw new CustomException(ErrorCode.NO_CONFIRMED_EMPLOYEES);
         }
+        System.out.println("=== submit 진입");   // 임시
+
         ApprovalFormCache.CachedForm form =
                 approvalFormCache.get(companyId, ApprovalFormType.SALARY);
-
+        System.out.println("=== form 가져옴, formId=" + form.formId());   // 임시
         docCreatedPublisher.publish(PayrollApprovalDocCreatedEvent.builder()
                 .companyId(companyId)
                 .payrollRunId(run.getPayrollRunId())

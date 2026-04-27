@@ -23,6 +23,7 @@ import java.util.Optional;
 @Component
 public class PayrollApprovalDocCreatedConsumer {
 
+
     private static final String HR_REF_TYPE = "PAYROLL_RUN";
 
     private final ApprovalDocumentService approvalDocumentService;

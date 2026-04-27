@@ -78,16 +78,6 @@ public class PayrollController {
         return ResponseEntity.ok().build();
     }
 
-//    급여 확정
-    @PutMapping("/{payrollRunId}/confirm")
-    public ResponseEntity<Void> confirmPayroll(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long actorEmpId,
-            @PathVariable Long payrollRunId){
-        payrollService.confirmPayroll(companyId, actorEmpId, payrollRunId);
-        return ResponseEntity.ok().build();
-    }
-
 //    급여 확정(개인별)
     @PutMapping("/{payrollRunId}/employees/{empId}/confirm")
     public ResponseEntity<Void> confirmEmployee(
