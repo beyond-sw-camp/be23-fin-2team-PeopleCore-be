@@ -190,6 +190,14 @@ public class VacationGrantRequestService {
                 .map(VacationGrantRequestResponse::from);
     }
 
+    /* 관리자 상태별 부여 신청 페이지 (createdAt DESC) - Type + Employee fetch join, 응답 DTO 매핑 */
+    /* 화면 "휴가 부여 신청 현황" - 상태(PENDING/APPROVED/REJECTED/CANCELED) 탭별 조회 */
+    @Transactional(readOnly = true)
+    public Page<VacationGrantRequestResponse> listForAdmin(UUID companyId, RequestStatus status, Pageable pageable) {
+        return vacationGrantRequestQueryRepository.findByCompanyAndStatus(companyId, status, pageable)
+                .map(VacationGrantRequestResponse::from);
+    }
+
     /* 부여 신청 가능한 법정 휴가 유형 + 현재 잔여 + 한도 + 추가 신청 가능 일수 */
     @Transactional(readOnly = true)
     public List<VacationGrantableTypeResponse> listGrantableTypes(UUID companyId, Long empId) {
