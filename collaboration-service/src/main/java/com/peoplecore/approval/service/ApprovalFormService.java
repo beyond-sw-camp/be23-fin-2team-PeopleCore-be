@@ -16,6 +16,7 @@ import com.peoplecore.common.service.MinioService;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.support.ResourcePatternResolver;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StreamUtils;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -74,6 +76,9 @@ public class ApprovalFormService {
     private final CommonCodeRepository commonCodeRepository;
     private final MinioService minioService;
     private final ResourcePatternResolver resourcePatternResolver;
+    /* 같은 클래스의 @Transactional 메서드를 호출할 때 AOP 프록시를 거치게 하기 위한 self 주입.
+     * @Lazy 가 없으면 자기 자신을 생성자에서 받느라 순환 의존이 발생함. */
+    private final ApprovalFormService self;
 
     @Autowired
     public ApprovalFormService(ApprovalFormFolderRepository approvalFormFolderRepository,
@@ -81,7 +86,9 @@ public class ApprovalFormService {
                                FrequentFormRepository frequentFormRepository,
                                CommonCodeGroupRepository commonCodeGroupRepository,
                                CommonCodeRepository commonCodeRepository,
-                               MinioService minioService, ResourcePatternResolver resourcePatternResolver) {
+                               MinioService minioService,
+                               ResourcePatternResolver resourcePatternResolver,
+                               @Lazy ApprovalFormService self) {
         this.approvalFormFolderRepository = approvalFormFolderRepository;
         this.approvalFormRepository = approvalFormRepository;
         this.frequentFormRepository = frequentFormRepository;
@@ -89,6 +96,7 @@ public class ApprovalFormService {
         this.commonCodeRepository = commonCodeRepository;
         this.minioService = minioService;
         this.resourcePatternResolver = resourcePatternResolver;
+        this.self = self;
     }
 
     //    결재 양식 폴더 조회하는 메서드
@@ -434,118 +442,155 @@ public class ApprovalFormService {
 
     private final List<String> subFolderNames = List.of("스크립트 양식", "보고-시행문", "회계-총무", "일반기안","휴가", "출장", "인사");
 
-    @Transactional
+    /* 회사 초기화 트랜잭션 1 의 결과 묶음 — 루트 폴더, 서브폴더 맵, 양식 코드 그룹 */
+    public record InitContext(ApprovalFormFolder root,
+                              Map<String, ApprovalFormFolder> folderMap,
+                              CommonCodeGroup codeGroup) {}
+
+    /* 회사 생성 시 결재 양식 일괄 초기화 — 트랜잭션 없는 조율자.
+     * 폴더/codeGroup 은 한 트랜잭션, 양식은 양식별로 별도 트랜잭션, MinIO 는 트랜잭션 밖. */
     public void initFormFolder(UUID companyId) {
-        try {
-            if (approvalFormFolderRepository.existsByFolderCompanyId(companyId)) {
-                log.info("========================  이미 회사 루트 폴더가 존재합니다. companyId = {}", companyId);
-                return;
+        // 1. 폴더 + codeGroup ensure (짧은 단일 트랜잭션)
+        InitContext ctx = self.ensureFoldersAndCodeGroup(companyId);
+
+        // 2. 양식별 처리 (양식마다 별도 트랜잭션 + MinIO 는 트랜잭션 밖)
+        for (Map.Entry<String, ApprovalFormFolder> entry : ctx.folderMap().entrySet()) {
+            String folderName = entry.getKey();
+            ApprovalFormFolder subFolder = entry.getValue();
+
+            Resource[] resources;
+            try {
+                resources = resourcePatternResolver.getResources("classpath:default-forms/" + folderName + "/*.html");
+            } catch (IOException e) {
+                throw new BusinessException("기본 양식 리소스 조회 실패: " + folderName, HttpStatus.INTERNAL_SERVER_ERROR);
             }
 
-            String folderPath = "forms/" + companyId + "/양식모음";
+            for (int j = 0; j < resources.length; j++) {
+                Resource resource = resources[j];
 
-            ApprovalFormFolder folder = ApprovalFormFolder.builder()
-                    .folderCompanyId(companyId)
-                    .folderName("양식모음")
-                    .parent(null)
-                    .folderPath(folderPath)
-                    .folderIsVisible(true)
-                    .folderSortOrder(1)
-                    .build();
-            approvalFormFolderRepository.save(folder);
-            Map<String, ApprovalFormFolder> formFolderMap = new HashMap<>();
+                String fileName = resource.getFilename();
+                if (fileName == null) continue;
+                String formName = fileName.replace(".html", "");
 
-            for (int i = 0; i < subFolderNames.size(); i++) {
-                ApprovalFormFolder subFolder = ApprovalFormFolder.builder()
-                        .folderCompanyId(companyId)
-                        .folderName(subFolderNames.get(i))
-                        .parent(folder)
-                        .folderPath(folderPath + "/" + subFolderNames.get(i))
-                        .folderIsVisible(true)
-                        .folderSortOrder(i + 1)
-                        .build();
-                approvalFormFolderRepository.save(subFolder);
-                formFolderMap.put(subFolderNames.get(i), subFolder);
-            }
-
-            CommonCodeGroup codeGroup = commonCodeGroupRepository.findByCompanyIdAndGroupCodeAndIsActiveTrue(companyId, FORM_CODE_GROUP).orElseGet(() -> commonCodeGroupRepository.save(CommonCodeGroup.builder()
-                    .companyId(companyId)
-                    .groupCode(FORM_CODE_GROUP)
-                    .groupName("결재 양식 코드")
-                    .groupDescription("결재 양식을 관리하는 코드 ")
-                    .isActive(true)
-                    .build()));
-
-            for (Map.Entry<String, ApprovalFormFolder> entry : formFolderMap.entrySet()) {
-                String folderName = entry.getKey();
-                ApprovalFormFolder subFolder = entry.getValue();
-
-                Resource[] resources = resourcePatternResolver.getResources("classpath:default-forms/" + folderName + "/*.html");
-
-                for (int j = 0; j < resources.length; j++) {
-                    Resource resource = resources[j];
-
-                    /*1. 파일명에서 .html제거 -> formName으로 저장하기 위해 */
-                    String fileName = resource.getFilename();
-                    if (fileName == null) continue;
-                    String formName = fileName.replace(".html", "");
-                    /*2. html 내용 읽기 -> formHtml
-                     * getInputStream : resource 객체가 가리키는 파일의 내용을 바이트 스트림으로 열어주는 메서드 반환은 바이트 데이터
-                     * StreamUtils.copyToString : 바이트 스트림-> String으로 변환해주는 Spring 유ㅠ틸 / UTF_8 인코딩으로 해석해라 라는 뜻. 한글이 포함된 HTML이기 때문에
-                     *  순서는 파일 열기 -> 바이트 읽기 -> UTF_8 문자열로 반환 -> formHtml에 담기*/
-                    String formHtml = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
-
-                    /*3. formCode 생성
-                     *  - FIXED_FORM_CODES 에 등록된 계약 양식은 영문 고정 코드 사용 (OVERTIME_REQUEST 등)
-                     *  - 미등록 양식은 기존 규칙(formName + "_001") 유지
-                     *  String.format 서식: %03d = 최소 3자리 정수, 앞자리 0 패딩 */
-                    String fixedKey = folderName + "/" + formName;
-                    String formCode = FIXED_FORM_CODES.getOrDefault(
-                            fixedKey,
-                            formName + "_" + String.format("%03d", j + 1));
-
-                    /* 보호 대상 양식은 isProtected = true 로 세팅 */
-                    boolean isProtectedForm = PROTECTED_FORM_KEYS.contains(folderName + "/" + formName);
-
-                    /* 4. ApprovalForm 엔티티 생성 -> 저장 */
-                    ApprovalForm form = ApprovalForm.builder()
-                            .companyId(companyId)
-                            .formName(formName)
-                            .formCode(formCode)
-                            .formHtml(formHtml)
-                            .isSystem(true)
-                            .isProtected(isProtectedForm)
-                            .isActive(true)
-                            .isCurrent(true)
-                            .formWritePermission(FormWritePermission.ALL)
-                            .formIsPublic(true)
-                            .formRetentionYear(5)
-                            .formPreApprovalYn(true)
-                            .folderId(subFolder)
-                            .formSortOrder(j + 1)
-                            .build();
-                    if (approvalFormRepository.existsByCompanyIdAndFormNameAndIsCurrent(companyId, formName, true)) {
-                        continue; // 이미 존재하면 skip
-                    }
-                    ApprovalForm saved = approvalFormRepository.save(form);
-                    String objectName = String.format("forms/%s/%s_v%d.html", companyId, saved.getFormCode(), saved.getFormVersion());
-                    minioService.uploadFormHtml(objectName, formHtml);
-
-
-                    Integer maxCodeSort = commonCodeRepository.findMaxSortOrder(codeGroup.getGroupId());
-                    CommonCode commonCode = CommonCode.builder()
-                            .groupId(codeGroup.getGroupId())
-                            .codeValue(saved.getFormCode())
-                            .codeName(saved.getFormName())
-                            .sortOrder(maxCodeSort + 1)
-                            .isActive(true)
-                            .build();
-                    commonCodeRepository.save(commonCode);
+                String formHtml;
+                try {
+                    formHtml = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+                } catch (IOException e) {
+                    throw new BusinessException("양식 HTML 읽기 실패: " + fileName, HttpStatus.INTERNAL_SERVER_ERROR);
                 }
+
+                // formCode 결정 — 계약 고정 코드 우선, 미등록은 기존 규칙
+                String fixedKey = folderName + "/" + formName;
+                String formCode = FIXED_FORM_CODES.getOrDefault(fixedKey, formName + "_" + String.format("%03d", j + 1));
+                boolean isProtectedForm = PROTECTED_FORM_KEYS.contains(fixedKey);
+
+                // 양식 ensure (양식 단위 트랜잭션) — 이미 있으면 기존 반환
+                ApprovalForm form = self.ensureForm(
+                        companyId, subFolder, ctx.codeGroup(),
+                        formName, formCode, formHtml, isProtectedForm, j + 1);
+
+                // MinIO 업로드 — 트랜잭션 밖. putObject 는 멱등하므로 재시도 시 덮어쓰기 OK
+                String objectName = String.format("forms/%s/%s_v%d.html",
+                        companyId, form.getFormCode(), form.getFormVersion());
+                minioService.uploadFormHtml(objectName, formHtml);
             }
-        } catch (Exception e) {
-            log.error("오류가 발생했습니다. e = {}", e.getMessage());
         }
+    }
+
+    /* 폴더 + codeGroup ensure — 멱등. 이미 있으면 그대로 재사용. */
+    @Transactional
+    public InitContext ensureFoldersAndCodeGroup(UUID companyId) {
+        String folderPath = "forms/" + companyId + "/양식모음";
+
+        ApprovalFormFolder root = approvalFormFolderRepository
+                .findByFolderCompanyIdAndFolderNameAndParentIsNull(companyId, "양식모음")
+                .orElseGet(() -> approvalFormFolderRepository.save(
+                        ApprovalFormFolder.builder()
+                                .folderCompanyId(companyId)
+                                .folderName("양식모음")
+                                .parent(null)
+                                .folderPath(folderPath)
+                                .folderIsVisible(true)
+                                .folderSortOrder(1)
+                                .build()
+                ));
+
+        Map<String, ApprovalFormFolder> folderMap = new HashMap<>();
+        for (int i = 0; i < subFolderNames.size(); i++) {
+            String subName = subFolderNames.get(i);
+            int sortOrder = i + 1;
+            ApprovalFormFolder subFolder = approvalFormFolderRepository
+                    .findByFolderCompanyIdAndFolderNameAndParent(companyId, subName, root)
+                    .orElseGet(() -> approvalFormFolderRepository.save(
+                            ApprovalFormFolder.builder()
+                                    .folderCompanyId(companyId)
+                                    .folderName(subName)
+                                    .parent(root)
+                                    .folderPath(folderPath + "/" + subName)
+                                    .folderIsVisible(true)
+                                    .folderSortOrder(sortOrder)
+                                    .build()
+                    ));
+            folderMap.put(subName, subFolder);
+        }
+
+        CommonCodeGroup codeGroup = commonCodeGroupRepository
+                .findByCompanyIdAndGroupCodeAndIsActiveTrue(companyId, FORM_CODE_GROUP)
+                .orElseGet(() -> commonCodeGroupRepository.save(CommonCodeGroup.builder()
+                        .companyId(companyId)
+                        .groupCode(FORM_CODE_GROUP)
+                        .groupName("결재 양식 코드")
+                        .groupDescription("결재 양식을 관리하는 코드 ")
+                        .isActive(true)
+                        .build()));
+
+        return new InitContext(root, folderMap, codeGroup);
+    }
+
+    /* 양식 ensure (단일 트랜잭션) — 이미 있으면 기존 양식 반환, 없으면 양식 + commonCode 함께 INSERT.
+     * MinIO 호출은 호출부(트랜잭션 밖) 에서 수행하므로 여기엔 포함하지 않음. */
+    @Transactional
+    public ApprovalForm ensureForm(UUID companyId,
+                                   ApprovalFormFolder subFolder,
+                                   CommonCodeGroup codeGroup,
+                                   String formName,
+                                   String formCode,
+                                   String formHtml,
+                                   boolean isProtectedForm,
+                                   int sortOrder) {
+        Optional<ApprovalForm> existing = approvalFormRepository
+                .findByCompanyIdAndFormNameAndIsCurrent(companyId, formName, true);
+        if (existing.isPresent()) {
+            return existing.get();
+        }
+
+        ApprovalForm saved = approvalFormRepository.save(ApprovalForm.builder()
+                .companyId(companyId)
+                .formName(formName)
+                .formCode(formCode)
+                .formHtml(formHtml)
+                .isSystem(true)
+                .isProtected(isProtectedForm)
+                .isActive(true)
+                .isCurrent(true)
+                .formWritePermission(FormWritePermission.ALL)
+                .formIsPublic(true)
+                .formRetentionYear(5)
+                .formPreApprovalYn(true)
+                .folderId(subFolder)
+                .formSortOrder(sortOrder)
+                .build());
+
+        Integer maxCodeSort = commonCodeRepository.findMaxSortOrder(codeGroup.getGroupId());
+        commonCodeRepository.save(CommonCode.builder()
+                .groupId(codeGroup.getGroupId())
+                .codeValue(saved.getFormCode())
+                .codeName(saved.getFormName())
+                .sortOrder(maxCodeSort + 1)
+                .isActive(true)
+                .build());
+
+        return saved;
     }
 
     /* formCode + companyId 로 활성 양식 ID 조회 — hr-service 의 ApprovalFormIdCache 가 REST 로 호출 */

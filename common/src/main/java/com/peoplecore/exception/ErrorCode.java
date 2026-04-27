@@ -237,6 +237,9 @@ public enum ErrorCode {
     ATTENDANCE_MODIFY_FORM_NOT_FOUND(404, "근태 정정 양식이 존재하지 않습니다."),
     ATTENDANCE_MODIFY_APPLY_FAILED(500, "근태 정정 적용 중 오류가 발생했습니다."),
 
+    /*전자 결재 */
+    COMPANY_INIT_EVENT_PUBLISH_FAILED(404,"회사 생성 이벤트를 실행하였습니다."),
+
     /*휴가 */
     INVALID_REQUEST_STATUS_TRANSITION(400, "허용되지 않은 휴가 신청 상태 전이입니다."),
     VACATION_POLICY_FIRST_NOTICE_REQUIRED(400, "연차 촉진 사용 시 1차 통지 시기는 필수입니다."),

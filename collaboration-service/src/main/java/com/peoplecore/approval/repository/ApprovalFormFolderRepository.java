@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
@@ -30,5 +31,9 @@ public interface ApprovalFormFolderRepository extends JpaRepository<ApprovalForm
     @Query("SELECT COUNT(f) > 0 FROM ApprovalForm f WHERE f.folderId.folderId = :folderId")
     boolean existsFormByFolderId(@Param("folderId") Long folderId);
 
-    boolean existsByFolderCompanyId(UUID folderCompanyId);
+    // 회사별 루트 폴더(부모 없음) 조회 — 회사 초기화 시 멱등성 체크용
+    Optional<ApprovalFormFolder> findByFolderCompanyIdAndFolderNameAndParentIsNull(UUID companyId, String folderName);
+
+    // 특정 부모 아래 폴더 조회 — 회사 초기화 시 서브폴더 멱등성 체크용
+    Optional<ApprovalFormFolder> findByFolderCompanyIdAndFolderNameAndParent(UUID companyId, String folderName, ApprovalFormFolder parent);
 }

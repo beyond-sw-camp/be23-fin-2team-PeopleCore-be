@@ -2,7 +2,6 @@ package com.peoplecore.approval.controller;
 
 import com.peoplecore.approval.dto.*;
 import com.peoplecore.approval.service.ApprovalFormService;
-import com.peoplecore.approval.service.ApprovalNumberRuleService;
 import com.peoplecore.auth.RoleRequired;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -17,13 +16,10 @@ import java.util.UUID;
 public class ApprovalFormController {
 
     private final ApprovalFormService approvalFormService;
-    private final ApprovalNumberRuleService approvalNumberRuleService;
 
     @Autowired
-    public ApprovalFormController(ApprovalFormService approvalFormService,
-                                  ApprovalNumberRuleService approvalNumberRuleService) {
+    public ApprovalFormController(ApprovalFormService approvalFormService) {
         this.approvalFormService = approvalFormService;
-        this.approvalNumberRuleService = approvalNumberRuleService;
     }
 
     @GetMapping("/form-folder")
@@ -174,14 +170,6 @@ public class ApprovalFormController {
         return ResponseEntity.ok(approvalFormService.batchUpdateFormSettings(companyId, request));
     }
 
-
-    /*기본 양식 폴더 + 기본 채번 규칙 주입 (회사 생성 시 hr-service RestClient 진입점)*/
-    @PostMapping("/init/formfolder")
-    public ResponseEntity<?> initFormFolder(@RequestHeader("X-User-Company") UUID companyId) {
-        approvalFormService.initFormFolder(companyId);
-        approvalNumberRuleService.initDefault(companyId);
-        return ResponseEntity.status(HttpStatus.CREATED).build();
-    }
 
     /* formCode 로 formId 조회 — hr-service ApprovalFormIdCache 가 호출하는 내부 API */
     @GetMapping("/forms/by-code")
