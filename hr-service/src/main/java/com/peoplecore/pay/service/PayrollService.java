@@ -165,6 +165,14 @@ public class PayrollService {
 
             if (contract == null) continue;
 
+            // 사원별 산정 상태 (기본 CALCULATING) - uk_payroll_emp(run_id, emp_id) 제약상 사원당 1회만 저장
+            payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
+                    .payrollRuns(run)
+                    .employee(emp)
+                    .status(PayrollEmpStatusType.CALCULATING)
+                    .companyId(companyId)
+                    .build());
+
 //            1. 계약 상세 항목 (지급항목 위주)
             List<SalaryContractDetail> contractDetails = salaryContractDetailRepository.findByContract_ContractId(contract.getContractId());
 
@@ -187,14 +195,6 @@ public class PayrollService {
                         .amount(detail.getAmount().longValue())
                         .company(company)
                         .build();
-
-                // 사원별 산정 상태 (기본 CALCULATING)
-                payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
-                        .payrollRuns(run)
-                        .employee(emp)
-                        .status(PayrollEmpStatusType.CALCULATING)
-                        .companyId(companyId)
-                        .build());
 
                 payrollDetailsRepository.save(payrollDetail);
 
