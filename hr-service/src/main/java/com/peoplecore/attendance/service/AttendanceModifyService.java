@@ -57,6 +57,7 @@ public class AttendanceModifyService {
     private final VacationRequestQueryRepository vacationRequestQueryRepository;
     private final HolidayReasonResolver holidayReasonResolver;
     private final BusinessDayCalculator businessDayCalculator;
+    private final WorkStatusResolver workStatusResolver;
 
     @Autowired
     public AttendanceModifyService(AttendanceModifyRepository attendanceModifyRepository,
@@ -67,7 +68,8 @@ public class AttendanceModifyService {
                                    HrAlarmPublisher hrAlarmPublisher,
                                    VacationRequestQueryRepository vacationRequestQueryRepository,
                                    HolidayReasonResolver holidayReasonResolver,
-                                   BusinessDayCalculator businessDayCalculator) {
+                                   BusinessDayCalculator businessDayCalculator,
+                                   WorkStatusResolver workStatusResolver) {
         this.attendanceModifyRepository = attendanceModifyRepository;
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
@@ -77,43 +79,47 @@ public class AttendanceModifyService {
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
         this.holidayReasonResolver = holidayReasonResolver;
         this.businessDayCalculator = businessDayCalculator;
+        this.workStatusResolver = workStatusResolver;
     }
 
     /* ===================== 1) 프리필 ===================== */
 
     @Transactional(readOnly = true)
     public AttendanceModifyPrefillResDto prefill(UUID companyId, Long empId, LocalDate workDate) {
-        // 해당 날짜 CommuteRecord — (company, emp, workDate) unique, 파티션 프루닝
-        CommuteRecord cr = commuteRecordRepository
-                .findByCompanyIdAndEmployee_EmpIdAndWorkDate(companyId, empId, workDate)
-                .orElseThrow(() -> new CustomException(ErrorCode.ATTENDANCE_RECORD_NOT_FOUND));
-
-        // 동일 CommuteRecord 에 PENDING 신청이 이미 있으면 차단
+        /* 같은 날 PENDING 중복 차단 (CommuteRecord 존재 여부와 무관) */
         boolean pendingExists = attendanceModifyRepository
-                .existsByEmployee_EmpIdAndComRecIdAndAttenStatus(empId, cr.getComRecId(), ModifyStatus.PENDING);
+                .existsByEmployee_EmpIdAndWorkDateAndAttenStatus(empId, workDate, ModifyStatus.PENDING);
         if (pendingExists) {
             throw new CustomException(ErrorCode.ATTENDANCE_MODIFY_PENDING_EXISTS);
         }
 
-        Employee emp = cr.getEmployee();
+        Employee emp = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         Long formId = approvalFormIdCache.getAttendanceModifyFormId(companyId);
 
-        return AttendanceModifyPrefillResDto.builder()
+        /* CommuteRecord 있으면 현재값으로 prefill, 없으면 빈 값 (휴일 근무 미입력 등) */
+        Optional<CommuteRecord> opt = commuteRecordRepository
+                .findByCompanyIdAndEmployee_EmpIdAndWorkDate(companyId, empId, workDate);
+
+        AttendanceModifyPrefillResDto.AttendanceModifyPrefillResDtoBuilder b = AttendanceModifyPrefillResDto.builder()
                 .formId(formId)
                 .formCode(ApprovalFormIdCache.FORM_CODE_ATTENDANCE_MODIFY)
-                .comRecId(cr.getComRecId())
-                .workDate(cr.getWorkDate())
-                .currentCheckIn(cr.getComRecCheckIn())
-                .currentCheckOut(cr.getComRecCheckOut())
-                .isAutoClosed(cr.getWorkStatus() == WorkStatus.AUTO_CLOSED)
-                .workStatus(cr.getWorkStatus())
-                .workStatusLabel(cr.getWorkStatus() != null ? cr.getWorkStatus().getLabel() : null)
+                .workDate(workDate)
                 .empId(emp.getEmpId())
                 .empName(emp.getEmpName())
                 .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
                 .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)
-                .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
-                .build();
+                .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null);
+
+        opt.ifPresent(cr -> b
+                .comRecId(cr.getComRecId())
+                .currentCheckIn(cr.getComRecCheckIn())
+                .currentCheckOut(cr.getComRecCheckOut())
+                .isAutoClosed(cr.getWorkStatus() == WorkStatus.AUTO_CLOSED)
+                .workStatus(cr.getWorkStatus())
+                .workStatusLabel(cr.getWorkStatus() != null ? cr.getWorkStatus().getLabel() : null));
+
+        return b.build();
     }
 
     /*
@@ -129,10 +135,10 @@ public class AttendanceModifyService {
             return;
         }
 
-        // PENDING 중복 체크 — 있으면 역방향 이벤트 발행 후 종료
+        /* PENDING 중복 체크 — 같은 사원/같은 날짜 기준 (comRecId 는 nullable 이라 키로 부적합) */
         boolean pendingExists = attendanceModifyRepository
-                .existsByEmployee_EmpIdAndComRecIdAndAttenStatus(
-                        event.getEmpId(), event.getComRecId(), ModifyStatus.PENDING);
+                .existsByEmployee_EmpIdAndWorkDateAndAttenStatus(
+                        event.getEmpId(), event.getWorkDate(), ModifyStatus.PENDING);
         if (pendingExists) {
             rejectedPublisher.publish(AttendanceModifyRejectedByHrEvent.builder()
                     .companyId(event.getCompanyId())
@@ -175,8 +181,7 @@ public class AttendanceModifyService {
 
     /*
      * collab 결재 결과 이벤트 수신 → 상태 반영.
-     * 승인 시 CommuteRecord native UPDATE (파티션 프루닝 보장).
-     * 멱등성: 이미 전이된 상태면
+     * 승인 시 comRecId 있으면 native UPDATE, 없으면 신규 CommuteRecord INSERT (휴일근무 미입력 정정 등).
      */
     public void applyApprovalResult(AttendanceModifyResultEvent event) {
         AttendanceModify am = attendanceModifyRepository
@@ -190,15 +195,7 @@ public class AttendanceModifyService {
         switch (event.getStatus()) {
             case "승인" -> {
                 am.approve(manager);
-                // CommuteRecord 갱신 — native UPDATE (com_rec_id + work_date WHERE)
-                int updated = commuteRecordRepository.applyAttendanceModify(
-                        am.getComRecId(), am.getWorkDate(),
-                        am.getAttenReqCheckIn(), am.getAttenReqCheckOut());
-                if (updated != 1) {
-                    log.error("[AttendanceModify] CommuteRecord UPDATE 실패 - attenModiId={}, affected={}",
-                            am.getAttenModiId(), updated);
-                    throw new CustomException(ErrorCode.ATTENDANCE_MODIFY_APPLY_FAILED);
-                }
+                applyApprovedRecord(am);
                 notifyRequester(am, "근태 정정 신청이 승인되었습니다.",
                         "수정된 출퇴근 시각이 반영되었습니다.");
             }
@@ -216,6 +213,41 @@ public class AttendanceModifyService {
         }
         log.info("[AttendanceModify] 결과 반영 - attenModiId={}, status={}",
                 am.getAttenModiId(), event.getStatus());
+    }
+
+    /* 정정 승인 반영 - comRecId 있으면 native UPDATE, 없으면 신규 CommuteRecord INSERT */
+    /* INSERT 케이스: 휴일 근무 미입력 정정 등 (CommuteRecord 자체가 아직 없는 상태) */
+    private void applyApprovedRecord(AttendanceModify am) {
+        if (am.getComRecId() != null) {
+            int updated = commuteRecordRepository.applyAttendanceModify(
+                    am.getComRecId(), am.getWorkDate(),
+                    am.getAttenReqCheckIn(), am.getAttenReqCheckOut());
+            if (updated != 1) {
+                log.error("[AttendanceModify] CommuteRecord UPDATE 실패 - attenModiId={}, affected={}",
+                        am.getAttenModiId(), updated);
+                throw new CustomException(ErrorCode.ATTENDANCE_MODIFY_APPLY_FAILED);
+            }
+            return;
+        }
+        Employee emp = am.getEmployee();
+        WorkGroup wg = emp.getWorkGroup();
+        HolidayReason reason = holidayReasonResolver.resolve(am.getCompanyId(), am.getWorkDate(), wg);
+        /* CommuteService.checkIn 과 동일 판정기 재사용 - LATE/HOLIDAY_WORK/NORMAL 일관 처리 */
+        WorkStatus status = workStatusResolver.resolveInitial(
+                am.getAttenReqCheckIn() != null ? am.getAttenReqCheckIn().toLocalTime() : wg.getGroupStartTime(),
+                wg.getGroupStartTime(), reason);
+
+        CommuteRecord saved = commuteRecordRepository.save(CommuteRecord.builder()
+                .workDate(am.getWorkDate())
+                .companyId(am.getCompanyId())
+                .employee(emp)
+                .comRecCheckIn(am.getAttenReqCheckIn())
+                .comRecCheckOut(am.getAttenReqCheckOut())
+                .holidayReason(reason)
+                .workStatus(status)
+                .build());
+        log.info("[AttendanceModify] CommuteRecord 신규 INSERT - attenModiId={}, comRecId={}, workDate={}",
+                am.getAttenModiId(), saved.getComRecId(), am.getWorkDate());
     }
 
 

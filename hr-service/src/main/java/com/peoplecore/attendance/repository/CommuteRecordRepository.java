@@ -90,7 +90,7 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
             UPDATE commute_record
                SET com_rec_check_in  = :newCheckIn,
                    com_rec_check_out = :newCheckOut,
-                   work_status       = CASE WHEN work_status = 'AUTO_CLOSED'
+                   work_status       = CASE WHEN work_status IN ('AUTO_CLOSED', 'ABSENT')
                                             THEN 'NORMAL' ELSE work_status END
              WHERE com_rec_id = :comRecId
                AND work_date  = :workDate
