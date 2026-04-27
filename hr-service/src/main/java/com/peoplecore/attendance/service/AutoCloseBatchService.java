@@ -176,7 +176,7 @@ public class AutoCloseBatchService {
                 .alarmTitle("퇴근 미체크로 자동 마감 처리")
                 .alarmContent(emp.getEmpName() + " 사원의 " + targetDate
                         + " 근무 기록이 자동 마감되었습니다. 근태 정정 신청이 필요합니다.")
-                .alarmLink("/attendance")
+                .alarmLink("/attendance?date=" + targetDate + "&empId=" + emp.getEmpId())
                 .alarmRefType("COMMUTE_AUTO_CLOSED")
                 .alarmRefId(comRecId)
                 .empIds(new ArrayList<>(recipientSet))
@@ -195,7 +195,7 @@ public class AutoCloseBatchService {
                 .alarmTitle("결근 처리 안내")
                 .alarmContent(emp.getEmpName() + " 사원이 " + targetDate
                         + " 근무 예정일에 출근 기록이 없어 결근 처리되었습니다.")
-                .alarmLink("/attendance")
+                .alarmLink("/attendance?date=" + targetDate + "&empId=" + emp.getEmpId())
                 .alarmRefType("COMMUTE_ABSENT")
                 .alarmRefId(comRecId)
                 .empIds(new ArrayList<>(recipientSet))

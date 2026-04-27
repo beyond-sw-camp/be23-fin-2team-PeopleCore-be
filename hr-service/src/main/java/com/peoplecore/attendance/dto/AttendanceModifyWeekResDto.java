@@ -1,11 +1,13 @@
 package com.peoplecore.attendance.dto;
 
 import com.peoplecore.attendance.entity.HolidayReason;
+import com.peoplecore.attendance.entity.WorkStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -68,9 +70,22 @@ public class AttendanceModifyWeekResDto {
          */
         private Long unrecognizedOvertimeMinutes;
 
-        /**
-         * 자동 마감 여부
-         */
-        private Boolean isAutoClosed;
+        /* 하루 단위 최종 근태 상태 (NORMAL/LATE/EARLY_LEAVE/LATE_AND_EARLY/HOLIDAY_WORK/AUTO_CLOSED/ABSENT). CommuteRecord 없는 날은 null */
+        private WorkStatus workStatus;
+
+        /* 승인 휴가 여부 — 해당 일자에 APPROVED 휴가 슬라이스가 걸린 경우 true */
+        private Boolean isVacation;
+
+        /* 휴가 유형명 (예: "연차", "오전 반차") — isVacation=false 면 null */
+        private String vacationTypeName;
+
+        /* 휴가 시작 시각 (반차/시간 휴가 표현용) — isVacation=false 면 null */
+        private LocalDateTime vacationStart;
+
+        /* 휴가 종료 시각 — isVacation=false 면 null */
+        private LocalDateTime vacationEnd;
+
+        /* 휴가 사용 일수 (1.0 종일 / 0.5 반차 / 0.125 시간) — isVacation=false 면 null */
+        private BigDecimal vacationUseDay;
     }
 }

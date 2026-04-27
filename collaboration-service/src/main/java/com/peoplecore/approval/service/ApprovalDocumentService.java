@@ -626,7 +626,7 @@ public class ApprovalDocumentService {
                 .anyMatch(line -> hrEmpIds.contains(line.getEmpId()));
 
         if (!hasHr) {
-            throw new BusinessException("결재선에 인사팀 사원이 1명 이상 포함되어야 합니다.");
+            throw new BusinessException("결재선에 인사 담당자(HR_ADMIN 이상 권한)가 1명 이상 포함되어야 합니다.");
         }
     }
 }
