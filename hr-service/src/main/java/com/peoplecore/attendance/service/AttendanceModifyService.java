@@ -7,6 +7,7 @@ import com.peoplecore.attendance.entity.AttendanceModify;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.HolidayReason;
 import com.peoplecore.attendance.entity.ModifyStatus;
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.publisher.AttendanceModifyRejectedByHrPublisher;
 import com.peoplecore.attendance.repository.AttendanceModifyRepository;
@@ -22,6 +23,7 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
+import com.peoplecore.vacation.service.BusinessDayCalculator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -32,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.util.*;
 
 /*
@@ -52,6 +55,8 @@ public class AttendanceModifyService {
     private final AttendanceModifyRejectedByHrPublisher rejectedPublisher;
     private final HrAlarmPublisher hrAlarmPublisher;
     private final VacationRequestQueryRepository vacationRequestQueryRepository;
+    private final HolidayReasonResolver holidayReasonResolver;
+    private final BusinessDayCalculator businessDayCalculator;
 
     @Autowired
     public AttendanceModifyService(AttendanceModifyRepository attendanceModifyRepository,
@@ -60,7 +65,9 @@ public class AttendanceModifyService {
                                    ApprovalFormIdCache approvalFormIdCache,
                                    AttendanceModifyRejectedByHrPublisher rejectedPublisher,
                                    HrAlarmPublisher hrAlarmPublisher,
-                                   VacationRequestQueryRepository vacationRequestQueryRepository) {
+                                   VacationRequestQueryRepository vacationRequestQueryRepository,
+                                   HolidayReasonResolver holidayReasonResolver,
+                                   BusinessDayCalculator businessDayCalculator) {
         this.attendanceModifyRepository = attendanceModifyRepository;
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
@@ -68,6 +75,8 @@ public class AttendanceModifyService {
         this.rejectedPublisher = rejectedPublisher;
         this.hrAlarmPublisher = hrAlarmPublisher;
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
+        this.holidayReasonResolver = holidayReasonResolver;
+        this.businessDayCalculator = businessDayCalculator;
     }
 
     /* ===================== 1) 프리필 ===================== */
@@ -308,96 +317,25 @@ public class AttendanceModifyService {
     /*
      * 사원의 주간 근태 + 미인증 초과근무 + 승인 휴가 조회.
      * weekStart 는 어느 요일이 들어와도 해당 주 월요일로 정규화.
-     * CommuteRecord 없는 날도 빈 Day 로 포함 (토/일은 기본 WEEKLY_OFF).
-     * 같은 날 출근 + 휴가(반차 등) 공존 가능 — 두 정보를 동시에 응답.
+     * 결근 배치 도입 후 평일+비휴가+비공휴일은 항상 CommuteRecord 존재 → else 분기는 휴일/주말/휴가일 fallback.
      */
     @Transactional(readOnly = true)
     public AttendanceModifyWeekResDto getWeek(UUID companyId, Long empId, LocalDate weekStartParam) {
         LocalDate monday = weekStartParam.with(DayOfWeek.MONDAY);
         LocalDate sunday = monday.plusDays(6);
 
-        // CommuteRecord 주간 조회 — (company_id, emp_id, work_date) 인덱스 + 파티션 프루닝
-        List<CommuteRecord> records = commuteRecordRepository
-                .findByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenOrderByWorkDateDesc(
-                        companyId, empId, monday, sunday,
-                        org.springframework.data.domain.Pageable.unpaged())
-                .getContent();
-        Map<LocalDate, CommuteRecord> recordMap = new HashMap<>();
-        for (CommuteRecord cr : records) recordMap.put(cr.getWorkDate(), cr);
+        WorkGroup wg = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND))
+                .getWorkGroup();
 
-        // 승인 휴가 슬라이스 — 일자별 매핑. 한 날짜에 여러 건이면 useDay 큰 쪽 우선 (종일 > 반차)
-        List<VacationSlice> vacSlices = vacationRequestQueryRepository.findApprovedSlicesInWeek(
-                companyId, empId, RequestStatus.APPROVED,
-                monday.atStartOfDay(), sunday.atTime(LocalTime.MAX));
-        Map<LocalDate, VacationSlice> vacationMap = new HashMap<>();
-        for (VacationSlice s : vacSlices) {
-            LocalDate from = s.startAt().toLocalDate();
-            LocalDate to = s.endAt().toLocalDate();
-            if (from.isBefore(monday)) from = monday;
-            if (to.isAfter(sunday)) to = sunday;
-            for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
-                VacationSlice prev = vacationMap.get(d);
-                if (prev == null
-                        || (s.useDay() != null
-                            && (prev.useDay() == null
-                                || s.useDay().compareTo(prev.useDay()) > 0))) {
-                    vacationMap.put(d, s);
-                }
-            }
-        }
+        Map<LocalDate, CommuteRecord> recordMap = loadCommuteRecords(companyId, empId, monday, sunday);
+        Map<LocalDate, VacationSlice> vacationMap = loadApprovedVacations(companyId, empId, monday, sunday);
+        Set<LocalDate> monthHolidays = loadHolidaysForWeek(companyId, monday, sunday);
 
-        // 7일 슬롯 빌드
         List<AttendanceModifyWeekResDto.Day> days = new ArrayList<>(7);
         for (int i = 0; i < 7; i++) {
             LocalDate date = monday.plusDays(i);
-            DayOfWeek dow = date.getDayOfWeek();
-            CommuteRecord cr = recordMap.get(date);
-            VacationSlice vac = vacationMap.get(date);
-
-            AttendanceModifyWeekResDto.Day.DayBuilder b = AttendanceModifyWeekResDto.Day.builder()
-                    .workDate(date)
-                    .dayOfWeek(dow);
-
-            if (cr != null) {
-                long overtime = cr.getOvertimeMinutes() != null ? cr.getOvertimeMinutes() : 0L;
-                long recognized = cr.getRecognizedExtendedMinutes() != null
-                        ? cr.getRecognizedExtendedMinutes() : 0L;
-                long unrecognized = Math.max(0L, overtime - recognized);
-
-                b.isHoliday(cr.getHolidayReason() != null)
-                        .holidayReason(cr.getHolidayReason())
-                        .comRecId(cr.getComRecId())
-                        .checkIn(cr.getComRecCheckIn())
-                        .checkOut(cr.getComRecCheckOut())
-                        .actualWorkMinutes(cr.getActualWorkMinutes() != null
-                                ? cr.getActualWorkMinutes() : 0L)
-                        .recognizedOvertimeMinutes(recognized)
-                        .unrecognizedOvertimeMinutes(unrecognized)
-                        .workStatus(cr.getWorkStatus());
-            } else {
-                boolean isWeekend = (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY);
-                b.isHoliday(isWeekend)
-                        .holidayReason(isWeekend ? HolidayReason.WEEKLY_OFF : null)
-                        .comRecId(null)
-                        .checkIn(null)
-                        .checkOut(null)
-                        .actualWorkMinutes(0L)
-                        .recognizedOvertimeMinutes(0L)
-                        .unrecognizedOvertimeMinutes(0L)
-                        .workStatus(null);
-            }
-
-            if (vac != null) {
-                b.isVacation(true)
-                        .vacationTypeName(vac.typeName())
-                        .vacationStart(vac.startAt())
-                        .vacationEnd(vac.endAt())
-                        .vacationUseDay(vac.useDay());
-            } else {
-                b.isVacation(false);
-            }
-
-            days.add(b.build());
+            days.add(buildDay(date, recordMap.get(date), vacationMap.get(date), wg, monthHolidays));
         }
 
         return AttendanceModifyWeekResDto.builder()
@@ -405,6 +343,112 @@ public class AttendanceModifyService {
                 .weekEnd(sunday)
                 .days(days)
                 .build();
+    }
+
+    /* 주간 CommuteRecord → 날짜별 Map. 인덱스 + 파티션 프루닝 */
+    private Map<LocalDate, CommuteRecord> loadCommuteRecords(UUID companyId, Long empId,
+                                                             LocalDate monday, LocalDate sunday) {
+        List<CommuteRecord> records = commuteRecordRepository
+                .findByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenOrderByWorkDateDesc(
+                        companyId, empId, monday, sunday,
+                        org.springframework.data.domain.Pageable.unpaged())
+                .getContent();
+        Map<LocalDate, CommuteRecord> map = new HashMap<>();
+        for (CommuteRecord cr : records) map.put(cr.getWorkDate(), cr);
+        return map;
+    }
+
+    /* 승인 휴가 슬라이스 → 날짜별 Map. 한 날 여러 건이면 useDay 큰 쪽(종일 > 반차) 우선 */
+    private Map<LocalDate, VacationSlice> loadApprovedVacations(UUID companyId, Long empId,
+                                                                LocalDate monday, LocalDate sunday) {
+        List<VacationSlice> slices = vacationRequestQueryRepository.findApprovedSlicesInWeek(
+                companyId, empId, RequestStatus.APPROVED,
+                monday.atStartOfDay(), sunday.atTime(LocalTime.MAX));
+        Map<LocalDate, VacationSlice> map = new HashMap<>();
+        for (VacationSlice s : slices) {
+            LocalDate from = s.startAt().toLocalDate();
+            LocalDate to = s.endAt().toLocalDate();
+            if (from.isBefore(monday)) from = monday;
+            if (to.isAfter(sunday)) to = sunday;
+            for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+                VacationSlice prev = map.get(d);
+                if (prev == null
+                        || (s.useDay() != null
+                            && (prev.useDay() == null
+                                || s.useDay().compareTo(prev.useDay()) > 0))) {
+                    map.put(d, s);
+                }
+            }
+        }
+        return map;
+    }
+
+    /* 주가 두 달 걸치면 두 달 공휴일 합집합 - 캐시 1~2회 조회로 끝 */
+    private Set<LocalDate> loadHolidaysForWeek(UUID companyId, LocalDate monday, LocalDate sunday) {
+        Set<LocalDate> holidays = new HashSet<>(
+                businessDayCalculator.getHolidaysInMonth(companyId, YearMonth.from(monday)));
+        if (!YearMonth.from(monday).equals(YearMonth.from(sunday))) {
+            holidays.addAll(businessDayCalculator.getHolidaysInMonth(companyId, YearMonth.from(sunday)));
+        }
+        return holidays;
+    }
+
+    /* 단일 일자 Day 슬롯 - cr 분기 + 휴가 정보 합성 */
+    private AttendanceModifyWeekResDto.Day buildDay(LocalDate date, CommuteRecord cr, VacationSlice vac,
+                                                    WorkGroup wg, Set<LocalDate> monthHolidays) {
+        AttendanceModifyWeekResDto.Day.DayBuilder b = AttendanceModifyWeekResDto.Day.builder()
+                .workDate(date)
+                .dayOfWeek(date.getDayOfWeek());
+
+        if (cr != null) applyCommuteRecord(b, cr);
+        else applyEmptyFallback(b, date, wg, monthHolidays);
+
+        applyVacation(b, vac);
+        return b.build();
+    }
+
+    /* CommuteRecord 실데이터 분기 - holidayReason 은 INSERT 시점 결정값 그대로 사용 */
+    private void applyCommuteRecord(AttendanceModifyWeekResDto.Day.DayBuilder b, CommuteRecord cr) {
+        long overtime = cr.getOvertimeMinutes() != null ? cr.getOvertimeMinutes() : 0L;
+        long recognized = cr.getRecognizedExtendedMinutes() != null ? cr.getRecognizedExtendedMinutes() : 0L;
+        long unrecognized = Math.max(0L, overtime - recognized);
+        b.isHoliday(cr.getHolidayReason() != null)
+                .holidayReason(cr.getHolidayReason())
+                .comRecId(cr.getComRecId())
+                .checkIn(cr.getComRecCheckIn())
+                .checkOut(cr.getComRecCheckOut())
+                .actualWorkMinutes(cr.getActualWorkMinutes() != null ? cr.getActualWorkMinutes() : 0L)
+                .recognizedOvertimeMinutes(recognized)
+                .unrecognizedOvertimeMinutes(unrecognized)
+                .workStatus(cr.getWorkStatus());
+    }
+
+    /* 빈 슬롯 fallback - 결근 배치가 INSERT 안 한 케이스 (휴일/주말/휴가일) */
+    private void applyEmptyFallback(AttendanceModifyWeekResDto.Day.DayBuilder b, LocalDate date,
+                                    WorkGroup wg, Set<LocalDate> monthHolidays) {
+        HolidayReason hr = holidayReasonResolver.resolve(date, wg, monthHolidays);
+        b.isHoliday(hr != null)
+                .holidayReason(hr)
+                .comRecId(null)
+                .checkIn(null)
+                .checkOut(null)
+                .actualWorkMinutes(0L)
+                .recognizedOvertimeMinutes(0L)
+                .unrecognizedOvertimeMinutes(0L)
+                .workStatus(null);
+    }
+
+    /* 휴가 정보 - 슬라이스 있으면 채우고, 없으면 false */
+    private void applyVacation(AttendanceModifyWeekResDto.Day.DayBuilder b, VacationSlice vac) {
+        if (vac != null) {
+            b.isVacation(true)
+                    .vacationTypeName(vac.typeName())
+                    .vacationStart(vac.startAt())
+                    .vacationEnd(vac.endAt())
+                    .vacationUseDay(vac.useDay());
+        } else {
+            b.isVacation(false);
+        }
     }
 
     /**
