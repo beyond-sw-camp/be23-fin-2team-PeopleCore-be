@@ -7,6 +7,7 @@ import com.peoplecore.attendance.entity.AttendanceModify;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.HolidayReason;
 import com.peoplecore.attendance.entity.ModifyStatus;
+import com.peoplecore.attendance.entity.OtExceedAction;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.publisher.AttendanceModifyRejectedByHrPublisher;
@@ -58,6 +59,7 @@ public class AttendanceModifyService {
     private final HolidayReasonResolver holidayReasonResolver;
     private final BusinessDayCalculator businessDayCalculator;
     private final WorkStatusResolver workStatusResolver;
+    private final OvertimeLimitChecker overtimeLimitChecker;
 
     @Autowired
     public AttendanceModifyService(AttendanceModifyRepository attendanceModifyRepository,
@@ -69,7 +71,8 @@ public class AttendanceModifyService {
                                    VacationRequestQueryRepository vacationRequestQueryRepository,
                                    HolidayReasonResolver holidayReasonResolver,
                                    BusinessDayCalculator businessDayCalculator,
-                                   WorkStatusResolver workStatusResolver) {
+                                   WorkStatusResolver workStatusResolver,
+                                   OvertimeLimitChecker overtimeLimitChecker) {
         this.attendanceModifyRepository = attendanceModifyRepository;
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
@@ -80,6 +83,7 @@ public class AttendanceModifyService {
         this.holidayReasonResolver = holidayReasonResolver;
         this.businessDayCalculator = businessDayCalculator;
         this.workStatusResolver = workStatusResolver;
+        this.overtimeLimitChecker = overtimeLimitChecker;
     }
 
     /* ===================== 1) 프리필 ===================== */
@@ -119,15 +123,21 @@ public class AttendanceModifyService {
                 .workStatus(cr.getWorkStatus())
                 .workStatusLabel(cr.getWorkStatus() != null ? cr.getWorkStatus().getLabel() : null));
 
+        /* 주간 한도 + 현재 사용 분 - 프론트가 정정 후 추정값 비교해 BLOCK 차단 */
+        OvertimeLimitChecker.WeeklyUsage usage = overtimeLimitChecker.usageBefore(companyId, empId, workDate);
+        b.weeklyMaxMinutes(usage.weeklyMaxMinutes())
+         .weekUsedMinutes(usage.usedMinutes())
+         .exceedAction(usage.exceedAction());
+
         return b.build();
     }
 
     /*
-     * collab 상신 이벤트 수신 → AttendanceModify INSERT.
-     * 중복 PENDING 감지 시 역방향 이벤트 발행으로 collab 측 자동 반려 트리거.
+     * collab 상신 이벤트 수신 → 검증 선행 → 통과 시 AttendanceModify INSERT.
+     * 검증 단계: 멱등성 → PENDING 중복 → 주간 한도 (BLOCK 시 역방향 반려).
      */
     public void createFromApproval(AttendanceModifyDocCreatedEvent event) {
-        // 멱등성: 동일 docId 로 이미 INSERT 된 경우 no-op
+        /* 멱등성 - 동일 docId 중복 수신 */
         var existing = attendanceModifyRepository
                 .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId());
         if (existing.isPresent()) {
@@ -135,24 +145,28 @@ public class AttendanceModifyService {
             return;
         }
 
-        /* PENDING 중복 체크 — 같은 사원/같은 날짜 기준 (comRecId 는 nullable 이라 키로 부적합) */
+        /* PENDING 중복 - 같은 사원/같은 날짜 기준 */
         boolean pendingExists = attendanceModifyRepository
                 .existsByEmployee_EmpIdAndWorkDateAndAttenStatus(
                         event.getEmpId(), event.getWorkDate(), ModifyStatus.PENDING);
         if (pendingExists) {
-            rejectedPublisher.publish(AttendanceModifyRejectedByHrEvent.builder()
-                    .companyId(event.getCompanyId())
-                    .approvalDocId(event.getApprovalDocId())
-                    .rejectReason("동일 출퇴근 기록에 대한 정정 신청이 이미 진행 중입니다.")
-                    .build());
-            log.info("[AttendanceModify] 중복 PENDING → 역방향 반려 이벤트 발행 - docId={}",
-                    event.getApprovalDocId());
+            publishRejection(event, "동일 일자 정정 신청이 이미 진행 중입니다.", "PENDING 중복");
             return;
         }
 
-        // 사원 스냅샷 조회
         Employee emp = employeeRepository.findById(event.getEmpId())
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        /* 주간 한도 검증 - INSERT 전 선행. BLOCK + 초과 시 역방향 반려, NOTIFY 면 통과 후 알림 표기 */
+        OvertimeLimitChecker.WeeklyUsage usage = overtimeLimitChecker.usageAfterModify(
+                event.getCompanyId(), event.getEmpId(), emp.getWorkGroup(),
+                event.getWorkDate(), event.getAttenReqCheckIn(), event.getAttenReqCheckOut());
+        if (usage.isExceeded() && usage.exceedAction() == OtExceedAction.BLOCK) {
+            publishRejection(event,
+                    "주간 최대 근무시간(" + (usage.weeklyMaxMinutes() / 60) + "h)을 초과합니다.",
+                    "한도 초과 BLOCK");
+            return;
+        }
 
         AttendanceModify entity = AttendanceModify.builder()
                 .companyId(event.getCompanyId())
@@ -173,10 +187,32 @@ public class AttendanceModifyService {
         log.info("[AttendanceModify] INSERT - attenModiId={}, docId={}",
                 saved.getAttenModiId(), saved.getApprovalDocId());
 
-        // HR 관리자 알림 — 근태 전용 (alarmRefType=ATTENDANCE_MODIFY)
-        notifyHrAdmins(event.getCompanyId(), saved,
-                emp.getEmpName() + " 사원의 근태 정정 신청",
-                "신청이 접수되었습니다. 결재 진행을 확인해 주세요.");
+        /* HR 관리자 알림 - 한도 초과 NOTIFY 면 메시지에 표기 */
+        if (usage.isExceeded()) {
+            notifyHrAdmins(event.getCompanyId(), saved,
+                    emp.getEmpName() + " 사원의 근태 정정 신청 (주간 한도 초과)",
+                    "정정 적용 시 주간 누적 " + formatHm(usage.usedMinutes())
+                            + " / 한도 " + formatHm(usage.weeklyMaxMinutes()));
+        } else {
+            notifyHrAdmins(event.getCompanyId(), saved,
+                    emp.getEmpName() + " 사원의 근태 정정 신청",
+                    "신청이 접수되었습니다. 결재 진행을 확인해 주세요.");
+        }
+    }
+
+    /* 역방향 반려 이벤트 발행 - PENDING 중복 / 한도 초과 BLOCK 공통 */
+    private void publishRejection(AttendanceModifyDocCreatedEvent event, String reason, String tag) {
+        rejectedPublisher.publish(AttendanceModifyRejectedByHrEvent.builder()
+                .companyId(event.getCompanyId())
+                .approvalDocId(event.getApprovalDocId())
+                .rejectReason(reason)
+                .build());
+        log.info("[AttendanceModify] {} → 역방향 반려 - docId={}", tag, event.getApprovalDocId());
+    }
+
+    /* "Xh YYm" 라벨 헬퍼 */
+    private String formatHm(long minutes) {
+        return (minutes / 60) + "h " + (minutes % 60) + "m";
     }
 
     /*

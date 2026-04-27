@@ -106,6 +106,34 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
      */
     Optional<CommuteRecord> findByComRecIdAndWorkDate(Long comRecId, LocalDate workDate);
 
+    /* 주간 actualWorkMinutes 합 - OT/정정 한도 검증용. work_date 범위라 파티션 프루닝 */
+    @Query("""
+            SELECT COALESCE(SUM(c.actualWorkMinutes), 0)
+              FROM CommuteRecord c
+             WHERE c.companyId = :companyId
+               AND c.employee.empId = :empId
+               AND c.workDate BETWEEN :start AND :end
+            """)
+    Long sumActualWorkMinutesInWeek(@Param("companyId") UUID companyId,
+                                    @Param("empId") Long empId,
+                                    @Param("start") LocalDate start,
+                                    @Param("end") LocalDate end);
+
+    /* 정정 대상 일자 제외 주간 합 - 정정 적용 후 합계 추정용 */
+    @Query("""
+            SELECT COALESCE(SUM(c.actualWorkMinutes), 0)
+              FROM CommuteRecord c
+             WHERE c.companyId = :companyId
+               AND c.employee.empId = :empId
+               AND c.workDate BETWEEN :start AND :end
+               AND c.workDate <> :exclude
+            """)
+    Long sumActualWorkMinutesInWeekExcluding(@Param("companyId") UUID companyId,
+                                             @Param("empId") Long empId,
+                                             @Param("start") LocalDate start,
+                                             @Param("end") LocalDate end,
+                                             @Param("exclude") LocalDate exclude);
+
 
     /*
      * 사원의 [from, to] 구간 출근일 LocalDate 리스트 - check_in 존재 row 만.

@@ -1,5 +1,6 @@
 package com.peoplecore.attendance.dto;
 
+import com.peoplecore.attendance.entity.OtExceedAction;
 import com.peoplecore.attendance.entity.WorkStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -59,4 +60,13 @@ public class AttendanceModifyPrefillResDto {
 
     /* 신청자 직책명 */
     private String titleName;
+
+    /* 주간 최대 근무 분 - OvertimePolicy 또는 fallback 52h. 프론트가 정정 후 추정값 비교 시 분모 */
+    private Integer weeklyMaxMinutes;
+
+    /* 현재 그 주 사용 분 (정정 미반영) - 다른 일자 actualWork + PENDING/APPROVED OT 합 */
+    private Long weekUsedMinutes;
+
+    /* 초과 시 처리 - BLOCK 이면 프론트가 신청 버튼 차단, NOTIFY 면 알림만 */
+    private OtExceedAction exceedAction;
 }
