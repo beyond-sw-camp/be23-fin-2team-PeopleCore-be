@@ -126,7 +126,11 @@ public class EmployeeService {
 
         String empNum = generateEmpNum(companyId, requestDto.getEmpHireDate());
 
-        String fullEmail = empNum + EMAIL_DOMAIN;
+        String fullEmail = requestDto.getEmpEmailLocal() + EMAIL_DOMAIN;
+
+        if (employeeRepository.existsByCompany_CompanyIdAndEmpEmail(companyId, fullEmail)) {
+            throw new BusinessException("이미 사용 중인 사내 이메일입니다.", HttpStatus.CONFLICT);
+        }
 
         String rawPassword = resolvePassword(requestDto);
 
@@ -208,19 +212,11 @@ public class EmployeeService {
         return String.format("%s-%04d", prefix, nextSeq);
     }
 
-    //    비밀번호 생성 / 분기 처리
+    //    비밀번호 검증 후 반환
     private String resolvePassword(EmployeeCreateRequestDto requestDto) {
-        if (requestDto.getPasswordIssueType() == PasswordIssueType.MANUAL) {
-            if (requestDto.getInitialPassword() == null || requestDto.getInitialPassword().isBlank()) {
-                throw new BusinessException(ErrorCode.MANUAL_PASSWORD_REQUIRED.getMessage(), HttpStatus.BAD_REQUEST);
-            }
-            validatePassword(requestDto.getInitialPassword());
-            return requestDto.getInitialPassword();
-        }
-        String chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%";
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 12; i++) sb.append(chars.charAt((int) (Math.random() * chars.length())));
-        return sb.toString();
+        String pwd = requestDto.getInitialPassword();
+        validatePassword(pwd);
+        return pwd;
     }
 
 //    비밀번호 직접 생성  //직접생성 굳이?? ->사원 재설정이 더 나은거 같은데
