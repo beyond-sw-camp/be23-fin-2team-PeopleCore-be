@@ -49,7 +49,8 @@ public class MonthlyAccrualService {
         LocalDate periodStart = hireDate.plusMonths(monthNth - 1L);
         LocalDate periodEnd = hireDate.plusMonths(monthNth).minusDays(1);
 
-        boolean full = attendanceCheckService.isFullAttendance(companyId, emp.getEmpId(), periodStart, periodEnd);
+        boolean full = attendanceCheckService.isFullAttendance(
+                companyId, emp.getEmpId(), emp.getWorkGroup(), periodStart, periodEnd);
         if (!full) {
             log.info("[MonthlyAccrual] 만근 미충족 - empId={}, monthNth={}, period={}~{}",
                     emp.getEmpId(), monthNth, periodStart, periodEnd);
