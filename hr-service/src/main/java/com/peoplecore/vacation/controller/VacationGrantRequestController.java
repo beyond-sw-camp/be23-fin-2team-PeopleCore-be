@@ -4,6 +4,7 @@ import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.vacation.dto.CancelRequest;
 import com.peoplecore.vacation.dto.VacationGrantRequestResponse;
 import com.peoplecore.vacation.dto.VacationGrantableTypeResponse;
+import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.service.VacationGrantRequestService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -57,6 +58,17 @@ public class VacationGrantRequestController {
         String reason = body != null ? body.getReason() : null;
         vacationGrantRequestService.cancelByEmployee(companyId, empId, requestId, reason);
         return ResponseEntity.noContent().build();
+    }
+
+    /* 관리자 상태별 부여 신청 조회 (페이지) - status = PENDING/APPROVED/REJECTED/CANCELED */
+    /* 호출 예: GET /vacation/grant-requests/admin?status=PENDING&page=0&size=20 */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @GetMapping("/admin")
+    public ResponseEntity<Page<VacationGrantRequestResponse>> listForAdmin(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam RequestStatus status,
+            @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(vacationGrantRequestService.listForAdmin(companyId, status, pageable));
     }
 
     /* 관리자 직권 취소 - 상태 전이 규칙 우회 (applyByAdmin) */

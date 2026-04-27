@@ -37,7 +37,9 @@ import java.util.UUID;
 @Transactional
 public class OvertimeRequestService {
 
-    /** 정책 미존재 회사 fallback (분 단위, 52h = 3120) */
+    /**
+     * 정책 미존재 회사 fallback (분 단위, 52h = 3120)
+     */
     private static final int DEFAULT_WEEKLY_MAX_MINUTE = 3120;
 
     private final OvertimeRequestRepository overtimeRequestRepository;
@@ -59,7 +61,9 @@ public class OvertimeRequestService {
         this.hrAlarmPublisher = hrAlarmPublisher;
     }
 
-    /** 모달 진입 시 잔여 시간 조회 */
+    /**
+     * 모달 진입 시 잔여 시간 조회
+     */
     @Transactional(readOnly = true)
     public OvertimeRemainingResDto getRemaining(UUID companyId, Long empId, LocalDate weekStart) {
         // 정책 조회 (없으면 52h / NOTIFY)
@@ -103,7 +107,9 @@ public class OvertimeRequestService {
                 .build();
     }
 
-    /** 주간 초과근무 이력 조회 — 모달 하단 이력 테이블용 */
+    /**
+     * 주간 초과근무 이력 조회 — 모달 하단 이력 테이블용
+     */
     @Transactional(readOnly = true)
     public OvertimeWeekHistoryResDto getWeekHistory(UUID companyId, Long empId, LocalDate weekStart) {
         LocalDate monday = weekStart.with(DayOfWeek.MONDAY);
@@ -135,8 +141,8 @@ public class OvertimeRequestService {
     /**
      * Kafka(docCreated) Consumer 진입 — 결재문서 상신 성공 시점에 OvertimeRequest insert.
      * BLOCK/NOTIFY 정책 검증:
-     *  - BLOCK: 프론트 선제 차단 가정. 우회 시 Consumer 도 insert 통과 + 경고 알림
-     *  - NOTIFY: 초과해도 통과 + 관리자/최종결재자 알림
+     * - BLOCK: 프론트 선제 차단 가정. 우회 시 Consumer 도 insert 통과 + 경고 알림
+     * - NOTIFY: 초과해도 통과 + 관리자/최종결재자 알림
      * 중복 수신 방어: (companyId, approvalDocId) 기존에 이미 있으면 no-op
      */
     public void createFromApproval(OvertimeApprovalDocCreatedEvent event) {
@@ -185,8 +191,8 @@ public class OvertimeRequestService {
      * 대상 = HR_ADMIN/HR_SUPER_ADMIN + 최종 결재자 (중복 제거).
      */
     private void checkExceedAndNotify(OvertimeApprovalDocCreatedEvent event,
-                                       Employee employee,
-                                       OvertimeRequest saved) {
+                                      Employee employee,
+                                      OvertimeRequest saved) {
         OvertimePolicy policy = overtimePolicyRepository
                 .findByCompany_CompanyId(event.getCompanyId()).orElse(null);
         if (policy == null) return;
@@ -231,11 +237,16 @@ public class OvertimeRequestService {
                 saved.getOtId(), recipients.size());
     }
 
-    /** Kafka(approvalResult) Consumer 진입 — 결재 결과 캐시 적용 + APPROVED 시 CommuteRecord 재계산 */
+    /**
+     * Kafka(approvalResult) Consumer 진입 — 결재 결과 캐시 적용 + APPROVED 시 CommuteRecord 재계산
+     */
     public void applyApprovalResult(OvertimeApprovalResultEvent event) {
         // 회사 + otId 라우팅 검증 조회 — docId 기준으로도 찾을 수 있으나 otId 우선
-        OvertimeRequest req = overtimeRequestRepository
-                .findByCompanyIdAndOtId(event.getCompanyId(), event.getOtId())
+        OvertimeRequest req = (event.getApprovalDocId() != null
+                ? overtimeRequestRepository.findByCompanyIdAndApprovalDocId(
+                event.getCompanyId(), event.getApprovalDocId())
+                : overtimeRequestRepository.findByCompanyIdAndOtId(
+                event.getCompanyId(), event.getOtId()))
                 .orElseThrow(() -> new CustomException(ErrorCode.OVERTIME_REQUEST_NOT_FOUND));
 
         OtStatus newStatus = OtStatus.valueOf(event.getStatus());
@@ -259,9 +270,9 @@ public class OvertimeRequestService {
 
     /**
      * 사원 근무그룹 기반 주간 기본 근로 분.
-     *  daily = (groupEnd - groupStart) - (breakEnd - breakStart)
-     *  workDays = bitCount(groupWorkDay)
-     *  return daily × workDays
+     * daily = (groupEnd - groupStart) - (breakEnd - breakStart)
+     * workDays = bitCount(groupWorkDay)
+     * return daily × workDays
      * workGroup 미배정/필드 결측 시 0
      */
     private int calcBaseWorkMinutes(WorkGroup wg) {

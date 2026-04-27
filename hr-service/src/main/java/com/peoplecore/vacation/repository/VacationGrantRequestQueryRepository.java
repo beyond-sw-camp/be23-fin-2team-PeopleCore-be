@@ -1,12 +1,14 @@
 package com.peoplecore.vacation.repository;
 
 import com.peoplecore.employee.domain.EmpGender;
+import com.peoplecore.employee.domain.QEmployee;
 import com.peoplecore.vacation.dto.GrantableTypeQueryDto;
 import com.peoplecore.vacation.entity.GenderLimit;
 import com.peoplecore.vacation.entity.QVacationBalance;
 import com.peoplecore.vacation.entity.QVacationGrantRequest;
 import com.peoplecore.vacation.entity.QVacationType;
 import com.peoplecore.vacation.entity.RequestStatus;
+import com.peoplecore.vacation.entity.VacationGrantRequest;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.Expressions;
@@ -14,6 +16,9 @@ import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
@@ -100,6 +105,43 @@ public class VacationGrantRequestQueryRepository {
                 )
                 .orderBy(t.sortOrder.asc())
                 .fetch();
+    }
+
+    /*
+     * 회사 상태별 부여 신청 페이지 조회 + VacationType + Employee fetch join
+     * 용도: 관리자 화면 "휴가 부여 신청 - 결재 대기/승인/반려/취소" 탭별 목록
+     * N+1 방지: Type + Employee 같이 로드 (사원 이름/부서 표시용)
+     * 정렬: createdAt 내림차순 (최신순)
+     * 쿼리 수: content 1 + count 1 = 총 2회
+     */
+    public Page<VacationGrantRequest> findByCompanyAndStatus(UUID companyId, RequestStatus status, Pageable pageable) {
+        QVacationGrantRequest g = QVacationGrantRequest.vacationGrantRequest;
+        QVacationType t = QVacationType.vacationType;
+        QEmployee e = QEmployee.employee;
+
+        List<VacationGrantRequest> content = queryFactory
+                .selectFrom(g)
+                .join(g.vacationType, t).fetchJoin()
+                .join(g.employee, e).fetchJoin()
+                .where(
+                        g.companyId.eq(companyId),
+                        g.requestStatus.eq(status)
+                )
+                .orderBy(g.createdAt.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(g.count())
+                .from(g)
+                .where(
+                        g.companyId.eq(companyId),
+                        g.requestStatus.eq(status)
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
     }
 
     /* 성별별 허용 GenderLimit 매핑 */

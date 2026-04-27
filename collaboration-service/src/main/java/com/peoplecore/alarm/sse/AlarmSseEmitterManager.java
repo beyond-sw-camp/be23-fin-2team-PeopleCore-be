@@ -4,7 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -26,10 +25,10 @@ public class AlarmSseEmitterManager {
         emitter.onTimeout(cleanup);
         emitter.onError(e -> cleanup.run());
 
-        // 연결 직후 더미 이벤트 (503 방지)
+        // 연결 직후 더미 이벤트 (503 방지). IOException 외 IllegalStateException/AsyncRequestNotUsableException 도 가능
         try {
             emitter.send(SseEmitter.event().name("connect").data("connected-Alarm"));
-        } catch (IOException e) {
+        } catch (Exception e) {
             removeEmitter(empId, emitter);
         }
         return emitter;
@@ -42,9 +41,12 @@ public class AlarmSseEmitterManager {
         for (SseEmitter emitter : list) {
             try {
                 emitter.send(SseEmitter.event().name("alarm").data(data));
-            } catch (IOException e) {
-                // send 실패한 emitter 만 종료 → onError 콜백 → cleanup 자동 실행
-                emitter.completeWithError(e);
+            } catch (Exception e) {
+                // IOException(연결 끊김) + IllegalStateException(이미 complete) + AsyncRequestNotUsableException(응답 errored) 모두 처리
+                // 이미 errored 상태인 emitter 는 completeWithError 자체가 또 throw 할 수 있어 한 번 더 감싸기
+                try { emitter.completeWithError(e); } catch (Exception ignore) {}
+                // onError 콜백이 비동기로 호출되지만, race 로 누락될 가능성 대비해 즉시 제거
+                removeEmitter(empId, emitter);
             }
         }
     }
