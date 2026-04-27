@@ -167,12 +167,15 @@ public class SalaryContractService {
             }
         }
 
+        String annualSalary = fieldMap.get("annualSalary");
+        BigDecimal annualSalaryBD = (annualSalaryStr != null && !annualSalaryStr.isBlank()) ? new BigDecimal(annualSalaryStr) : totalAmount;
+
 //      계약서 저장 — details 도 builder 에 포함시켜야 CascadeType.ALL 로 자식 insert 됨
         SalaryContract contract = SalaryContract.builder()
                 .companyId(companyId)
                 .employee(emp)
                 .createBy(userId)
-                .totalAmount(totalAmount)
+                .totalAmount(annualSalaryBD)
                 .formValues(toJson(fieldMap))
                 .formSnapshot(formSnapshot)
                 .formVersion(formVersion)
