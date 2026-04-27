@@ -70,8 +70,9 @@ public class PayrollRuns {
 
 //    상태변경: 전자결재 상신
     public void submitApproval(Long approvalDocId){
-        if (this.payrollStatus != PayrollStatus.CONFIRMED){
-            throw new IllegalStateException("확정 상태에서만 전자결재 상신 가능합니다.");
+        if (this.payrollStatus != PayrollStatus.CALCULATING
+                && this.payrollStatus != PayrollStatus.CONFIRMED){
+            throw new IllegalStateException("산정중 또는 확정 상태에서만 전자결재 상신 가능합니다.");
         }
         this.approvalDocId = approvalDocId;
         this.payrollStatus = PayrollStatus.PENDING_APPROVAL;

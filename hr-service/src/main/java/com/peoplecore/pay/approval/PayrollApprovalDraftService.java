@@ -54,8 +54,9 @@ public class PayrollApprovalDraftService {
     public ApprovalDraftResDto draft(UUID companyId, Long userId, Long payrollRunId){
         PayrollRuns run = payrollRunsRepository.findByPayrollRunIdAndCompany_CompanyId(payrollRunId, companyId).orElseThrow(()-> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
 
-//        결재 가능 상태 검증 (Confirmed 또는 PENDING_APPROVAL(재상신 케이스) 가능)
-        if (run.getPayrollStatus() != PayrollStatus.CONFIRMED
+//        결재 가능 상태 검증 (Confirmed 또는 PENDING_APPROVAL(재상신 케이스), CALCULATING(사원별 일부 확정후 부분결재) 가능)
+        if (run.getPayrollStatus() != PayrollStatus.CALCULATING
+                && run.getPayrollStatus() != PayrollStatus.CONFIRMED
                 && run.getPayrollStatus() != PayrollStatus.PENDING_APPROVAL){
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
