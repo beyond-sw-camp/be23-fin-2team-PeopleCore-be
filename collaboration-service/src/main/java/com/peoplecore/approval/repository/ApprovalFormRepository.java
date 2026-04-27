@@ -69,4 +69,7 @@ public interface ApprovalFormRepository extends JpaRepository<ApprovalForm, Long
 
     /* formCode 로 활성+현재 양식 단건 조회 — hr-service REST 연동용 */
     Optional<ApprovalForm> findByCompanyIdAndFormCodeAndIsActiveTrueAndIsCurrentTrue(UUID companyId, String formCode);
+
+    /* 회사 초기화 시 양식 ensure 패턴용 — 이미 있으면 그대로 반환, 없으면 호출부가 INSERT */
+    Optional<ApprovalForm> findByCompanyIdAndFormNameAndIsCurrent(UUID companyId, String formName, Boolean isCurrent);
 }
