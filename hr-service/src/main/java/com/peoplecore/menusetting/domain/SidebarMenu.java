@@ -35,7 +35,9 @@ public enum SidebarMenu {
     /* 인사통합 - HR 관리자/최고관리자만 접근 */
     HR_INTEGRATION(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 10),
     /* 평가 관리 - HR 관리자/최고관리자만 접근 */
-    EVAL_ADMIN(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 11);
+    EVAL_ADMIN(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 11),
+    /* 근태/휴가 관리 - HR 관리자/최고관리자만 접근 */
+    ATTENDANCE_ADMIN(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 12);
 
     private final boolean alwaysOn;
     private final Set<EmpRole> requiredRoles;
