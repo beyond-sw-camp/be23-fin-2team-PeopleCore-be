@@ -56,4 +56,9 @@ public class PayrollDetails {
     @Builder.Default
     private Boolean isOvertimePay = false;
 
+
+    public void updateAmount(Long amount){
+        this.amount = amount;
+    }
+
 }

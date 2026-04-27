@@ -108,7 +108,7 @@ public class SeveranceEstimateService {
 
 
 //    사원1명에 대한 추계액 계산
-    private SeveranceEstimateRowDto calculateOneRow(Employee emp, LocalDate baseDate, RetirementType rt, Long last3MonthPay, Long lastYearBonus, Long dcDepositedTotal){
+    SeveranceEstimateRowDto calculateOneRow(Employee emp, LocalDate baseDate, RetirementType rt, Long last3MonthPay, Long lastYearBonus, Long dcDepositedTotal){
         LocalDate hireDate = emp.getEmpHireDate();
         long serviceDays = ChronoUnit.DAYS.between(hireDate, baseDate);
         BigDecimal serviceYears = BigDecimal.valueOf(serviceDays)

@@ -67,12 +67,24 @@ public class PayrollController {
         return ResponseEntity.ok(payrollService.getEmpPayrollDetail(companyId, payrollRunId, empId));
     }
 
+//    사원별 상세-항목별 금액 수정
+    @PutMapping("/{payrollRunId}/employees/{empId}/details")
+    public ResponseEntity<Void> updateEmpDetails(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long payrollRunId,
+            @PathVariable Long empId,
+            @RequestBody PayrollDetailUpdateReqDto reqDto){
+        payrollService.updateEmpDetails(companyId, payrollRunId, empId, reqDto);
+        return ResponseEntity.ok().build();
+    }
+
 //    급여 확정
     @PutMapping("/{payrollRunId}/confirm")
     public ResponseEntity<Void> confirmPayroll(
             @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long actorEmpId,
             @PathVariable Long payrollRunId){
-        payrollService.confirmPayroll(companyId, payrollRunId);
+        payrollService.confirmPayroll(companyId, actorEmpId, payrollRunId);
         return ResponseEntity.ok().build();
     }
 
