@@ -181,7 +181,6 @@ public enum ErrorCode {
     EMPLOYEE_NOT_FOUND(404, "사원을 찾을 수 없습니다."),
     GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다."),
     TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다."),
-    MANUAL_PASSWORD_REQUIRED(400, "비밀번호를 직접 입력해야 합니다."),
 
 
     //    연봉

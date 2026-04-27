@@ -251,7 +251,7 @@ public class FormFieldSetupService {
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "pwMethod", "초기 비밀번호 발급 방식", "시스템 계정 설정", FieldType.RADIO, true, true, 3, null, null));
 
         // 메뉴 / 기능 권한 설정
-        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "authTemplate", "권한 템플릿", "메뉴 / 기능 권한 설정", FieldType.SELECT, true, true, 1, "[\"일반 사원 (기본)\",\"팀장\",\"HR 담당자\",\"재무 담당자\",\"시스템 관리자\"]", null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "authTemplate", "권한", "메뉴 / 기능 권한 설정", FieldType.SELECT, true, true, 1, "[\"일반 사원\",\"HR 담당자\",\"인사 최고 관리자\"]", null));
 
         // 인사 서류 등록
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "documents", "서류 첨부", "인사 서류 등록", FieldType.FILE, true, false, 1, null, null));

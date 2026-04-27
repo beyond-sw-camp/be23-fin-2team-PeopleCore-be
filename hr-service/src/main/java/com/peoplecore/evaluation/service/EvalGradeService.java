@@ -60,6 +60,9 @@ import java.util.*;
 @Transactional
 public class EvalGradeService {
 
+    // 자기평가 만점 — 100점 고정 (회사별 설정 없음)
+    private static final BigDecimal SCALE_TO = BigDecimal.valueOf(100);
+
     private final EvalGradeRepository evalGradeRepository;
     private final SeasonRepository seasonRepository;
     private final DepartmentRepository departmentRepository;
@@ -280,16 +283,14 @@ public class EvalGradeService {
         Map<Long, SelfEvaluation> selfByGoal = new HashMap<>();
         for (SelfEvaluation se : selfEvals) selfByGoal.put(se.getGoal().getGoalId(), se);
 
-        // kpiScoring 설정 추출 (없으면 업계 표준 기본값)
+        // kpiScoring 설정 추출 (없으면 업계 표준 기본값) — 자기평가 만점은 SCALE_TO 상수 (100 고정)
         BigDecimal cap = BigDecimal.valueOf(120);
-        BigDecimal scaleTo = BigDecimal.valueOf(100);
         BigDecimal tolerance = BigDecimal.ZERO;
         BigDecimal threshold = BigDecimal.ZERO;
         BigDecimal factor = BigDecimal.ONE;
         FormSnapshotDto.KpiScoring scoring = snapshot.getKpiScoring();
         if (scoring != null) {
             if (scoring.getCap() != null) cap = scoring.getCap();
-            if (scoring.getScaleTo() != null) scaleTo = scoring.getScaleTo();
             if (scoring.getMaintainTolerance() != null) tolerance = scoring.getMaintainTolerance();
             if (scoring.getUnderperformanceThreshold() != null) threshold = scoring.getUnderperformanceThreshold();
             if (scoring.getUnderperformanceFactor() != null) factor = scoring.getUnderperformanceFactor();
@@ -319,8 +320,8 @@ public class EvalGradeService {
 
         // raw: taskGrade 가중평균 [0, cap] — 초과 달성이 미달 커버 가능
         BigDecimal raw = weightedSum.divide(BigDecimal.valueOf(totalWeight), 2, RoundingMode.HALF_UP);
-        // clipped: scaleTo 상한으로 자름 [0, scaleTo] — 실제 점수 집계용
-        BigDecimal clipped = raw.min(scaleTo).setScale(2, RoundingMode.HALF_UP);
+        // clipped: 자기평가 만점(100) 상한으로 자름 — 실제 점수 집계용
+        BigDecimal clipped = raw.min(SCALE_TO).setScale(2, RoundingMode.HALF_UP);
         return new SelfScoreResult(raw, clipped);
     }
 
@@ -740,17 +741,14 @@ public class EvalGradeService {
             throw new IllegalArgumentException("접근 권한 없음");
         }
 
-//        b. 스냅샷에서 minTeamSize / scaleTo 추출 - 보정 당시 기준과 동일 기준 사용
+//        b. 스냅샷에서 minTeamSize 추출 - 보정 당시 기준과 동일 기준 사용
+//           자기평가 만점은 SCALE_TO 상수 (100 고정) 사용
         int minTeamSize = 5;                                            // 기본값
-        BigDecimal scaleTo = BigDecimal.valueOf(100);                   // 기본값
         if (season.getFormSnapshot() != null) {
             try {
                 FormSnapshotDto snap = objectMapper.readValue(season.getFormSnapshot(), FormSnapshotDto.class);           // JSON 파싱
                 if (snap.getMinTeamSize() != null) {
                     minTeamSize = snap.getMinTeamSize();                // 스냅샷 값으로 덮어씀
-                }
-                if (snap.getKpiScoring() != null && snap.getKpiScoring().getScaleTo() != null) {
-                    scaleTo = snap.getKpiScoring().getScaleTo();
                 }
             } catch (JsonProcessingException ignored) {
 //                파싱 실패해도 기본값으로 조회 계속 진행
@@ -774,9 +772,9 @@ public class EvalGradeService {
                 processedCount++;
             }
 
-//            자기평가 clip 대상 판정: rawSelfScore > scaleTo
+//            자기평가 clip 대상 판정: rawSelfScore > 자기평가 만점(SCALE_TO=100)
 //              - rawSelfScore == null 이면 자동산정 미실행/미제출 -> 스킵
-            if (row.getRawSelfScore() != null && row.getRawSelfScore().compareTo(scaleTo) > 0) {
+            if (row.getRawSelfScore() != null && row.getRawSelfScore().compareTo(SCALE_TO) > 0) {
                 clippedSelfEmployees.add(CalibrationReviewDto.ClippedSelfEmployeeDto.builder()
                         .empId(row.getEmp() != null ? row.getEmp().getEmpId() : null)
                         .empName(row.getEmp() != null ? row.getEmp().getEmpName() : null)
