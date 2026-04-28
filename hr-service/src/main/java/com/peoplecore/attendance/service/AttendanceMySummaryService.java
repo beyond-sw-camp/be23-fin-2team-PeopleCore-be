@@ -7,6 +7,7 @@ import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import com.peoplecore.attendance.repository.MyAttendanceQueryRepository;
 import com.peoplecore.attendance.repository.OverTimePolicyRepository;
+import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
@@ -21,7 +22,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.*;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -41,14 +45,16 @@ public class AttendanceMySummaryService {
     private final MyAttendanceQueryRepository myAttendanceQueryRepository;
     private final VacationRequestQueryRepository vacationRequestQueryRepository;   /* QueryDSL 로 이동됨 */
     private final CommuteRecordRepository commuteRecordRepository;
+    private final OvertimeRequestRepository overtimeRequestRepository;
 
     @Autowired
-    public AttendanceMySummaryService(EmployeeRepository employeeRepository, OverTimePolicyRepository overTimePolicyRepository, MyAttendanceQueryRepository myAttendanceQueryRepository, VacationRequestQueryRepository vacationRequestQueryRepository, CommuteRecordRepository commuteRecordRepository) {
+    public AttendanceMySummaryService(EmployeeRepository employeeRepository, OverTimePolicyRepository overTimePolicyRepository, MyAttendanceQueryRepository myAttendanceQueryRepository, VacationRequestQueryRepository vacationRequestQueryRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository) {
         this.employeeRepository = employeeRepository;
         this.overTimePolicyRepository = overTimePolicyRepository;
         this.myAttendanceQueryRepository = myAttendanceQueryRepository;
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
         this.commuteRecordRepository = commuteRecordRepository;
+        this.overtimeRequestRepository = overtimeRequestRepository;
     }
 
     /* 주간 요약 조회 */
@@ -123,6 +129,101 @@ public class AttendanceMySummaryService {
                 .build();
     }
 
+
+    /* 월간 요약 조회 — 지각/인증 초과근무 일자별 상세 + 헤더 카운트 */
+    public AttendanceMyMonthlySummaryResDto getMonthlySummary(UUID companyId, Long empId, YearMonth yearMonth) {
+        YearMonth ym = (yearMonth != null) ? yearMonth : YearMonth.from(LocalDate.now());
+        LocalDate monthStart = ym.atDay(1);
+        LocalDate monthEnd = ym.atEndOfMonth();
+
+        /* 사원 + 근무 그룹 */
+        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+        WorkGroup wg = employee.getWorkGroup();
+        if (wg == null) {
+            throw new CustomException(ErrorCode.EMPLOYEE_WORK_GROUP_NOT_ASSIGNED);
+        }
+        LocalTime groupStart = wg.getGroupStartTime();
+        LocalTime groupEnd = wg.getGroupEndTime();
+
+        /* 지각 행 */
+        List<CommuteRecord> lateRecords = myAttendanceQueryRepository
+                .findMonthlyLateRecords(companyId, empId, monthStart, monthEnd);
+
+        List<MonthlyLateDayDto> lateDays = new ArrayList<>(lateRecords.size());
+        for (CommuteRecord c : lateRecords) {
+            lateDays.add(MonthlyLateDayDto.builder()
+                    .workDate(c.getWorkDate())
+                    .checkInAt(c.getComRecCheckIn())
+                    .lateMinutes(calcLateMinutes(c.getComRecCheckIn(), groupStart))
+                    .build());
+        }
+
+        /* 초과근무 행 + 승인 OT 시작시각 매핑 */
+        List<CommuteRecord> otRecords = myAttendanceQueryRepository
+                .findMonthlyOvertimeRecords(companyId, empId, monthStart, monthEnd);
+        Map<LocalDate, LocalDateTime> approvedPlanStartByDate =
+                loadApprovedPlanStartByDate(empId, monthStart, monthEnd);
+
+        long overtimeMinutesSum = 0L;
+        List<MonthlyOvertimeDayDto> overtimeDays = new ArrayList<>(otRecords.size());
+        for (CommuteRecord c : otRecords) {
+            long approvedMin = recognizedTotal(c);
+            overtimeMinutesSum += approvedMin;
+            // APPROVED OT 가 있으면 otPlanStart, 없으면 (workDate + groupEndTime) 폴백
+            LocalDateTime startAt = approvedPlanStartByDate.getOrDefault(
+                    c.getWorkDate(), LocalDateTime.of(c.getWorkDate(), groupEnd));
+            overtimeDays.add(MonthlyOvertimeDayDto.builder()
+                    .workDate(c.getWorkDate())
+                    .overtimeStartAt(startAt)
+                    .checkOutAt(c.getComRecCheckOut())
+                    .approvedOvertimeMinutes(approvedMin)
+                    .build());
+        }
+
+        log.debug("[getMonthlySummary] companyId={}, empId={}, ym={}, lateCnt={}, otDays={}, otMin={}",
+                companyId, empId, ym, lateDays.size(), overtimeDays.size(), overtimeMinutesSum);
+
+        return AttendanceMyMonthlySummaryResDto.builder()
+                .yearMonth(ym.toString())
+                .lateCount(lateDays.size())
+                .overtimeMinutes(overtimeMinutesSum)
+                .overtimeDayCount(overtimeDays.size())
+                .lateDays(lateDays)
+                .overtimeDays(overtimeDays)
+                .build();
+    }
+
+    /* 지각 분 = max(0, checkIn.time - groupStart) */
+    private long calcLateMinutes(LocalDateTime checkInAt, LocalTime groupStart) {
+        if (checkInAt == null || groupStart == null) return 0L;
+        long diff = Duration.between(groupStart, checkInAt.toLocalTime()).toMinutes();
+        return Math.max(0L, diff);
+    }
+
+    /* 인정 초과 합 = extended + night + holiday */
+    private long recognizedTotal(CommuteRecord c) {
+        long ext = c.getRecognizedExtendedMinutes() != null ? c.getRecognizedExtendedMinutes() : 0L;
+        long night = c.getRecognizedNightMinutes() != null ? c.getRecognizedNightMinutes() : 0L;
+        long holi = c.getRecognizedHolidayMinutes() != null ? c.getRecognizedHolidayMinutes() : 0L;
+        return ext + night + holi;
+    }
+
+    /* 월 구간 APPROVED OT 의 일자별 가장 이른 시작 시각 매핑 */
+    private Map<LocalDate, LocalDateTime> loadApprovedPlanStartByDate(Long empId,
+                                                                      LocalDate monthStart,
+                                                                      LocalDate monthEnd) {
+        LocalDateTime from = monthStart.atStartOfDay();
+        LocalDateTime to = monthEnd.atTime(LocalTime.MAX);
+        List<Object[]> rows = overtimeRequestRepository.findApprovedPlanStartByDate(empId, from, to);
+        Map<LocalDate, LocalDateTime> map = new HashMap<>(rows.size() * 2);
+        for (Object[] r : rows) {
+            LocalDate d = ((java.sql.Date) r[0]).toLocalDate();
+            LocalDateTime planStart = ((java.sql.Timestamp) r[1]).toLocalDateTime();
+            map.put(d, planStart);
+        }
+        return map;
+    }
 
     /* 오늘자 CommuteRecord 조회 후 출퇴근 시간만 추출 두 값 전부 null일 수 도 있음  */
     private TodayCommuteDto loadTodayCommute(UUID companyId, Long empId, LocalDate today) {
