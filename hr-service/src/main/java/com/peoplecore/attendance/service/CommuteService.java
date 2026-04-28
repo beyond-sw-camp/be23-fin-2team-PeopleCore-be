@@ -29,7 +29,7 @@ import java.util.UUID;
  *
  * 규칙:
  *  - 하루 1쌍. 퇴근 후 재출근 불가.
- *  - IP 허용 대역 밖 → 거부 X, 로그에만 표기 (entity isOffsite 필드 제거됨).
+ *  - IP 허용 대역 밖 → 거부 (활성 IP 미등록 회사는 정책 미적용 → 모든 IP 허용).
  *  - 휴일 → 허용, HOLIDAY_WORK + holidayReason 기록. 근무 인정은 배치.
  *  - workGroup 미배정 → 예외 (데이터 정합성).
  *  - WorkStatus 결정/전이는 WorkStatusResolver 위임.
@@ -72,6 +72,11 @@ public class CommuteService {
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
 
+        /* IP 정책 선검증: 회사가 활성 IP를 등록했다면 해당 대역 밖에서 출근 불가 */
+        if (!companyAllowedIpService.isAllowed(companyId, clientIp)) {
+            throw new CustomException(ErrorCode.COMMUTE_IP_NOT_ALLOWED);
+        }
+
         /* 1차 방어: 이미 오늘 기록이 있으면 즉시 409 (ABSENT 배치 레코드 포함) */
         commuteRecordRepository
                 .findByCompanyIdAndEmployee_EmpIdAndWorkDate(companyId, empId, today)
@@ -83,7 +88,6 @@ public class CommuteService {
         WorkGroup wg = employee.getWorkGroup();
         if (wg == null) throw new CustomException(ErrorCode.EMPLOYEE_WORK_GROUP_NOT_ASSIGNED);
 
-        boolean offsite = !companyAllowedIpService.matches(companyId, clientIp); // 로그용
         HolidayReason reason = holidayReasonResolver.resolve(companyId, today, wg);
         WorkStatus initialStatus = workStatusResolver.resolveInitial(
                 now.toLocalTime(), wg.getGroupStartTime(), reason);
@@ -101,8 +105,8 @@ public class CommuteService {
         /* 2차 방어: saveAndFlush 로 즉시 INSERT → UNIQUE 위반을 트랜잭션 내에서 감지 */
         try {
             CommuteRecord saved = commuteRecordRepository.saveAndFlush(record);
-            log.info("[checkIn] empId={}, ip={}, offsite={}, workStatus={}, reason={}",
-                    empId, clientIp, offsite, initialStatus, reason);
+            log.info("[checkIn] empId={}, ip={}, workStatus={}, reason={}",
+                    empId, clientIp, initialStatus, reason);
             return CheckInResDto.fromEntity(saved);
         } catch (DataIntegrityViolationException e) {
             /* UNIQUE(company_id, emp_id, work_date) 위반 → race condition */
@@ -124,6 +128,11 @@ public class CommuteService {
         String clientIp = extractClientIp(request);
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
+
+        /* IP 정책 선검증: 회사가 활성 IP를 등록했다면 해당 대역 밖에서 퇴근 불가 */
+        if (!companyAllowedIpService.isAllowed(companyId, clientIp)) {
+            throw new CustomException(ErrorCode.COMMUTE_IP_NOT_ALLOWED);
+        }
 
         Optional<CommuteRecord> openRecord = commuteRecordRepository
                 .findFirstByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndComRecCheckOutIsNullOrderByWorkDateDesc(
