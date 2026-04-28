@@ -8,6 +8,7 @@ import com.peoplecore.vacation.dto.VacationManualGrantRequest;
 import com.peoplecore.vacation.service.VacationBalanceService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.web.PageableDefault;
@@ -67,5 +68,29 @@ public class VacationBalanceController {
             @RequestHeader("X-User-Id") Long empId,
             @RequestParam int year) {
         return ResponseEntity.ok(vacationBalanceService.getMyVacationStatus(companyId, empId, year));
+    }
+
+    /* 내 예정 휴가 페이지 - 휴가현황 페이지 upcoming 탭 */
+    /* 정렬은 서버 고정(startAt asc) → Pageable.sort 는 무시 */
+    /* 예: GET /vacation/balances/me/requests/upcoming?year=2026&page=0&size=10 */
+    @GetMapping("/me/requests/upcoming")
+    public ResponseEntity<Page<MyVacationStatusResponseDto.RequestItem>> listMyUpcoming(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam int year,
+            @PageableDefault(size = 10) Pageable pageable) {
+        return ResponseEntity.ok(vacationBalanceService.listMyUpcoming(companyId, empId, year, pageable));
+    }
+
+    /* 내 지난 휴가 페이지 - 휴가현황 페이지 past 탭 */
+    /* 정렬은 서버 고정(endAt desc) → Pageable.sort 는 무시 */
+    /* 예: GET /vacation/balances/me/requests/past?year=2026&page=0&size=10 */
+    @GetMapping("/me/requests/past")
+    public ResponseEntity<Page<MyVacationStatusResponseDto.RequestItem>> listMyPast(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam int year,
+            @PageableDefault(size = 10) Pageable pageable) {
+        return ResponseEntity.ok(vacationBalanceService.listMyPast(companyId, empId, year, pageable));
     }
 }

@@ -56,11 +56,11 @@ public class AttendanceModify extends BaseTimeEntity {
     @JoinColumn(name = "emp_id", nullable = false)
     private Employee employee;
 
-    /**
-     * 근태 ID  - attendance 논리 참조
-     * fk 매핑/ 제약 부적합 ㄴ
+    /*
+     * CommuteRecord PK - attendance 논리 참조 (FK 제약 없음).
+     * 휴일 근무 미입력 등으로 CommuteRecord 가 아직 없는 상태에서 정정 신청 가능 → nullable.
+     * 승인 시 null 이면 신규 INSERT, 아니면 기존 UPDATE.
      */
-    @Column(nullable = false)
     private Long comRecId;
 
     /**

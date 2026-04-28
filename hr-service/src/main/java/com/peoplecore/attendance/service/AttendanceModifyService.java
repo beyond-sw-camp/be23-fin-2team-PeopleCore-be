@@ -7,6 +7,8 @@ import com.peoplecore.attendance.entity.AttendanceModify;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.HolidayReason;
 import com.peoplecore.attendance.entity.ModifyStatus;
+import com.peoplecore.attendance.entity.OtExceedAction;
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.publisher.AttendanceModifyRejectedByHrPublisher;
 import com.peoplecore.attendance.repository.AttendanceModifyRepository;
@@ -22,6 +24,7 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
+import com.peoplecore.vacation.service.BusinessDayCalculator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -32,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.util.*;
 
 /*
@@ -52,6 +56,10 @@ public class AttendanceModifyService {
     private final AttendanceModifyRejectedByHrPublisher rejectedPublisher;
     private final HrAlarmPublisher hrAlarmPublisher;
     private final VacationRequestQueryRepository vacationRequestQueryRepository;
+    private final HolidayReasonResolver holidayReasonResolver;
+    private final BusinessDayCalculator businessDayCalculator;
+    private final WorkStatusResolver workStatusResolver;
+    private final OvertimeLimitChecker overtimeLimitChecker;
 
     @Autowired
     public AttendanceModifyService(AttendanceModifyRepository attendanceModifyRepository,
@@ -60,7 +68,11 @@ public class AttendanceModifyService {
                                    ApprovalFormIdCache approvalFormIdCache,
                                    AttendanceModifyRejectedByHrPublisher rejectedPublisher,
                                    HrAlarmPublisher hrAlarmPublisher,
-                                   VacationRequestQueryRepository vacationRequestQueryRepository) {
+                                   VacationRequestQueryRepository vacationRequestQueryRepository,
+                                   HolidayReasonResolver holidayReasonResolver,
+                                   BusinessDayCalculator businessDayCalculator,
+                                   WorkStatusResolver workStatusResolver,
+                                   OvertimeLimitChecker overtimeLimitChecker) {
         this.attendanceModifyRepository = attendanceModifyRepository;
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
@@ -68,51 +80,64 @@ public class AttendanceModifyService {
         this.rejectedPublisher = rejectedPublisher;
         this.hrAlarmPublisher = hrAlarmPublisher;
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
+        this.holidayReasonResolver = holidayReasonResolver;
+        this.businessDayCalculator = businessDayCalculator;
+        this.workStatusResolver = workStatusResolver;
+        this.overtimeLimitChecker = overtimeLimitChecker;
     }
 
     /* ===================== 1) 프리필 ===================== */
 
     @Transactional(readOnly = true)
     public AttendanceModifyPrefillResDto prefill(UUID companyId, Long empId, LocalDate workDate) {
-        // 해당 날짜 CommuteRecord — (company, emp, workDate) unique, 파티션 프루닝
-        CommuteRecord cr = commuteRecordRepository
-                .findByCompanyIdAndEmployee_EmpIdAndWorkDate(companyId, empId, workDate)
-                .orElseThrow(() -> new CustomException(ErrorCode.ATTENDANCE_RECORD_NOT_FOUND));
-
-        // 동일 CommuteRecord 에 PENDING 신청이 이미 있으면 차단
+        /* 같은 날 PENDING 중복 차단 (CommuteRecord 존재 여부와 무관) */
         boolean pendingExists = attendanceModifyRepository
-                .existsByEmployee_EmpIdAndComRecIdAndAttenStatus(empId, cr.getComRecId(), ModifyStatus.PENDING);
+                .existsByEmployee_EmpIdAndWorkDateAndAttenStatus(empId, workDate, ModifyStatus.PENDING);
         if (pendingExists) {
             throw new CustomException(ErrorCode.ATTENDANCE_MODIFY_PENDING_EXISTS);
         }
 
-        Employee emp = cr.getEmployee();
+        Employee emp = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         Long formId = approvalFormIdCache.getAttendanceModifyFormId(companyId);
 
-        return AttendanceModifyPrefillResDto.builder()
+        /* CommuteRecord 있으면 현재값으로 prefill, 없으면 빈 값 (휴일 근무 미입력 등) */
+        Optional<CommuteRecord> opt = commuteRecordRepository
+                .findByCompanyIdAndEmployee_EmpIdAndWorkDate(companyId, empId, workDate);
+
+        AttendanceModifyPrefillResDto.AttendanceModifyPrefillResDtoBuilder b = AttendanceModifyPrefillResDto.builder()
                 .formId(formId)
                 .formCode(ApprovalFormIdCache.FORM_CODE_ATTENDANCE_MODIFY)
-                .comRecId(cr.getComRecId())
-                .workDate(cr.getWorkDate())
-                .currentCheckIn(cr.getComRecCheckIn())
-                .currentCheckOut(cr.getComRecCheckOut())
-                .isAutoClosed(cr.getWorkStatus() == WorkStatus.AUTO_CLOSED)
-                .workStatus(cr.getWorkStatus())
-                .workStatusLabel(cr.getWorkStatus() != null ? cr.getWorkStatus().getLabel() : null)
+                .workDate(workDate)
                 .empId(emp.getEmpId())
                 .empName(emp.getEmpName())
                 .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
                 .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)
-                .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
-                .build();
+                .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null);
+
+        opt.ifPresent(cr -> b
+                .comRecId(cr.getComRecId())
+                .currentCheckIn(cr.getComRecCheckIn())
+                .currentCheckOut(cr.getComRecCheckOut())
+                .isAutoClosed(cr.getWorkStatus() == WorkStatus.AUTO_CLOSED)
+                .workStatus(cr.getWorkStatus())
+                .workStatusLabel(cr.getWorkStatus() != null ? cr.getWorkStatus().getLabel() : null));
+
+        /* 주간 한도 + 현재 사용 분 - 프론트가 정정 후 추정값 비교해 BLOCK 차단 */
+        OvertimeLimitChecker.WeeklyUsage usage = overtimeLimitChecker.usageBefore(companyId, empId, workDate);
+        b.weeklyMaxMinutes(usage.weeklyMaxMinutes())
+         .weekUsedMinutes(usage.usedMinutes())
+         .exceedAction(usage.exceedAction());
+
+        return b.build();
     }
 
     /*
-     * collab 상신 이벤트 수신 → AttendanceModify INSERT.
-     * 중복 PENDING 감지 시 역방향 이벤트 발행으로 collab 측 자동 반려 트리거.
+     * collab 상신 이벤트 수신 → 검증 선행 → 통과 시 AttendanceModify INSERT.
+     * 검증 단계: 멱등성 → PENDING 중복 → 주간 한도 (BLOCK 시 역방향 반려).
      */
     public void createFromApproval(AttendanceModifyDocCreatedEvent event) {
-        // 멱등성: 동일 docId 로 이미 INSERT 된 경우 no-op
+        /* 멱등성 - 동일 docId 중복 수신 */
         var existing = attendanceModifyRepository
                 .findByCompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId());
         if (existing.isPresent()) {
@@ -120,24 +145,28 @@ public class AttendanceModifyService {
             return;
         }
 
-        // PENDING 중복 체크 — 있으면 역방향 이벤트 발행 후 종료
+        /* PENDING 중복 - 같은 사원/같은 날짜 기준 */
         boolean pendingExists = attendanceModifyRepository
-                .existsByEmployee_EmpIdAndComRecIdAndAttenStatus(
-                        event.getEmpId(), event.getComRecId(), ModifyStatus.PENDING);
+                .existsByEmployee_EmpIdAndWorkDateAndAttenStatus(
+                        event.getEmpId(), event.getWorkDate(), ModifyStatus.PENDING);
         if (pendingExists) {
-            rejectedPublisher.publish(AttendanceModifyRejectedByHrEvent.builder()
-                    .companyId(event.getCompanyId())
-                    .approvalDocId(event.getApprovalDocId())
-                    .rejectReason("동일 출퇴근 기록에 대한 정정 신청이 이미 진행 중입니다.")
-                    .build());
-            log.info("[AttendanceModify] 중복 PENDING → 역방향 반려 이벤트 발행 - docId={}",
-                    event.getApprovalDocId());
+            publishRejection(event, "동일 일자 정정 신청이 이미 진행 중입니다.", "PENDING 중복");
             return;
         }
 
-        // 사원 스냅샷 조회
         Employee emp = employeeRepository.findById(event.getEmpId())
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        /* 주간 한도 검증 - INSERT 전 선행. BLOCK + 초과 시 역방향 반려, NOTIFY 면 통과 후 알림 표기 */
+        OvertimeLimitChecker.WeeklyUsage usage = overtimeLimitChecker.usageAfterModify(
+                event.getCompanyId(), event.getEmpId(), emp.getWorkGroup(),
+                event.getWorkDate(), event.getAttenReqCheckIn(), event.getAttenReqCheckOut());
+        if (usage.isExceeded() && usage.exceedAction() == OtExceedAction.BLOCK) {
+            publishRejection(event,
+                    "주간 최대 근무시간(" + (usage.weeklyMaxMinutes() / 60) + "h)을 초과합니다.",
+                    "한도 초과 BLOCK");
+            return;
+        }
 
         AttendanceModify entity = AttendanceModify.builder()
                 .companyId(event.getCompanyId())
@@ -158,16 +187,37 @@ public class AttendanceModifyService {
         log.info("[AttendanceModify] INSERT - attenModiId={}, docId={}",
                 saved.getAttenModiId(), saved.getApprovalDocId());
 
-        // HR 관리자 알림 — 근태 전용 (alarmRefType=ATTENDANCE_MODIFY)
-        notifyHrAdmins(event.getCompanyId(), saved,
-                emp.getEmpName() + " 사원의 근태 정정 신청",
-                "신청이 접수되었습니다. 결재 진행을 확인해 주세요.");
+        /* HR 관리자 알림 - 한도 초과 NOTIFY 면 메시지에 표기 */
+        if (usage.isExceeded()) {
+            notifyHrAdmins(event.getCompanyId(), saved,
+                    emp.getEmpName() + " 사원의 근태 정정 신청 (주간 한도 초과)",
+                    "정정 적용 시 주간 누적 " + formatHm(usage.usedMinutes())
+                            + " / 한도 " + formatHm(usage.weeklyMaxMinutes()));
+        } else {
+            notifyHrAdmins(event.getCompanyId(), saved,
+                    emp.getEmpName() + " 사원의 근태 정정 신청",
+                    "신청이 접수되었습니다. 결재 진행을 확인해 주세요.");
+        }
+    }
+
+    /* 역방향 반려 이벤트 발행 - PENDING 중복 / 한도 초과 BLOCK 공통 */
+    private void publishRejection(AttendanceModifyDocCreatedEvent event, String reason, String tag) {
+        rejectedPublisher.publish(AttendanceModifyRejectedByHrEvent.builder()
+                .companyId(event.getCompanyId())
+                .approvalDocId(event.getApprovalDocId())
+                .rejectReason(reason)
+                .build());
+        log.info("[AttendanceModify] {} → 역방향 반려 - docId={}", tag, event.getApprovalDocId());
+    }
+
+    /* "Xh YYm" 라벨 헬퍼 */
+    private String formatHm(long minutes) {
+        return (minutes / 60) + "h " + (minutes % 60) + "m";
     }
 
     /*
      * collab 결재 결과 이벤트 수신 → 상태 반영.
-     * 승인 시 CommuteRecord native UPDATE (파티션 프루닝 보장).
-     * 멱등성: 이미 전이된 상태면
+     * 승인 시 comRecId 있으면 native UPDATE, 없으면 신규 CommuteRecord INSERT (휴일근무 미입력 정정 등).
      */
     public void applyApprovalResult(AttendanceModifyResultEvent event) {
         AttendanceModify am = attendanceModifyRepository
@@ -181,15 +231,7 @@ public class AttendanceModifyService {
         switch (event.getStatus()) {
             case "승인" -> {
                 am.approve(manager);
-                // CommuteRecord 갱신 — native UPDATE (com_rec_id + work_date WHERE)
-                int updated = commuteRecordRepository.applyAttendanceModify(
-                        am.getComRecId(), am.getWorkDate(),
-                        am.getAttenReqCheckIn(), am.getAttenReqCheckOut());
-                if (updated != 1) {
-                    log.error("[AttendanceModify] CommuteRecord UPDATE 실패 - attenModiId={}, affected={}",
-                            am.getAttenModiId(), updated);
-                    throw new CustomException(ErrorCode.ATTENDANCE_MODIFY_APPLY_FAILED);
-                }
+                applyApprovedRecord(am);
                 notifyRequester(am, "근태 정정 신청이 승인되었습니다.",
                         "수정된 출퇴근 시각이 반영되었습니다.");
             }
@@ -207,6 +249,41 @@ public class AttendanceModifyService {
         }
         log.info("[AttendanceModify] 결과 반영 - attenModiId={}, status={}",
                 am.getAttenModiId(), event.getStatus());
+    }
+
+    /* 정정 승인 반영 - comRecId 있으면 native UPDATE, 없으면 신규 CommuteRecord INSERT */
+    /* INSERT 케이스: 휴일 근무 미입력 정정 등 (CommuteRecord 자체가 아직 없는 상태) */
+    private void applyApprovedRecord(AttendanceModify am) {
+        if (am.getComRecId() != null) {
+            int updated = commuteRecordRepository.applyAttendanceModify(
+                    am.getComRecId(), am.getWorkDate(),
+                    am.getAttenReqCheckIn(), am.getAttenReqCheckOut());
+            if (updated != 1) {
+                log.error("[AttendanceModify] CommuteRecord UPDATE 실패 - attenModiId={}, affected={}",
+                        am.getAttenModiId(), updated);
+                throw new CustomException(ErrorCode.ATTENDANCE_MODIFY_APPLY_FAILED);
+            }
+            return;
+        }
+        Employee emp = am.getEmployee();
+        WorkGroup wg = emp.getWorkGroup();
+        HolidayReason reason = holidayReasonResolver.resolve(am.getCompanyId(), am.getWorkDate(), wg);
+        /* CommuteService.checkIn 과 동일 판정기 재사용 - LATE/HOLIDAY_WORK/NORMAL 일관 처리 */
+        WorkStatus status = workStatusResolver.resolveInitial(
+                am.getAttenReqCheckIn() != null ? am.getAttenReqCheckIn().toLocalTime() : wg.getGroupStartTime(),
+                wg.getGroupStartTime(), reason);
+
+        CommuteRecord saved = commuteRecordRepository.save(CommuteRecord.builder()
+                .workDate(am.getWorkDate())
+                .companyId(am.getCompanyId())
+                .employee(emp)
+                .comRecCheckIn(am.getAttenReqCheckIn())
+                .comRecCheckOut(am.getAttenReqCheckOut())
+                .holidayReason(reason)
+                .workStatus(status)
+                .build());
+        log.info("[AttendanceModify] CommuteRecord 신규 INSERT - attenModiId={}, comRecId={}, workDate={}",
+                am.getAttenModiId(), saved.getComRecId(), am.getWorkDate());
     }
 
 
@@ -308,96 +385,25 @@ public class AttendanceModifyService {
     /*
      * 사원의 주간 근태 + 미인증 초과근무 + 승인 휴가 조회.
      * weekStart 는 어느 요일이 들어와도 해당 주 월요일로 정규화.
-     * CommuteRecord 없는 날도 빈 Day 로 포함 (토/일은 기본 WEEKLY_OFF).
-     * 같은 날 출근 + 휴가(반차 등) 공존 가능 — 두 정보를 동시에 응답.
+     * 결근 배치 도입 후 평일+비휴가+비공휴일은 항상 CommuteRecord 존재 → else 분기는 휴일/주말/휴가일 fallback.
      */
     @Transactional(readOnly = true)
     public AttendanceModifyWeekResDto getWeek(UUID companyId, Long empId, LocalDate weekStartParam) {
         LocalDate monday = weekStartParam.with(DayOfWeek.MONDAY);
         LocalDate sunday = monday.plusDays(6);
 
-        // CommuteRecord 주간 조회 — (company_id, emp_id, work_date) 인덱스 + 파티션 프루닝
-        List<CommuteRecord> records = commuteRecordRepository
-                .findByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenOrderByWorkDateDesc(
-                        companyId, empId, monday, sunday,
-                        org.springframework.data.domain.Pageable.unpaged())
-                .getContent();
-        Map<LocalDate, CommuteRecord> recordMap = new HashMap<>();
-        for (CommuteRecord cr : records) recordMap.put(cr.getWorkDate(), cr);
+        WorkGroup wg = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND))
+                .getWorkGroup();
 
-        // 승인 휴가 슬라이스 — 일자별 매핑. 한 날짜에 여러 건이면 useDay 큰 쪽 우선 (종일 > 반차)
-        List<VacationSlice> vacSlices = vacationRequestQueryRepository.findApprovedSlicesInWeek(
-                companyId, empId, RequestStatus.APPROVED,
-                monday.atStartOfDay(), sunday.atTime(LocalTime.MAX));
-        Map<LocalDate, VacationSlice> vacationMap = new HashMap<>();
-        for (VacationSlice s : vacSlices) {
-            LocalDate from = s.startAt().toLocalDate();
-            LocalDate to = s.endAt().toLocalDate();
-            if (from.isBefore(monday)) from = monday;
-            if (to.isAfter(sunday)) to = sunday;
-            for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
-                VacationSlice prev = vacationMap.get(d);
-                if (prev == null
-                        || (s.useDay() != null
-                            && (prev.useDay() == null
-                                || s.useDay().compareTo(prev.useDay()) > 0))) {
-                    vacationMap.put(d, s);
-                }
-            }
-        }
+        Map<LocalDate, CommuteRecord> recordMap = loadCommuteRecords(companyId, empId, monday, sunday);
+        Map<LocalDate, VacationSlice> vacationMap = loadApprovedVacations(companyId, empId, monday, sunday);
+        Set<LocalDate> monthHolidays = loadHolidaysForWeek(companyId, monday, sunday);
 
-        // 7일 슬롯 빌드
         List<AttendanceModifyWeekResDto.Day> days = new ArrayList<>(7);
         for (int i = 0; i < 7; i++) {
             LocalDate date = monday.plusDays(i);
-            DayOfWeek dow = date.getDayOfWeek();
-            CommuteRecord cr = recordMap.get(date);
-            VacationSlice vac = vacationMap.get(date);
-
-            AttendanceModifyWeekResDto.Day.DayBuilder b = AttendanceModifyWeekResDto.Day.builder()
-                    .workDate(date)
-                    .dayOfWeek(dow);
-
-            if (cr != null) {
-                long overtime = cr.getOvertimeMinutes() != null ? cr.getOvertimeMinutes() : 0L;
-                long recognized = cr.getRecognizedExtendedMinutes() != null
-                        ? cr.getRecognizedExtendedMinutes() : 0L;
-                long unrecognized = Math.max(0L, overtime - recognized);
-
-                b.isHoliday(cr.getHolidayReason() != null)
-                        .holidayReason(cr.getHolidayReason())
-                        .comRecId(cr.getComRecId())
-                        .checkIn(cr.getComRecCheckIn())
-                        .checkOut(cr.getComRecCheckOut())
-                        .actualWorkMinutes(cr.getActualWorkMinutes() != null
-                                ? cr.getActualWorkMinutes() : 0L)
-                        .recognizedOvertimeMinutes(recognized)
-                        .unrecognizedOvertimeMinutes(unrecognized)
-                        .workStatus(cr.getWorkStatus());
-            } else {
-                boolean isWeekend = (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY);
-                b.isHoliday(isWeekend)
-                        .holidayReason(isWeekend ? HolidayReason.WEEKLY_OFF : null)
-                        .comRecId(null)
-                        .checkIn(null)
-                        .checkOut(null)
-                        .actualWorkMinutes(0L)
-                        .recognizedOvertimeMinutes(0L)
-                        .unrecognizedOvertimeMinutes(0L)
-                        .workStatus(null);
-            }
-
-            if (vac != null) {
-                b.isVacation(true)
-                        .vacationTypeName(vac.typeName())
-                        .vacationStart(vac.startAt())
-                        .vacationEnd(vac.endAt())
-                        .vacationUseDay(vac.useDay());
-            } else {
-                b.isVacation(false);
-            }
-
-            days.add(b.build());
+            days.add(buildDay(date, recordMap.get(date), vacationMap.get(date), wg, monthHolidays));
         }
 
         return AttendanceModifyWeekResDto.builder()
@@ -405,6 +411,112 @@ public class AttendanceModifyService {
                 .weekEnd(sunday)
                 .days(days)
                 .build();
+    }
+
+    /* 주간 CommuteRecord → 날짜별 Map. 인덱스 + 파티션 프루닝 */
+    private Map<LocalDate, CommuteRecord> loadCommuteRecords(UUID companyId, Long empId,
+                                                             LocalDate monday, LocalDate sunday) {
+        List<CommuteRecord> records = commuteRecordRepository
+                .findByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenOrderByWorkDateDesc(
+                        companyId, empId, monday, sunday,
+                        org.springframework.data.domain.Pageable.unpaged())
+                .getContent();
+        Map<LocalDate, CommuteRecord> map = new HashMap<>();
+        for (CommuteRecord cr : records) map.put(cr.getWorkDate(), cr);
+        return map;
+    }
+
+    /* 승인 휴가 슬라이스 → 날짜별 Map. 한 날 여러 건이면 useDay 큰 쪽(종일 > 반차) 우선 */
+    private Map<LocalDate, VacationSlice> loadApprovedVacations(UUID companyId, Long empId,
+                                                                LocalDate monday, LocalDate sunday) {
+        List<VacationSlice> slices = vacationRequestQueryRepository.findApprovedSlicesInWeek(
+                companyId, empId, RequestStatus.APPROVED,
+                monday.atStartOfDay(), sunday.atTime(LocalTime.MAX));
+        Map<LocalDate, VacationSlice> map = new HashMap<>();
+        for (VacationSlice s : slices) {
+            LocalDate from = s.startAt().toLocalDate();
+            LocalDate to = s.endAt().toLocalDate();
+            if (from.isBefore(monday)) from = monday;
+            if (to.isAfter(sunday)) to = sunday;
+            for (LocalDate d = from; !d.isAfter(to); d = d.plusDays(1)) {
+                VacationSlice prev = map.get(d);
+                if (prev == null
+                        || (s.useDay() != null
+                            && (prev.useDay() == null
+                                || s.useDay().compareTo(prev.useDay()) > 0))) {
+                    map.put(d, s);
+                }
+            }
+        }
+        return map;
+    }
+
+    /* 주가 두 달 걸치면 두 달 공휴일 합집합 - 캐시 1~2회 조회로 끝 */
+    private Set<LocalDate> loadHolidaysForWeek(UUID companyId, LocalDate monday, LocalDate sunday) {
+        Set<LocalDate> holidays = new HashSet<>(
+                businessDayCalculator.getHolidaysInMonth(companyId, YearMonth.from(monday)));
+        if (!YearMonth.from(monday).equals(YearMonth.from(sunday))) {
+            holidays.addAll(businessDayCalculator.getHolidaysInMonth(companyId, YearMonth.from(sunday)));
+        }
+        return holidays;
+    }
+
+    /* 단일 일자 Day 슬롯 - cr 분기 + 휴가 정보 합성 */
+    private AttendanceModifyWeekResDto.Day buildDay(LocalDate date, CommuteRecord cr, VacationSlice vac,
+                                                    WorkGroup wg, Set<LocalDate> monthHolidays) {
+        AttendanceModifyWeekResDto.Day.DayBuilder b = AttendanceModifyWeekResDto.Day.builder()
+                .workDate(date)
+                .dayOfWeek(date.getDayOfWeek());
+
+        if (cr != null) applyCommuteRecord(b, cr);
+        else applyEmptyFallback(b, date, wg, monthHolidays);
+
+        applyVacation(b, vac);
+        return b.build();
+    }
+
+    /* CommuteRecord 실데이터 분기 - holidayReason 은 INSERT 시점 결정값 그대로 사용 */
+    private void applyCommuteRecord(AttendanceModifyWeekResDto.Day.DayBuilder b, CommuteRecord cr) {
+        long overtime = cr.getOvertimeMinutes() != null ? cr.getOvertimeMinutes() : 0L;
+        long recognized = cr.getRecognizedExtendedMinutes() != null ? cr.getRecognizedExtendedMinutes() : 0L;
+        long unrecognized = Math.max(0L, overtime - recognized);
+        b.isHoliday(cr.getHolidayReason() != null)
+                .holidayReason(cr.getHolidayReason())
+                .comRecId(cr.getComRecId())
+                .checkIn(cr.getComRecCheckIn())
+                .checkOut(cr.getComRecCheckOut())
+                .actualWorkMinutes(cr.getActualWorkMinutes() != null ? cr.getActualWorkMinutes() : 0L)
+                .recognizedOvertimeMinutes(recognized)
+                .unrecognizedOvertimeMinutes(unrecognized)
+                .workStatus(cr.getWorkStatus());
+    }
+
+    /* 빈 슬롯 fallback - 결근 배치가 INSERT 안 한 케이스 (휴일/주말/휴가일) */
+    private void applyEmptyFallback(AttendanceModifyWeekResDto.Day.DayBuilder b, LocalDate date,
+                                    WorkGroup wg, Set<LocalDate> monthHolidays) {
+        HolidayReason hr = holidayReasonResolver.resolve(date, wg, monthHolidays);
+        b.isHoliday(hr != null)
+                .holidayReason(hr)
+                .comRecId(null)
+                .checkIn(null)
+                .checkOut(null)
+                .actualWorkMinutes(0L)
+                .recognizedOvertimeMinutes(0L)
+                .unrecognizedOvertimeMinutes(0L)
+                .workStatus(null);
+    }
+
+    /* 휴가 정보 - 슬라이스 있으면 채우고, 없으면 false */
+    private void applyVacation(AttendanceModifyWeekResDto.Day.DayBuilder b, VacationSlice vac) {
+        if (vac != null) {
+            b.isVacation(true)
+                    .vacationTypeName(vac.typeName())
+                    .vacationStart(vac.startAt())
+                    .vacationEnd(vac.endAt())
+                    .vacationUseDay(vac.useDay());
+        } else {
+            b.isVacation(false);
+        }
     }
 
     /**

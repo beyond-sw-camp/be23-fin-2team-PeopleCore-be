@@ -90,7 +90,7 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
             UPDATE commute_record
                SET com_rec_check_in  = :newCheckIn,
                    com_rec_check_out = :newCheckOut,
-                   work_status       = CASE WHEN work_status = 'AUTO_CLOSED'
+                   work_status       = CASE WHEN work_status IN ('AUTO_CLOSED', 'ABSENT')
                                             THEN 'NORMAL' ELSE work_status END
              WHERE com_rec_id = :comRecId
                AND work_date  = :workDate
@@ -105,6 +105,34 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
      * 용도: AttendanceModifyService 가 승인 처리 전에 현재값/역전 검증용으로 load.
      */
     Optional<CommuteRecord> findByComRecIdAndWorkDate(Long comRecId, LocalDate workDate);
+
+    /* 주간 actualWorkMinutes 합 - OT/정정 한도 검증용. work_date 범위라 파티션 프루닝 */
+    @Query("""
+            SELECT COALESCE(SUM(c.actualWorkMinutes), 0)
+              FROM CommuteRecord c
+             WHERE c.companyId = :companyId
+               AND c.employee.empId = :empId
+               AND c.workDate BETWEEN :start AND :end
+            """)
+    Long sumActualWorkMinutesInWeek(@Param("companyId") UUID companyId,
+                                    @Param("empId") Long empId,
+                                    @Param("start") LocalDate start,
+                                    @Param("end") LocalDate end);
+
+    /* 정정 대상 일자 제외 주간 합 - 정정 적용 후 합계 추정용 */
+    @Query("""
+            SELECT COALESCE(SUM(c.actualWorkMinutes), 0)
+              FROM CommuteRecord c
+             WHERE c.companyId = :companyId
+               AND c.employee.empId = :empId
+               AND c.workDate BETWEEN :start AND :end
+               AND c.workDate <> :exclude
+            """)
+    Long sumActualWorkMinutesInWeekExcluding(@Param("companyId") UUID companyId,
+                                             @Param("empId") Long empId,
+                                             @Param("start") LocalDate start,
+                                             @Param("end") LocalDate end,
+                                             @Param("exclude") LocalDate exclude);
 
 
     /*
