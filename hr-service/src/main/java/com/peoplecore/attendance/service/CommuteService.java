@@ -7,6 +7,7 @@ import com.peoplecore.attendance.entity.HolidayReason;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
+import com.peoplecore.attendance.util.ClientIpExtractor;
 import com.peoplecore.company.service.CompanyAllowedIpService;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
@@ -45,6 +46,7 @@ public class CommuteService {
     private final PayrollMinutesCalculator payrollMinutesCalculator;
     private final WorkStatusResolver workStatusResolver;
     private final HolidayReasonResolver holidayReasonResolver;
+    private final ClientIpExtractor clientIpExtractor;
 
     @Autowired
     public CommuteService(CommuteRecordRepository commuteRecordRepository,
@@ -52,13 +54,15 @@ public class CommuteService {
                           CompanyAllowedIpService companyAllowedIpService,
                           PayrollMinutesCalculator payrollMinutesCalculator,
                           WorkStatusResolver workStatusResolver,
-                          HolidayReasonResolver holidayReasonResolver) {
+                          HolidayReasonResolver holidayReasonResolver,
+                          ClientIpExtractor clientIpExtractor) {
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
         this.companyAllowedIpService = companyAllowedIpService;
         this.payrollMinutesCalculator = payrollMinutesCalculator;
         this.workStatusResolver = workStatusResolver;
         this.holidayReasonResolver = holidayReasonResolver;
+        this.clientIpExtractor = clientIpExtractor;
     }
 
     /*
@@ -68,9 +72,12 @@ public class CommuteService {
      */
     @Transactional
     public CheckInResDto checkIn(UUID companyId, Long empId, HttpServletRequest request) {
-        String clientIp = extractClientIp(request);
+        String clientIp = clientIpExtractor.extract(request);
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
+
+        log.info("[checkIn-DEBUG] empId={}, clientIp={}, xff={}, remoteAddr={}",
+                empId, clientIp, request.getHeader("X-Forwarded-For"), request.getRemoteAddr());
 
         /* IP 정책 선검증: 회사가 활성 IP를 등록했다면 해당 대역 밖에서 출근 불가 */
         if (!companyAllowedIpService.isAllowed(companyId, clientIp)) {
@@ -125,9 +132,12 @@ public class CommuteService {
      */
     @Transactional
     public CheckOutResDto checkOut(UUID companyId, Long empId, HttpServletRequest request) {
-        String clientIp = extractClientIp(request);
+        String clientIp = clientIpExtractor.extract(request);
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
+
+        log.info("[checkOut-DEBUG] empId={}, clientIp={}, xff={}, remoteAddr={}",
+                empId, clientIp, request.getHeader("X-Forwarded-For"), request.getRemoteAddr());
 
         /* IP 정책 선검증: 회사가 활성 IP를 등록했다면 해당 대역 밖에서 퇴근 불가 */
         if (!companyAllowedIpService.isAllowed(companyId, clientIp)) {
@@ -183,13 +193,4 @@ public class CommuteService {
                 .ifPresent(payrollMinutesCalculator::applyApprovedRecognition);
     }
 
-    /* X-Forwarded-For 최초 토큰 > getRemoteAddr 폴백 */
-    private String extractClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int comma = xff.indexOf(',');
-            return (comma > 0 ? xff.substring(0, comma) : xff).trim();
-        }
-        return request.getRemoteAddr();
-    }
 }
