@@ -87,9 +87,7 @@ public class PayItems {
             throw new CustomException(ErrorCode.SYSTEM_PAY_ITEM_NOT_EDITABLE);
         }
         if (Boolean.TRUE.equals(this.isProtected)) {
-            // 보호 항목: 비과세한도만 변경 허용
-            this.taxExemptLimit = taxExemptLimit;
-            return;
+            throw new CustomException(ErrorCode.PROTECTED_PAY_ITEM_NOT_EDITABLE);
         }
         this.payItemName = payItemName;
         this.isFixed = isFixed;

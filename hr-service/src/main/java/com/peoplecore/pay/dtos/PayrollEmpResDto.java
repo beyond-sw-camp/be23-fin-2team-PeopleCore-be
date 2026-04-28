@@ -26,4 +26,5 @@ public class PayrollEmpResDto {
 
     private String payrollEmpStatus;   // CALCULATING / CONFIRMED 산정중/확정
     private String empStatus;          // ACTIVE / ON_LEAVE / RESIGNED 재직/휴직/퇴직
+    private Long approvalDocId;
 }

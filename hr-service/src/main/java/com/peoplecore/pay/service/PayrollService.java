@@ -60,10 +60,12 @@ public class PayrollService {
     private final RetirementPensionDepositsRepository depositRepository;
     private final MySalaryCacheService mySalaryCacheService;
     private final PayrollEmpStatusRepository payrollEmpStatusRepository;
+    private final PayStubsRepository payStubsRepository;
+
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -82,6 +84,7 @@ public class PayrollService {
         this.depositRepository = depositRepository;
         this.mySalaryCacheService = mySalaryCacheService;
         this.payrollEmpStatusRepository = payrollEmpStatusRepository;
+        this.payStubsRepository = payStubsRepository;
     }
 
 ///       급여대장 조회(특정 월)
@@ -94,6 +97,15 @@ public class PayrollService {
 //        사원별 그룹핑
         Map<Long, List<PayrollDetails>> detailsByEmp = allDetails.stream().collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()));
 
+        // 사원별 PayrollEmpStatus 한 번에 조회
+        Map<Long, PayrollEmpStatus> empStatusMap = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunId(run.getPayrollRunId())
+                .stream()
+                .collect(Collectors.toMap(
+                        s -> s.getEmployee().getEmpId(),
+                        s -> s
+                ));
+
         List<PayrollEmpResDto> empList = detailsByEmp.entrySet().stream().map(entry -> {
             Employee emp = entry.getValue().get(0).getEmployee();
             List<PayrollDetails> details = entry.getValue();
@@ -104,31 +116,28 @@ public class PayrollService {
                     .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
                     .mapToLong(PayrollDetails::getAmount).sum();
 
-            // 사원별 산정 상태 일괄 조회
-            Map<Long, String> empStatusMap = payrollEmpStatusRepository
-                    .findByPayrollRuns_PayrollRunId(run.getPayrollRunId())
-                    .stream()
-                    .collect(Collectors.toMap(
-                            s -> s.getEmployee().getEmpId(),
-                            s -> s.getStatus().name()
-                    ));
+        // 사원의 PayrollEmpStatus 1건 추출
+        PayrollEmpStatus pes = empStatusMap.get(emp.getEmpId());
+        String empStatusValue = pes != null ? pes.getStatus().name() : "CALCULATING";
+        Long approvalDocIdValue = pes != null ? pes.getApprovalDocId() : null;
 
-            return PayrollEmpResDto.builder()
-                    .empId(emp.getEmpId())
-                    .empName(emp.getEmpName())
-                    .deptName(emp.getDept().getDeptName())
-                    .gradeName(emp.getGrade().getGradeName())
-                    .empType(emp.getEmpType().name())
-                    .status(run.getPayrollStatus().name())
-                    .payrollEmpStatus(empStatusMap.getOrDefault(emp.getEmpId(), "CALCULATING"))
-                    .empStatus(emp.getEmpStatus().name())
-                    .totalPay(pay)
-                    .totalDeduction(deduction)
-                    .netPay(pay-deduction)
-                    .unpaid(run.getPayrollStatus() == PayrollStatus.PAID ? 0L : pay - deduction)
-                    .build();
+        return PayrollEmpResDto.builder()
+                .empId(emp.getEmpId())
+                .empName(emp.getEmpName())
+                .deptName(emp.getDept().getDeptName())
+                .gradeName(emp.getGrade().getGradeName())
+                .empType(emp.getEmpType().name())
+                .status(run.getPayrollStatus().name())
+                .payrollEmpStatus(empStatusValue)
+                .approvalDocId(approvalDocIdValue)
+                .empStatus(emp.getEmpStatus().name())
+                .totalPay(pay)
+                .totalDeduction(deduction)
+                .netPay(pay-deduction)
+                .unpaid(run.getPayrollStatus() == PayrollStatus.PAID ? 0L : pay - deduction)
+                .build();
         })
-                .toList();
+        .toList();
 
         return PayrollRunResDto.fromEntity(run, empList);
     }
@@ -395,8 +404,7 @@ public class PayrollService {
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
         run.markPaid(LocalDate.now());
 
-//        DC형 퇴직연금 적립 데이터 저장
-        createDcDeposits(run, run.getCompany());
+        createPayStubs(run, run.getCompany());
     }
 
 
@@ -775,45 +783,42 @@ public class PayrollService {
         return payrollRunsRepository.findByPayrollRunIdAndCompany_CompanyId(payrollRunId, companyId).orElseThrow(()-> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
     }
 
-//    DC형 사원의 해당 급여대장의 퇴직연금 적립 데이터 생성
-//    연간 임금 % 12
-    private void createDcDeposits(PayrollRuns run, Company company){
+
+
+//    급여명세서 생성
+    private void createPayStubs(PayrollRuns run, Company company) {
         List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRuns(run);
         Map<Long, List<PayrollDetails>> byEmp = details.stream()
-                .collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()  ));
-        for (Map.Entry<Long, List<PayrollDetails>> entry : byEmp.entrySet()){
+                .collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()));
+
+        for (Map.Entry<Long, List<PayrollDetails>> entry : byEmp.entrySet()) {
             Long empId = entry.getKey();
-            Employee emp = entry.getValue().get(0).getEmployee();
 
-//            DC형만
-            if(emp.getRetirementType() != RetirementType.DC) continue;
-//            중복방지
-            if (depositRepository.existsByPayrollRun_PayrollRunIdAndEmployee_EmpId(run.getPayrollRunId(), empId)) continue;
+            // 중복 방지
+            if (payStubsRepository.existsByEmpIdAndPayrollRunId(empId, run.getPayrollRunId())) continue;
 
-//            적립기준임금 = 해당 월지급합계(과세지급 총액)
-            long baseAmount = entry.getValue().stream()
-                    .filter(d-> d.getPayItemType() == PayItemType.PAYMENT)
-                    .mapToLong(PayrollDetails::getAmount)
-                    .sum();
+            long totalPay = entry.getValue().stream()
+                    .filter(d -> d.getPayItemType() == PayItemType.PAYMENT)
+                    .mapToLong(PayrollDetails::getAmount).sum();
+            long totalDeduction = entry.getValue().stream()
+                    .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
+                    .mapToLong(PayrollDetails::getAmount).sum();
+            long netPay = totalPay - totalDeduction;
 
-//            월적립액 = 연간임금/12 -> 매월 지급시마다 1/12 적립
-            long depositAmount = baseAmount / 12;
-
-            RetirementPensionDeposits deposits = RetirementPensionDeposits.builder()
-                    .employee(emp)
+            PayStubs stub = PayStubs.builder()
+                    .empId(empId)
+                    .payrollRunId(run.getPayrollRunId())
                     .payYearMonth(run.getPayYearMonth())
-                    .baseAmount(baseAmount)
-                    .depositAmount(depositAmount)
-                    .depositDate(LocalDateTime.now())
-                    .depStatus(DepStatus.COMPLETED)
+                    .totalPay(totalPay)
+                    .totalDeduction(totalDeduction)
+                    .netPay(netPay)
+                    .sendStatus(SendStatus.PENDING)   // 초기 상태 (전송 대기)
+                    .issuedAT(LocalDateTime.now())
                     .company(company)
-                    .payrollRun(run)
                     .build();
-
-            depositRepository.save(deposits);
+            payStubsRepository.save(stub);
         }
     }
-
 
 
     private boolean isHolidayForWorkGroup(UUID companyId, LocalDate date, WorkGroup wg) {

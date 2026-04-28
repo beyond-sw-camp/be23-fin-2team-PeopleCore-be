@@ -13,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -25,6 +26,14 @@ public class PensionDepositController {
     @Autowired
     public PensionDepositController(PensionDepositService pensionDepositService) {
         this.pensionDepositService = pensionDepositService;
+    }
+
+    @PostMapping("/create")
+    public ResponseEntity<Map<String, Integer>> createMonthlyDeposits(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam String payYearMonth) {
+        int created = pensionDepositService.createMonthlyDeposits(companyId, payYearMonth);
+        return ResponseEntity.ok(Map.of("created", created));
     }
 
     // 1. 목록조회
