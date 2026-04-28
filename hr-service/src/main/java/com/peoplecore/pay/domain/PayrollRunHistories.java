@@ -15,7 +15,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "payroll_run_histories")  //급여산정이력
+@Table(name = "payroll_run_histories")  //급여산정이력  --> 감사용 //todo : 향후 구현 예정
 public class PayrollRunHistories {
 
     @Id

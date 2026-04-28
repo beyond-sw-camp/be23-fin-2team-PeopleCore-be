@@ -1,14 +1,21 @@
 package com.peoplecore.pay.service;
 
+import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.pay.domain.PayrollDetails;
+import com.peoplecore.pay.domain.PayrollRuns;
 import com.peoplecore.pay.domain.RetirementPensionDeposits;
 import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.enums.DepStatus;
+import com.peoplecore.pay.enums.PayItemType;
+import com.peoplecore.pay.enums.PayrollStatus;
 import com.peoplecore.pay.enums.RetirementType;
+import com.peoplecore.pay.repository.PayrollDetailsRepository;
+import com.peoplecore.pay.repository.PayrollRunsRepository;
 import com.peoplecore.pay.repository.RetirementPensionDepositsRepository;
 import com.peoplecore.pay.repository.SeverancePaysRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +27,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional(readOnly = true)
@@ -32,15 +41,75 @@ public class PensionDepositService {
     private final SeverancePaysRepository severancePaysRepository;
     private final CompanyRepository companyRepository;
     private final SeveranceEstimateService severanceEstimateService;
+    private final PayrollDetailsRepository payrollDetailsRepository;
+    private final PayrollRunsRepository payrollRunsRepository;
+
 
     @Autowired
-    public PensionDepositService(RetirementPensionDepositsRepository retirementPensionDepositsRepository, EmployeeRepository employeeRepository, SeverancePaysRepository severancePaysRepository, CompanyRepository companyRepository, SeveranceEstimateService severanceEstimateService) {
+    public PensionDepositService(RetirementPensionDepositsRepository retirementPensionDepositsRepository, EmployeeRepository employeeRepository, SeverancePaysRepository severancePaysRepository, CompanyRepository companyRepository, SeveranceEstimateService severanceEstimateService, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository) {
         this.retirementPensionDepositsRepository = retirementPensionDepositsRepository;
         this.employeeRepository = employeeRepository;
         this.severancePaysRepository = severancePaysRepository;
         this.companyRepository = companyRepository;
         this.severanceEstimateService = severanceEstimateService;
+        this.payrollDetailsRepository = payrollDetailsRepository;
+        this.payrollRunsRepository = payrollRunsRepository;
     }
+
+
+//    DC형 사원의 해당 지급완료된 급여대장의 퇴직연금 적립 데이터 생성
+//    연간 임금 % 12
+    @Transactional
+    public int createMonthlyDeposits (UUID companyId, String payYearMonth) {
+        PayrollRuns run = payrollRunsRepository
+                .findByCompany_CompanyIdAndPayYearMonth(companyId, payYearMonth)
+                .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
+
+        // 지급 완료된 run 만 적립 가능
+        if (run.getPayrollStatus() != PayrollStatus.PAID) {
+            throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
+        }
+
+        List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRuns(run);
+        Map<Long, List<PayrollDetails>> byEmp = details.stream()
+                .collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()));
+
+        int created = 0;
+        for (Map.Entry<Long, List<PayrollDetails>> entry : byEmp.entrySet()) {
+            Employee emp = entry.getValue().get(0).getEmployee();
+
+//            DC형만
+            if (emp.getRetirementType() != RetirementType.DC) continue;
+//            중복방지
+            if (retirementPensionDepositsRepository.existsByPayrollRun_PayrollRunIdAndEmployee_EmpId(run.getPayrollRunId(), emp.getEmpId()))
+                continue;
+
+//            적립기준임금 = 해당 월지급합계(과세지급 총액)
+            long baseAmount = entry.getValue().stream()
+                    .filter(d -> d.getPayItemType() == PayItemType.PAYMENT)
+                    .mapToLong(PayrollDetails::getAmount)
+                    .sum();
+
+//            월적립액 = 연간임금/12 -> 매월 지급시마다 1/12 적립
+            long depositAmount = baseAmount / 12;
+
+            RetirementPensionDeposits deposits = RetirementPensionDeposits.builder()
+                    .employee(emp)
+                    .payYearMonth(payYearMonth)
+                    .baseAmount(baseAmount)
+                    .depositAmount(depositAmount)
+                    .depositDate(LocalDateTime.now())
+                    .depStatus(DepStatus.COMPLETED)
+                    .company(run.getCompany())
+                    .payrollRun(run)
+                    .build();
+            created++;
+        }
+        return created;
+    }
+
+
+
 
 //    1. 목록조회
     public PensionDepositSummaryResDto getDepositList(

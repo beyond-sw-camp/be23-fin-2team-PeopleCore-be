@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@Table(name = "pay_transfers")  //급여지급
+@Table(name = "pay_transfers")  //급여지급 (사원별 송금기록) -> //todo: 추후 구현
 public class PayTransfers {
 
     @Id

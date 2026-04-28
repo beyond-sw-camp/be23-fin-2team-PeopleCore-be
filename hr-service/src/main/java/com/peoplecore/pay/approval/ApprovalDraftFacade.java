@@ -23,10 +23,4 @@ public class ApprovalDraftFacade {
             case RETIREMENT -> severanceApprovalDraftService.draft(companyId,userId, ledgerId);
         };
     }
-    public void submit(UUID companyId, Long userId, ApprovalSubmitReqDto reqDto){
-        switch (reqDto.getType()){
-            case SALARY -> payrollApprovalDraftService.submit(companyId, userId, reqDto);
-            case RETIREMENT -> severanceApprovalDraftService.submit(companyId, userId, reqDto);
-        }
-    }
 }
