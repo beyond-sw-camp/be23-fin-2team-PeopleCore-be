@@ -2,7 +2,6 @@ package com.peoplecore.pay.approval;
 
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
-import com.peoplecore.event.SeveranceApprovalDocCreatedEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.SeverancePays;
@@ -28,17 +27,15 @@ public class SeveranceApprovalDraftService {
 
     private final SeverancePaysRepository severancePaysRepository;
     private final EmployeeRepository employeeRepository;
-    private final SeveranceApprovalDocCreatedPublisher severanceApprovalDocCreatedPublisher;
     private final ApprovalFormCache approvalFormCache;
 
     private static final DateTimeFormatter YMD = DateTimeFormatter.ISO_LOCAL_DATE;
     private static final DateTimeFormatter YM =DateTimeFormatter.ofPattern("yyyy-MM");
 
     @Autowired
-    public SeveranceApprovalDraftService(SeverancePaysRepository severancePaysRepository, EmployeeRepository employeeRepository, SeveranceApprovalDocCreatedPublisher severanceApprovalDocCreatedPublisher, ApprovalFormCache approvalFormCache) {
+    public SeveranceApprovalDraftService(SeverancePaysRepository severancePaysRepository, EmployeeRepository employeeRepository, ApprovalFormCache approvalFormCache) {
         this.severancePaysRepository = severancePaysRepository;
         this.employeeRepository = employeeRepository;
-        this.severanceApprovalDocCreatedPublisher = severanceApprovalDocCreatedPublisher;
         this.approvalFormCache = approvalFormCache;
     }
 
@@ -132,35 +129,6 @@ public class SeveranceApprovalDraftService {
         m.put("netPayAmount",   currency(sev.getNetAmount()));
 
         return m;
-    }
-
-//    전자결재 상신처리
-    @Transactional
-    public void submit(UUID companyId, Long userId, ApprovalSubmitReqDto reqDto){
-
-        SeverancePays sev = severancePaysRepository.findBySevIdAndCompany_CompanyId(reqDto.getLedgerId(), companyId).orElseThrow(()-> new CustomException(ErrorCode.SEVERANCE_NOT_FOUND));
-
-        if (sev.getSevStatus() != SevStatus.CONFIRMED){
-            throw new CustomException(ErrorCode.SEVERANCE_STATUS_INVALID);
-        }
-
-        // 캐시에서 formId 조회
-        ApprovalFormCache.CachedForm form =
-                approvalFormCache.get(companyId, ApprovalFormType.RETIREMENT);
-
-//        kafka 발행
-        severanceApprovalDocCreatedPublisher.publish(SeveranceApprovalDocCreatedEvent.builder()
-                        .companyId(companyId)
-                        .sevId(sev.getSevId())
-                        .empId(sev.getEmployee().getEmpId())
-                        .drafterId(userId)
-                        .formId(form.formId())
-                        .formCode(ApprovalFormType.RETIREMENT.getFormCode()) // "SEVERANCE_RESOLUTION"
-                        .htmlContent(reqDto.getHtmlContent())
-                        .approvalLine(reqDto.getApprovalLine())
-                .build());
-
-        log.info("[SeveranceApproval] 상신 발행 - sevId={}, formId={}, drafterId={}", sev.getSevId(), form.formId(), userId);
     }
 
 

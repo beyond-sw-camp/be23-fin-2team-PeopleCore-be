@@ -20,7 +20,7 @@ public interface PayStubsRepository extends JpaRepository<PayStubs, Long> {
     Optional<PayStubs> findByPayStubsIdAndEmpIdAndCompany_CompanyId(
             Long payStubsId, Long empId, UUID companyId);
 
-
+    boolean existsByEmpIdAndPayrollRunId(Long empId, Long payrollRunId);
 
 }
 
