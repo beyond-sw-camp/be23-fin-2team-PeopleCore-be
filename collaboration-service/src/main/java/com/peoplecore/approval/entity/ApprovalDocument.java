@@ -34,10 +34,9 @@ public class ApprovalDocument extends BaseTimeEntity {
     @Column(nullable = false)
     private UUID companyId;
 
-    /**
+    /*
      * 결재 번호 - 제출 시 채번
      */
-    @Column(unique = true)
     private String docNum;
 
     /**

@@ -30,7 +30,6 @@ public class AttendanceWeeklyHeadlineResDto {
     /*지각율 (%) = 지각 / (근무 예정자*날짜,(휴가자 제외) * 100 )*/
     private Double lateRate;
 
-    /* TODO : 누적으로 바꾸기*/
     /*결근 사원 수 (distinct) - 주 중 한번이라고 근무 예정 + 체크인 X + 승인 휴가 없음*/
     private Integer absentCount;
 

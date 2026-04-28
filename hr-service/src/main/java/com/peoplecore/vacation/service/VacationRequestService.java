@@ -162,10 +162,13 @@ public class VacationRequestService {
         RequestStatus newStatus = RequestStatus.valueOf(event.getStatus());
         RequestStatus currentStatus = group.get(0).getRequestStatus();   // 그룹 불변식: 전원 동일 상태
 
-        // 멱등 가드: 이미 같은 상태면 첫 처리 결과 보존하고 no-op
-        if (currentStatus == newStatus) {
-            log.info("[VacationRequest] applyApprovalResult 중복 수신 skip - docId={}, status={}",
-                    event.getApprovalDocId(), newStatus);
+        // 멱등/방어 가드: PENDING 만 결재 결과 반영 대상
+        // 종결(APPROVED/REJECTED/CANCELED) 상태에서 수신된 이벤트는 모두 skip
+        // - 동일 상태 중복 수신, 다른 종결 상태로의 비정상 이벤트, Kafka 재처리 등 흡수
+        // - RequestStatus.kafkaTransitionTo(non-PENDING) 의 UnsupportedOperationException 노출 차단
+        if (currentStatus != RequestStatus.PENDING) {
+            log.warn("[VacationRequest] applyApprovalResult 비정상/중복 수신 skip - docId={}, current={}, requested={}",
+                    event.getApprovalDocId(), currentStatus, newStatus);
             return;
         }
 
@@ -238,65 +241,6 @@ public class VacationRequestService {
     public Page<VacationRequestResponse> listMine(UUID companyId, Long empId, Pageable pageable) {
         return vacationRequestQueryRepository.findEmployeeHistory(companyId, empId, pageable)
                 .map(VacationRequestResponse::from);
-    }
-
-    /* 관리자 직권 취소 - 규칙 우회 (applyByAdmin) */
-    public void cancelByAdmin(UUID companyId, Long managerId, Long requestId, String reason) {
-        VacationRequest request = loadRequestForCompany(companyId, requestId);
-        cancelInternal(request, managerId, reason, true);
-    }
-
-    /* 공통 취소 로직 - 그룹 일괄 취소. 상태 패턴 cancelFrom 위임 (releasePending or restore) */
-    private void cancelInternal(VacationRequest request, Long actorId, String reason, boolean isAdmin) {
-        // 그룹 전체 로드 - 불변식: 같은 approvalDocId 의 모든 slot 은 같은 상태
-        List<VacationRequest> group = vacationRequestRepository
-                .findByCompanyIdAndApprovalDocId(request.getCompanyId(), request.getApprovalDocId());
-        if (group.isEmpty()) {
-            throw new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND);
-        }
-
-        RequestStatus currentStatus = group.get(0).getRequestStatus();   // apply 전 캡처
-
-        // 회사 스코프 내 actor 조회 - 타 회사 empId 탈취 방어 (Gateway 보장 이중 방어)
-        Employee actor = employeeRepository.findByEmpIdAndCompany_CompanyId(actorId, request.getCompanyId())
-                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
-
-        // 모든 슬롯 일괄 전이
-        group.forEach(r -> {
-            if (isAdmin) {
-                r.applyByAdmin(RequestStatus.CANCELED, actor, reason);
-            } else {
-                r.apply(RequestStatus.CANCELED, actor, reason);
-            }
-        });
-
-        // Balance 조회 - 그룹 대표 기준
-        VacationRequest first = group.get(0);
-        Integer balanceYear = first.getRequestStartAt().toLocalDate().getYear();
-        VacationBalance balance = vacationBalanceRepository
-                .findOne(first.getCompanyId(),
-                         first.getEmployee().getEmpId(),
-                         first.getVacationType().getTypeId(),
-                         balanceYear)
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_NOT_FOUND));
-
-        // 그룹 합계로 한 번만 cancelFrom (markPending 이 합계였으므로 대칭)
-        BigDecimal totalDays = group.stream()
-                .map(VacationRequest::getRequestUseDays)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        Optional<VacationLedger> ledgerToSave = currentStatus.cancelFrom(
-                balance, totalDays, first.getRequestId(), actorId, reason);
-        ledgerToSave.ifPresent(vacationLedgerRepository::save);
-
-        log.info("[VacationRequest] 취소 완료 - docId={}, slots={}, from={}, actorId={}, isAdmin={}",
-                first.getApprovalDocId(), group.size(), currentStatus, actorId, isAdmin);
-    }
-
-    /* 회사 + requestId 단건 조회 - 타 회사 차단 */
-    private VacationRequest loadRequestForCompany(UUID companyId, Long requestId) {
-        return vacationRequestRepository.findByCompanyIdAndRequestId(companyId, requestId)
-                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_REQ_NOT_FOUND));
     }
 
     /* allowAdvanceUse 정책 + 연차/월차 유형 동시 만족 시 true (available 검증 스킵 대상) */

@@ -73,4 +73,24 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
     List<Object[]> sumApprovedOtMinutesByDate(@Param("empId") Long empId,
                                               @Param("from") LocalDateTime from,
                                               @Param("to") LocalDateTime to);
+
+    /**
+     * 사원의 [from, to] 구간 APPROVED OT 의 일별 가장 이른 시작 시각.
+     * 같은 날 여러 APPROVED 가 있으면 MIN(ot_plan_start).
+     * native: DATE() 로 ot_date 에서 날짜만 꺼내 그룹핑.
+     * 반환: [ [java.sql.Date workDate, Timestamp planStart], ... ]
+     * 사용: 월간 요약의 overtimeStartAt 산출. 없는 날은 service 에서 groupEndTime 폴백.
+     */
+    @Query(value = """
+            SELECT DATE(o.ot_date) AS work_date,
+                   MIN(o.ot_plan_start) AS plan_start
+              FROM overtime_request o
+             WHERE o.emp_id = :empId
+               AND o.ot_status = 'APPROVED'
+               AND o.ot_date BETWEEN :from AND :to
+             GROUP BY DATE(o.ot_date)
+            """, nativeQuery = true)
+    List<Object[]> findApprovedPlanStartByDate(@Param("empId") Long empId,
+                                               @Param("from") LocalDateTime from,
+                                               @Param("to") LocalDateTime to);
 }

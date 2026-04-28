@@ -7,6 +7,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,9 +23,10 @@ public interface AttendanceModifyRepository extends JpaRepository<AttendanceModi
     /* 회사 + approvalDocId 단건 — Kafka result 이벤트 역조회 (idx_atten_modify_doc_id 히트) */
     Optional<AttendanceModify> findByCompanyIdAndApprovalDocId(UUID companyId, Long approvalDocId);
 
-    /* docCreated Consumer 에서 PENDING 중복 검사 — true 면 역방향 이벤트 발행 */
-    boolean existsByEmployee_EmpIdAndComRecIdAndAttenStatus(Long empId,
-                                                            Long comRecId,
+    /* docCreated Consumer + prefill 에서 PENDING 중복 검사 — 같은 사원/같은 날짜 다중 신청 차단 */
+    /* 키 변경: comRecId 는 nullable 이라 같은 날에 record 있을 때/없을 때 충돌 검사 불가 → workDate 로 통일 */
+    boolean existsByEmployee_EmpIdAndWorkDateAndAttenStatus(Long empId,
+                                                            LocalDate workDate,
                                                             ModifyStatus attenStatus);
 
     /* HR 관리자 목록 — 상태 필터 (idx_atten_modify_company_status 히트) */

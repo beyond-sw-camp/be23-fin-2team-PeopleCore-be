@@ -22,6 +22,7 @@ import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
@@ -250,6 +251,31 @@ public class VacationBalanceService {
                 .upcoming(upcoming)
                 .past(past)
                 .build();
+    }
+
+    /* 내 예정 휴가 페이지 조회 - 휴가현황 페이지 upcoming 탭 (페이지네이션 분리 endpoint) */
+    /* 분류 규칙은 getMyVacationStatus 와 동일. DB 레벨 필터 + 페이징으로 위임 */
+    public Page<MyVacationStatusResponseDto.RequestItem> listMyUpcoming(UUID companyId, Long empId,
+                                                                        int year, Pageable pageable) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime yearStart = LocalDate.of(year, 1, 1).atStartOfDay();
+        LocalDateTime yearEnd = LocalDate.of(year, 12, 31).atTime(23, 59, 59);
+
+        return vacationRequestQueryRepository
+                .findUpcomingPage(companyId, empId, yearStart, yearEnd, now, pageable)
+                .map(MyVacationStatusResponseDto.RequestItem::from);
+    }
+
+    /* 내 지난 휴가 페이지 조회 - 휴가현황 페이지 past 탭 (페이지네이션 분리 endpoint) */
+    public Page<MyVacationStatusResponseDto.RequestItem> listMyPast(UUID companyId, Long empId,
+                                                                    int year, Pageable pageable) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime yearStart = LocalDate.of(year, 1, 1).atStartOfDay();
+        LocalDateTime yearEnd = LocalDate.of(year, 12, 31).atTime(23, 59, 59);
+
+        return vacationRequestQueryRepository
+                .findPastPage(companyId, empId, yearStart, yearEnd, now, pageable)
+                .map(MyVacationStatusResponseDto.RequestItem::from);
     }
 
     /* VacationBalance → AnnualSummary 매핑 (ANNUAL/MONTHLY 공용) */

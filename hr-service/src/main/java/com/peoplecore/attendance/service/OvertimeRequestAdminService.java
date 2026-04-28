@@ -5,12 +5,13 @@ import com.peoplecore.attendance.dto.PagedResDto;
 import com.peoplecore.attendance.entity.OtStatus;
 import com.peoplecore.attendance.entity.OvertimeRequest;
 import com.peoplecore.attendance.repository.OvertimeRequestAdminQueryRepository;
+import com.peoplecore.vacation.service.BusinessDayCalculator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.DayOfWeek;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
@@ -23,10 +24,13 @@ import java.util.UUID;
 public class OvertimeRequestAdminService {
 
     private final OvertimeRequestAdminQueryRepository queryRepository;
+    private final BusinessDayCalculator businessDayCalculator;
 
     @Autowired
-    public OvertimeRequestAdminService(OvertimeRequestAdminQueryRepository queryRepository) {
+    public OvertimeRequestAdminService(OvertimeRequestAdminQueryRepository queryRepository,
+                                       BusinessDayCalculator businessDayCalculator) {
         this.queryRepository = queryRepository;
+        this.businessDayCalculator = businessDayCalculator;
     }
 
     /* status null → 전체 탭, 그 외 → 해당 상태만 페이징 */
@@ -57,7 +61,7 @@ public class OvertimeRequestAdminService {
                 .empId(o.getEmployee().getEmpId())
                 .empName(o.getEmployee().getEmpName())
                 .deptName(o.getEmployee().getDept().getDeptName())
-                .otType(classifyOtType(o.getOtPlanStart(), o.getOtPlanEnd()))
+                .otType(classifyOtType(o))
                 .otDate(o.getOtDate().toLocalDate())
                 .durationLabel(formatDuration(minutes))
                 .durationMinutes(minutes)
@@ -68,15 +72,20 @@ public class OvertimeRequestAdminService {
     }
 
     /* 근무 유형 분류
-     *  1) 토/일 시작 → 휴일근무
+     *  1) WorkGroup 비근무일 또는 공휴일에 시작 → 휴일근무
      *  2) 종료 22:00 이후 또는 자정 넘김 → 야간근무
-     *  3) 그 외 → 연장근무
-     *  공휴일은 HolidayLookup 연동 시 추후 보강 */
-    private String classifyOtType(LocalDateTime start, LocalDateTime end) {
-        DayOfWeek dow = start.getDayOfWeek();
-        if (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY) return "휴일근무";
+     *  3) 그 외 → 연장근무 */
+    private String classifyOtType(OvertimeRequest o) {
+        LocalDateTime start = o.getOtPlanStart();
+        LocalDateTime end = o.getOtPlanEnd();
+        LocalDate startDate = start.toLocalDate();
 
-        boolean crossesMidnight = !end.toLocalDate().isEqual(start.toLocalDate());
+        /* 휴일근무 - 사원 WorkGroup 비근무일 또는 회사 공휴일 (BusinessDayCalculator 가 둘 다 검사) */
+        if (!businessDayCalculator.isBusinessDay(o.getCompanyId(), o.getEmployee().getWorkGroup(), startDate)) {
+            return "휴일근무";
+        }
+
+        boolean crossesMidnight = !end.toLocalDate().isEqual(startDate);
         if (crossesMidnight) return "야간근무";
 
         LocalTime endTime = end.toLocalTime();

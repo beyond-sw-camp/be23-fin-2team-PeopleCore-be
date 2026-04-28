@@ -19,8 +19,12 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /* 휴가 신청 QueryDSL Repository - 페이지/fetch join/복잡 조건 전용 */
@@ -234,5 +238,127 @@ public class VacationRequestQueryRepository {
                         r.requestEndAt.goe(weekStart)
                 )
                 .fetch();
+    }
+
+    /*
+     * 사원 "예정 휴가" 페이지 조회 - 휴가현황 페이지 upcoming 탭
+     * 조건: year 기간과 겹치는 신청 중
+     *   - PENDING (대기 전부)
+     *   - APPROVED 이고 requestEndAt >= now (진행중 포함)
+     * 정렬: requestStartAt 오름차순 (가까운 일정 먼저)
+     * N+1 방지: VacationType fetch join (typeName 표시용)
+     * fetch join + paging 충돌 방지: count 쿼리 분리
+     */
+    public Page<VacationRequest> findUpcomingPage(UUID companyId, Long empId,
+                                                  LocalDateTime yearStart, LocalDateTime yearEnd,
+                                                  LocalDateTime now, Pageable pageable) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
+
+        BooleanExpression upcomingCond = r.requestStatus.eq(RequestStatus.PENDING)
+                .or(r.requestStatus.eq(RequestStatus.APPROVED).and(r.requestEndAt.goe(now)));
+
+        List<VacationRequest> content = queryFactory
+                .selectFrom(r)
+                .join(r.vacationType, t).fetchJoin()
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart),
+                        upcomingCond
+                )
+                .orderBy(r.requestStartAt.asc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(r.count())
+                .from(r)
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart),
+                        upcomingCond
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+
+    /*
+     * 사원 "지난 휴가" 페이지 조회 - 휴가현황 페이지 past 탭
+     * 조건: year 기간과 겹치는 신청 중
+     *   - REJECTED / CANCELED (종결)
+     *   - APPROVED 이고 requestEndAt < now (종료됨)
+     * 정렬: requestEndAt 내림차순 (최근 종료 먼저)
+     */
+    public Page<VacationRequest> findPastPage(UUID companyId, Long empId,
+                                              LocalDateTime yearStart, LocalDateTime yearEnd,
+                                              LocalDateTime now, Pageable pageable) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
+
+        BooleanExpression pastCond = r.requestStatus.in(RequestStatus.REJECTED, RequestStatus.CANCELED)
+                .or(r.requestStatus.eq(RequestStatus.APPROVED).and(r.requestEndAt.lt(now)));
+
+        List<VacationRequest> content = queryFactory
+                .selectFrom(r)
+                .join(r.vacationType, t).fetchJoin()
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart),
+                        pastCond
+                )
+                .orderBy(r.requestEndAt.desc())
+                .offset(pageable.getOffset())
+                .limit(pageable.getPageSize())
+                .fetch();
+
+        Long total = queryFactory
+                .select(r.count())
+                .from(r)
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStartAt.loe(yearEnd),
+                        r.requestEndAt.goe(yearStart),
+                        pastCond
+                )
+                .fetchOne();
+
+        return new PageImpl<>(content, pageable, total != null ? total : 0L);
+    }
+
+    /*
+     * 특정 근무그룹 + 특정 날짜에 승인 휴가가 걸린 사원 empId Set 조회
+     * 용도: 결근 배치 — 휴가자 결근 처리 제외
+     * 조건: APPROVED + (startAt <= dayEnd && endAt >= dayStart) — 반차/시간휴가 포함
+     * workGroup 필터로 다른 그룹 사원 컷 (성능)
+     */
+    public Set<Long> findOnLeaveEmpIds(UUID companyId, Long workGroupId, LocalDate targetDate) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+        QEmployee e = QEmployee.employee;
+
+        LocalDateTime dayStart = targetDate.atStartOfDay();
+        LocalDateTime dayEnd = targetDate.atTime(LocalTime.MAX);
+
+        return new HashSet<>(queryFactory
+                .select(r.employee.empId)
+                .from(r)
+                .join(r.employee, e)
+                .where(
+                        r.companyId.eq(companyId),
+                        r.requestStatus.eq(RequestStatus.APPROVED),
+                        e.workGroup.workGroupId.eq(workGroupId),
+                        r.requestStartAt.loe(dayEnd),
+                        r.requestEndAt.goe(dayStart)
+                )
+                .distinct()
+                .fetch());
     }
 }

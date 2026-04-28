@@ -7,15 +7,11 @@ import com.peoplecore.attendance.entity.HolidayReason;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
-import com.peoplecore.attendance.repository.HolidayLookupRepository;
 import com.peoplecore.company.service.CompanyAllowedIpService;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
-import com.peoplecore.entity.HolidayType;
-import com.peoplecore.entity.Holidays;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
-import com.peoplecore.vacation.service.BusinessDayCalculator;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,10 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.YearMonth;
-import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /*
@@ -49,27 +42,23 @@ public class CommuteService {
     private final CommuteRecordRepository commuteRecordRepository;
     private final EmployeeRepository employeeRepository;
     private final CompanyAllowedIpService companyAllowedIpService;
-    private final HolidayLookupRepository holidayLookupRepository;
     private final PayrollMinutesCalculator payrollMinutesCalculator;
-    /* 공휴일 판정 1차 필터 - 월 단위 캐시(Redis 6h TTL + write-through evict) 공유 */
-    private final BusinessDayCalculator businessDayCalculator;
     private final WorkStatusResolver workStatusResolver;
+    private final HolidayReasonResolver holidayReasonResolver;
 
     @Autowired
     public CommuteService(CommuteRecordRepository commuteRecordRepository,
                           EmployeeRepository employeeRepository,
                           CompanyAllowedIpService companyAllowedIpService,
-                          HolidayLookupRepository holidayLookupRepository,
                           PayrollMinutesCalculator payrollMinutesCalculator,
-                          BusinessDayCalculator businessDayCalculator,
-                          WorkStatusResolver workStatusResolver) {
+                          WorkStatusResolver workStatusResolver,
+                          HolidayReasonResolver holidayReasonResolver) {
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
         this.companyAllowedIpService = companyAllowedIpService;
-        this.holidayLookupRepository = holidayLookupRepository;
         this.payrollMinutesCalculator = payrollMinutesCalculator;
-        this.businessDayCalculator = businessDayCalculator;
         this.workStatusResolver = workStatusResolver;
+        this.holidayReasonResolver = holidayReasonResolver;
     }
 
     /*
@@ -95,7 +84,7 @@ public class CommuteService {
         if (wg == null) throw new CustomException(ErrorCode.EMPLOYEE_WORK_GROUP_NOT_ASSIGNED);
 
         boolean offsite = !companyAllowedIpService.matches(companyId, clientIp); // 로그용
-        HolidayReason reason = resolveHolidayReason(companyId, today, wg);
+        HolidayReason reason = holidayReasonResolver.resolve(companyId, today, wg);
         WorkStatus initialStatus = workStatusResolver.resolveInitial(
                 now.toLocalTime(), wg.getGroupStartTime(), reason);
 
@@ -183,26 +172,6 @@ public class CommuteService {
         commuteRecordRepository
                 .findByCompanyIdAndEmployee_EmpIdAndWorkDate(companyId, empId, workDate)
                 .ifPresent(payrollMinutesCalculator::applyApprovedRecognition);
-    }
-
-    /*
-     * 휴일 판정. NATIONAL > COMPANY > WEEKLY_OFF. 평일이면 null.
-     * 1차: 월 단위 캐시(BusinessDayCalculator) 로 공휴일 여부 O(1) 판정 - 평일(95%)은 DB 0회
-     * 2차: 공휴일 확정 시에만 findMatching 으로 NATIONAL/COMPANY 타입 구분 (연 15~20일 한정)
-     */
-    private HolidayReason resolveHolidayReason(UUID companyId, LocalDate date, WorkGroup wg) {
-        Set<LocalDate> monthHolidays = businessDayCalculator.getHolidaysInMonth(companyId, YearMonth.from(date));
-        if (monthHolidays.contains(date)) {
-            /* 공휴일 확정 - 타입 구분 위해 단건 조회 (NATIONAL 우선 원칙 유지) */
-            List<Holidays> matched = holidayLookupRepository.findMatching(
-                    companyId, date, date.getMonthValue(), date.getDayOfMonth());
-            boolean hasNational = matched.stream()
-                    .anyMatch(h -> h.getHolidayType() == HolidayType.NATIONAL);
-            return hasNational ? HolidayReason.NATIONAL : HolidayReason.COMPANY;
-        }
-        /* 주말 판정 - MONDAY(1)→bit0 ... SUNDAY(7)→bit6 비트마스크 */
-        int bit = 1 << (date.getDayOfWeek().getValue() - 1);
-        return (wg.getGroupWorkDay() & bit) != 0 ? null : HolidayReason.WEEKLY_OFF;
     }
 
     /* X-Forwarded-For 최초 토큰 > getRemoteAddr 폴백 */

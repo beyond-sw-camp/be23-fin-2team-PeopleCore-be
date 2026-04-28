@@ -1,6 +1,7 @@
 package com.peoplecore.vacation.service;
 
 import com.peoplecore.attendance.dto.VacationSlice;
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
@@ -39,11 +40,12 @@ public class AttendanceCheckService {
     }
 
     /* 만근 여부 판정 - 덮은 영업일 >= 영업일 총수 */
-    /* 영업일 0 (주말+공휴일만) 이면 판정 불가 → true 반환 (방어) */
-    public boolean isFullAttendance(UUID companyId, Long empId, LocalDate periodStart, LocalDate periodEnd) {
-        int businessDays = businessDayCalculator.countBusinessDays(companyId, periodStart, periodEnd);
+    /* 영업일 0 (비근무일+공휴일만) 이면 판정 불가 → true 반환 (방어) */
+    public boolean isFullAttendance(UUID companyId, Long empId, WorkGroup wg,
+                                    LocalDate periodStart, LocalDate periodEnd) {
+        int businessDays = businessDayCalculator.countBusinessDays(companyId, wg, periodStart, periodEnd);
         if (businessDays == 0) return true;
-        int covered = countCoveredBusinessDays(companyId, empId, periodStart, periodEnd);
+        int covered = countCoveredBusinessDays(companyId, empId, wg, periodStart, periodEnd);
         log.debug("[AttendanceCheck] empId={}, period={}~{}, bizDays={}, covered={}, full={}",
                 empId, periodStart, periodEnd, businessDays, covered, covered >= businessDays);
         return covered >= businessDays;
@@ -52,7 +54,8 @@ public class AttendanceCheckService {
     /* 덮은 영업일 수 - (출근일 ∪ 승인휴가일) ∩ 영업일 */
     /* null 입력은 호출 버그 → IllegalArgumentException (감추지 않음) */
     /* start > end 는 호출부 계산 오류 가능성 높음 → WARN 후 0 반환 (방어) */
-    public int countCoveredBusinessDays(UUID companyId, Long empId, LocalDate periodStart, LocalDate periodEnd) {
+    public int countCoveredBusinessDays(UUID companyId, Long empId, WorkGroup wg,
+                                        LocalDate periodStart, LocalDate periodEnd) {
         if (periodStart == null || periodEnd == null) {
             throw new IllegalArgumentException("periodStart/periodEnd null - empId=" + empId);
         }
@@ -63,7 +66,7 @@ public class AttendanceCheckService {
         }
         Set<LocalDate> covered = collectCoveredDates(companyId, empId, periodStart, periodEnd);
         return (int) covered.stream()
-                .filter(d -> businessDayCalculator.isBusinessDay(companyId, d))
+                .filter(d -> businessDayCalculator.isBusinessDay(companyId, wg, d))
                 .count();
     }
 

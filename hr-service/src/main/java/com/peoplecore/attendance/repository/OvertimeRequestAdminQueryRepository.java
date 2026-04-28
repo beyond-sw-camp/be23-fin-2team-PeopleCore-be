@@ -3,6 +3,7 @@ package com.peoplecore.attendance.repository;
 import com.peoplecore.attendance.entity.OtStatus;
 import com.peoplecore.attendance.entity.OvertimeRequest;
 import com.peoplecore.attendance.entity.QOvertimeRequest;
+import com.peoplecore.attendance.entity.QWorkGroup;
 import com.peoplecore.department.domain.QDepartment;
 import com.peoplecore.employee.domain.QEmployee;
 import com.querydsl.core.BooleanBuilder;
@@ -32,11 +33,13 @@ public class OvertimeRequestAdminQueryRepository {
         QOvertimeRequest o = QOvertimeRequest.overtimeRequest;
         QEmployee e = QEmployee.employee;
         QDepartment d = QDepartment.department;
+        QWorkGroup wg = QWorkGroup.workGroup;
 
         return queryFactory
                 .selectFrom(o)
                 .join(o.employee, e).fetchJoin()        // 신청자 (empName) — N+1 차단
                 .join(e.dept, d).fetchJoin()            // 부서 (deptName) — N+1 차단
+                .join(e.workGroup, wg).fetchJoin()      // 근무그룹 (휴일근무 분류) — N+1 차단
                 .where(buildWhere(o, companyId, status))
                 .orderBy(o.otDate.desc(), o.otId.desc())
                 .offset((long) page * size)
