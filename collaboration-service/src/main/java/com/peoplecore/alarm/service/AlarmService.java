@@ -118,4 +118,11 @@ public class AlarmService {
         }
         return page.map(AlarmListResponseDto::from);
     }
+
+    /*최근 알람 5건 조회 - 읽음/안읽음 여부 포함 */
+    public List<AlarmListResponseDto> getRecent(UUID companyId, Long empId) {
+        return alarmRepository.findTop5ByCompanyIdAndAlarmEmpIdOrderByCreatedAtDesc(companyId, empId).stream()
+                .map(AlarmListResponseDto::from)
+                .toList();
+    }
 }

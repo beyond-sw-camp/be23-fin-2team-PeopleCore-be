@@ -97,24 +97,44 @@ public class UserMenuSettingService {
     /**
      * enum에 새 메뉴가 추가되었는데 기존 사용자에게 row가 없는 경우 lazy-insert.
      * - initDefault 이후 enum 항목이 늘어났을 때 자동 동기화 용도
-     * - sortOrder 는 defaultOrder, isVisible 은 true 로 시작 (사용자가 모달에서 끌 수 있음)
+     * - 누락 메뉴는 enum 선언 순서대로 처리:
+     *   1) 해당 메뉴의 defaultOrder 를 삽입 지점으로 사용
+     *   2) 기존 row 중 sortOrder >= 삽입 지점 인 것들을 +1 시프트 (충돌 방지)
+     *   3) 누락 메뉴를 isVisible=true / sortOrder=defaultOrder 로 INSERT
+     *   클래스 레벨 @Transactional 로 dirty checking 시프트가 같은 트랜잭션에서 flush 됨
      */
     private List<UserMenuSetting> ensureAllMenusPresent(Long empId, List<UserMenuSetting> existing) {
         if (existing.size() == SidebarMenu.values().length) return existing;
+
         Set<SidebarMenu> have = EnumSet.noneOf(SidebarMenu.class);
-        for (UserMenuSetting e : existing) have.add(e.getMenuCode());
-        List<UserMenuSetting> missing = new ArrayList<>();
-        for (SidebarMenu menu : SidebarMenu.values()) {
-            if (!have.contains(menu)) {
-                missing.add(UserMenuSetting.builder()
-                        .empId(empId)
-                        .menuCode(menu)
-                        .isVisible(true)
-                        .sortOrder(menu.getDefaultOrder())
-                        .build());
-            }
+        Map<SidebarMenu, UserMenuSetting> byCode = new EnumMap<>(SidebarMenu.class);
+        for (UserMenuSetting e : existing) {
+            have.add(e.getMenuCode());
+            byCode.put(e.getMenuCode(), e);
         }
-        repository.saveAll(missing);
+
+        for (SidebarMenu menu : SidebarMenu.values()) {
+            if (have.contains(menu)) continue;
+
+            int insertAt = menu.getDefaultOrder();
+            // 삽입 지점 이후 기존 메뉴 sort_order +1 시프트
+            for (UserMenuSetting e : byCode.values()) {
+                if (e.getSortOrder() != null && e.getSortOrder() >= insertAt) {
+                    e.changeSortOrder(e.getSortOrder() + 1);
+                }
+            }
+
+            UserMenuSetting created = UserMenuSetting.builder()
+                    .empId(empId)
+                    .menuCode(menu)
+                    .isVisible(true)
+                    .sortOrder(insertAt)
+                    .build();
+            repository.save(created);
+            byCode.put(menu, created);
+            have.add(menu);
+        }
+
         return repository.findByEmpIdOrderBySortOrderAsc(empId);
     }
 
