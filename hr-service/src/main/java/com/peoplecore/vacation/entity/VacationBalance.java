@@ -194,6 +194,15 @@ public class VacationBalance extends BaseTimeEntity {
         this.totalDays = this.totalDays.subtract(days);
     }
 
+    /* 만료일 갱신 - 같은 (회사,사원,유형,연도) 행에 추가 부여 들어올 때 가장 최근 부여 만료일로 덮어쓰기 */
+    /* expiresAt null 인 경우 IllegalArgumentException - 무기한 처리는 createNew 시점에만 허용 */
+    public void updateExpiresAt(LocalDate expiresAt) {
+        if (expiresAt == null) {
+            throw new IllegalArgumentException("expiresAt null 불가 - balanceId=" + balanceId);
+        }
+        this.expiresAt = expiresAt;
+    }
+
     /* 잔여 만료 - 만료 잡 / 1년 도달 시. 남은 잔여를 expired 로 이동 → 잔여 0 */
     public BigDecimal expireRemaining() {
         BigDecimal remaining = getAvailableDays();
