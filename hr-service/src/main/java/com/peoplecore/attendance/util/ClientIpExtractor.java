@@ -5,7 +5,21 @@ import org.springframework.stereotype.Component;
 
 /* 클라이언트 실 IP 추출 컴포넌트
  * 출퇴근 체크인/아웃 IP 정책 검증, 허용 IP 등록 모달의 "내 현재 IP" 표시에서 공통 사용
- * 두 호출처가 동일한 IP 를 보도록 단일 진입점 유지 → 등록한 IP 가 매칭에서 누락되는 사고 방지 */
+ * 두 호출처가 동일한 IP 를 보도록 단일 진입점 유지 → 등록한 IP 가 매칭에서 누락되는 사고 방지
+ *
+ * TODO: [배포 시 인프라 점검 필수 — 누락 시 전사 출퇴근 차단 사고 가능]
+ *   NGINX Ingress + AWS NLB 환경에서 클라이언트 IP 보존 설정이 빠지면
+ *   hr-service 가 받는 IP 는 사설 IP(10.x.x.x)만 보임 → 등록한 회사 외부 공인 IP CIDR 매칭 실패.
+ *
+ *   필수 설정 1) ingress-nginx-controller Service spec.externalTrafficPolicy: Local
+ *               + NLB target-type: instance (또는 target-type: ip + preserve_client_ip.enabled=true)
+ *   필수 설정 2) ingress-nginx-controller ConfigMap
+ *               - use-forwarded-headers: "true"
+ *               - compute-full-forwarded-for: "true"
+ *   권장 설정 3) api-gateway application.yml
+ *               - spring.cloud.gateway.x-forwarded.enabled: true
+ *
+ *   배포 직후 [checkIn-DEBUG] 로그의 clientIp 가 회사 외부 공인 IP 로 찍히는지 반드시 확인. */
 @Component
 public class ClientIpExtractor {
 

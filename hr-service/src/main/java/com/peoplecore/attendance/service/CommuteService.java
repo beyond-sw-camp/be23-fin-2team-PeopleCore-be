@@ -76,6 +76,7 @@ public class CommuteService {
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
 
+        // TODO: [배포 검증 후 제거] 운영에서 clientIp 가 회사 외부 공인 IP 로 도달하는지 확인용 임시 로그
         log.info("[checkIn-DEBUG] empId={}, clientIp={}, xff={}, remoteAddr={}",
                 empId, clientIp, request.getHeader("X-Forwarded-For"), request.getRemoteAddr());
 
@@ -136,6 +137,7 @@ public class CommuteService {
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
 
+        // TODO: [배포 검증 후 제거] 운영에서 clientIp 가 회사 외부 공인 IP 로 도달하는지 확인용 임시 로그
         log.info("[checkOut-DEBUG] empId={}, clientIp={}, xff={}, remoteAddr={}",
                 empId, clientIp, request.getHeader("X-Forwarded-For"), request.getRemoteAddr());
 
