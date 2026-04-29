@@ -20,6 +20,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -166,22 +167,49 @@ public class CommuteService {
         if (record.getComRecCheckIn() == null) {
             throw new CustomException(ErrorCode.COMMUTE_NOT_CHECKED_IN);
         }
+        /* 시계 역행 등 비정상 케이스 방어 */
+        if (now.isBefore(record.getComRecCheckIn())) {
+            throw new IllegalStateException(
+                    "체크아웃 시각이 체크인보다 이전 - comRecId=" + record.getComRecId()
+                            + ", checkIn=" + record.getComRecCheckIn() + ", checkOut=" + now);
+        }
 
         WorkGroup wg = record.getEmployee().getWorkGroup();
         if (wg == null) throw new CustomException(ErrorCode.EMPLOYEE_WORK_GROUP_NOT_ASSIGNED);
 
+        /* 1. workStatus 결정 */
         WorkStatus finalStatus = workStatusResolver.resolveFinal(
                 record.getWorkStatus(), now.toLocalTime(), wg.getGroupEndTime());
 
-        /* workDate 유지, comRecCheckOut + workStatus 확정 */
-        record.checkOut(now, clientIp, finalStatus);
+        /* 2. 분 컬럼 산출 (mutate/persist 없음) - APPROVAL 은 0, ALL 은 overtime 전체 자동 인정 */
+        PayrollMinutesCalculator.PayrollMinutes m = payrollMinutesCalculator.computeForCheckout(record, now);
 
-        /* 체크아웃 시점엔 actual/overtime 만 기록 — recognized_* 는 OT 승인 시 반영 */
-        payrollMinutesCalculator.applyCheckoutBase(record);
+        /* 3. 단일 native UPDATE - 9 컬럼 + work_date 포함(파티션 프루닝). 가드 WHERE 로 atomic check */
+        int affected = commuteRecordRepository.applyCheckOut(
+                record.getComRecId(), record.getWorkDate(),
+                now, clientIp, finalStatus.name(),
+                m.actual(), m.overtime(), m.unrecognizedOt(),
+                m.recExt(), m.recNight(), m.recHoliday());
+        if (affected != 1) {
+            log.warn("[checkOut] UPDATE 실패 - comRecId={}, affected={} (이미 체크아웃됨/race)",
+                    record.getComRecId(), affected);
+            throw new CustomException(ErrorCode.COMMUTE_ALREADY_CHECKED_OUT);
+        }
 
         log.info("[checkOut] empId={}, workDate={}, checkOutAt={}, ip={}, workStatus={}",
                 empId, record.getWorkDate(), now, clientIp, finalStatus);
-        return CheckOutResDto.fromEntity(record);
+
+        /* 4. DTO 직접 빌드 (엔티티는 native UPDATE 후 stale - 읽지 않음) */
+        return CheckOutResDto.builder()
+                .comRecId(record.getComRecId())
+                .workDate(record.getWorkDate())
+                .checkInAt(record.getComRecCheckIn())
+                .checkOutAt(now)
+                .checkOutIp(clientIp)
+                .workedMinutes(Duration.between(record.getComRecCheckIn(), now).toMinutes())
+                .workStatus(finalStatus)
+                .holidayReason(record.getHolidayReason())
+                .build();
     }
 
     /*

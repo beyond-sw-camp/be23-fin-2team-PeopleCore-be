@@ -133,20 +133,21 @@ public class AutoCloseBatchService {
 
         int success = 0;
         for (CommuteRecord record : targets) {
-            try {
-                record.markAutoClosed(closedAt);
-                Employee emp = record.getEmployee();
-                log.info("[AutoClose] 자동마감 — comRecId={}, empId={}, workDate={}",
-                        record.getComRecId(), emp.getEmpId(), targetDate);
-                publishAutoCloseAlarm(companyId, emp, targetDate, record.getComRecId(), hrAdminEmpIds);
-                success++;
-            } catch (IllegalStateException e) {
-                /* markAutoClosed 내부 가드 위반(중복 체크아웃 등) — 로그만 남기고 계속 */
-                log.warn("[AutoClose] 마감 실패 — comRecId={}, reason={}",
-                        record.getComRecId(), e.getMessage());
+            /* native UPDATE - 가드(체크인 있음 + 미체크아웃)는 WHERE 에 박힘. 영향행 0 이면 가드 위반 */
+            int affected = commuteRecordRepository.applyAutoClose(
+                    record.getComRecId(), record.getWorkDate(), closedAt);
+            if (affected != 1) {
+                log.warn("[AutoClose] 마감 스킵 - comRecId={}, affected={} (가드 위반/이미 처리됨)",
+                        record.getComRecId(), affected);
+                continue;
             }
+            Employee emp = record.getEmployee();
+            log.info("[AutoClose] 자동마감 - comRecId={}, empId={}, workDate={}",
+                    record.getComRecId(), emp.getEmpId(), targetDate);
+            publishAutoCloseAlarm(companyId, emp, targetDate, record.getComRecId(), hrAdminEmpIds);
+            success++;
         }
-        log.info("[AutoClose] 자동마감 완료 — workGroupId={}, targetDate={}, success={}/{}",
+        log.info("[AutoClose] 자동마감 완료 - workGroupId={}, targetDate={}, success={}/{}",
                 workGroupId, targetDate, success, targets.size());
     }
 

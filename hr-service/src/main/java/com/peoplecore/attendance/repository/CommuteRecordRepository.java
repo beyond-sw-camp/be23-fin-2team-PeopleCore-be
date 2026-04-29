@@ -124,6 +124,62 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
                             @Param("recNight") Long recNight,
                             @Param("recHoliday") Long recHoliday);
 
+    /* 배치 자동마감 native UPDATE - 8 컬럼 (checkOut/status + 6 분 컬럼) 일괄.
+     * 가드 (체크인 있음 + 미체크아웃) 를 WHERE 에 박아 atomic check-and-update.
+     * 영향행 0 이면 가드 위반 또는 이미 처리됨.
+     * 파티션 프루닝: WHERE work_date 포함 필수. */
+    @Modifying
+    @Query(value = """
+            UPDATE commute_record
+               SET com_rec_check_out           = :closedAt,
+                   work_status                 = 'AUTO_CLOSED',
+                   actual_work_minutes         = 0,
+                   overtime_minutes            = 0,
+                   unrecognized_ot_minutes     = 0,
+                   recognized_extended_minutes = 0,
+                   recognized_night_minutes    = 0,
+                   recognized_holiday_minutes  = 0
+             WHERE com_rec_id = :comRecId
+               AND work_date  = :workDate
+               AND com_rec_check_in IS NOT NULL
+               AND com_rec_check_out IS NULL
+            """, nativeQuery = true)
+    int applyAutoClose(@Param("comRecId") Long comRecId,
+                       @Param("workDate") LocalDate workDate,
+                       @Param("closedAt") LocalDateTime closedAt);
+
+    /* 퇴근 체크아웃 native UPDATE - 9 컬럼 (checkOut/IP/status + 6 분 컬럼) 일괄.
+     * 가드 (체크인 있음 + 미체크아웃) 를 WHERE 에 박아 atomic check-and-update.
+     * 영향행 0 이면 가드 위반 (이미 체크아웃됨 등). 파티션 프루닝: WHERE work_date 포함 필수. */
+    @Modifying
+    @Query(value = """
+            UPDATE commute_record
+               SET com_rec_check_out           = :checkOut,
+                   check_out_ip                = :ip,
+                   work_status                 = :status,
+                   actual_work_minutes         = :actual,
+                   overtime_minutes            = :overtime,
+                   unrecognized_ot_minutes     = :unrecognizedOt,
+                   recognized_extended_minutes = :recExt,
+                   recognized_night_minutes    = :recNight,
+                   recognized_holiday_minutes  = :recHoliday
+             WHERE com_rec_id = :comRecId
+               AND work_date  = :workDate
+               AND com_rec_check_in IS NOT NULL
+               AND com_rec_check_out IS NULL
+            """, nativeQuery = true)
+    int applyCheckOut(@Param("comRecId") Long comRecId,
+                      @Param("workDate") LocalDate workDate,
+                      @Param("checkOut") LocalDateTime checkOut,
+                      @Param("ip") String ip,
+                      @Param("status") String status,
+                      @Param("actual") Long actual,
+                      @Param("overtime") Long overtime,
+                      @Param("unrecognizedOt") Long unrecognizedOt,
+                      @Param("recExt") Long recExt,
+                      @Param("recNight") Long recNight,
+                      @Param("recHoliday") Long recHoliday);
+
     /*
      * 특정 (comRecId, workDate) CommuteRecord 단건 조회 — 파티션 프루닝 보장.
      * 용도: AttendanceModifyService 가 승인 처리 전에 현재값/역전 검증용으로 load.

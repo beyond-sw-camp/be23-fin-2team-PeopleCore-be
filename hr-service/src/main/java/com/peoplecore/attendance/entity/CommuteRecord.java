@@ -149,95 +149,13 @@ public class CommuteRecord extends BaseTimeEntity {
     @Builder.Default
     private Long recognizedHolidayMinutes = 0L;
 
-    /* 출근 체크인 처리 — 시각/IP/초기상태/휴일이유 일괄 세팅 */
-    public void checkIn(LocalDateTime at, String ip,
-                        WorkStatus initialStatus, HolidayReason reason) {
-        if (this.comRecCheckIn != null) {
-            throw new IllegalStateException(
-                    "이미 체크인된 레코드에 checkIn() 재호출 — comRecId=" + this.comRecId);
-        }
-        this.comRecCheckIn = at;
-        this.checkInIp = ip;
-        this.workStatus = initialStatus; // 체크아웃 시 NORMAL/EARLY_LEAVE/LATE_AND_EARLY 로 확정
-        this.holidayReason = reason;
-    }
-
-    /*
-     * 퇴근 체크아웃 처리 — WorkStatus 최종 확정.
-     * 가드: 체크인 없이 불가 / 중복 체크아웃 불가 / 체크아웃 < 체크인 불가.
-     */
-    public void checkOut(LocalDateTime at, String ip, WorkStatus finalStatus) {
-        if (this.comRecCheckIn == null) {
-            throw new IllegalStateException(
-                    "체크인 없이 체크아웃 불가 — comRecId=" + this.comRecId);
-        }
-        if (this.comRecCheckOut != null) {
-            throw new IllegalStateException(
-                    "이미 체크아웃된 레코드에 checkOut() 재호출 — comRecId=" + this.comRecId);
-        }
-        if (at.isBefore(this.comRecCheckIn)) {
-            throw new IllegalStateException(
-                    "체크아웃 시각이 체크인보다 이전 — comRecId=" + this.comRecId
-                            + ", checkIn=" + this.comRecCheckIn + ", checkOut=" + at);
-        }
-        this.comRecCheckOut = at;
-        this.checkOutIp = ip;
-        this.workStatus = finalStatus;
-    }
-
-    /* 배치 자동마감 — workStatus = AUTO_CLOSED, 모든 근무분 0 */
-    public void markAutoClosed(LocalDateTime closedAt) {
-        if (this.comRecCheckIn == null) {
-            throw new IllegalStateException("체크인 없이 자동마감 불가");
-        }
-        if (this.comRecCheckOut != null) {
-            throw new IllegalStateException("이미 체크아웃된 레코드에 자동마감 불가");
-        }
-        this.comRecCheckOut = closedAt;
-        this.workStatus = WorkStatus.AUTO_CLOSED;
-        this.actualWorkMinutes = 0L;
-        this.overtimeMinutes = 0L;
-        this.unrecognizedOtMinutes = 0L;
-        this.recognizedExtendedMinutes = 0L;
-        this.recognizedNightMinutes = 0L;
-        this.recognizedHolidayMinutes = 0L;
-    }
-
-    /* 근태정정 승인 시 workStatus 재설정 */
-    public void applyCorrection(WorkStatus correctedStatus) {
-        this.workStatus = correctedStatus;
-    }
-
-    /* 급여연동 분 컬럼 일괄 갱신 */
-    public void applyPayrollMinutes(Long actualWork, Long overtime, Long unrecognizedOt,
-                                    Long extended, Long night, Long holiday) {
-        if (actualWork == null || overtime == null || unrecognizedOt == null
-                || extended == null || night == null || holiday == null) {
-            throw new IllegalArgumentException("급여 연동 분 컬럼은 null 허용 안 됨");
-        }
-        if (unrecognizedOt < 0 || unrecognizedOt > overtime) {
-            throw new IllegalArgumentException(
-                    "unrecognizedOtMinutes 범위 위반: unrecognizedOt=" + unrecognizedOt
-                            + ", overtime=" + overtime);
-        }
-        long maxTyped = Math.max(extended, Math.max(night, holiday));
-        if (overtime < maxTyped) {
-            throw new IllegalArgumentException(
-                    "overtimeMinutes < max(recognized_*) 불변식 위반: overtime=" + overtime
-                            + ", ext=" + extended + ", night=" + night + ", holiday=" + holiday);
-        }
-        if (actualWork < overtime) {
-            throw new IllegalArgumentException(
-                    "actualWorkMinutes < overtimeMinutes 불변식 위반: actual=" + actualWork
-                            + ", overtime=" + overtime);
-        }
-        this.actualWorkMinutes = actualWork;
-        this.overtimeMinutes = overtime;
-        this.unrecognizedOtMinutes = unrecognizedOt;
-        this.recognizedExtendedMinutes = extended;
-        this.recognizedNightMinutes = night;
-        this.recognizedHolidayMinutes = holiday;
-    }
+    /* 상태 변경 메서드는 모두 제거됨 - 파티션 테이블이라 모든 UPDATE 는 native UPDATE (work_date 포함) 경유.
+     * 호출처:
+     *  - 체크인: CommuteService.checkIn (builder + saveAndFlush 로 INSERT)
+     *  - 체크아웃: CommuteService.checkOut → CommuteRecordRepository.applyCheckOut
+     *  - 자동마감: AutoCloseBatchService → CommuteRecordRepository.applyAutoClose
+     *  - 정정 승인: AttendanceModifyService → CommuteRecordRepository.applyAttendanceModify
+     *  - 분 컬럼 재계산: PayrollMinutesCalculator → CommuteRecordRepository.applyPayrollMinutes */
 
     /*
      * 결근 행 생성 팩토리 메서드.
