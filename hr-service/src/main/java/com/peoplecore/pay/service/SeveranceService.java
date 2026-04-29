@@ -127,7 +127,7 @@ public class SeveranceService {
         List<String> last12Months = buildMonthRange(
                 resignYm.minusMonths(12),
                 resignYm.minusMonths(1));
-        Long lastYearBonus = severancePaysRepository.sumLastYearBonus(empId,companyId, last12Months);
+        Long lastYearBonus = severancePaysRepository.sumLastYearBonus(empId, companyId, last12Months);
 
 //        상여금 가산액 = 직전 1년 상여금 * (3/12)
          BigDecimal bonusAdded = BigDecimal.valueOf(lastYearBonus)
@@ -138,7 +138,7 @@ public class SeveranceService {
 /// 대법원의 판례에 따라 =>
 //        평균임금 반영분 : 전년도 미사용연차수당은 퇴직금 평균임금에 포함하고(3/12),
 //        별도지급분 : 해당연도 미연차수당은 퇴직정산으로 별도 지급
-        AnnualLeaveSeveranceResult leaveResult = calcAnnualLeaveAllowanceForSeverance(empId, companyId,resignDate);
+        AnnualLeaveSeveranceResult leaveResult = calcAnnualLeaveAllowanceForSeverance(empId, companyId, resignDate);
         Long annualLeaveForAvgWage = leaveResult.forAvgWage();
         Long annualLeaveOnRetirement = leaveResult.onRetirement();
 
@@ -183,12 +183,17 @@ public class SeveranceService {
             dcDiffAmount = Math.max(0, severanceAmount - dcDepositedTotal);
         }
 
+        // 직전 3개월 비과세 누계 → 퇴직소득세 계산에 반영
+        Long nonTaxableSum = severanceRepositoryImpl
+                .sumNonTaxableLast3Months(empId, companyId, last3Months);
+
 //        퇴직소득세/지방소득세 자동산출
 //        퇴직소득세는 분류과세라서 인적공제(부양가족공제) 없음
 //        IRP 이전시 과세이연 -> Calculator가 세액 0원 반환
         boolean irpTransfer = emp.getRetirementType() == RetirementType.DB || emp.getRetirementType() == RetirementType.DC;
         int taxYear = resignDate.getYear();
-        RetirementIncomeTaxCalculator.TaxResult taxResult = retirementIncomeTaxCalculator.calculate(severanceAmount, serviceYears, taxYear, irpTransfer);
+
+        RetirementIncomeTaxCalculator.TaxResult taxResult = retirementIncomeTaxCalculator.calculate(severanceAmount,nonTaxableSum, serviceYears, taxYear, irpTransfer);
         Long retirementIncomeTax = taxResult.retirementIncomeTax();
         Long localIncomeTax =taxResult.localIncomeTax();
 
@@ -242,12 +247,10 @@ public class SeveranceService {
         severancePaysRepository.save(sev);
         }
 
-        log.info("[SeveranceService 퇴직금 산정 완료 - empId:{}, amount={}, type:{}", empId, dcDiffAmount, retirementType);
+        log.info("[SeveranceService 퇴직금 산정 완료 - empId:{}, severance={}, nonTax={}, type:{}", empId, severanceAmount, nonTaxableSum, retirementType);
 
         return SeveranceDetailResDto.fromEntity(sev);
     }
-
-
 
 
     private PayrollTransferDto buildTransferDto(SeverancePays sev, UUID companyId){

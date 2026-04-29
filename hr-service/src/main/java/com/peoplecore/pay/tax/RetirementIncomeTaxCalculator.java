@@ -16,12 +16,14 @@ public class RetirementIncomeTaxCalculator {
 
      /* 퇴직소득세 + 지방소득세 산출
      *
-     * @param severanceAmount  퇴직급여 산정액 (비과세소득 없음 가정)
-     * @param serviceYears     근속연수 (소수점 포함 — 내부에서 1년 미만 절상 처리)
-     * @param taxYear          세액 귀속연도 (퇴직일 기준)
-     * @param irpTransfer      IRP 이전 여부 — true 시 과세이연으로 세액 0원
+     * @param severanceAmount    퇴직급여 산정액 (비과세소득 없음 가정)
+     * @param nonTaxableAmount   비과세 누계 (직전 3개월 식대/교통비 등 한도 차감 합계). null/음수는 0으로 보정.
+     * @param serviceYears       근속연수 (소수점 포함 — 내부에서 1년 미만 절상 처리)
+     * @param taxYear            세액 귀속연도 (퇴직일 기준)
+     * @param irpTransfer        IRP 이전 여부 — true 시 과세이연으로 세액 0원
      */
     public TaxResult calculate(Long severanceAmount,
+                               Long nonTaxableAmount,
                                BigDecimal serviceYears,
                                int taxYear,
                                boolean irpTransfer) {
@@ -43,8 +45,14 @@ public class RetirementIncomeTaxCalculator {
         int yearsRoundedUp = serviceYears.setScale(0, RoundingMode.CEILING).intValue();
         if (yearsRoundedUp < 1) yearsRoundedUp = 1;
 
-        // 1. 퇴직소득금액 (일단 비과세소득 없다고 가정 — 필요 시 감면 항목 확장)
-        long taxableIncome = severanceAmount;
+        // 1. 퇴직소득금액  = 퇴직급여 − 비과세 누계
+        long nonTax = (nonTaxableAmount == null) ? 0L : Math.max(0L, nonTaxableAmount);
+        long taxableIncome = Math.max(0L, severanceAmount - nonTax);
+
+        if (taxableIncome <= 0L) {
+            log.info("[TaxCalc] 비과세 차감 후 과세대상 ≤ 0 → 세액 0원");
+            return TaxResult.zero();
+        }
 
         // 2. 근속연수공제
         long serviceYearsDeduction = TaxYearlyConfig.serviceYearsDeduction(taxYear, yearsRoundedUp);
@@ -80,9 +88,9 @@ public class RetirementIncomeTaxCalculator {
         // 8. 지방소득세 = 퇴직소득세 × 10% (지방세법 제103조의2)
         long localIncomeTax = retirementIncomeTax / 10;
 
-        log.info("[TaxCalc] 퇴직소득세 산출 - severance={}, years={}, annualized={}, "
+        log.info("[TaxCalc] 퇴직소득세 산출 - severance={}, nonTax={}, years={}, annualized={}, "
                         + "taxBase={}, retTax={}, localTax={}",
-                severanceAmount, yearsRoundedUp, annualized, taxBase,
+                severanceAmount, nonTax, yearsRoundedUp, annualized, taxBase,
                 retirementIncomeTax, localIncomeTax);
 
         return new TaxResult(retirementIncomeTax, localIncomeTax);

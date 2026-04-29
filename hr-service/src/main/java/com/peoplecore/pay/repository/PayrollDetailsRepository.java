@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -85,5 +86,13 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
             @Param("runId") Long runId,
             @Param("type") PayItemType type,
             @Param("empIds") Set<Long> empIds);
+
+
+    Optional<PayrollDetails> findByPayrollRunsAndEmployee_EmpIdAndPayItems_PayItemId(
+            PayrollRuns run, Long empId, Long payItemId);
+
+
+
+
 
 }
