@@ -1,0 +1,1535 @@
+{
+  "meta": {
+    "port": "58294",
+    "size": 10,
+    "n": 50
+  },
+  "overall": {
+    "bm25_avg": 0.94,
+    "hybrid_avg": 1.0,
+    "delta": 0.06000000000000005
+  },
+  "by_category": {
+    "BM25": {
+      "n": 41,
+      "bm25_avg": 1.0,
+      "hybrid_avg": 1.0,
+      "delta": 0.0
+    },
+    "KNN": {
+      "n": 8,
+      "bm25_avg": 0.625,
+      "hybrid_avg": 1.0,
+      "delta": 0.375
+    },
+    "BOTH": {
+      "n": 1,
+      "bm25_avg": 1.0,
+      "hybrid_avg": 1.0,
+      "delta": 0.0
+    }
+  },
+  "rows": [
+    {
+      "id": "Q01",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "윤서아",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_7"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_7",
+        "EMPLOYEE_4",
+        "EMPLOYEE_8",
+        "EMPLOYEE_5",
+        "EMPLOYEE_15",
+        "EMPLOYEE_3",
+        "EMPLOYEE_10",
+        "EMPLOYEE_14",
+        "EMPLOYEE_6",
+        "EMPLOYEE_13"
+      ],
+      "expected": [
+        "EMPLOYEE_7"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q02",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "마케팅팀",
+      "expected_n": 4,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "EMPLOYEE_8",
+        "EMPLOYEE_6",
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_15",
+        "EMPLOYEE_14"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_12",
+        "EMPLOYEE_11",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "EMPLOYEE_8",
+        "EMPLOYEE_13",
+        "EMPLOYEE_16",
+        "EMPLOYEE_6",
+        "EMPLOYEE_15",
+        "EMPLOYEE_14"
+      ],
+      "expected": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q03",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "부장",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_9"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_13",
+        "EMPLOYEE_6",
+        "EMPLOYEE_8",
+        "EMPLOYEE_3",
+        "EMPLOYEE_14",
+        "EMPLOYEE_11",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16",
+        "EMPLOYEE_4"
+      ],
+      "expected": [
+        "EMPLOYEE_9"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q04",
+      "category": "KNN",
+      "type": "EMPLOYEE",
+      "query": "재무 담당자",
+      "expected_n": 4,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_15",
+        "EMPLOYEE_14"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_15",
+        "EMPLOYEE_14",
+        "EMPLOYEE_8",
+        "EMPLOYEE_12",
+        "EMPLOYEE_6",
+        "EMPLOYEE_9",
+        "EMPLOYEE_7",
+        "EMPLOYEE_66"
+      ],
+      "expected": [
+        "EMPLOYEE_13",
+        "EMPLOYEE_14",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q05",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "재무팀",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_4",
+        "DEPARTMENT_2",
+        "DEPARTMENT_3"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_4",
+        "DEPARTMENT_2",
+        "DEPARTMENT_3",
+        "DEPARTMENT_13",
+        "DEPARTMENT_14",
+        "DEPARTMENT_16",
+        "DEPARTMENT_15"
+      ],
+      "expected": [
+        "DEPARTMENT_4"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q06",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "장도윤",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_8"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_8",
+        "EMPLOYEE_16",
+        "EMPLOYEE_4",
+        "EMPLOYEE_66",
+        "EMPLOYEE_5",
+        "EMPLOYEE_6",
+        "EMPLOYEE_12",
+        "EMPLOYEE_14",
+        "EMPLOYEE_7",
+        "EMPLOYEE_9"
+      ],
+      "expected": [
+        "EMPLOYEE_8"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q07",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "최은정",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_9"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_5",
+        "EMPLOYEE_4",
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_3",
+        "EMPLOYEE_6",
+        "EMPLOYEE_11",
+        "EMPLOYEE_8",
+        "EMPLOYEE_10"
+      ],
+      "expected": [
+        "EMPLOYEE_9"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q08",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "송태현",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_10"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_10",
+        "EMPLOYEE_4",
+        "EMPLOYEE_13",
+        "EMPLOYEE_16",
+        "EMPLOYEE_3",
+        "EMPLOYEE_6",
+        "EMPLOYEE_7",
+        "EMPLOYEE_5",
+        "EMPLOYEE_8",
+        "EMPLOYEE_14"
+      ],
+      "expected": [
+        "EMPLOYEE_10"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q09",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "윤서",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_7"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_7",
+        "EMPLOYEE_4",
+        "EMPLOYEE_8",
+        "EMPLOYEE_15",
+        "EMPLOYEE_3",
+        "EMPLOYEE_14",
+        "EMPLOYEE_6",
+        "EMPLOYEE_5",
+        "EMPLOYEE_66",
+        "EMPLOYEE_10"
+      ],
+      "expected": [
+        "EMPLOYEE_7"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q10",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "한지",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_5"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_5",
+        "EMPLOYEE_4",
+        "EMPLOYEE_8",
+        "EMPLOYEE_66",
+        "EMPLOYEE_6",
+        "EMPLOYEE_14",
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_7",
+        "EMPLOYEE_10"
+      ],
+      "expected": [
+        "EMPLOYEE_5"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q11",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "박민수",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_3"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_3",
+        "EMPLOYEE_4",
+        "EMPLOYEE_5",
+        "EMPLOYEE_13",
+        "EMPLOYEE_6",
+        "EMPLOYEE_11",
+        "EMPLOYEE_10",
+        "EMPLOYEE_14",
+        "EMPLOYEE_7",
+        "EMPLOYEE_9"
+      ],
+      "expected": [
+        "EMPLOYEE_3"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q12",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "주완",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_66"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_66",
+        "EMPLOYEE_4",
+        "EMPLOYEE_8",
+        "EMPLOYEE_5",
+        "EMPLOYEE_12",
+        "EMPLOYEE_3",
+        "EMPLOYEE_14",
+        "EMPLOYEE_16",
+        "EMPLOYEE_6",
+        "EMPLOYEE_15"
+      ],
+      "expected": [
+        "EMPLOYEE_66"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q13",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "오준혁",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_6"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_6",
+        "EMPLOYEE_5",
+        "EMPLOYEE_4",
+        "EMPLOYEE_16",
+        "EMPLOYEE_3",
+        "EMPLOYEE_8",
+        "EMPLOYEE_66",
+        "EMPLOYEE_14",
+        "EMPLOYEE_10",
+        "EMPLOYEE_13"
+      ],
+      "expected": [
+        "EMPLOYEE_6"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q14",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "인사팀",
+      "expected_n": 3,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_8",
+        "EMPLOYEE_6",
+        "EMPLOYEE_7",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_15",
+        "EMPLOYEE_14",
+        "EMPLOYEE_9"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_8",
+        "EMPLOYEE_7",
+        "EMPLOYEE_6",
+        "EMPLOYEE_12",
+        "EMPLOYEE_11",
+        "EMPLOYEE_13",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16",
+        "EMPLOYEE_9",
+        "EMPLOYEE_14"
+      ],
+      "expected": [
+        "EMPLOYEE_6",
+        "EMPLOYEE_7",
+        "EMPLOYEE_8"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q15",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "재무팀",
+      "expected_n": 4,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_15",
+        "EMPLOYEE_14",
+        "EMPLOYEE_11",
+        "EMPLOYEE_8",
+        "EMPLOYEE_6",
+        "EMPLOYEE_12",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_15",
+        "EMPLOYEE_14",
+        "EMPLOYEE_8",
+        "EMPLOYEE_6",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_9",
+        "EMPLOYEE_7"
+      ],
+      "expected": [
+        "EMPLOYEE_13",
+        "EMPLOYEE_14",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q16",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "마케팅",
+      "expected_n": 4,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_12",
+        "EMPLOYEE_11",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "EMPLOYEE_13",
+        "EMPLOYEE_8",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16",
+        "EMPLOYEE_14",
+        "EMPLOYEE_6"
+      ],
+      "expected": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q17",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "사원",
+      "expected_n": 6,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_11",
+        "EMPLOYEE_8",
+        "EMPLOYEE_12",
+        "EMPLOYEE_16",
+        "EMPLOYEE_15",
+        "EMPLOYEE_7"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_8",
+        "EMPLOYEE_12",
+        "EMPLOYEE_15",
+        "EMPLOYEE_11",
+        "EMPLOYEE_16",
+        "EMPLOYEE_7",
+        "EMPLOYEE_4",
+        "EMPLOYEE_13",
+        "EMPLOYEE_14",
+        "EMPLOYEE_66"
+      ],
+      "expected": [
+        "EMPLOYEE_7",
+        "EMPLOYEE_8",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q18",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "대리",
+      "expected_n": 3,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_6",
+        "EMPLOYEE_14",
+        "EMPLOYEE_10"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_6",
+        "EMPLOYEE_10",
+        "EMPLOYEE_14",
+        "EMPLOYEE_4",
+        "EMPLOYEE_8",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16",
+        "EMPLOYEE_9"
+      ],
+      "expected": [
+        "EMPLOYEE_6",
+        "EMPLOYEE_10",
+        "EMPLOYEE_14"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q19",
+      "category": "BM25",
+      "type": "EMPLOYEE",
+      "query": "과장",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_13"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_13",
+        "EMPLOYEE_66",
+        "EMPLOYEE_4",
+        "EMPLOYEE_8",
+        "EMPLOYEE_12",
+        "EMPLOYEE_16",
+        "EMPLOYEE_15",
+        "EMPLOYEE_11",
+        "EMPLOYEE_14",
+        "EMPLOYEE_5"
+      ],
+      "expected": [
+        "EMPLOYEE_13"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q20",
+      "category": "BOTH",
+      "type": "EMPLOYEE",
+      "query": "마케팅 부장",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_10"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_12",
+        "EMPLOYEE_11",
+        "EMPLOYEE_10",
+        "EMPLOYEE_13",
+        "EMPLOYEE_8",
+        "EMPLOYEE_16",
+        "EMPLOYEE_14",
+        "EMPLOYEE_6",
+        "EMPLOYEE_15"
+      ],
+      "expected": [
+        "EMPLOYEE_9"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q21",
+      "category": "KNN",
+      "type": "EMPLOYEE",
+      "query": "마케팅 담당자",
+      "expected_n": 4,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_12",
+        "EMPLOYEE_11",
+        "EMPLOYEE_10",
+        "EMPLOYEE_8",
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_6",
+        "EMPLOYEE_7",
+        "EMPLOYEE_14"
+      ],
+      "expected": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q22",
+      "category": "KNN",
+      "type": "EMPLOYEE",
+      "query": "인사 담당자",
+      "expected_n": 3,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_8",
+        "EMPLOYEE_6",
+        "EMPLOYEE_7"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_8",
+        "EMPLOYEE_6",
+        "EMPLOYEE_7",
+        "EMPLOYEE_12",
+        "EMPLOYEE_9",
+        "EMPLOYEE_16",
+        "EMPLOYEE_10",
+        "EMPLOYEE_13",
+        "EMPLOYEE_11",
+        "EMPLOYEE_15"
+      ],
+      "expected": [
+        "EMPLOYEE_6",
+        "EMPLOYEE_7",
+        "EMPLOYEE_8"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q23",
+      "category": "KNN",
+      "type": "EMPLOYEE",
+      "query": "광고 마케팅",
+      "expected_n": 4,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "EMPLOYEE_13",
+        "EMPLOYEE_8",
+        "EMPLOYEE_16",
+        "EMPLOYEE_14",
+        "EMPLOYEE_3",
+        "EMPLOYEE_4"
+      ],
+      "expected": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q24",
+      "category": "KNN",
+      "type": "EMPLOYEE",
+      "query": "재정 담당",
+      "expected_n": 4,
+      "bm25_recall": 0.0,
+      "hybrid_recall": 1.0,
+      "delta": 1.0,
+      "bm25_top": [],
+      "hybrid_top": [
+        "EMPLOYEE_16",
+        "EMPLOYEE_8",
+        "EMPLOYEE_13",
+        "EMPLOYEE_14",
+        "EMPLOYEE_6",
+        "EMPLOYEE_15",
+        "EMPLOYEE_12",
+        "EMPLOYEE_66",
+        "EMPLOYEE_7",
+        "EMPLOYEE_9"
+      ],
+      "expected": [
+        "EMPLOYEE_13",
+        "EMPLOYEE_14",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q25",
+      "category": "KNN",
+      "type": "EMPLOYEE",
+      "query": "팀장급 직책",
+      "expected_n": 2,
+      "bm25_recall": 0.0,
+      "hybrid_recall": 1.0,
+      "delta": 1.0,
+      "bm25_top": [
+        "EMPLOYEE_66"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_66",
+        "EMPLOYEE_13",
+        "EMPLOYEE_16",
+        "EMPLOYEE_9",
+        "EMPLOYEE_14",
+        "EMPLOYEE_6",
+        "EMPLOYEE_12",
+        "EMPLOYEE_11",
+        "EMPLOYEE_15",
+        "EMPLOYEE_8"
+      ],
+      "expected": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_13"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q26",
+      "category": "BM25",
+      "type": "ALL",
+      "query": "마케팅",
+      "expected_n": 6,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_3",
+        "DEPARTMENT_14",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_3",
+        "DEPARTMENT_14",
+        "EMPLOYEE_12",
+        "EMPLOYEE_11",
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "DEPARTMENT_13",
+        "EMPLOYEE_13",
+        "DEPARTMENT_4",
+        "CALENDAR_T8002"
+      ],
+      "expected": [
+        "EMPLOYEE_9",
+        "EMPLOYEE_10",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "DEPARTMENT_3",
+        "DEPARTMENT_14"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q27",
+      "category": "BM25",
+      "type": "ALL",
+      "query": "인사",
+      "expected_n": 4,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_2",
+        "EMPLOYEE_8",
+        "EMPLOYEE_6",
+        "EMPLOYEE_7",
+        "APPROVAL_T9001"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_2",
+        "EMPLOYEE_8",
+        "EMPLOYEE_7",
+        "EMPLOYEE_6",
+        "APPROVAL_T9001",
+        "DEPARTMENT_13",
+        "DEPARTMENT_3",
+        "DEPARTMENT_4",
+        "CALENDAR_T8001",
+        "CALENDAR_T8002"
+      ],
+      "expected": [
+        "EMPLOYEE_6",
+        "EMPLOYEE_7",
+        "EMPLOYEE_8",
+        "DEPARTMENT_2"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q28",
+      "category": "BM25",
+      "type": "ALL",
+      "query": "재무",
+      "expected_n": 5,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_4",
+        "EMPLOYEE_16",
+        "EMPLOYEE_13",
+        "EMPLOYEE_15",
+        "EMPLOYEE_14"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_4",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16",
+        "EMPLOYEE_14",
+        "EMPLOYEE_13",
+        "EMPLOYEE_66",
+        "DEPARTMENT_14",
+        "EMPLOYEE_8",
+        "DEPARTMENT_13",
+        "DEPARTMENT_3"
+      ],
+      "expected": [
+        "EMPLOYEE_13",
+        "EMPLOYEE_14",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16",
+        "DEPARTMENT_4"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q29",
+      "category": "BM25",
+      "type": "ALL",
+      "query": "사원",
+      "expected_n": 6,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "EMPLOYEE_11",
+        "EMPLOYEE_8",
+        "EMPLOYEE_12",
+        "EMPLOYEE_16",
+        "EMPLOYEE_15",
+        "EMPLOYEE_7"
+      ],
+      "hybrid_top": [
+        "EMPLOYEE_8",
+        "EMPLOYEE_12",
+        "EMPLOYEE_15",
+        "EMPLOYEE_11",
+        "EMPLOYEE_16",
+        "EMPLOYEE_7",
+        "DEPARTMENT_2",
+        "DEPARTMENT_15",
+        "DEPARTMENT_4",
+        "DEPARTMENT_13"
+      ],
+      "expected": [
+        "EMPLOYEE_7",
+        "EMPLOYEE_8",
+        "EMPLOYEE_11",
+        "EMPLOYEE_12",
+        "EMPLOYEE_15",
+        "EMPLOYEE_16"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q30",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "인사팀",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_2",
+        "DEPARTMENT_3",
+        "DEPARTMENT_4"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_2",
+        "DEPARTMENT_3",
+        "DEPARTMENT_4",
+        "DEPARTMENT_13",
+        "DEPARTMENT_14",
+        "DEPARTMENT_16",
+        "DEPARTMENT_15"
+      ],
+      "expected": [
+        "DEPARTMENT_2"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q31",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "마케팅팀",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_3",
+        "DEPARTMENT_14",
+        "DEPARTMENT_2",
+        "DEPARTMENT_4"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_3",
+        "DEPARTMENT_14",
+        "DEPARTMENT_2",
+        "DEPARTMENT_4",
+        "DEPARTMENT_13",
+        "DEPARTMENT_15",
+        "DEPARTMENT_16"
+      ],
+      "expected": [
+        "DEPARTMENT_3"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q32",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "개발부",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_13",
+        "DEPARTMENT_14",
+        "DEPARTMENT_15"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_13",
+        "DEPARTMENT_14",
+        "DEPARTMENT_15",
+        "DEPARTMENT_3",
+        "DEPARTMENT_2",
+        "DEPARTMENT_4",
+        "DEPARTMENT_16"
+      ],
+      "expected": [
+        "DEPARTMENT_13"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q33",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "마케팅부",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_14",
+        "DEPARTMENT_3",
+        "DEPARTMENT_15",
+        "DEPARTMENT_13"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_14",
+        "DEPARTMENT_3",
+        "DEPARTMENT_13",
+        "DEPARTMENT_15",
+        "DEPARTMENT_4",
+        "DEPARTMENT_2",
+        "DEPARTMENT_16"
+      ],
+      "expected": [
+        "DEPARTMENT_14"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q34",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "생산부",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_15",
+        "DEPARTMENT_14",
+        "DEPARTMENT_13"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_15",
+        "DEPARTMENT_13",
+        "DEPARTMENT_14",
+        "DEPARTMENT_16",
+        "DEPARTMENT_4",
+        "DEPARTMENT_2",
+        "DEPARTMENT_3"
+      ],
+      "expected": [
+        "DEPARTMENT_15"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q35",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "황주완",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_16"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_16",
+        "DEPARTMENT_4",
+        "DEPARTMENT_15",
+        "DEPARTMENT_13",
+        "DEPARTMENT_2",
+        "DEPARTMENT_3",
+        "DEPARTMENT_14"
+      ],
+      "expected": [
+        "DEPARTMENT_16"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q36",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "D02",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_2"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_2",
+        "DEPARTMENT_13",
+        "DEPARTMENT_4",
+        "DEPARTMENT_16",
+        "DEPARTMENT_15",
+        "DEPARTMENT_14",
+        "DEPARTMENT_3"
+      ],
+      "expected": [
+        "DEPARTMENT_2"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q37",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "DEV",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_13"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_13",
+        "DEPARTMENT_4",
+        "DEPARTMENT_3",
+        "DEPARTMENT_15",
+        "DEPARTMENT_14",
+        "DEPARTMENT_2",
+        "DEPARTMENT_16"
+      ],
+      "expected": [
+        "DEPARTMENT_13"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q38",
+      "category": "BM25",
+      "type": "DEPARTMENT",
+      "query": "MKT",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_14"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_14",
+        "DEPARTMENT_13",
+        "DEPARTMENT_3",
+        "DEPARTMENT_15",
+        "DEPARTMENT_4",
+        "DEPARTMENT_2",
+        "DEPARTMENT_16"
+      ],
+      "expected": [
+        "DEPARTMENT_14"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q39",
+      "category": "BM25",
+      "type": "ALL",
+      "query": "황주완",
+      "expected_n": 2,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "DEPARTMENT_16",
+        "EMPLOYEE_66"
+      ],
+      "hybrid_top": [
+        "DEPARTMENT_16",
+        "EMPLOYEE_66",
+        "EMPLOYEE_4",
+        "CALENDAR_T8002",
+        "EMPLOYEE_5",
+        "DEPARTMENT_4",
+        "EMPLOYEE_6",
+        "EMPLOYEE_8",
+        "APPROVAL_T9001",
+        "DEPARTMENT_15"
+      ],
+      "expected": [
+        "EMPLOYEE_66",
+        "DEPARTMENT_16"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q40",
+      "category": "BM25",
+      "type": "ALL",
+      "query": "테스트",
+      "expected_n": 7,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "CALENDAR_T8001",
+        "CALENDAR_T8002",
+        "CALENDAR_T8004",
+        "CALENDAR_T8003",
+        "EMPLOYEE_66",
+        "APPROVAL_T9002",
+        "APPROVAL_T9001"
+      ],
+      "hybrid_top": [
+        "CALENDAR_T8001",
+        "CALENDAR_T8002",
+        "CALENDAR_T8003",
+        "CALENDAR_T8004",
+        "EMPLOYEE_66",
+        "APPROVAL_T9002",
+        "APPROVAL_T9001",
+        "DEPARTMENT_4",
+        "DEPARTMENT_13",
+        "DEPARTMENT_3"
+      ],
+      "expected": [
+        "APPROVAL_T9001",
+        "APPROVAL_T9002",
+        "CALENDAR_T8001",
+        "CALENDAR_T8002",
+        "CALENDAR_T8003",
+        "CALENDAR_T8004",
+        "EMPLOYEE_66"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q41",
+      "category": "BM25",
+      "type": "APPROVAL",
+      "query": "홍길동",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "APPROVAL_T9001"
+      ],
+      "hybrid_top": [
+        "APPROVAL_T9001",
+        "APPROVAL_T9002"
+      ],
+      "expected": [
+        "APPROVAL_T9001"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q42",
+      "category": "BM25",
+      "type": "APPROVAL",
+      "query": "김철수",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "APPROVAL_T9002"
+      ],
+      "hybrid_top": [
+        "APPROVAL_T9002",
+        "APPROVAL_T9001"
+      ],
+      "expected": [
+        "APPROVAL_T9002"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q43",
+      "category": "BM25",
+      "type": "APPROVAL",
+      "query": "품의서",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "APPROVAL_T9001"
+      ],
+      "hybrid_top": [
+        "APPROVAL_T9001",
+        "APPROVAL_T9002"
+      ],
+      "expected": [
+        "APPROVAL_T9001"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q44",
+      "category": "BM25",
+      "type": "APPROVAL",
+      "query": "지출결의",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "APPROVAL_T9002"
+      ],
+      "hybrid_top": [
+        "APPROVAL_T9002",
+        "APPROVAL_T9001"
+      ],
+      "expected": [
+        "APPROVAL_T9002"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q45",
+      "category": "KNN",
+      "type": "APPROVAL",
+      "query": "결재 진행",
+      "expected_n": 2,
+      "bm25_recall": 0.0,
+      "hybrid_recall": 1.0,
+      "delta": 1.0,
+      "bm25_top": [],
+      "hybrid_top": [
+        "APPROVAL_T9002",
+        "APPROVAL_T9001"
+      ],
+      "expected": [
+        "APPROVAL_T9001",
+        "APPROVAL_T9002"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q46",
+      "category": "BM25",
+      "type": "CALENDAR",
+      "query": "비공개",
+      "expected_n": 2,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "CALENDAR_T8001",
+        "CALENDAR_T8002",
+        "CALENDAR_T8004"
+      ],
+      "hybrid_top": [
+        "CALENDAR_T8001",
+        "CALENDAR_T8002",
+        "CALENDAR_T8004",
+        "CALENDAR_T8003"
+      ],
+      "expected": [
+        "CALENDAR_T8001",
+        "CALENDAR_T8004"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q47",
+      "category": "BM25",
+      "type": "CALENDAR",
+      "query": "전직원",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "CALENDAR_T8003"
+      ],
+      "hybrid_top": [
+        "CALENDAR_T8003",
+        "CALENDAR_T8001",
+        "CALENDAR_T8004",
+        "CALENDAR_T8002"
+      ],
+      "expected": [
+        "CALENDAR_T8003"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q48",
+      "category": "BM25",
+      "type": "CALENDAR",
+      "query": "사내",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "CALENDAR_T8002"
+      ],
+      "hybrid_top": [
+        "CALENDAR_T8002",
+        "CALENDAR_T8001",
+        "CALENDAR_T8004",
+        "CALENDAR_T8003"
+      ],
+      "expected": [
+        "CALENDAR_T8002"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q49",
+      "category": "BM25",
+      "type": "CALENDAR",
+      "query": "김철수",
+      "expected_n": 1,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "CALENDAR_T8004"
+      ],
+      "hybrid_top": [
+        "CALENDAR_T8004",
+        "CALENDAR_T8001",
+        "CALENDAR_T8002",
+        "CALENDAR_T8003"
+      ],
+      "expected": [
+        "CALENDAR_T8004"
+      ],
+      "errors": []
+    },
+    {
+      "id": "Q50",
+      "category": "KNN",
+      "type": "CALENDAR",
+      "query": "모두에게 공개된 일정",
+      "expected_n": 2,
+      "bm25_recall": 1.0,
+      "hybrid_recall": 1.0,
+      "delta": 0.0,
+      "bm25_top": [
+        "CALENDAR_T8003",
+        "CALENDAR_T8001",
+        "CALENDAR_T8002",
+        "CALENDAR_T8004"
+      ],
+      "hybrid_top": [
+        "CALENDAR_T8002",
+        "CALENDAR_T8003",
+        "CALENDAR_T8001",
+        "CALENDAR_T8004"
+      ],
+      "expected": [
+        "CALENDAR_T8002",
+        "CALENDAR_T8003"
+      ],
+      "errors": []
+    }
+  ]
+}

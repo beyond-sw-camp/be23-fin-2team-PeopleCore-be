@@ -7,6 +7,7 @@ import com.peoplecore.dto.SearchResponse;
 import com.peoplecore.dto.SearchResultItem;
 import com.peoplecore.dto.SuggestItem;
 import com.peoplecore.dto.SuggestResponse;
+import com.peoplecore.embedding.EmbeddingClient;
 import com.peoplecore.repository.SearchRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +24,9 @@ import org.springframework.data.elasticsearch.core.query.highlight.HighlightPara
 import org.springframework.data.elasticsearch.core.query.HighlightQuery;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -32,8 +35,33 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SearchService {
 
+    private static final int RRF_K = 60;
+    private static final int HYBRID_TOP_K = 50;
+
+    // 4곳(search/countByType/suggest)에서 동일 필드를 쓰던 것을 상수로 묶음.
+    // 새 검색 필드는 여기 한 줄만 추가하면 BM25 경로 전체에 일관 적용된다.
+    private static final List<String> SEARCH_FIELDS = List.of(
+            "title^3", "title.ngram",
+            "content",
+            "metadata.empName^2", "metadata.empName.ngram",
+            "metadata.deptName^2", "metadata.deptName.ngram",
+            "metadata.gradeName", "metadata.titleName",
+            "metadata.docNum", "metadata.location",
+            "metadata.deptCode"
+    );
+
+    // suggest 는 자동완성 용도라 본문(content)·부가 직급(gradeName/titleName) 제외.
+    private static final List<String> SUGGEST_FIELDS = List.of(
+            "title^3", "title.ngram",
+            "metadata.empName^2", "metadata.empName.ngram",
+            "metadata.deptName^2", "metadata.deptName.ngram",
+            "metadata.docNum", "metadata.location",
+            "metadata.deptCode"
+    );
+
     private final ElasticsearchOperations elasticsearchOperations;
     private final SearchRepository searchRepository;
+    private final EmbeddingClient embeddingClient;
 
     public SearchResponse search(String keyword, String type, String companyId,
                                  Long empId, Long deptId, String role,
@@ -58,7 +86,145 @@ public class SearchService {
                 .build();
     }
 
+    /**
+     * BM25 + kNN + RRF(k=60) 하이브리드 검색.
+     * - BM25: 기존 buildSearchQuery 재사용 (multiMatch)
+     * - kNN : 사용자 질의를 1536d 벡터로 임베딩 후 content_vector 코사인 검색
+     * - 융합: RRF score(d) = Σ 1 / (RRF_K + rank_i(d))  for each branch
+     * 회사/권한 필터는 양 쪽에 동일하게 적용한다.
+     */
+    public SearchResponse searchHybrid(String keyword, String type, String companyId,
+                                       Long empId, String role, int size) {
+        boolean isAdmin = isAdmin(role);
+        int topK = HYBRID_TOP_K;
+
+        NativeQuery bm25Q = buildSearchQuery(keyword, type, companyId, empId, isAdmin, 0, topK);
+        SearchHits<SearchDocument> bm25Hits = elasticsearchOperations.search(bm25Q, SearchDocument.class);
+
+        float[] queryVector;
+        try {
+            queryVector = embeddingClient.embed(keyword);
+        } catch (Exception e) {
+            log.warn("[hybrid] query embedding failed ({}); falling back to BM25-only", e.getMessage());
+            return search(keyword, type, companyId, empId, null, role, 0, size);
+        }
+
+        SearchHits<SearchDocument> knnHits;
+        if (queryVector == null || queryVector.length == 0) {
+            log.warn("[hybrid] empty query vector; falling back to BM25-only");
+            knnHits = null;
+        } else {
+            NativeQuery knnQ = buildKnnQuery(queryVector, type, companyId, empId, isAdmin, topK);
+            knnHits = elasticsearchOperations.search(knnQ, SearchDocument.class);
+        }
+
+        Map<String, Double> rrfScore = new HashMap<>();
+        Map<String, SearchHit<SearchDocument>> bestHit = new LinkedHashMap<>();
+        Map<String, Integer> bm25Rank = new HashMap<>();
+        Map<String, Integer> knnRank = new HashMap<>();
+
+        accumulateRrf(bm25Hits, rrfScore, bestHit, bm25Rank);
+        if (knnHits != null) {
+            accumulateRrf(knnHits, rrfScore, bestHit, knnRank);
+        }
+
+        List<SearchResultItem> items = rrfScore.entrySet().stream()
+                .sorted(Map.Entry.<String, Double>comparingByValue().reversed())
+                .limit(size)
+                .map(e -> {
+                    SearchHit<SearchDocument> hit = bestHit.get(e.getKey());
+                    return toHybridResultItem(hit, e.getValue(), bm25Rank.get(e.getKey()), knnRank.get(e.getKey()));
+                })
+                .toList();
+
+        Map<String, Long> typeCounts = aggregateTypeCounts(bestHit, rrfScore);
+
+        return SearchResponse.builder()
+                .keyword(keyword)
+                .totalHits(rrfScore.size())
+                .page(0)
+                .size(size)
+                .items(items)
+                .typeCounts(typeCounts)
+                .build();
+    }
+
+    private void accumulateRrf(SearchHits<SearchDocument> hits,
+                               Map<String, Double> rrfScore,
+                               Map<String, SearchHit<SearchDocument>> bestHit,
+                               Map<String, Integer> rankByDoc) {
+        int rank = 0;
+        for (SearchHit<SearchDocument> hit : hits.getSearchHits()) {
+            rank++;
+            String id = hit.getId();
+            rrfScore.merge(id, 1.0 / (RRF_K + rank), Double::sum);
+            bestHit.putIfAbsent(id, hit);
+            rankByDoc.put(id, rank);
+        }
+    }
+
+    private NativeQuery buildKnnQuery(float[] vector, String type, String companyId,
+                                      Long empId, boolean isAdmin, int k) {
+        List<Float> queryVector = new ArrayList<>(vector.length);
+        for (float f : vector) queryVector.add(f);
+        int numCandidates = Math.max(k * 5, 100);
+
+        return NativeQuery.builder()
+                .withKnnSearches(knn -> knn
+                        .field("content_vector")
+                        .queryVector(queryVector)
+                        .k(k)
+                        .numCandidates(numCandidates)
+                        .filter(f -> f.bool(b -> applyScope(b, type, companyId, empId, isAdmin)))
+                )
+                .withMaxResults(k)
+                .build();
+    }
+
+    private SearchResultItem toHybridResultItem(SearchHit<SearchDocument> hit, double rrf,
+                                                Integer bm25Rank, Integer knnRank) {
+        SearchDocument doc = hit.getContent();
+        Map<String, List<String>> highlights = hit.getHighlightFields();
+        Map<String, Object> meta = doc.getMetadata() != null ? new HashMap<>(doc.getMetadata()) : new HashMap<>();
+        if (bm25Rank != null) meta.put("_bm25Rank", bm25Rank);
+        if (knnRank != null) meta.put("_knnRank", knnRank);
+        return SearchResultItem.builder()
+                .id(doc.getId())
+                .type(doc.getType())
+                .sourceId(doc.getSourceId())
+                .title(doc.getTitle())
+                .content(doc.getContent())
+                .metadata(meta)
+                .createdAt(doc.getCreatedAt())
+                .score((float) rrf)
+                .highlights(highlights == null || highlights.isEmpty() ? null : highlights)
+                .build();
+    }
+
+    private Map<String, Long> aggregateTypeCounts(Map<String, SearchHit<SearchDocument>> bestHit,
+                                                  Map<String, Double> rrfScore) {
+        Map<String, Long> counts = new HashMap<>();
+        for (String t : List.of("EMPLOYEE", "DEPARTMENT", "APPROVAL", "CALENDAR")) {
+            counts.put(t, 0L);
+        }
+        for (String id : rrfScore.keySet()) {
+            SearchHit<SearchDocument> hit = bestHit.get(id);
+            if (hit == null) continue;
+            String t = hit.getContent().getType();
+            counts.merge(t, 1L, Long::sum);
+        }
+        return counts;
+    }
+
+    /**
+     * 색인 진입점. 호출자(주로 CdcEventListener의 각 핸들러)는 도메인 지식만 — title/content/metadata 조립 — 만 책임지고,
+     * 임베딩 호출/실패 처리/모델 선택 같은 인프라는 여기 한 곳으로 일원화한다.
+     * 이미 contentVector가 채워진 doc(예: 결재선 갱신 같은 부분 재색인)은 재임베딩하지 않고 그대로 보존.
+     */
     public void indexDocument(SearchDocument document) {
+        if (document.getContentVector() == null) {
+            document.setContentVector(embedSafe(document.getTitle(), document.getContent()));
+        }
         searchRepository.save(document);
         log.info("Indexed document: type={}, sourceId={}", document.getType(), document.getSourceId());
     }
@@ -66,6 +232,19 @@ public class SearchService {
     public void deleteDocument(String sourceId, String type) {
         searchRepository.deleteBySourceIdAndType(sourceId, type);
         log.info("Deleted document: type={}, sourceId={}", type, sourceId);
+    }
+
+    // 임베딩 실패해도 색인은 진행 (벡터 없는 문서는 BM25로만 검색됨).
+    // CdcEventListener에서 옮겨와 indexDocument의 보조로 일원화.
+    private float[] embedSafe(String title, String content) {
+        try {
+            String combined = ((title != null ? title : "") + "\n" + (content != null ? content : "")).trim();
+            if (combined.isBlank()) return null;
+            return embeddingClient.embed(combined);
+        } catch (Exception e) {
+            log.warn("Embedding failed, indexing without vector: {}", e.getMessage());
+            return null;
+        }
     }
 
     private static final List<String> HIGHLIGHT_FIELDS = List.of(
@@ -109,33 +288,35 @@ public class SearchService {
                 .withHighlightQuery(new HighlightQuery(buildHighlight(), SearchDocument.class))
                 .withQuery(q -> q
                         .bool(b -> {
-                            b.filter(f -> f.term(t -> t.field("companyId").value(companyId)));
-
-                            if (type != null && !type.isBlank()) {
-                                b.filter(f -> f.term(t -> t.field("type").value(type)));
-                            }
-
+                            applyScope(b, type, companyId, empId, isAdmin);
                             b.must(m -> m
                                     .multiMatch(mm -> mm
                                             .query(keyword)
-                                            .fields("title^3", "title.ngram",
-                                                    "content",
-                                                    "metadata.empName^2", "metadata.empName.ngram",
-                                                    "metadata.deptName^2", "metadata.deptName.ngram",
-                                                    "metadata.gradeName", "metadata.titleName",
-                                                    "metadata.docNum", "metadata.location")
+                                            .fields(SEARCH_FIELDS)
                                     )
                             );
-
-                            if (!isAdmin) {
-                                b.filter(f -> f.bool(ab -> applyAccessFilter(ab, empId)));
-                            }
-
                             return b;
                         })
                 )
                 .withPageable(PageRequest.of(page, size))
                 .build();
+    }
+
+    /**
+     * 회사/타입/권한 필터를 BoolQuery에 일괄 적용. BM25·kNN·countByType·suggest 모두 이 헬퍼만 호출하도록 통일하여,
+     * 한쪽에만 필터가 빠져 권한 누수가 일어나는 사고를 구조적으로 차단한다.
+     */
+    private co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery.Builder applyScope(
+            co.elastic.clients.elasticsearch._types.query_dsl.BoolQuery.Builder b,
+            String type, String companyId, Long empId, boolean isAdmin) {
+        b.filter(f -> f.term(t -> t.field("companyId").value(companyId)));
+        if (type != null && !type.isBlank()) {
+            b.filter(f -> f.term(t -> t.field("type").value(type)));
+        }
+        if (!isAdmin) {
+            b.filter(f -> f.bool(ab -> applyAccessFilter(ab, empId)));
+        }
+        return b;
     }
 
     /**
@@ -189,21 +370,13 @@ public class SearchService {
         NativeQuery query = NativeQuery.builder()
                 .withQuery(q -> q
                         .bool(b -> {
-                            b.filter(f -> f.term(t -> t.field("companyId").value(companyId)));
+                            applyScope(b, null, companyId, empId, isAdmin);
                             b.must(m -> m
                                     .multiMatch(mm -> mm
                                             .query(keyword)
-                                            .fields("title^3", "title.ngram",
-                                                    "content",
-                                                    "metadata.empName^2", "metadata.empName.ngram",
-                                                    "metadata.deptName^2", "metadata.deptName.ngram",
-                                                    "metadata.gradeName", "metadata.titleName",
-                                                    "metadata.docNum", "metadata.location")
+                                            .fields(SEARCH_FIELDS)
                                     )
                             );
-                            if (!isAdmin) {
-                                b.filter(f -> f.bool(ab -> applyAccessFilter(ab, empId)));
-                            }
                             return b;
                         })
                 )
@@ -249,19 +422,13 @@ public class SearchService {
         NativeQuery query = NativeQuery.builder()
                 .withQuery(q -> q
                         .bool(b -> {
-                            b.filter(f -> f.term(t -> t.field("companyId").value(companyId)));
+                            applyScope(b, null, companyId, empId, isAdmin);
                             b.must(m -> m
                                     .multiMatch(mm -> mm
                                             .query(keyword)
-                                            .fields("title^3", "title.ngram",
-                                                    "metadata.empName^2", "metadata.empName.ngram",
-                                                    "metadata.deptName^2", "metadata.deptName.ngram",
-                                                    "metadata.docNum", "metadata.location")
+                                            .fields(SUGGEST_FIELDS)
                                     )
                             );
-                            if (!isAdmin) {
-                                b.filter(f -> f.bool(ab -> applyAccessFilter(ab, empId)));
-                            }
                             return b;
                         })
                 )
