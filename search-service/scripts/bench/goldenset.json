@@ -1,0 +1,83 @@
+{
+  "_meta": {
+    "version": "1.0",
+    "companyId": "a0000001-0000-0000-0000-000000000001",
+    "userId": 1,
+    "role": "HR_ADMIN",
+    "description": "Recall@10 골든셋 50건. 회사 a0000001 한정. role=HR_ADMIN으로 권한 필터 우회하여 검색 알고리즘 자체의 품질만 측정.",
+    "categoryLegend": {
+      "BM25": "키워드 정확/부분 매칭이 결정적 — BM25-only로 충분",
+      "KNN": "정확 키워드 없이 의미·동의어로 매칭 — kNN 강점",
+      "BOTH": "두 신호 모두 강한 케이스 — RRF 합산이 최고 점수"
+    },
+    "fieldGuide": {
+      "id": "Q01~Q50",
+      "query": "사용자 입력 자연어",
+      "type": "type 필터 (null이면 통합검색)",
+      "expectedIds": "정답 doc id 배열",
+      "category": "BM25 / KNN / BOTH",
+      "notes": "라벨링 근거"
+    }
+  },
+  "queries": [
+    { "id": "Q01", "query": "윤서아", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_7"], "category": "BM25", "notes": "정확 이름 단일 매칭" },
+    { "id": "Q02", "query": "마케팅팀", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_9","EMPLOYEE_10","EMPLOYEE_11","EMPLOYEE_12"], "category": "BM25", "notes": "부서명으로 소속 사원 4명" },
+    { "id": "Q03", "query": "부장", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_9"], "category": "BM25", "notes": "직급 정확 매칭 — 마케팅 부장 최은정" },
+    { "id": "Q04", "query": "재무 담당자", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_13","EMPLOYEE_14","EMPLOYEE_15","EMPLOYEE_16"], "category": "KNN", "notes": "'재무팀' 정확 키워드 없이 의미 검색 — 재무팀 4명 매칭 기대" },
+    { "id": "Q05", "query": "재무팀", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_4"], "category": "BM25", "notes": "부서 자체 검색 — title 정확 매칭" },
+
+    { "id": "Q06", "query": "장도윤", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_8"], "category": "BM25", "notes": "정확 이름 단일" },
+    { "id": "Q07", "query": "최은정", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_9"], "category": "BM25", "notes": "정확 이름 단일" },
+    { "id": "Q08", "query": "송태현", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_10"], "category": "BM25", "notes": "정확 이름 단일" },
+    { "id": "Q09", "query": "윤서", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_7"], "category": "BM25", "notes": "이름 부분 매칭 — title.ngram이 작동해야 함" },
+    { "id": "Q10", "query": "한지", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_5"], "category": "BM25", "notes": "이름 부분 매칭 (한지민)" },
+    { "id": "Q11", "query": "박민수", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_3"], "category": "BM25", "notes": "휴직자 (HR_ADMIN이라 보임) 정확 이름" },
+    { "id": "Q12", "query": "주완", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_66"], "category": "BM25", "notes": "테스트 직원 이름 단일" },
+    { "id": "Q13", "query": "오준혁", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_6"], "category": "BM25", "notes": "정확 이름 단일" },
+
+    { "id": "Q14", "query": "인사팀", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_6","EMPLOYEE_7","EMPLOYEE_8"], "category": "BM25", "notes": "부서별 소속 사원 — 인사팀 3명" },
+    { "id": "Q15", "query": "재무팀", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_13","EMPLOYEE_14","EMPLOYEE_15","EMPLOYEE_16"], "category": "BM25", "notes": "부서별 소속 사원 — 재무팀 4명" },
+    { "id": "Q16", "query": "마케팅", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_9","EMPLOYEE_10","EMPLOYEE_11","EMPLOYEE_12"], "category": "BM25", "notes": "부서명 부분 — 마케팅팀 4명" },
+
+    { "id": "Q17", "query": "사원", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_7","EMPLOYEE_8","EMPLOYEE_11","EMPLOYEE_12","EMPLOYEE_15","EMPLOYEE_16"], "category": "BM25", "notes": "직급=사원 6명" },
+    { "id": "Q18", "query": "대리", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_6","EMPLOYEE_10","EMPLOYEE_14"], "category": "BM25", "notes": "직급=대리 3명" },
+    { "id": "Q19", "query": "과장", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_13"], "category": "BM25", "notes": "직급=과장 1명 (배성호)" },
+    { "id": "Q20", "query": "마케팅 부장", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_9"], "category": "BOTH", "notes": "다단어: 부서+직급 — BM25 양쪽 토큰 매칭, kNN도 의미 일치" },
+
+    { "id": "Q21", "query": "마케팅 담당자", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_9","EMPLOYEE_10","EMPLOYEE_11","EMPLOYEE_12"], "category": "KNN", "notes": "정확 '마케팅팀' 없이 '담당자'로 의미 검색" },
+    { "id": "Q22", "query": "인사 담당자", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_6","EMPLOYEE_7","EMPLOYEE_8"], "category": "KNN", "notes": "인사팀 3명 — 의미 매칭" },
+    { "id": "Q23", "query": "광고 마케팅", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_9","EMPLOYEE_10","EMPLOYEE_11","EMPLOYEE_12"], "category": "KNN", "notes": "'광고'는 색인에 없음 — kNN의 의미 일반화 시험" },
+    { "id": "Q24", "query": "재정 담당", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_13","EMPLOYEE_14","EMPLOYEE_15","EMPLOYEE_16"], "category": "KNN", "notes": "'재정'='재무' 동의어 — kNN 핵심 시험" },
+    { "id": "Q25", "query": "팀장급 직책", "type": "EMPLOYEE", "expectedIds": ["EMPLOYEE_9","EMPLOYEE_13"], "category": "KNN", "notes": "고위 직급(부장/과장) — '팀장급'은 색인에 없음, kNN 의미 매칭" },
+
+    { "id": "Q26", "query": "마케팅", "type": null, "expectedIds": ["EMPLOYEE_9","EMPLOYEE_10","EMPLOYEE_11","EMPLOYEE_12","DEPARTMENT_3","DEPARTMENT_14"], "category": "BM25", "notes": "통합검색 — 마케팅팀 사원 4명 + 마케팅팀/마케팅부 부서 2개" },
+    { "id": "Q27", "query": "인사", "type": null, "expectedIds": ["EMPLOYEE_6","EMPLOYEE_7","EMPLOYEE_8","DEPARTMENT_2"], "category": "BM25", "notes": "통합검색 — 인사팀 사원 3명 + 인사팀 부서" },
+    { "id": "Q28", "query": "재무", "type": null, "expectedIds": ["EMPLOYEE_13","EMPLOYEE_14","EMPLOYEE_15","EMPLOYEE_16","DEPARTMENT_4"], "category": "BM25", "notes": "통합검색 — 재무팀 사원 4명 + 재무팀 부서" },
+    { "id": "Q29", "query": "사원", "type": null, "expectedIds": ["EMPLOYEE_7","EMPLOYEE_8","EMPLOYEE_11","EMPLOYEE_12","EMPLOYEE_15","EMPLOYEE_16"], "category": "BM25", "notes": "통합검색이지만 직급은 EMPLOYEE에만 존재 — 6명" },
+
+    { "id": "Q30", "query": "인사팀", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_2"], "category": "BM25", "notes": "부서 자체 — title 정확 매칭" },
+    { "id": "Q31", "query": "마케팅팀", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_3"], "category": "BM25", "notes": "부서 자체 — title 정확" },
+    { "id": "Q32", "query": "개발부", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_13"], "category": "BM25", "notes": "부서 자체 — title 정확" },
+    { "id": "Q33", "query": "마케팅부", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_14"], "category": "BM25", "notes": "하위 부서 (parent=개발부)" },
+    { "id": "Q34", "query": "생산부", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_15"], "category": "BM25", "notes": "하위 부서" },
+    { "id": "Q35", "query": "황주완", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_16"], "category": "BM25", "notes": "특이 부서명 (개인 이름)" },
+    { "id": "Q36", "query": "D02", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_2"], "category": "BM25", "notes": "부서 코드 검색 — metadata.deptCode 매칭 시도" },
+    { "id": "Q37", "query": "DEV", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_13"], "category": "BM25", "notes": "부서 코드 (영문)" },
+    { "id": "Q38", "query": "MKT", "type": "DEPARTMENT", "expectedIds": ["DEPARTMENT_14"], "category": "BM25", "notes": "부서 코드 (영문)" },
+
+    { "id": "Q39", "query": "황주완", "type": null, "expectedIds": ["EMPLOYEE_66","DEPARTMENT_16"], "category": "BM25", "notes": "동명이의 — 부서명도 직원 deptName도 '황주완'" },
+    { "id": "Q40", "query": "테스트", "type": null, "expectedIds": ["APPROVAL_T9001","APPROVAL_T9002","CALENDAR_T8001","CALENDAR_T8002","CALENDAR_T8003","CALENDAR_T8004","EMPLOYEE_66"], "category": "BM25", "notes": "[테스트] 접두사 + EMPLOYEE_66의 테스트직급/테스트직책" },
+
+    { "id": "Q41", "query": "홍길동", "type": "APPROVAL", "expectedIds": ["APPROVAL_T9001"], "category": "BM25", "notes": "결재 작성자 이름" },
+    { "id": "Q42", "query": "김철수", "type": "APPROVAL", "expectedIds": ["APPROVAL_T9002"], "category": "BM25", "notes": "결재 작성자 이름" },
+    { "id": "Q43", "query": "품의서", "type": "APPROVAL", "expectedIds": ["APPROVAL_T9001"], "category": "BM25", "notes": "결재 문서 종류" },
+    { "id": "Q44", "query": "지출결의", "type": "APPROVAL", "expectedIds": ["APPROVAL_T9002"], "category": "BM25", "notes": "결재 문서 종류" },
+    { "id": "Q45", "query": "결재 진행", "type": "APPROVAL", "expectedIds": ["APPROVAL_T9001","APPROVAL_T9002"], "category": "KNN", "notes": "픽스처는 statusLabel 없음 — kNN 의미 매칭 시험" },
+
+    { "id": "Q46", "query": "비공개", "type": "CALENDAR", "expectedIds": ["CALENDAR_T8001","CALENDAR_T8004"], "category": "BM25", "notes": "title에 '비공개' 명시된 2건" },
+    { "id": "Q47", "query": "전직원", "type": "CALENDAR", "expectedIds": ["CALENDAR_T8003"], "category": "BM25", "notes": "전직원 일정 단일" },
+    { "id": "Q48", "query": "사내", "type": "CALENDAR", "expectedIds": ["CALENDAR_T8002"], "category": "BM25", "notes": "사내 공개 일정 단일" },
+    { "id": "Q49", "query": "김철수", "type": "CALENDAR", "expectedIds": ["CALENDAR_T8004"], "category": "BM25", "notes": "캘린더 소유자 이름이 title에 포함" },
+    { "id": "Q50", "query": "모두에게 공개된 일정", "type": "CALENDAR", "expectedIds": ["CALENDAR_T8002","CALENDAR_T8003"], "category": "KNN", "notes": "isPublic / isAllEmployees 의미 — kNN 시험" }
+  ]
+}
