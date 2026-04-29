@@ -26,6 +26,7 @@ public class DocumentDetailResponse {
     private String docData;
     private String approvalStatus;
     private Boolean isEmergency;
+    private Boolean isPublic;
     private LocalDateTime docSubmittedAt;
     private LocalDateTime docCompleteAt;
     private String docUrl;
@@ -104,6 +105,7 @@ public class DocumentDetailResponse {
                 .docOpinion(doc.getDocOpinion())
                 .approvalStatus(doc.getApprovalStatus().name())
                 .isEmergency(doc.getIsEmergency())
+                .isPublic(doc.getIsPublic())
                 .docSubmittedAt(doc.getDocSubmittedAt())
                 .docCompleteAt(doc.getDocCompleteAt())
                 .docUrl(doc.getDocUrl())

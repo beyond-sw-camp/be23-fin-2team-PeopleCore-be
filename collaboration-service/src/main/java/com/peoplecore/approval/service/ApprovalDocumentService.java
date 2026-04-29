@@ -113,6 +113,7 @@ public class ApprovalDocumentService {
                 .docOpinion(request.getDocOpinion())
                 .approvalStatus(ApprovalStatus.PENDING)
                 .isEmergency(request.getIsEmergency() != null ? request.getIsEmergency() : false)
+                .isPublic(request.getIsPublic() != null ? request.getIsPublic() : true)
                 .build();
 
         document.markSubmitted();
@@ -177,6 +178,13 @@ public class ApprovalDocumentService {
     public DocumentDetailResponse getDocumentDetail(UUID companyId, Long empId, Long docId) {
         ApprovalDocument document = documentRepository.findWithFormById(companyId, docId).orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
         List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
+
+        /* 비공개 문서 진입 가드 — 기안자 본인 또는 결재라인 본인만 통과, 그 외(HR_ADMIN 포함) 403 */
+        if (Boolean.FALSE.equals(document.getIsPublic())
+                && !document.getEmpId().equals(empId)
+                && lines.stream().noneMatch(l -> l.getEmpId().equals(empId))) {
+            throw new BusinessException("비공개 문서입니다. 접근 권한이 없습니다.", HttpStatus.FORBIDDEN);
+        }
 
         /* 본인 결재선이 있으면 읽음 처리 */
         lines.stream()
@@ -283,7 +291,7 @@ public class ApprovalDocumentService {
 
     /*임시 저장 -> 결재 요청 전환(상태 패턴을 사용 + 낙관적 락)*/
     @Transactional
-    public void submitDocument(UUID companyId, Long deptId, Long empId, Long docId) {
+    public void submitDocument(UUID companyId, Long deptId, Long empId, Long docId, Boolean isPublic) {
         ApprovalDocument document = findOwnDraftDocument(companyId, empId, docId);
         /* 결재자 존재 검증 */
         List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
@@ -292,6 +300,8 @@ public class ApprovalDocumentService {
         if (!hasApprover) {
             throw new BusinessException("결재자가 지정되지 않은 문서는 상신할 수 없습니다.");
         }
+
+        document.changeVisibility(isPublic); // 상신 시점에 공개여부 확정 (null 이면 기존 값 유지)
 
         DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
         CompanyInfoResponse companyInfo = hrCacheService.getCompany(companyId);
@@ -399,6 +409,7 @@ public class ApprovalDocumentService {
                 .docData(request.getDocData())     // 수정된 내용
                 .docOpinion(request.getDocOpinion() != null ? request.getDocOpinion() : prev.getDocOpinion())
                 .isEmergency(request.getIsEmergency() != null ? request.getIsEmergency() : prev.getIsEmergency())
+                .isPublic(request.getIsPublic() != null ? request.getIsPublic() : prev.getIsPublic())          // 재기안 시 사용자가 새로 지정 가능, 미지정 시 이전 값
                 .approvalStatus(ApprovalStatus.PENDING)
                 .personalFolderId(prev.getPersonalFolderId())
                 .deptFolderId(prev.getDeptFolderId())

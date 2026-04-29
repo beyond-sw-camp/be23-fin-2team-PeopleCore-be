@@ -154,7 +154,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -191,7 +191,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -239,7 +239,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -271,6 +271,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         doc.docNum,
                         doc.approvalStatus.stringValue(),
                         doc.isEmergency,
+                        doc.isPublic,
                         doc.formId.formName,
                         doc.formId.formId,
                         doc.formId.formCode,
@@ -307,6 +308,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         doc.docNum,
                         doc.approvalStatus.stringValue(),
                         doc.isEmergency,
+                        doc.isPublic,
                         doc.formId.formName,
                         doc.formId.formId,
                         doc.formId.formCode,
@@ -347,7 +349,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -371,7 +373,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -411,7 +413,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -448,7 +450,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -493,7 +495,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()

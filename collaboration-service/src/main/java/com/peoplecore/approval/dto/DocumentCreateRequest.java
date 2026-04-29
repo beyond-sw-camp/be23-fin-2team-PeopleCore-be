@@ -24,6 +24,7 @@ public class DocumentCreateRequest {
     private String docData;
     private String docOpinion;
     private Boolean isEmergency;
+    private Boolean isPublic; // null 허용 — 서버에서 null 이면 true 디폴트 처리
     private Long personalFolderId;
     private Long deptFolderId;
     private String hrRefType;   // nullable — 프론트 직접 상신 시 null
