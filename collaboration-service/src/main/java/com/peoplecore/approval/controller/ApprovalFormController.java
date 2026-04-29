@@ -79,7 +79,7 @@ public class ApprovalFormController {
 
     // 관리자용 - 전체 양식 조회 (비활성·숨김 폴더 양식 포함, 일괄 설정 탭용)
     // folderId 미지정 시 회사 전체, 지정 시 해당 폴더만 (숨김 폴더라도 통과)
-    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @RoleRequired({"HR_SUPER_ADMIN"})
     @GetMapping("/form/all")
     public ResponseEntity<List<FormAdminListResponse>> getAllForms(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -160,6 +160,16 @@ public class ApprovalFormController {
             @PathVariable Long formId) {
         approvalFormService.deleteForm(companyId, formId);
         return ResponseEntity.noContent().build();
+    }
+
+    // 양식 사용여부 토글 (사용 ON/OFF) — 보호 양식은 OFF 차단
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @PatchMapping("/forms/{formId}/active")
+    public ResponseEntity<FormDetailResponse> setFormActive(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long formId,
+            @RequestBody ApprovalFormActiveRequest request) {
+        return ResponseEntity.ok(approvalFormService.setFormActive(companyId, formId, request.getIsActive()));
     }
 
     // 양식 버전 이력 조회 — 같은 formCode 의 모든 버전 메타 (formHtml 제외 슬림)

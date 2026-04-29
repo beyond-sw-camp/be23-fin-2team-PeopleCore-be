@@ -13,14 +13,8 @@ import java.util.UUID;
 @Repository
 public interface ApprovalFormFolderRepository extends JpaRepository<ApprovalFormFolder, Long> {
 
-    /* 사원용 폴더 목록 — 미삭제·노출 폴더만 */
-    @Query("SELECT f FROM ApprovalFormFolder f " +
-            "WHERE f.folderCompanyId = :companyId " +
-            "AND f.folderIsVisible = true AND f.isDeleted = false " +
-            "ORDER BY f.folderSortOrder")
-    List<ApprovalFormFolder> findVisibleByCompanyId(@Param("companyId") UUID companyId);
-
-    /* 관리자용 폴더 목록 — 숨김 포함, 삭제된 것만 제외 */
+    /* 폴더 목록 — 숨김 포함, 삭제된 것만 제외.
+     * 사원용은 서비스 레이어에서 부모 cascade 가시성 평가 후 필터링 (정책: 조상 숨김 → 자손 숨김) */
     @Query("SELECT f FROM ApprovalFormFolder f " +
             "WHERE f.folderCompanyId = :companyId AND f.isDeleted = false " +
             "ORDER BY f.folderSortOrder")

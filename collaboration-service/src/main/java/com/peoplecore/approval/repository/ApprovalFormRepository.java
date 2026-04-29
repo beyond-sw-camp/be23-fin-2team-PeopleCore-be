@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -14,25 +15,18 @@ import java.util.UUID;
 @Repository
 public interface ApprovalFormRepository extends JpaRepository<ApprovalForm, Long> {
 
-    /* 전체 양식 목록 — 사원용. 활성·현재 버전 + 노출된 폴더 + 미삭제 양식·폴더만 */
+    /* 사원용 양식 목록 — folderIds 에 속한 미삭제·활성·현재 버전 양식.
+     * 부모 cascade 가시성은 서비스 레이어에서 계산해 folderIds 로 한정 (정책: 조상 숨김 → 자손 숨김).
+     * folderIds 비어있으면 호출 측에서 빈 리스트 반환할 것 (IN () 방언별 처리 차이 회피) */
     @Query("SELECT f FROM ApprovalForm f " +
             "JOIN FETCH f.folderId folder " +
             "WHERE f.companyId = :companyId " +
-            "AND f.isActive = true AND f.isCurrent = true AND f.isDeleted = false " +
-            "AND folder.folderIsVisible = true AND folder.isDeleted = false " +
-            "ORDER BY f.formSortOrder")
-    List<ApprovalForm> findAllWithFolder(@Param("companyId") UUID companyId);
-
-    /* 폴더별 양식 목록 — 사원용. 폴더가 숨김/삭제면 빈 리스트 */
-    @Query("SELECT f FROM ApprovalForm f " +
-            "JOIN FETCH f.folderId folder " +
-            "WHERE f.companyId = :companyId " +
-            "AND folder.folderId = :folderId " +
-            "AND folder.folderIsVisible = true AND folder.isDeleted = false " +
+            "AND folder.folderId IN :folderIds " +
+            "AND folder.isDeleted = false " +
             "AND f.isActive = true AND f.isCurrent = true AND f.isDeleted = false " +
             "ORDER BY f.formSortOrder")
-    List<ApprovalForm> findAllWithFolderByFolderId(
-            @Param("companyId") UUID companyId, @Param("folderId") Long folderId);
+    List<ApprovalForm> findAllWithFolderByFolderIds(@Param("companyId") UUID companyId,
+                                                    @Param("folderIds") Collection<Long> folderIds);
 
     /* 관리자용 전체 양식 목록 — isActive 무관, 폴더 visibility 무관 (둘 다 관리자가 봐야 함).
      * isDeleted=true 는 비가역 삭제라 어디서도 안 보임. isCurrent=true 만 */
@@ -62,6 +56,16 @@ public interface ApprovalFormRepository extends JpaRepository<ApprovalForm, Long
             "AND f.companyId = :companyId " +
             "AND f.isActive = true AND f.isCurrent = true AND f.isDeleted = false")
     Optional<ApprovalForm> findDetailById(
+            @Param("formId") Long formId, @Param("companyId") UUID companyId);
+
+    /* 사용여부 토글용 단건 조회 — isActive 무관 (비활성 양식도 다시 활성화 가능해야 함).
+     * 미삭제·현재 버전만. findDetailById 와 달리 사원 화면이 아닌 관리자 토글 전용 */
+    @Query("SELECT f FROM ApprovalForm f " +
+            "JOIN FETCH f.folderId folder " +
+            "WHERE f.formId = :formId " +
+            "AND f.companyId = :companyId " +
+            "AND f.isCurrent = true AND f.isDeleted = false")
+    Optional<ApprovalForm> findCurrentById(
             @Param("formId") Long formId, @Param("companyId") UUID companyId);
 
     /* 폴더 내 최대 정렬순서 — 미삭제 양식만 */

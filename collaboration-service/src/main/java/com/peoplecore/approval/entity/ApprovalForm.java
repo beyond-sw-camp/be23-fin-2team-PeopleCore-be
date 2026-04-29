@@ -168,6 +168,11 @@ public class ApprovalForm extends BaseTimeEntity {
         this.isActive = false;
     }
 
+    /** 양식 활성화 (사용여부 ON) — 보호 양식은 별도 가드 없이 통과 (활성 상태 전환은 안전) */
+    public void activate() {
+        this.isActive = true;
+    }
+
     /** 양식 삭제 (soft) — 비가역. 보호 양식은 삭제 불가.
      *  서비스 호출부에서 같은 formCode 의 모든 버전을 일괄 markAsDeleted 처리해야 함 */
     public void markAsDeleted() {
