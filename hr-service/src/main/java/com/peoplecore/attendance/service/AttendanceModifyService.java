@@ -34,6 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.YearMonth;
 import java.util.*;
@@ -60,6 +61,7 @@ public class AttendanceModifyService {
     private final BusinessDayCalculator businessDayCalculator;
     private final WorkStatusResolver workStatusResolver;
     private final OvertimeLimitChecker overtimeLimitChecker;
+    private final PayrollMinutesCalculator payrollMinutesCalculator;
 
     @Autowired
     public AttendanceModifyService(AttendanceModifyRepository attendanceModifyRepository,
@@ -72,7 +74,8 @@ public class AttendanceModifyService {
                                    HolidayReasonResolver holidayReasonResolver,
                                    BusinessDayCalculator businessDayCalculator,
                                    WorkStatusResolver workStatusResolver,
-                                   OvertimeLimitChecker overtimeLimitChecker) {
+                                   OvertimeLimitChecker overtimeLimitChecker,
+                                   PayrollMinutesCalculator payrollMinutesCalculator) {
         this.attendanceModifyRepository = attendanceModifyRepository;
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
@@ -84,6 +87,7 @@ public class AttendanceModifyService {
         this.businessDayCalculator = businessDayCalculator;
         this.workStatusResolver = workStatusResolver;
         this.overtimeLimitChecker = overtimeLimitChecker;
+        this.payrollMinutesCalculator = payrollMinutesCalculator;
     }
 
     /* ===================== 1) 프리필 ===================== */
@@ -251,28 +255,41 @@ public class AttendanceModifyService {
                 am.getAttenModiId(), event.getStatus());
     }
 
-    /* 정정 승인 반영 - comRecId 있으면 native UPDATE, 없으면 신규 CommuteRecord INSERT */
-    /* INSERT 케이스: 휴일 근무 미입력 정정 등 (CommuteRecord 자체가 아직 없는 상태) */
+    /* 정정 승인 반영
+     *  - comRecId 있으면 native UPDATE (check-in/out + workStatus 일괄, work_date 포함)
+     *  - 없으면 신규 INSERT (휴일근무 미입력 정정 등)
+     * 두 케이스 모두 끝에 PayrollMinutesCalculator.applyApprovedRecognition 호출 → native UPDATE 로 분 컬럼 재계산.
+     * workStatus: 새 시간 기준 final 까지 자바에서 산출(NORMAL/LATE/EARLY_LEAVE/LATE_AND_EARLY/HOLIDAY_WORK). */
     private void applyApprovedRecord(AttendanceModify am) {
+        Employee emp = am.getEmployee();
+        WorkGroup wg = emp.getWorkGroup();
+        HolidayReason reason = holidayReasonResolver.resolve(am.getCompanyId(), am.getWorkDate(), wg);
+        /* 새 시간 기준 final WorkStatus 자바에서 미리 산출 - DB 일률 변환 금지 */
+        WorkStatus newStatus = resolveCorrectedStatus(
+                am.getAttenReqCheckIn(), am.getAttenReqCheckOut(), wg, reason);
+
         if (am.getComRecId() != null) {
+            /* native UPDATE - check-in/out + status 일괄, work_date 포함(파티션 프루닝) */
             int updated = commuteRecordRepository.applyAttendanceModify(
                     am.getComRecId(), am.getWorkDate(),
-                    am.getAttenReqCheckIn(), am.getAttenReqCheckOut());
+                    am.getAttenReqCheckIn(), am.getAttenReqCheckOut(),
+                    newStatus.name());
             if (updated != 1) {
                 log.error("[AttendanceModify] CommuteRecord UPDATE 실패 - attenModiId={}, affected={}",
                         am.getAttenModiId(), updated);
                 throw new CustomException(ErrorCode.ATTENDANCE_MODIFY_APPLY_FAILED);
             }
+            /* native UPDATE 직후 영속성 컨텍스트 비워진 상태 → 최신값 다시 로드해 분 컬럼 재계산 */
+            CommuteRecord reloaded = commuteRecordRepository
+                    .findByComRecIdAndWorkDate(am.getComRecId(), am.getWorkDate())
+                    .orElseThrow(() -> new CustomException(ErrorCode.ATTENDANCE_MODIFY_APPLY_FAILED));
+            payrollMinutesCalculator.applyApprovedRecognition(reloaded);
+            log.info("[AttendanceModify] UPDATE + 상태/분 재판정 - attenModiId={}, comRecId={}, status={}",
+                    am.getAttenModiId(), am.getComRecId(), newStatus);
             return;
         }
-        Employee emp = am.getEmployee();
-        WorkGroup wg = emp.getWorkGroup();
-        HolidayReason reason = holidayReasonResolver.resolve(am.getCompanyId(), am.getWorkDate(), wg);
-        /* CommuteService.checkIn 과 동일 판정기 재사용 - LATE/HOLIDAY_WORK/NORMAL 일관 처리 */
-        WorkStatus status = workStatusResolver.resolveInitial(
-                am.getAttenReqCheckIn() != null ? am.getAttenReqCheckIn().toLocalTime() : wg.getGroupStartTime(),
-                wg.getGroupStartTime(), reason);
 
+        /* INSERT 케이스 - 신규 record (INSERT 는 work_date 컬럼값으로 partition routing 자동) */
         CommuteRecord saved = commuteRecordRepository.save(CommuteRecord.builder()
                 .workDate(am.getWorkDate())
                 .companyId(am.getCompanyId())
@@ -280,10 +297,23 @@ public class AttendanceModifyService {
                 .comRecCheckIn(am.getAttenReqCheckIn())
                 .comRecCheckOut(am.getAttenReqCheckOut())
                 .holidayReason(reason)
-                .workStatus(status)
+                .workStatus(newStatus)
                 .build());
-        log.info("[AttendanceModify] CommuteRecord 신규 INSERT - attenModiId={}, comRecId={}, workDate={}",
-                am.getAttenModiId(), saved.getComRecId(), am.getWorkDate());
+        payrollMinutesCalculator.applyApprovedRecognition(saved);
+        log.info("[AttendanceModify] INSERT + 상태/분 재판정 - attenModiId={}, comRecId={}, status={}",
+                am.getAttenModiId(), saved.getComRecId(), newStatus);
+    }
+
+    /* 새 checkIn/checkOut 기준 final WorkStatus 산출.
+     * checkIn null → NORMAL 폴백(체크인 없는 정정은 비정상 케이스).
+     * checkOut null → initial 만 반환(조퇴 판정 불가). */
+    private WorkStatus resolveCorrectedStatus(LocalDateTime ci, LocalDateTime co,
+                                              WorkGroup wg, HolidayReason reason) {
+        if (ci == null) return WorkStatus.NORMAL;
+        WorkStatus initial = workStatusResolver.resolveInitial(
+                ci.toLocalTime(), wg.getGroupStartTime(), reason);
+        if (co == null) return initial;
+        return workStatusResolver.resolveFinal(initial, co.toLocalTime(), wg.getGroupEndTime());
     }
 
 

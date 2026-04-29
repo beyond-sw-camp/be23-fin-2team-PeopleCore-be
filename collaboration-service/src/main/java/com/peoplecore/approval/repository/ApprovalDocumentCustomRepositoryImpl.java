@@ -509,6 +509,45 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
     }
 
     /**
+     * 결재 대기 건수 단건 조회 — DB 왕복 1회
+     * 조건: 나=APPROVER, lineStatus=PENDING, 내 step=최소 PENDING step, 문서 PENDING, 미만료
+     * 헤더/탭 배지처럼 숫자 하나만 필요할 때 사용 (countAllBoxes 대비 경량)
+     */
+    @Override
+    public Long countWaitingDocuments(UUID companyId, Long empId) {
+        QApprovalLine subLine = new QApprovalLine("subLine");
+
+        Long count = jpaQueryFactory
+                .select(doc.count())
+                .from(doc)
+                .where(
+                        doc.companyId.eq(companyId),
+                        doc.approvalStatus.eq(ApprovalStatus.PENDING),
+                        notExpired(),
+                        JPAExpressions.selectOne()
+                                .from(line)
+                                .where(
+                                        line.docId.eq(doc),
+                                        line.empId.eq(empId),
+                                        line.approvalRole.eq(ApprovalRole.APPROVER),
+                                        line.approvalLineStatus.eq(ApprovalLineStatus.PENDING),
+                                        line.lineStep.eq(
+                                                JPAExpressions.select(subLine.lineStep.min())
+                                                        .from(subLine)
+                                                        .where(
+                                                                subLine.docId.eq(doc),
+                                                                subLine.approvalRole.eq(ApprovalRole.APPROVER),
+                                                                subLine.approvalLineStatus.eq(ApprovalLineStatus.PENDING)
+                                                        )
+                                        )
+                                )
+                                .exists()
+                )
+                .fetchOne();
+        return count != null ? count : 0L;
+    }
+
+    /**
      * 전체 문서함 건수 조회 — DB 왕복 2회 (결재선 기반 1회 + 기안자 기반 1회)
      * 결재선 기반: waiting, ccView, upcoming, approved, ccViewBox, inbox
      * 기안자 기반: draft, temp

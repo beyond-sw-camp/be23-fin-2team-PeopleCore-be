@@ -3,6 +3,7 @@ package com.peoplecore.approval.service;
 import com.peoplecore.approval.dto.DocumentCountResponse;
 import com.peoplecore.approval.dto.DocumentListResponseDto;
 import com.peoplecore.approval.dto.DocumentListSearchDto;
+import com.peoplecore.approval.dto.WaitingCountResponse;
 import com.peoplecore.approval.repository.ApprovalDocumentRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -62,6 +63,12 @@ public class ApprovalDocumentListService {
 
     public DocumentCountResponse getDocumentCounts(UUID companyId, Long empId, Long deptId) {
         return documentRepository.countAllBoxes(companyId, empId, deptId);
+    }
+
+    /* 결재 대기 건수만 단건 조회 — 헤더 배지용 경량 API */
+    public WaitingCountResponse getWaitingCount(UUID companyId, Long empId) {
+        long count = documentRepository.countWaitingDocuments(companyId, empId);
+        return WaitingCountResponse.builder().waiting(count).build();
     }
 
     /* === 개인 폴더 문서함 === */

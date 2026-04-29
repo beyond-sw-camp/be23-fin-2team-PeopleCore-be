@@ -3,6 +3,7 @@ package com.peoplecore.attendance.service;
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.OvertimeRequest;
 import com.peoplecore.attendance.entity.WorkGroup;
+import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,10 +40,13 @@ public class PayrollMinutesCalculator {
     private static final LocalTime NIGHT_END = LocalTime.of(6, 0);
 
     private final OvertimeRequestRepository overtimeRequestRepository;
+    private final CommuteRecordRepository commuteRecordRepository;
 
     @Autowired
-    public PayrollMinutesCalculator(OvertimeRequestRepository overtimeRequestRepository) {
+    public PayrollMinutesCalculator(OvertimeRequestRepository overtimeRequestRepository,
+                                    CommuteRecordRepository commuteRecordRepository) {
         this.overtimeRequestRepository = overtimeRequestRepository;
+        this.commuteRecordRepository = commuteRecordRepository;
     }
 
     /**
@@ -72,9 +76,10 @@ public class PayrollMinutesCalculator {
     }
 
     /**
-     * OT 승인 이벤트 수신 시 호출. actual/overtime 재계산 후 recognize 타입별 분기:
+     * OT 승인 / 근태 정정 승인 시 호출. actual/overtime 재계산 후 recognize 타입별 분기:
      *  · APPROVAL 그룹: 해당 날짜 APPROVED OT 전체와 overtime 구간 교집합으로 recognized_* 산출
-     *  · ALL 그룹: overtime 전체 재배정 (체크아웃 결과와 동일 — idempotent)
+     *  · ALL 그룹: overtime 전체 재배정 (체크아웃 결과와 동일 - idempotent)
+     * 파티션 규칙 준수: 엔티티 mutate 대신 native UPDATE (work_date 포함).
      */
     public void applyApprovedRecognition(CommuteRecord record) {
         if (!isReady(record)) return;
@@ -90,11 +95,41 @@ public class PayrollMinutesCalculator {
                     : allocateRecognizedByApprovedOt(record, wg);
             recExt = rec[0]; recNight = rec[1]; recHoliday = rec[2];
         }
+        long unrecognizedOt = overtime - recExt - recHoliday;
+        validatePayrollInvariants(actual, overtime, unrecognizedOt, recExt, recNight, recHoliday);
 
-        record.applyPayrollMinutes(actual, overtime, overtime - recExt - recHoliday, recExt, recNight, recHoliday);
+        /* native UPDATE - work_date 포함 파티션 프루닝 보장 */
+        int updated = commuteRecordRepository.applyPayrollMinutes(
+                record.getComRecId(), record.getWorkDate(),
+                actual, overtime, unrecognizedOt, recExt, recNight, recHoliday);
+        if (updated != 1) {
+            throw new IllegalStateException(
+                    "PayrollMinutes UPDATE 실패 - comRecId=" + record.getComRecId() + ", affected=" + updated);
+        }
         log.debug("[Payroll-recog] comRecId={}, recognize={}, actual={}, ot={}, unrecognizedOt={}, ext={}, night={}, holiday={}",
                 record.getComRecId(), wg.getGroupOvertimeRecognize(),
-                actual, overtime, overtime - recExt - recHoliday, recExt, recNight, recHoliday);
+                actual, overtime, unrecognizedOt, recExt, recNight, recHoliday);
+    }
+
+    /* 분 컬럼 불변식 검증 - 기존 CommuteRecord.applyPayrollMinutes 가드 인라인 */
+    private void validatePayrollInvariants(long actual, long overtime, long unrecognizedOt,
+                                           long recExt, long recNight, long recHoliday) {
+        if (unrecognizedOt < 0 || unrecognizedOt > overtime) {
+            throw new IllegalArgumentException(
+                    "unrecognizedOtMinutes 범위 위반: unrecognizedOt=" + unrecognizedOt
+                            + ", overtime=" + overtime);
+        }
+        long maxTyped = Math.max(recExt, Math.max(recNight, recHoliday));
+        if (overtime < maxTyped) {
+            throw new IllegalArgumentException(
+                    "overtimeMinutes < max(recognized_*) 불변식 위반: overtime=" + overtime
+                            + ", ext=" + recExt + ", night=" + recNight + ", holiday=" + recHoliday);
+        }
+        if (actual < overtime) {
+            throw new IllegalArgumentException(
+                    "actualWorkMinutes < overtimeMinutes 불변식 위반: actual=" + actual
+                            + ", overtime=" + overtime);
+        }
     }
 
     /**
