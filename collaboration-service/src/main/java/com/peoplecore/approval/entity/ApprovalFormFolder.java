@@ -15,6 +15,11 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@Table(indexes = {
+        // 사원·관리자용 폴더 조회 시 회사별 + 삭제·노출 필터링 빠르게
+        @Index(name = "idx_form_folder_company_deleted_visible",
+                columnList = "folder_company_id, is_deleted, folder_is_visible")
+})
 public class ApprovalFormFolder extends BaseTimeEntity {
 
     /**
@@ -44,7 +49,7 @@ public class ApprovalFormFolder extends BaseTimeEntity {
     private ApprovalFormFolder parent;
 
     /**
-     * niniIO  경로
+     * miniIO  경로
      */
     @Column(nullable = false)
     private String folderPath;
@@ -63,6 +68,13 @@ public class ApprovalFormFolder extends BaseTimeEntity {
     private Boolean folderIsVisible = true;
 
     /**
+     * 삭제 여부 (soft delete) - true 면 모든 조회에서 영구 제외. 비가역 (복원 불가)
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isDeleted = false;
+
+    /**
      * 등록자 id
      */
     private Long folderEmpId;
@@ -77,5 +89,10 @@ public class ApprovalFormFolder extends BaseTimeEntity {
 
     public void updateSortOrder(Integer folderSortOrder) {
         this.folderSortOrder = folderSortOrder;
+    }
+
+    /** 폴더 삭제 (soft) — 비가역. 호출부에서 자식 양식 부재 검증 선행 */
+    public void markAsDeleted() {
+        this.isDeleted = true;
     }
 }

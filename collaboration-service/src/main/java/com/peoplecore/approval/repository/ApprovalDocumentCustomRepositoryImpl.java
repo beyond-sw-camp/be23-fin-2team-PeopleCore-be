@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCustomRepository {
 
     private final JPAQueryFactory jpaQueryFactory;
+    private final ApprovalFormRepository approvalFormRepository;
 
     /*Q클래스 선언 - 엔티티에 QueryDsl전용 객체 */
     private final QApprovalDocument doc = QApprovalDocument.approvalDocument;
@@ -38,8 +39,10 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
     private final QPersonalFolderDocument folderDoc = QPersonalFolderDocument.personalFolderDocument;
 
     @Autowired
-    public ApprovalDocumentCustomRepositoryImpl(JPAQueryFactory jpaQueryFactory) {
+    public ApprovalDocumentCustomRepositoryImpl(JPAQueryFactory jpaQueryFactory,
+                                                ApprovalFormRepository approvalFormRepository) {
         this.jpaQueryFactory = jpaQueryFactory;
+        this.approvalFormRepository = approvalFormRepository;
     }
 
     /*헬퍼 1 : 공통 검색/필터  조건빌더
@@ -72,9 +75,15 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
             builder.and(doc.createdAt.lt(searchDto.getEndDate().plusDays(1).atStartOfDay()));
         }
 
-        /*양식 필터 */
+        /* 양식 필터 — 양식 버전 박제 정책상 frontend 가 보내는 formId 는 현재 버전 row.
+         * 같은 formCode 의 옛 버전 시점에 상신된 문서까지 포함하려면 formCode 단위로 매칭 */
         if (searchDto.getFormId() != null) {
-            builder.and(doc.formId.formId.eq(searchDto.getFormId()));
+            String formCode = approvalFormRepository.findById(searchDto.getFormId())
+                    .map(ApprovalForm::getFormCode)
+                    .orElse(null);
+            if (formCode != null) {
+                builder.and(doc.formId.formCode.eq(formCode));
+            }
         }
 
         /*상태 필터 */
