@@ -2,8 +2,10 @@ package com.peoplecore.company.controller;
 
 import com.peoplecore.attendance.dto.CompanyAllowedIpReqDto;
 import com.peoplecore.attendance.dto.CompanyAllowedIpResDto;
+import com.peoplecore.attendance.util.ClientIpExtractor;
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.company.service.CompanyAllowedIpService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -11,6 +13,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -23,10 +26,13 @@ import java.util.UUID;
 public class CompanyAllowedIpController {
 
     private final CompanyAllowedIpService companyAllowedIpService;
+    private final ClientIpExtractor clientIpExtractor;
 
     @Autowired
-    public CompanyAllowedIpController(CompanyAllowedIpService companyAllowedIpService) {
+    public CompanyAllowedIpController(CompanyAllowedIpService companyAllowedIpService,
+                                      ClientIpExtractor clientIpExtractor) {
         this.companyAllowedIpService = companyAllowedIpService;
+        this.clientIpExtractor = clientIpExtractor;
     }
 
     /** 허용 IP 등록 */
@@ -43,6 +49,12 @@ public class CompanyAllowedIpController {
     public ResponseEntity<List<CompanyAllowedIpResDto>> list(
             @RequestHeader("X-User-Company") UUID companyId) {
         return ResponseEntity.ok(companyAllowedIpService.list(companyId));
+    }
+
+    /** 등록 모달용 — 호출자가 백엔드에서 보는 자기 IP 그대로 반환 (출퇴근 체크 IP 매칭과 동일 추출 로직) */
+    @GetMapping("/my-ip")
+    public ResponseEntity<Map<String, String>> getMyIp(HttpServletRequest request) {
+        return ResponseEntity.ok(Map.of("ip", clientIpExtractor.extract(request)));
     }
 
     /** 허용 IP 수정 (대역/라벨/활성 일괄) */

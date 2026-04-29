@@ -4,6 +4,7 @@ package com.peoplecore.approval.controller;
 import com.peoplecore.approval.dto.DocumentCountResponse;
 import com.peoplecore.approval.dto.DocumentListResponseDto;
 import com.peoplecore.approval.dto.DocumentListSearchDto;
+import com.peoplecore.approval.dto.WaitingCountResponse;
 import com.peoplecore.approval.service.ApprovalDocumentListService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -31,6 +32,15 @@ public class ApprovalDocumentListController {
             @RequestHeader("X-User-Id") Long empId,
             @RequestHeader("X-User-Department") Long deptId) {
         return ResponseEntity.ok(listService.getDocumentCounts(companyId, empId, deptId));
+    }
+
+    /* === 결재 대기 건수 단건 (배지용) === */
+
+    @GetMapping("/waiting/count")
+    public ResponseEntity<WaitingCountResponse> getWaitingCount(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId) {
+        return ResponseEntity.ok(listService.getWaitingCount(companyId, empId));
     }
 
     /* === 결재하기 === */

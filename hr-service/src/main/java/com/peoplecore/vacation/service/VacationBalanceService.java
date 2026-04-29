@@ -90,6 +90,10 @@ public class VacationBalanceService {
         if (request.getDays() == null || request.getDays().signum() == 0) {
             throw new CustomException(ErrorCode.BAD_REQUEST);
         }
+        // 부여(days>0) 일 때만 expiresAt 필수 - 차감(days<0)은 사용 기록이라 만료일 무관
+        if (request.getDays().signum() > 0 && request.getExpiresAt() == null) {
+            throw new CustomException(ErrorCode.BAD_REQUEST);
+        }
 
         Integer targetYear = (request.getYear() != null) ? request.getYear() : LocalDate.now().getYear();
         LocalDate today = LocalDate.now();
@@ -112,8 +116,13 @@ public class VacationBalanceService {
         Employee emp = employeeRepository.findById(empId)
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
+        // 기존 행 발견 + 부여(days>0): 가장 최근 부여 만료일로 덮어쓰기. 차감(days<0)은 만료일 유지
         VacationBalance balance = vacationBalanceRepository
                 .findOne(companyId, empId, type.getTypeId(), year)
+                .map(b -> {
+                    if (days.signum() > 0) b.updateExpiresAt(expiresAt);
+                    return b;
+                })
                 .orElseGet(() -> vacationBalanceRepository.save(
                         VacationBalance.createNew(companyId, type, emp, year, grantedAt, expiresAt)));
 

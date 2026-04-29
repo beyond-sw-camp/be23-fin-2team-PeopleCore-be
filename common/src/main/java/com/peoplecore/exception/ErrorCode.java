@@ -228,6 +228,7 @@ public enum ErrorCode {
     COMMUTE_ALREADY_CHECKED_IN(409, "이미 오늘 출근 체크가 완료되었습니다."),
     COMMUTE_NOT_CHECKED_IN(404, "오늘 출근 기록이 없어 퇴근 체크를 할 수 없습니다."),
     COMMUTE_ALREADY_CHECKED_OUT(409, "이미 오늘 퇴근 체크가 완료되었습니다."),
+    COMMUTE_IP_NOT_ALLOWED(403, "회사가 허용한 IP에서만 출퇴근 체크가 가능합니다."),
     EMPLOYEE_WORK_GROUP_NOT_ASSIGNED(409, "사원에게 근무 그룹이 배정되지 않았습니다."),
 
     /* 근태 정정 */

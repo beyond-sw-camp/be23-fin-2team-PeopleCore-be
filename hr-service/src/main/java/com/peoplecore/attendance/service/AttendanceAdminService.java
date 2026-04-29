@@ -25,6 +25,7 @@ import com.peoplecore.attendance.repository.OverTimePolicyRepository;
 import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.vacation.service.BusinessDayCalculator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
@@ -39,6 +40,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.EnumMap;
@@ -78,6 +80,7 @@ public class AttendanceAdminService {
     private final CommuteRecordRepository commuteRecordRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final CardDetailFormatter cardDetailFormatter;
+    private final BusinessDayCalculator businessDayCalculator;
 
     @Autowired
     public AttendanceAdminService(AttendanceAdminQueryRepository queryRepository,
@@ -87,7 +90,8 @@ public class AttendanceAdminService {
                                   EmployeeRepository employeeRepository,
                                   CommuteRecordRepository commuteRecordRepository,
                                   OvertimeRequestRepository overtimeRequestRepository,
-                                  CardDetailFormatter cardDetailFormatter) {
+                                  CardDetailFormatter cardDetailFormatter,
+                                  BusinessDayCalculator businessDayCalculator) {
         this.queryRepository = queryRepository;
         this.overtimePolicyRepository = overtimePolicyRepository;
         this.judge = judge;
@@ -96,6 +100,7 @@ public class AttendanceAdminService {
         this.commuteRecordRepository = commuteRecordRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.cardDetailFormatter = cardDetailFormatter;
+        this.businessDayCalculator = businessDayCalculator;
     }
 
     /**
@@ -104,6 +109,7 @@ public class AttendanceAdminService {
     public AttendanceDailySummaryResDto getSummary(UUID companyId, LocalDate date, EmploymentFilter filter) {
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
         int weeklyMaxMinutes = resolveWeeklyMaxMinute(companyId);
+        boolean isHoliday = isCompanyHoliday(companyId, date); // Judge 결근 가드용
 
         List<AttendanceAdminRow> rows = queryRepository.fetchAll(companyId, date, effectiveFilter);
 
@@ -113,7 +119,7 @@ public class AttendanceAdminService {
             counts.put(t, 0);
         }
         for (AttendanceAdminRow r : rows) {
-            List<AttendanceCardType> cards = judge.judge(r, date, weeklyMaxMinutes);
+            List<AttendanceCardType> cards = judge.judge(r, date, weeklyMaxMinutes, isHoliday);
             for (AttendanceCardType c : cards) {
                 counts.merge(c, 1, Integer::sum);
             }
@@ -141,6 +147,7 @@ public class AttendanceAdminService {
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
         // 2. 회사 정책 조회 후 주간 최대 분 계산
         int weeklyMaxMinutes = resolveWeeklyMaxMinute(companyId);
+        boolean isHoliday = isCompanyHoliday(companyId, date); // Judge 결근 가드용
 
         // 3. Repository 에 SQL 필터 위임 → Row 리스트 획득 (이미 휴가/OT/주간분 병합 상태)
         List<AttendanceAdminRow> rows = queryRepository.fetchAll(
@@ -150,7 +157,7 @@ public class AttendanceAdminService {
         List<AttendanceDailyListRowResDto> mapped = new ArrayList<>(rows.size());
         for (AttendanceAdminRow r : rows) {
             // 4-a. 이 사원의 카드 리스트 계산 (중복 허용 List<CardType>)
-            List<AttendanceCardType> cards = judge.judge(r, date, weeklyMaxMinutes);
+            List<AttendanceCardType> cards = judge.judge(r, date, weeklyMaxMinutes, isHoliday);
             // 4-b. 응답 DTO 조립해서 추가
             mapped.add(toListRow(r, cards));
         }
@@ -187,6 +194,7 @@ public class AttendanceAdminService {
         EmploymentFilter effectiveFilter = (filter != null) ? filter : EmploymentFilter.ALL;
         // 2. 주간 최대 분 준비 — formatDetail 내부에서 /60 으로 시간 표기
         int weeklyMaxMinutes = resolveWeeklyMaxMinute(companyId);
+        boolean isHoliday = isCompanyHoliday(companyId, date); // Judge 결근 가드용
 
         // 3. 회사 + 재직필터 기준 전체 Row 조회 (부서/검색어 필터 없음)
         List<AttendanceAdminRow> rows = queryRepository.fetchAll(companyId, date, effectiveFilter);
@@ -195,7 +203,7 @@ public class AttendanceAdminService {
         List<AttendanceDailyCardRowResDto> hit = new ArrayList<>();
         for (AttendanceAdminRow r : rows) {
             // 4-a. 카드 리스트 계산
-            List<AttendanceCardType> cards = judge.judge(r, date, weeklyMaxMinutes);
+            List<AttendanceCardType> cards = judge.judge(r, date, weeklyMaxMinutes, isHoliday);
             // 4-b. 요청 카드 타입을 가진 사원만 포함 (사원별 한 번만 등장)
             if (cards.contains(cardType)) {
                 hit.add(toCardRow(r, cardType, weeklyMaxMinutes));
@@ -341,13 +349,14 @@ public class AttendanceAdminService {
         // 4. 일자별로 fetchAll → 판정 → DTO 변환
         List<AttendancePeriodListRowResDto> all = new ArrayList<>();
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
+            boolean isHoliday = isCompanyHoliday(companyId, d); // 매 날짜 휴일 가드
             // 4-a. 단일 날짜 fetch — cr.workDate = :d 로 파티션 프루닝
             List<AttendanceAdminRow> rows = queryRepository.fetchAll(
                     companyId, d, effectiveFilter, deptId, workGroupId, keyword);
             final LocalDate day = d; // effectively-final 제약
             for (AttendanceAdminRow r : rows) {
                 // 4-b. 판정
-                List<AttendanceCardType> cards = judge.judge(r, day, weeklyMaxMinutes);
+                List<AttendanceCardType> cards = judge.judge(r, day, weeklyMaxMinutes, isHoliday);
                 // 4-c. statuses 필터 (교집합 없으면 skip)
                 if (required != null && cards.stream().noneMatch(required::contains)) continue;
                 // 4-d. 응답 행 조립
@@ -424,6 +433,7 @@ public class AttendanceAdminService {
         // 4. 월~일 7일 반복
         for (int i = 0; i < 7; i++) {
             LocalDate day = monday.plusDays(i);
+            boolean isHoliday = isCompanyHoliday(companyId, day); // 매 날짜 휴일 가드
             // 4-a. 해당일 fetchAll (단일 파티션)
             List<AttendanceAdminRow> rows = queryRepository.fetchAll(companyId, day, effectiveFilter);
 
@@ -431,7 +441,7 @@ public class AttendanceAdminService {
             int total = rows.size();
             int normal = 0, late = 0, earlyLeave = 0, absent = 0, onLeave = 0, overtime = 0;
             for (AttendanceAdminRow r : rows) {
-                List<AttendanceCardType> cards = judge.judge(r, day, weeklyMaxMinutes);
+                List<AttendanceCardType> cards = judge.judge(r, day, weeklyMaxMinutes, isHoliday);
                 boolean hasVac = Boolean.TRUE.equals(r.getHasApprovedVacationToday());
 
                 if (hasVac) onLeave++;
@@ -439,10 +449,11 @@ public class AttendanceAdminService {
                 if (cards.contains(AttendanceCardType.LATE)) late++;
                 if (cards.contains(AttendanceCardType.EARLY_LEAVE)) earlyLeave++;
 
-                // 결근: 소정근무일 && 출근기록 없음 && 휴가 아님
+                // 결근: 소정근무일 && 출근기록 없음 && 휴가 아님 && 공휴일 아님 && 근무종료 후
                 boolean scheduled = isScheduledWorkDay(r, day);
                 boolean noCheckIn = !hasCheckIn(r);
-                if (scheduled && noCheckIn && !hasVac) absent++;
+                if (scheduled && noCheckIn && !hasVac && !isHoliday
+                        && isWorkdayOver(day, r.getGroupEndTime())) absent++;
 
                 // 초과근무: 승인 OT 존재 OR 미승인 OT 카드
                 long approvedOt = (r.getApprovedOtMinutesToday() != null) ? r.getApprovedOtMinutesToday() : 0L;
@@ -484,6 +495,7 @@ public class AttendanceAdminService {
 
         // 5. 월~일 7일 순회 → 부서 단위 누적
         for (LocalDate day = monday; !day.isAfter(sunday); day = day.plusDays(1)) {
+            boolean isHoliday = isCompanyHoliday(companyId, day); // 매 날짜 휴일 가드
             List<AttendanceAdminRow> rows = queryRepository.fetchAll(companyId, day, effectiveFilter);
             final LocalDate d = day;
             for (AttendanceAdminRow r : rows) {
@@ -491,16 +503,18 @@ public class AttendanceAdminService {
                         k -> new DeptAggregator(r.getDeptId(), r.getDeptName()));
                 a.empIds.add(r.getEmpId());
 
-                List<AttendanceCardType> cards = judge.judge(r, d, weeklyMaxMinutes);
+                List<AttendanceCardType> cards = judge.judge(r, d, weeklyMaxMinutes, isHoliday);
                 boolean hasVac = Boolean.TRUE.equals(r.getHasApprovedVacationToday());
                 boolean scheduled = isScheduledWorkDay(r, d);
                 boolean checkedIn = hasCheckIn(r);
 
-                if (scheduled && !hasVac) {
+                // 휴일/휴가는 부서 분모/결근에서 제외
+                if (scheduled && !hasVac && !isHoliday) {
                     a.scheduledEmpDays++;
                     if (checkedIn) a.attendedDays++;
                     if (cards.contains(AttendanceCardType.LATE)) a.lateCount++;
-                    if (!checkedIn) a.absentCount++;
+                    // 결근 확정은 근무종료 후에만
+                    if (!checkedIn && isWorkdayOver(d, r.getGroupEndTime())) a.absentCount++;
                 }
 
                 long dayWorked = computeDayWorkedMinutes(r, d);
@@ -698,6 +712,22 @@ public class AttendanceAdminService {
     /* 체크인 여부 — checkInAt 기반. ABSENT 레코드는 comRecId 있어도 checkInAt null */
     private boolean hasCheckIn(AttendanceAdminRow r) {
         return r.getCheckInAt() != null;
+    }
+
+    /* 회사 공휴일 캐시에서 해당 날짜의 휴일 여부 1회 조회 — Judge 결근 가드 + Service 집계 가드 공용 */
+    private boolean isCompanyHoliday(UUID companyId, LocalDate date) {
+        return businessDayCalculator.getHolidaysInMonth(companyId, YearMonth.from(date))
+                .contains(date);
+    }
+
+    /* 결근 확정 시점 가드 (Service 집계용 자체 사본).
+     * 과거면 true / 오늘이면 groupEndTime 경과 후 / 미래·groupEndTime null 이면 false */
+    private boolean isWorkdayOver(LocalDate date, LocalTime groupEndTime) {
+        LocalDate today = LocalDate.now();
+        if (date.isBefore(today)) return true;
+        if (date.isAfter(today)) return false;
+        if (groupEndTime == null) return false;
+        return LocalTime.now().isAfter(groupEndTime);
     }
 
     /* 지각 분 = max(0, checkInAt.time - groupStartTime). LATE / LATE_AND_EARLY 일 때만 유효 */

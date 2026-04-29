@@ -7,6 +7,7 @@ import com.peoplecore.attendance.entity.HolidayReason;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
+import com.peoplecore.attendance.util.ClientIpExtractor;
 import com.peoplecore.company.service.CompanyAllowedIpService;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
@@ -19,6 +20,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -29,7 +31,7 @@ import java.util.UUID;
  *
  * 규칙:
  *  - 하루 1쌍. 퇴근 후 재출근 불가.
- *  - IP 허용 대역 밖 → 거부 X, 로그에만 표기 (entity isOffsite 필드 제거됨).
+ *  - IP 허용 대역 밖 → 거부 (활성 IP 미등록 회사는 정책 미적용 → 모든 IP 허용).
  *  - 휴일 → 허용, HOLIDAY_WORK + holidayReason 기록. 근무 인정은 배치.
  *  - workGroup 미배정 → 예외 (데이터 정합성).
  *  - WorkStatus 결정/전이는 WorkStatusResolver 위임.
@@ -45,6 +47,7 @@ public class CommuteService {
     private final PayrollMinutesCalculator payrollMinutesCalculator;
     private final WorkStatusResolver workStatusResolver;
     private final HolidayReasonResolver holidayReasonResolver;
+    private final ClientIpExtractor clientIpExtractor;
 
     @Autowired
     public CommuteService(CommuteRecordRepository commuteRecordRepository,
@@ -52,13 +55,15 @@ public class CommuteService {
                           CompanyAllowedIpService companyAllowedIpService,
                           PayrollMinutesCalculator payrollMinutesCalculator,
                           WorkStatusResolver workStatusResolver,
-                          HolidayReasonResolver holidayReasonResolver) {
+                          HolidayReasonResolver holidayReasonResolver,
+                          ClientIpExtractor clientIpExtractor) {
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
         this.companyAllowedIpService = companyAllowedIpService;
         this.payrollMinutesCalculator = payrollMinutesCalculator;
         this.workStatusResolver = workStatusResolver;
         this.holidayReasonResolver = holidayReasonResolver;
+        this.clientIpExtractor = clientIpExtractor;
     }
 
     /*
@@ -68,9 +73,18 @@ public class CommuteService {
      */
     @Transactional
     public CheckInResDto checkIn(UUID companyId, Long empId, HttpServletRequest request) {
-        String clientIp = extractClientIp(request);
+        String clientIp = clientIpExtractor.extract(request);
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
+
+        // TODO: [배포 검증 후 제거] 운영에서 clientIp 가 회사 외부 공인 IP 로 도달하는지 확인용 임시 로그
+        log.info("[checkIn-DEBUG] empId={}, clientIp={}, xff={}, remoteAddr={}",
+                empId, clientIp, request.getHeader("X-Forwarded-For"), request.getRemoteAddr());
+
+        /* IP 정책 선검증: 회사가 활성 IP를 등록했다면 해당 대역 밖에서 출근 불가 */
+        if (!companyAllowedIpService.isAllowed(companyId, clientIp)) {
+            throw new CustomException(ErrorCode.COMMUTE_IP_NOT_ALLOWED);
+        }
 
         /* 1차 방어: 이미 오늘 기록이 있으면 즉시 409 (ABSENT 배치 레코드 포함) */
         commuteRecordRepository
@@ -83,7 +97,6 @@ public class CommuteService {
         WorkGroup wg = employee.getWorkGroup();
         if (wg == null) throw new CustomException(ErrorCode.EMPLOYEE_WORK_GROUP_NOT_ASSIGNED);
 
-        boolean offsite = !companyAllowedIpService.matches(companyId, clientIp); // 로그용
         HolidayReason reason = holidayReasonResolver.resolve(companyId, today, wg);
         WorkStatus initialStatus = workStatusResolver.resolveInitial(
                 now.toLocalTime(), wg.getGroupStartTime(), reason);
@@ -101,8 +114,8 @@ public class CommuteService {
         /* 2차 방어: saveAndFlush 로 즉시 INSERT → UNIQUE 위반을 트랜잭션 내에서 감지 */
         try {
             CommuteRecord saved = commuteRecordRepository.saveAndFlush(record);
-            log.info("[checkIn] empId={}, ip={}, offsite={}, workStatus={}, reason={}",
-                    empId, clientIp, offsite, initialStatus, reason);
+            log.info("[checkIn] empId={}, ip={}, workStatus={}, reason={}",
+                    empId, clientIp, initialStatus, reason);
             return CheckInResDto.fromEntity(saved);
         } catch (DataIntegrityViolationException e) {
             /* UNIQUE(company_id, emp_id, work_date) 위반 → race condition */
@@ -121,9 +134,18 @@ public class CommuteService {
      */
     @Transactional
     public CheckOutResDto checkOut(UUID companyId, Long empId, HttpServletRequest request) {
-        String clientIp = extractClientIp(request);
+        String clientIp = clientIpExtractor.extract(request);
         LocalDate today = LocalDate.now();
         LocalDateTime now = LocalDateTime.now();
+
+        // TODO: [배포 검증 후 제거] 운영에서 clientIp 가 회사 외부 공인 IP 로 도달하는지 확인용 임시 로그
+        log.info("[checkOut-DEBUG] empId={}, clientIp={}, xff={}, remoteAddr={}",
+                empId, clientIp, request.getHeader("X-Forwarded-For"), request.getRemoteAddr());
+
+        /* IP 정책 선검증: 회사가 활성 IP를 등록했다면 해당 대역 밖에서 퇴근 불가 */
+        if (!companyAllowedIpService.isAllowed(companyId, clientIp)) {
+            throw new CustomException(ErrorCode.COMMUTE_IP_NOT_ALLOWED);
+        }
 
         Optional<CommuteRecord> openRecord = commuteRecordRepository
                 .findFirstByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndComRecCheckOutIsNullOrderByWorkDateDesc(
@@ -145,22 +167,49 @@ public class CommuteService {
         if (record.getComRecCheckIn() == null) {
             throw new CustomException(ErrorCode.COMMUTE_NOT_CHECKED_IN);
         }
+        /* 시계 역행 등 비정상 케이스 방어 */
+        if (now.isBefore(record.getComRecCheckIn())) {
+            throw new IllegalStateException(
+                    "체크아웃 시각이 체크인보다 이전 - comRecId=" + record.getComRecId()
+                            + ", checkIn=" + record.getComRecCheckIn() + ", checkOut=" + now);
+        }
 
         WorkGroup wg = record.getEmployee().getWorkGroup();
         if (wg == null) throw new CustomException(ErrorCode.EMPLOYEE_WORK_GROUP_NOT_ASSIGNED);
 
+        /* 1. workStatus 결정 */
         WorkStatus finalStatus = workStatusResolver.resolveFinal(
                 record.getWorkStatus(), now.toLocalTime(), wg.getGroupEndTime());
 
-        /* workDate 유지, comRecCheckOut + workStatus 확정 */
-        record.checkOut(now, clientIp, finalStatus);
+        /* 2. 분 컬럼 산출 (mutate/persist 없음) - APPROVAL 은 0, ALL 은 overtime 전체 자동 인정 */
+        PayrollMinutesCalculator.PayrollMinutes m = payrollMinutesCalculator.computeForCheckout(record, now);
 
-        /* 체크아웃 시점엔 actual/overtime 만 기록 — recognized_* 는 OT 승인 시 반영 */
-        payrollMinutesCalculator.applyCheckoutBase(record);
+        /* 3. 단일 native UPDATE - 9 컬럼 + work_date 포함(파티션 프루닝). 가드 WHERE 로 atomic check */
+        int affected = commuteRecordRepository.applyCheckOut(
+                record.getComRecId(), record.getWorkDate(),
+                now, clientIp, finalStatus.name(),
+                m.actual(), m.overtime(), m.unrecognizedOt(),
+                m.recExt(), m.recNight(), m.recHoliday());
+        if (affected != 1) {
+            log.warn("[checkOut] UPDATE 실패 - comRecId={}, affected={} (이미 체크아웃됨/race)",
+                    record.getComRecId(), affected);
+            throw new CustomException(ErrorCode.COMMUTE_ALREADY_CHECKED_OUT);
+        }
 
         log.info("[checkOut] empId={}, workDate={}, checkOutAt={}, ip={}, workStatus={}",
                 empId, record.getWorkDate(), now, clientIp, finalStatus);
-        return CheckOutResDto.fromEntity(record);
+
+        /* 4. DTO 직접 빌드 (엔티티는 native UPDATE 후 stale - 읽지 않음) */
+        return CheckOutResDto.builder()
+                .comRecId(record.getComRecId())
+                .workDate(record.getWorkDate())
+                .checkInAt(record.getComRecCheckIn())
+                .checkOutAt(now)
+                .checkOutIp(clientIp)
+                .workedMinutes(Duration.between(record.getComRecCheckIn(), now).toMinutes())
+                .workStatus(finalStatus)
+                .holidayReason(record.getHolidayReason())
+                .build();
     }
 
     /*
@@ -174,13 +223,4 @@ public class CommuteService {
                 .ifPresent(payrollMinutesCalculator::applyApprovedRecognition);
     }
 
-    /* X-Forwarded-For 최초 토큰 > getRemoteAddr 폴백 */
-    private String extractClientIp(HttpServletRequest request) {
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int comma = xff.indexOf(',');
-            return (comma > 0 ? xff.substring(0, comma) : xff).trim();
-        }
-        return request.getRemoteAddr();
-    }
 }
