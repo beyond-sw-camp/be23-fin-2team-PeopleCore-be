@@ -42,12 +42,14 @@ public class PayrollApprovalDocCreatedService {
         log.info("[PayrollDocCreated] payrollRunId={}, status={}, docId={}",
                 run.getPayrollRunId(), run.getPayrollStatus(), event.getApprovalDocId());
 
-        // CONFIRMED 사원들에게 docId 바인딩
+        // CONFIRMED 사원들에게 docId 바인딩 (이미 다른 결재문서에 바인딩된 사원은 건너띔 - 덮어쓰기 방지)
         List<PayrollEmpStatus> confirmedEmps = payrollEmpStatusRepository
                 .findByPayrollRuns_PayrollRunIdAndStatus(
                         run.getPayrollRunId(), PayrollEmpStatusType.CONFIRMED);
         for (PayrollEmpStatus pes : confirmedEmps) {
-            pes.bindApprovalDoc(event.getApprovalDocId());
+            if (pes.getApprovalDocId() == null) {
+                pes.bindApprovalDoc(event.getApprovalDocId());
+            }
         }
     }
 

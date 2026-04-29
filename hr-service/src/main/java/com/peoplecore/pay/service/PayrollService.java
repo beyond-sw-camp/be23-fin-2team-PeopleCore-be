@@ -422,17 +422,28 @@ public class PayrollService {
             log.info("[PayrollService] 캐시 invalidate - runId={}, empCount={}",
                     event.getPayrollRunId(), empIds.size());
 
-        } else if ("REJECTED".equals(status)){
-            run.rejectApproval();
-            log.info("[PayrollService] 전자결재 반려 처리 - payrollRunId={}, reason={}",
-                    event.getPayrollRunId(), event.getRejectReason());
-        } else if ("CANCELED".equals(status)) {
-            run.cancelApproval();
-            log.info("[PayrollService] 전자결재 회수 - payrollRunId={}", event.getPayrollRunId());
-        } else {
-            log.warn("[PayrollService] 알 수 없는 status={} - payrollRunId={}",
-                    status, event.getPayrollRunId());
+        } else if ("REJECTED".equals(status) || "CANCELED".equals(status)) {
+            if ("REJECTED".equals(status)) {
+                run.rejectApproval();
+                log.info("[PayrollService] 전자결재 반려 처리 - payrollRunId={}, reason={}",
+                        event.getPayrollRunId(), event.getRejectReason());
+            } else {
+                run.cancelApproval();
+                log.info("[PayrollService] 전자결재 회수 - payrollRunId={}", event.getPayrollRunId());
+            }
+            // 이 결재 문서에 묶여있던 사원들의 approvalDocId 풀기 (재상신 가능 상태로)
+            Long docId = event.getApprovalDocId();
+            List<PayrollEmpStatus> bound = payrollEmpStatusRepository
+                    .findByPayrollRuns_PayrollRunIdAndApprovalDocId(event.getPayrollRunId(), docId);
+            bound.forEach(PayrollEmpStatus::unbindApprovalDoc);
+
+            log.info("[PayrollService] 전자결재 {} - payrollRunId={}, docId={}, 전자결재 연결(연동) 풀린 사원={}명",
+                    status, event.getPayrollRunId(), docId, bound.size());
         }
+//        else {
+//            log.warn("[PayrollService] 알 수 없는 status={} - payrollRunId={}",
+//                    status, event.getPayrollRunId());
+//        }
     }
 
 
@@ -524,7 +535,7 @@ public class PayrollService {
 
         long dailyWorkMinutes = workTime.toMinutes();   //분 단위
 
-        long dailyWage = hourlyWage * dailyWorkMinutes;
+        long dailyWage = Math.round(hourlyWage * (dailyWorkMinutes / 60.0));
         return WageInfoResDto.builder()
                 .hourlyWage(hourlyWage)
                 .dailyWage(dailyWage)

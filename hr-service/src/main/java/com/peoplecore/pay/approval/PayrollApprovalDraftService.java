@@ -77,10 +77,11 @@ public class PayrollApprovalDraftService {
         Map<String, String> m = new HashMap<>();
         Long runId = run.getPayrollRunId();
 
-        // 확정된 사원 ID Set 미리 추출
+        // 확정된 사원 + 전자결재 안올린 사원 ID Set 추출
         Set<Long> confirmedEmpIds = payrollEmpStatusRepository
                 .findByPayrollRuns_PayrollRunIdAndStatus(runId, PayrollEmpStatusType.CONFIRMED)
                 .stream()
+                .filter(p-> p.getApprovalDocId() == null)
                 .map(p -> p.getEmployee().getEmpId())
                 .collect(Collectors.toSet());
 
