@@ -283,7 +283,8 @@ public class AttendanceModifyService {
             CommuteRecord reloaded = commuteRecordRepository
                     .findByComRecIdAndWorkDate(am.getComRecId(), am.getWorkDate())
                     .orElseThrow(() -> new CustomException(ErrorCode.ATTENDANCE_MODIFY_APPLY_FAILED));
-            payrollMinutesCalculator.applyApprovedRecognition(reloaded);
+            payrollMinutesCalculator.applyApprovedRecognition(
+                    reloaded, PayrollMinutesCalculator.RecognitionSource.ATTENDANCE_MODIFY);
             log.info("[AttendanceModify] UPDATE + 상태/분 재판정 - attenModiId={}, comRecId={}, status={}",
                     am.getAttenModiId(), am.getComRecId(), newStatus);
             return;
@@ -299,7 +300,8 @@ public class AttendanceModifyService {
                 .holidayReason(reason)
                 .workStatus(newStatus)
                 .build());
-        payrollMinutesCalculator.applyApprovedRecognition(saved);
+        payrollMinutesCalculator.applyApprovedRecognition(
+                saved, PayrollMinutesCalculator.RecognitionSource.ATTENDANCE_MODIFY);
         log.info("[AttendanceModify] INSERT + 상태/분 재판정 - attenModiId={}, comRecId={}, status={}",
                 am.getAttenModiId(), saved.getComRecId(), newStatus);
     }

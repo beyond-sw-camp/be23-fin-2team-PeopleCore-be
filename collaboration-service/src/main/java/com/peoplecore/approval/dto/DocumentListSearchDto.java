@@ -21,4 +21,5 @@ public class DocumentListSearchDto {
     private LocalDate endDate;
     private Long formId;
     private String status;
+    private SortBy sortBy; // null/미지정 시 LATEST 로 동작
 }

@@ -220,7 +220,8 @@ public class CommuteService {
     public void recalcPayrollMinutes(UUID companyId, Long empId, LocalDate workDate) {
         commuteRecordRepository
                 .findByCompanyIdAndEmployee_EmpIdAndWorkDate(companyId, empId, workDate)
-                .ifPresent(payrollMinutesCalculator::applyApprovedRecognition);
+                .ifPresent(record -> payrollMinutesCalculator.applyApprovedRecognition(
+                        record, PayrollMinutesCalculator.RecognitionSource.OT_REQUEST));
     }
 
 }

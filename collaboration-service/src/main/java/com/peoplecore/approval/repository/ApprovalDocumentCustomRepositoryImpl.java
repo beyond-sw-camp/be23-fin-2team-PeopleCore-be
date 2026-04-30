@@ -3,9 +3,11 @@ package com.peoplecore.approval.repository;
 import com.peoplecore.approval.dto.DocumentCountResponse;
 import com.peoplecore.approval.dto.DocumentListResponseDto;
 import com.peoplecore.approval.dto.DocumentListSearchDto;
+import com.peoplecore.approval.dto.SortBy;
 import com.peoplecore.approval.entity.*;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.Tuple;
+import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
@@ -125,6 +127,22 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
     }
 
+    /* 헬퍼 4 : 일반 문서함 정렬 — sortBy=EMERGENCY 면 긴급 우선, 그 외(null 포함)는 최신순 */
+    private OrderSpecifier<?>[] resolveOrder(DocumentListSearchDto searchDto) {
+        boolean emergencyFirst = searchDto != null && searchDto.getSortBy() == SortBy.EMERGENCY;
+        return emergencyFirst
+                ? new OrderSpecifier<?>[]{ doc.isEmergency.desc(), doc.createdAt.desc() }
+                : new OrderSpecifier<?>[]{ doc.createdAt.desc() };
+    }
+
+    /* 헬퍼 5 : 결재함 계열 정렬 — isRead.asc() 가 항상 최우선, 그다음 sortBy 정책 */
+    private OrderSpecifier<?>[] resolveOrderWithRead(DocumentListSearchDto searchDto) {
+        boolean emergencyFirst = searchDto != null && searchDto.getSortBy() == SortBy.EMERGENCY;
+        return emergencyFirst
+                ? new OrderSpecifier<?>[]{ line.isRead.asc(), doc.isEmergency.desc(), doc.createdAt.desc() }
+                : new OrderSpecifier<?>[]{ line.isRead.asc(), doc.createdAt.desc() };
+    }
+
 
     /*결재 대기 상태
      * */
@@ -170,7 +188,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -207,7 +225,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count()).from(doc).where(builder);
@@ -255,7 +273,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -291,7 +309,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());  // 긴급 우선, 최신순
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -328,7 +346,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -365,7 +383,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count()).from(doc).where(builder);
@@ -394,11 +412,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         line.approvalRole.in(ApprovalRole.REFERENCE, ApprovalRole.VIEWER)
                 )
                 .where(builder)
-                .orderBy(
-                        line.isRead.asc(),               // 미확인이 위로
-                        doc.isEmergency.desc(),
-                        doc.createdAt.desc()
-                );
+                .orderBy(resolveOrderWithRead(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -433,11 +447,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         line.empId.eq(empId)
                 )
                 .where(builder)
-                .orderBy(
-                        line.isRead.asc(),
-                        doc.isEmergency.desc(),
-                        doc.createdAt.desc()
-                );
+                .orderBy(resolveOrderWithRead(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -472,7 +482,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         folderDoc.personalFolderId.eq(folderId)
                 )
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -511,7 +521,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count()).from(doc).where(builder);
