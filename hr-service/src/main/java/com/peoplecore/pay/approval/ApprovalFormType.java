@@ -3,7 +3,7 @@ package com.peoplecore.pay.approval;
 
 public enum ApprovalFormType {
     SALARY("PAYROLL_PAYMENT"),
-    RETIREMENT("SEVERANCE_SEVERANCE");
+    RETIREMENT("RETIREMENT_SEVERANCE");
 
     private final String formCode;
 

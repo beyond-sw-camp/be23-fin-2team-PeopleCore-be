@@ -1,8 +1,9 @@
 package com.peoplecore.pay.controller;
 
 import com.peoplecore.auth.RoleRequired;
-import com.peoplecore.pay.approval.ApprovalDraftResDto;
-import com.peoplecore.pay.approval.PayrollApprovalDraftService;
+import com.peoplecore.exception.CustomException;
+import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.pay.approval.*;
 import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.service.PayrollService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,11 +25,13 @@ public class PayrollController {
 
     private final PayrollService payrollService;
     private final PayrollApprovalDraftService payrollApprovalDraftService;
+    private final PayrollApprovalSnapshotRepository snapshotRepository;
 
     @Autowired
-    public PayrollController(PayrollService payrollService, PayrollApprovalDraftService payrollApprovalDraftService) {
+    public PayrollController(PayrollService payrollService, PayrollApprovalDraftService payrollApprovalDraftService, PayrollApprovalSnapshotRepository snapshotRepository) {
         this.payrollService = payrollService;
         this.payrollApprovalDraftService = payrollApprovalDraftService;
+        this.snapshotRepository = snapshotRepository;
     }
 
 //    급여대장 조회
@@ -162,4 +165,20 @@ public class PayrollController {
         return ResponseEntity.ok(
                 payrollService.calcDeductions(companyId, reqDto));
     }
+
+
+//    전자결재 스냅샷
+    @GetMapping("/admin/approval/{docId}/snapshot")
+    public ResponseEntity<ApprovalSnapshotResDto> getSnapshot(@PathVariable Long docId) {
+        PayrollApprovalSnapshot snapshot = snapshotRepository.findByApprovalDocId(docId)
+                .orElseThrow(() -> new CustomException(ErrorCode.APPROVAL_SNAPSHOT_NOT_FOUND));
+
+        return ResponseEntity.ok(ApprovalSnapshotResDto.builder()
+                .approvalDocId(docId)
+                .approvalType(snapshot.getApprovalType())
+                .htmlSnapshot(snapshot.getHtmlSnapshot())
+                .createdAt(snapshot.getCreatedAt())
+                .build());
+    }
+
 }

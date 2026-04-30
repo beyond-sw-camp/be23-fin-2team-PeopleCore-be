@@ -135,55 +135,10 @@ body {
       <td class="tit">과세금액</td>
       <td class="tit">비과세금액</td>
     </tr>
-    <tr>
-      <td class="tit">기본급</td>
-      <td class="currency" data-key="baseSalaryTaxable" contenteditable="true">0</td>
-      <td class="currency" data-key="baseSalaryNonTaxable" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">상여금</td>
-      <td class="currency" data-key="bonusTaxable" contenteditable="true">0</td>
-      <td class="currency" data-key="bonusNonTaxable" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">야간근로수당</td>
-      <td class="currency" data-key="nightAllowanceTaxable" contenteditable="true">0</td>
-      <td class="currency" data-key="nightAllowanceNonTaxable" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">연장근로수당</td>
-      <td class="currency" data-key="overtimeAllowanceTaxable" contenteditable="true">0</td>
-      <td class="currency" data-key="overtimeAllowanceNonTaxable" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">연차수당</td>
-      <td class="currency" data-key="annualLeaveAllowanceTaxable" contenteditable="true">0</td>
-      <td class="currency" data-key="annualLeaveAllowanceNonTaxable" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">휴일근로수당</td>
-      <td class="currency" data-key="holidayAllowanceTaxable" contenteditable="true">0</td>
-      <td class="currency" data-key="holidayAllowanceNonTaxable" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">교육비지원금</td>
-      <td class="currency" data-key="educationSupportTaxable" contenteditable="true">0</td>
-      <td class="currency" data-key="educationSupportNonTaxable" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">식대</td>
-      <td class="currency" data-key="mealAllowanceTaxable" contenteditable="true">0</td>
-      <td class="currency" data-key="mealAllowanceNonTaxable" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">소계</td>
-      <td class="currency" data-key="paymentSubtotalTaxable" contenteditable="true">0</td>
-      <td class="currency" data-key="paymentSubtotalNonTaxable" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit" style="background:#bbb;">합계</td>
-      <td class="currency" colspan="2" style="font-weight:bold;" data-key="paymentTotal" contenteditable="true">0</td>
-    </tr>
+    </tbody>
+    <!-- 동적 영역: 백엔드가 항목 행 + 소계 + 합계 채움 -->
+    <tbody class="dynamic-payment-rows">
+    </tbody>
   </tbody>
 </table>
 
@@ -198,36 +153,52 @@ body {
       <td class="tit">항목명</td>
       <td class="tit">금액</td>
     </tr>
-    <tr>
-      <td class="tit">건강보험</td>
-      <td class="currency" data-key="healthInsurance" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">고용보험</td>
-      <td class="currency" data-key="employmentInsurance" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">국민연금</td>
-      <td class="currency" data-key="nationalPension" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">근로소득세</td>
-      <td class="currency" data-key="incomeTax" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">근로지방소득세</td>
-      <td class="currency" data-key="localIncomeTax" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit">학자금상환</td>
-      <td class="currency" data-key="studentLoanRepayment" contenteditable="true">0</td>
-    </tr>
-    <tr>
-      <td class="tit" style="background:#bbb;">합계</td>
-      <td class="currency" style="font-weight:bold;" data-key="deductionTotal" contenteditable="true">0</td>
-    </tr>
+    </tbody>
+    <tbody class="dynamic-deduction-rows">
+    </tbody>
   </tbody>
 </table>
+
+<!-- ====== 부서별 요약 ====== -->
+<table class="tb_chit" style="margin-top:10px;">
+  <colgroup>
+    <col width="180px"><col width="100px"><col width="180px"><col width="180px"><col width="160px">
+  </colgroup>
+  <tbody>
+  <tr><td class="tit" colspan="5">7. 부서별 요약</td></tr>
+  <tr>
+    <td class="tit">부서</td>
+    <td class="tit">인원</td>
+    <td class="tit">지급합계</td>
+    <td class="tit">공제합계</td>
+    <td class="tit">실지급액</td>
+  </tr>
+  </tbody>
+  <tbody class="dynamic-dept-summary">
+  </tbody>
+</table>
+
+<!-- ====== 사원 명단 접기 ====== -->
+<details style="margin-top:10px;" class="dynamic-employee-list">
+  <summary style="cursor:pointer; font-size:12px; font-weight:bold; padding:4px 0;">▼ 사원 명단</summary>
+  <table class="tb_chit" style="margin-top:4px;">
+    <colgroup>
+      <col width="200px"><col width="200px"><col width="180px"><col width="220px">
+    </colgroup>
+    <tbody>
+    <tr>
+      <td class="tit">부서</td>
+      <td class="tit">사원명</td>
+      <td class="tit">직급</td>
+      <td class="tit">총지급액</td>
+    </tr>
+    </tbody>
+    <tbody>
+    <!-- 백엔드가 사원 행 채움 (마커는 details 자체) -->
+    </tbody>
+  </table>
+</details>
+
 
 </body>
 </html>

@@ -14,10 +14,11 @@ import java.util.UUID;
 public class SeveranceApprovalDocCreatedEvent {
 
     private UUID companyId;
-    private Long approvalDocId;
-    private Long sevId;     // 또는 retirementId 등
+    private Long approvalDocId;     // collab 이 만든 결재 문서 ID
+    private Long sevId;
     private Long drafterId;
     private Long finalApproverEmpId;
+    private String htmlContent;       // 결재 상신 시점의 완성된 HTML (스냅샷용)
 
 
 //    private UUID companyId;
@@ -26,6 +27,5 @@ public class SeveranceApprovalDocCreatedEvent {
 //    private Long drafterId;
 //    private Long formId;
 //    private String formCode;          // "RETIREMENT_RESOLUTION"
-//    private String htmlContent;       // dataMap 주입 + 사용자 수정 반영 HTML
 //    private List<ApprovalLineDto> approvalLine;
 }

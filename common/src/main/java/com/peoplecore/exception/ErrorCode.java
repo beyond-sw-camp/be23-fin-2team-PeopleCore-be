@@ -97,6 +97,7 @@ public enum ErrorCode {
     NO_CONFIRMED_EMPLOYEES(400, "확정된 사원이 없습니다."),
     PAYROLL_EMP_ALREADY_CONFIRMED(404, "이미 확정된 사원입니다. 되돌리기 후 수정하세요."),
     OVERTIME_ALREADY_APPLIED(400, "이미 초과근무 수당이 적용되어있는 건입니다."),
+    APPROVAL_SNAPSHOT_NOT_FOUND(404, "전자결재 기록(스냅샷)을 찾을 수 없습니다."),
 
     // ── 정산보험료 ──
     INSURANCE_SETTLEMENT_NOT_FOUND(404, "정산보험료 데이터가 존재하지 않습니다."),

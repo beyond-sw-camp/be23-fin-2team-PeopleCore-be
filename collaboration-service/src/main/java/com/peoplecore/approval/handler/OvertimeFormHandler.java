@@ -37,7 +37,7 @@ public class OvertimeFormHandler implements ApprovalFormHandler {
     }
 
     @Override
-    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {
+    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {
         try {
             OvertimeDocData data = objectMapper.readValue(document.getDocData(), OvertimeDocData.class);
             OvertimeApprovalDocCreatedEvent event = OvertimeApprovalDocCreatedEvent.builder()

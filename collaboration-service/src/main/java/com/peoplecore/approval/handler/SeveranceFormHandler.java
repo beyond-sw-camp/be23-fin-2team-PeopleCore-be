@@ -36,7 +36,7 @@ public class SeveranceFormHandler implements ApprovalFormHandler {
     }
 
     @Override
-    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {
+    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {
         try {
             Long sevId = extractSevId(document);
             SeveranceApprovalDocCreatedEvent event = SeveranceApprovalDocCreatedEvent.builder()

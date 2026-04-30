@@ -75,6 +75,9 @@ dependencies {
 
 //    excel 파싱
     implementation 'org.apache.poi:poi-ooxml:5.3.0'
+
+//	html 표시해둔(마커) 영역만 동적 콘텐츠로 교체
+	implementation 'org.jsoup:jsoup:1.17.2'
 }
 
 dependencyManagement {

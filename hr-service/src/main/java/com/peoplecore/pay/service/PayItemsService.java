@@ -52,6 +52,14 @@ public class PayItemsService {
     public PayItemResDto createPayItem(UUID companyId, PayItemReqDto reqDto){
         Company company = companyRepository.findById(companyId).orElseThrow(()-> new CustomException(ErrorCode.NOT_FOUND));
 
+        Integer sortOrder = reqDto.getSortOrder();
+        if (sortOrder == null) {
+            // 같은 회사 + 같은 type 의 일반 항목 (sortOrder < 100 인 것만 — 보호 항목 901~ 제외)
+            // 중 max + 1 부여. 일반 항목이 없으면 1.
+            Integer maxOrder = payItemsRepository
+                    .findMaxSortOrderByCompanyAndType(companyId, reqDto.getPayItemType());
+            sortOrder = (maxOrder == null) ? 1 : maxOrder + 1;
+        }
         PayItems items = PayItems.builder()
                 .payItemName(reqDto.getPayItemName())
                 .payItemType(reqDto.getPayItemType())
@@ -59,7 +67,7 @@ public class PayItemsService {
                 .isTaxable(reqDto.getIsTaxable())
                 .taxExemptLimit(reqDto.getTaxExemptLimit())
                 .payItemCategory(reqDto.getPayItemCategory())
-                .sortOrder(reqDto.getSortOrder())
+                .sortOrder(sortOrder)
                 .isActive(true)
                 .isLegal(false)
                 .company(company)

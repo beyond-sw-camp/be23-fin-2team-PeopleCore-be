@@ -93,6 +93,19 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
 
 
 
+    @Query("""
+    SELECT DISTINCT pd.payItems.payItemId
+    FROM PayrollDetails pd
+    WHERE pd.payrollRuns.payrollRunId = :runId
+      AND pd.employee.empId IN :empIds
+      AND pd.payItems.payItemType = :type
+    """)
+    Set<Long> findDistinctPayItemIdsByRunIdAndEmpIdInAndPayItemType(
+            @Param("runId") Long runId,
+            @Param("empIds") Set<Long> empIds,
+            @Param("type") PayItemType type);
 
-
+    // 부서별 요약 / 사원 명단 빌드에 사용 (derived query)
+    List<PayrollDetails> findByPayrollRuns_PayrollRunIdAndEmployee_EmpIdIn(
+            Long payrollRunId, Set<Long> empIds);
 }
