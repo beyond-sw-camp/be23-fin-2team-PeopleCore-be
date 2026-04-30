@@ -1,122 +1,122 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8" />
-<title>급여지급결의서</title>
-<style>
-  body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; color:#222; font-size:12px; padding:24px; background:#fff; }
-  h1 { text-align:center; font-size:22px; letter-spacing:12px; margin:0 0 20px; }
-  .meta { width:100%; margin-bottom:18px; border-collapse:collapse; font-size:11px; }
-  .meta td { padding:4px 8px; }
-  .meta .label { color:#555; width:80px; }
-  .meta .value { font-weight:600; }
-  table.doc { width:100%; border-collapse:collapse; margin-bottom:16px; }
-  table.doc th, table.doc td { border:1px solid #333; padding:6px 8px; vertical-align:middle; }
-  table.doc th { background:#f0f3f7; font-weight:600; text-align:center; }
-  table.doc td.num { text-align:right; font-variant-numeric: tabular-nums; }
-  .section-title { font-size:13px; font-weight:700; margin:14px 0 6px; color:#2e9e6e; }
-  .summary { background:#fbfbe6; }
-  .total-row td { background:#eef7f1; font-weight:700; }
-  .final-row td { background:#2e9e6e; color:#fff; font-weight:700; font-size:13px; }
-  .approval-line { float:right; margin-top:-8px; }
-</style>
-</head>
-<body>
+<!--<!DOCTYPE html>-->
+<!--<html lang="ko">-->
+<!--<head>-->
+<!--<meta charset="UTF-8" />-->
+<!--<title>급여지급결의서</title>-->
+<!--<style>-->
+<!--  body { font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; color:#222; font-size:12px; padding:24px; background:#fff; }-->
+<!--  h1 { text-align:center; font-size:22px; letter-spacing:12px; margin:0 0 20px; }-->
+<!--  .meta { width:100%; margin-bottom:18px; border-collapse:collapse; font-size:11px; }-->
+<!--  .meta td { padding:4px 8px; }-->
+<!--  .meta .label { color:#555; width:80px; }-->
+<!--  .meta .value { font-weight:600; }-->
+<!--  table.doc { width:100%; border-collapse:collapse; margin-bottom:16px; }-->
+<!--  table.doc th, table.doc td { border:1px solid #333; padding:6px 8px; vertical-align:middle; }-->
+<!--  table.doc th { background:#f0f3f7; font-weight:600; text-align:center; }-->
+<!--  table.doc td.num { text-align:right; font-variant-numeric: tabular-nums; }-->
+<!--  .section-title { font-size:13px; font-weight:700; margin:14px 0 6px; color:#2e9e6e; }-->
+<!--  .summary { background:#fbfbe6; }-->
+<!--  .total-row td { background:#eef7f1; font-weight:700; }-->
+<!--  .final-row td { background:#2e9e6e; color:#fff; font-weight:700; font-size:13px; }-->
+<!--  .approval-line { float:right; margin-top:-8px; }-->
+<!--</style>-->
+<!--</head>-->
+<!--<body>-->
 
-<h1>급여지급결의서</h1>
+<!--<h1>급여지급결의서</h1>-->
 
-<div class="approval-line" data-key="approvalLineHtml"></div>
+<!--<div class="approval-line" data-key="approvalLineHtml"></div>-->
 
-<table class="meta">
-  <tr>
-    <td class="label">문서번호</td><td class="value" data-key="docNo">-</td>
-    <td class="label">기안일자</td><td class="value" data-key="draftDate">-</td>
-  </tr>
-  <tr>
-    <td class="label">기안자</td><td class="value" data-key="drafterName">-</td>
-    <td class="label">소속부서</td><td class="value" data-key="drafterDept">-</td>
-  </tr>
-</table>
+<!--<table class="meta">-->
+<!--  <tr>-->
+<!--    <td class="label">문서번호</td><td class="value" data-key="docNo">-</td>-->
+<!--    <td class="label">기안일자</td><td class="value" data-key="draftDate">-</td>-->
+<!--  </tr>-->
+<!--  <tr>-->
+<!--    <td class="label">기안자</td><td class="value" data-key="drafterName">-</td>-->
+<!--    <td class="label">소속부서</td><td class="value" data-key="drafterDept">-</td>-->
+<!--  </tr>-->
+<!--</table>-->
 
-<div class="section-title">1. 지급 기본정보</div>
-<table class="doc">
-  <tr>
-    <th style="width:18%">귀속월</th>
-    <td style="width:32%" data-key="payMonth">-</td>
-    <th style="width:18%">지급예정일</th>
-    <td style="width:32%" data-key="payScheduledDate">-</td>
-  </tr>
-  <tr>
-    <th>지급인원</th>
-    <td data-key="payHeadcount">-</td>
-    <th>실지급액</th>
-    <td class="num" data-key="totalPayAmount">0</td>
-  </tr>
-</table>
+<!--<div class="section-title">1. 지급 기본정보</div>-->
+<!--<table class="doc">-->
+<!--  <tr>-->
+<!--    <th style="width:18%">귀속월</th>-->
+<!--    <td style="width:32%" data-key="payMonth">-</td>-->
+<!--    <th style="width:18%">지급예정일</th>-->
+<!--    <td style="width:32%" data-key="payScheduledDate">-</td>-->
+<!--  </tr>-->
+<!--  <tr>-->
+<!--    <th>지급인원</th>-->
+<!--    <td data-key="payHeadcount">-</td>-->
+<!--    <th>실지급액</th>-->
+<!--    <td class="num" data-key="totalPayAmount">0</td>-->
+<!--  </tr>-->
+<!--</table>-->
 
-<div class="section-title">2. 지급내역</div>
-<table class="doc">
-  <thead>
-    <tr>
-      <th style="width:40%">항목</th>
-      <th style="width:30%">과세</th>
-      <th style="width:30%">비과세</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr><td>기본급</td>        <td class="num" data-key="baseSalaryTaxable">0</td>              <td class="num" data-key="baseSalaryNonTaxable">0</td></tr>
-    <tr><td>상여금</td>        <td class="num" data-key="bonusTaxable">0</td>                   <td class="num" data-key="bonusNonTaxable">0</td></tr>
-    <tr><td>야간근로수당</td>  <td class="num" data-key="nightAllowanceTaxable">0</td>          <td class="num" data-key="nightAllowanceNonTaxable">0</td></tr>
-    <tr><td>연장근로수당</td>  <td class="num" data-key="overtimeAllowanceTaxable">0</td>       <td class="num" data-key="overtimeAllowanceNonTaxable">0</td></tr>
-    <tr><td>연차수당</td>      <td class="num" data-key="annualLeaveAllowanceTaxable">0</td>    <td class="num" data-key="annualLeaveAllowanceNonTaxable">0</td></tr>
-    <tr><td>휴일근로수당</td>  <td class="num" data-key="holidayAllowanceTaxable">0</td>        <td class="num" data-key="holidayAllowanceNonTaxable">0</td></tr>
-    <tr><td>교육비지원금</td>  <td class="num" data-key="educationSupportTaxable">0</td>        <td class="num" data-key="educationSupportNonTaxable">0</td></tr>
-    <tr><td>식대</td>          <td class="num" data-key="mealAllowanceTaxable">0</td>           <td class="num" data-key="mealAllowanceNonTaxable">0</td></tr>
-    <tr class="summary">
-      <td>소계</td>
-      <td class="num" data-key="paymentSubtotalTaxable">0</td>
-      <td class="num" data-key="paymentSubtotalNonTaxable">0</td>
-    </tr>
-    <tr class="total-row">
-      <td>지급합계</td>
-      <td class="num" colspan="2" data-key="paymentTotal">0</td>
-    </tr>
-  </tbody>
-</table>
+<!--<div class="section-title">2. 지급내역</div>-->
+<!--<table class="doc">-->
+<!--  <thead>-->
+<!--    <tr>-->
+<!--      <th style="width:40%">항목</th>-->
+<!--      <th style="width:30%">과세</th>-->
+<!--      <th style="width:30%">비과세</th>-->
+<!--    </tr>-->
+<!--  </thead>-->
+<!--  <tbody>-->
+<!--    <tr><td>기본급</td>        <td class="num" data-key="baseSalaryTaxable">0</td>              <td class="num" data-key="baseSalaryNonTaxable">0</td></tr>-->
+<!--    <tr><td>상여금</td>        <td class="num" data-key="bonusTaxable">0</td>                   <td class="num" data-key="bonusNonTaxable">0</td></tr>-->
+<!--    <tr><td>야간근로수당</td>  <td class="num" data-key="nightAllowanceTaxable">0</td>          <td class="num" data-key="nightAllowanceNonTaxable">0</td></tr>-->
+<!--    <tr><td>연장근로수당</td>  <td class="num" data-key="overtimeAllowanceTaxable">0</td>       <td class="num" data-key="overtimeAllowanceNonTaxable">0</td></tr>-->
+<!--    <tr><td>연차수당</td>      <td class="num" data-key="annualLeaveAllowanceTaxable">0</td>    <td class="num" data-key="annualLeaveAllowanceNonTaxable">0</td></tr>-->
+<!--    <tr><td>휴일근로수당</td>  <td class="num" data-key="holidayAllowanceTaxable">0</td>        <td class="num" data-key="holidayAllowanceNonTaxable">0</td></tr>-->
+<!--    <tr><td>교육비지원금</td>  <td class="num" data-key="educationSupportTaxable">0</td>        <td class="num" data-key="educationSupportNonTaxable">0</td></tr>-->
+<!--    <tr><td>식대</td>          <td class="num" data-key="mealAllowanceTaxable">0</td>           <td class="num" data-key="mealAllowanceNonTaxable">0</td></tr>-->
+<!--    <tr class="summary">-->
+<!--      <td>소계</td>-->
+<!--      <td class="num" data-key="paymentSubtotalTaxable">0</td>-->
+<!--      <td class="num" data-key="paymentSubtotalNonTaxable">0</td>-->
+<!--    </tr>-->
+<!--    <tr class="total-row">-->
+<!--      <td>지급합계</td>-->
+<!--      <td class="num" colspan="2" data-key="paymentTotal">0</td>-->
+<!--    </tr>-->
+<!--  </tbody>-->
+<!--</table>-->
 
-<div class="section-title">3. 공제내역</div>
-<table class="doc">
-  <thead>
-    <tr>
-      <th style="width:50%">항목</th>
-      <th style="width:50%">금액</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr><td>건강보험</td>       <td class="num" data-key="healthInsurance">0</td></tr>
-    <tr><td>고용보험</td>       <td class="num" data-key="employmentInsurance">0</td></tr>
-    <tr><td>국민연금</td>       <td class="num" data-key="nationalPension">0</td></tr>
-    <tr><td>근로소득세</td>     <td class="num" data-key="incomeTax">0</td></tr>
-    <tr><td>근로지방소득세</td> <td class="num" data-key="localIncomeTax">0</td></tr>
-    <tr><td>학자금상환</td>     <td class="num" data-key="studentLoanRepayment">0</td></tr>
-    <tr class="total-row">
-      <td>공제합계</td>
-      <td class="num" data-key="deductionTotal">0</td>
-    </tr>
-  </tbody>
-</table>
+<!--<div class="section-title">3. 공제내역</div>-->
+<!--<table class="doc">-->
+<!--  <thead>-->
+<!--    <tr>-->
+<!--      <th style="width:50%">항목</th>-->
+<!--      <th style="width:50%">금액</th>-->
+<!--    </tr>-->
+<!--  </thead>-->
+<!--  <tbody>-->
+<!--    <tr><td>건강보험</td>       <td class="num" data-key="healthInsurance">0</td></tr>-->
+<!--    <tr><td>고용보험</td>       <td class="num" data-key="employmentInsurance">0</td></tr>-->
+<!--    <tr><td>국민연금</td>       <td class="num" data-key="nationalPension">0</td></tr>-->
+<!--    <tr><td>근로소득세</td>     <td class="num" data-key="incomeTax">0</td></tr>-->
+<!--    <tr><td>근로지방소득세</td> <td class="num" data-key="localIncomeTax">0</td></tr>-->
+<!--    <tr><td>학자금상환</td>     <td class="num" data-key="studentLoanRepayment">0</td></tr>-->
+<!--    <tr class="total-row">-->
+<!--      <td>공제합계</td>-->
+<!--      <td class="num" data-key="deductionTotal">0</td>-->
+<!--    </tr>-->
+<!--  </tbody>-->
+<!--</table>-->
 
-<div class="section-title">4. 최종 지급액</div>
-<table class="doc">
-  <tr class="final-row">
-    <td style="width:50%">실지급액 (지급합계 − 공제합계)</td>
-    <td class="num" data-key="totalPayAmount">0</td>
-  </tr>
-</table>
+<!--<div class="section-title">4. 최종 지급액</div>-->
+<!--<table class="doc">-->
+<!--  <tr class="final-row">-->
+<!--    <td style="width:50%">실지급액 (지급합계 − 공제합계)</td>-->
+<!--    <td class="num" data-key="totalPayAmount">0</td>-->
+<!--  </tr>-->
+<!--</table>-->
 
-<p style="margin-top:24px; font-size:11px; color:#666;">
-  상기 내역대로 급여 지급을 결의합니다.
-</p>
+<!--<p style="margin-top:24px; font-size:11px; color:#666;">-->
+<!--  상기 내역대로 급여 지급을 결의합니다.-->
+<!--</p>-->
 
-</body>
-</html>
+<!--</body>-->
+<!--</html>-->

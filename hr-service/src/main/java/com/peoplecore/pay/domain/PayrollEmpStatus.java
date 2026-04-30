@@ -72,6 +72,7 @@ public class PayrollEmpStatus {
     }
 //  결재 승인 후
     public void approve() {
+        if (this.status == PayrollEmpStatusType.APPROVED) return;  // 멱등
         if (this.status != PayrollEmpStatusType.CONFIRMED) {
             throw new IllegalStateException("확정 상태에서만 결재 승인 가능");
         }
@@ -79,6 +80,7 @@ public class PayrollEmpStatus {
     }
 //  지급처리
     public void markPaid() {
+        if (this.status == PayrollEmpStatusType.PAID) return;  // 멱등
         if (this.status != PayrollEmpStatusType.APPROVED) {
             throw new IllegalStateException("결재 승인된 사원만 지급 처리 가능");
         }

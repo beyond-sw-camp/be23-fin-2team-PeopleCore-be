@@ -41,7 +41,7 @@ public class PayItems {
     @Builder.Default
     private Boolean isTaxable = true;
 
-//    고정항목 여부 (금액이 고정)
+//    고정수당 여부 (금액이 고정)
     @Builder.Default
     private Boolean isFixed = true;
 

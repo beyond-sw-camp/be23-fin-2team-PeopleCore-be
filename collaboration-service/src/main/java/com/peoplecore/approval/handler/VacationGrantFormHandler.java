@@ -39,7 +39,7 @@ public class VacationGrantFormHandler implements ApprovalFormHandler {
     public boolean requiresIdempotencyKey() { return true; }
 
     @Override
-    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {
+    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {
         try {
             VacationGrantDocData data = objectMapper.readValue(document.getDocData(), VacationGrantDocData.class);
             VacationGrantApprovalDocCreatedEvent event = VacationGrantApprovalDocCreatedEvent.builder()

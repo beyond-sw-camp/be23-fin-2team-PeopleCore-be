@@ -24,4 +24,7 @@ public interface SeverancePaysRepositoryCustom {
     Map<Long, Long> sumLast3MonthPayByEmpIds(UUID companyId, List<Long> empIds, List<String> months);
     Map<Long, Long> sumLastYearBonusByEmpIds(UUID companyId, List<Long> empIds, List<String> months);
     Map<Long, Long> sumDcDepositedTotalByEmpIds(UUID companyId, List<Long> empIds);
+//  직전 N개월 PAYMENT 항목들의 비과세 누계
+    Long sumNonTaxableLast3Months(Long empId, java.util.UUID companyId, java.util.List<String> months);
+
 }

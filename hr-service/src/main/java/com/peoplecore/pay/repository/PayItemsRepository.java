@@ -39,6 +39,17 @@ public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
 
     List<PayItems> findByCompany_CompanyIdAndPayItemTypeAndPayItemNameIn(UUID companyId, PayItemType payItemType, List<String> payItemNames);
 
+    // 보호 항목(sortOrder >= 900) 제외한 max sortOrder 조회 — 신규 항목 자동 부여용
+    @Query("""
+    SELECT MAX(p.sortOrder)
+    FROM PayItems p
+    WHERE p.company.companyId = :companyId
+      AND p.payItemType = :type
+      AND p.sortOrder < 900
+    """)
+    Integer findMaxSortOrderByCompanyAndType(
+            @Param("companyId") UUID companyId,
+            @Param("type") PayItemType type);
 
 //    정산전용 PayItems 조회 (isSystem=true인 항목만)
     List<PayItems> findByCompany_CompanyIdAndPayItemNameInAndIsSystemTrue(UUID companyId, List<String> payItemNames);
@@ -46,4 +57,7 @@ public interface PayItemsRepository extends JpaRepository<PayItems, Long> {
 //    법정 항목 조회
      Optional<PayItems> findByCompany_CompanyIdAndIsLegalTrueAndLegalCalcType(UUID companyId, LegalCalcType legalCalcType);
 
+
+    List<PayItems> findByCompany_CompanyIdAndPayItemTypeAndIsActiveOrderBySortOrder(
+            UUID companyId, PayItemType type, Boolean isActive);
 }

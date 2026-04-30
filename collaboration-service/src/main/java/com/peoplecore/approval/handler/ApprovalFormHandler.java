@@ -14,7 +14,7 @@ public interface ApprovalFormHandler {
     boolean supports(ApprovalDocument document);
 
     /* 문서 기안 직후 — Kafka docCreated 발행 등 */
-    default void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {}
+    default void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {}
 
     /* 최종 승인/반려/회수 결과 — Kafka result 발행 */
     default void onResult(ApprovalDocument document, String status, Long managerId, String rejectReason) {}

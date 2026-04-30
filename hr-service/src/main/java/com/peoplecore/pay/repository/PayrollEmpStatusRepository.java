@@ -13,4 +13,7 @@ public interface PayrollEmpStatusRepository extends JpaRepository<PayrollEmpStat
     List<PayrollEmpStatus> findByPayrollRuns_PayrollRunIdAndStatus(Long payrollRunId, PayrollEmpStatusType status);
 
     List<PayrollEmpStatus> findByPayrollRuns_PayrollRunId(Long payrollRunId);
+
+    List<PayrollEmpStatus> findByPayrollRuns_PayrollRunIdAndApprovalDocId(Long runId, Long docId);
+
 }

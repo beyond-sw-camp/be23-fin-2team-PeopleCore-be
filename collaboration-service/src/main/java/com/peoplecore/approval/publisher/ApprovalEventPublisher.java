@@ -30,9 +30,10 @@ public class ApprovalEventPublisher {
     }
 
     /* 문서 기안 직후 — 매칭 핸들러의 onDocCreated 호출 */
-    public void publishDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {
+    public void publishDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {
         handlerRegistry.find(document)
-                .ifPresent(h -> h.onDocCreated(document, lines));
+                .ifPresent(h -> h.
+                        onDocCreated(document, lines, htmlContent));
     }
 
     /* 최종 승인/반려/회수 결과 — 매칭 핸들러의 onResult 호출 */
