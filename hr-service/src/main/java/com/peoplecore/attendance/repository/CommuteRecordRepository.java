@@ -186,33 +186,35 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
      */
     Optional<CommuteRecord> findByComRecIdAndWorkDate(Long comRecId, LocalDate workDate);
 
-    /* 주간 actualWorkMinutes 합 - OT/정정 한도 검증용. work_date 범위라 파티션 프루닝 */
+    /* 주간 인정 근무 분 합 (actualWorkMinutes - unrecognizedOtMinutes) - 주 한도 검증용.
+     * 미인정 OT (결재 안 받은 야근) 는 한도 카운팅에서 제외.
+     * work_date 범위라 파티션 프루닝. */
     @Query("""
-            SELECT COALESCE(SUM(c.actualWorkMinutes), 0)
+            SELECT COALESCE(SUM(c.actualWorkMinutes - c.unrecognizedOtMinutes), 0)
               FROM CommuteRecord c
              WHERE c.companyId = :companyId
                AND c.employee.empId = :empId
                AND c.workDate BETWEEN :start AND :end
             """)
-    Long sumActualWorkMinutesInWeek(@Param("companyId") UUID companyId,
-                                    @Param("empId") Long empId,
-                                    @Param("start") LocalDate start,
-                                    @Param("end") LocalDate end);
+    Long sumRecognizedWorkMinutesInWeek(@Param("companyId") UUID companyId,
+                                        @Param("empId") Long empId,
+                                        @Param("start") LocalDate start,
+                                        @Param("end") LocalDate end);
 
-    /* 정정 대상 일자 제외 주간 합 - 정정 적용 후 합계 추정용 */
+    /* 정정 대상 일자 제외 주간 인정 근무 분 합 - 정정 적용 후 합계 추정용. 미인정 OT 제외. */
     @Query("""
-            SELECT COALESCE(SUM(c.actualWorkMinutes), 0)
+            SELECT COALESCE(SUM(c.actualWorkMinutes - c.unrecognizedOtMinutes), 0)
               FROM CommuteRecord c
              WHERE c.companyId = :companyId
                AND c.employee.empId = :empId
                AND c.workDate BETWEEN :start AND :end
                AND c.workDate <> :exclude
             """)
-    Long sumActualWorkMinutesInWeekExcluding(@Param("companyId") UUID companyId,
-                                             @Param("empId") Long empId,
-                                             @Param("start") LocalDate start,
-                                             @Param("end") LocalDate end,
-                                             @Param("exclude") LocalDate exclude);
+    Long sumRecognizedWorkMinutesInWeekExcluding(@Param("companyId") UUID companyId,
+                                                 @Param("empId") Long empId,
+                                                 @Param("start") LocalDate start,
+                                                 @Param("end") LocalDate end,
+                                                 @Param("exclude") LocalDate exclude);
 
 
     /*

@@ -2,8 +2,10 @@ package com.peoplecore.attendance.service;
 
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.HolidayReason;
+import com.peoplecore.attendance.entity.ModifyStatus;
 import com.peoplecore.attendance.entity.OvertimeRequest;
 import com.peoplecore.attendance.entity.WorkGroup;
+import com.peoplecore.attendance.repository.AttendanceModifyRepository;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -38,12 +40,15 @@ public class PayrollMinutesCalculator {
 
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final CommuteRecordRepository commuteRecordRepository;
+    private final AttendanceModifyRepository attendanceModifyRepository;
 
     @Autowired
     public PayrollMinutesCalculator(OvertimeRequestRepository overtimeRequestRepository,
-                                    CommuteRecordRepository commuteRecordRepository) {
+                                    CommuteRecordRepository commuteRecordRepository,
+                                    AttendanceModifyRepository attendanceModifyRepository) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.commuteRecordRepository = commuteRecordRepository;
+        this.attendanceModifyRepository = attendanceModifyRepository;
     }
 
     /* 분 컬럼 산출 결과 - native UPDATE 호출부에 전달 */
@@ -120,7 +125,11 @@ public class PayrollMinutesCalculator {
                     wg.getGroupOvertimeRecognize() == WorkGroup.GroupOvertimeRecognize.ALL;
             /* 정정 결재 통과 → 사실관계 인정 */
             boolean recognizeByModifyApproval = source == RecognitionSource.ATTENDANCE_MODIFY;
-            long[] rec = (autoRecognizeByGroup || recognizeByModifyApproval)
+            /* OT 결재 경로에서도 그 날 APPROVED 정정 이력이 있으면 정정 우선 처리 (덮어쓰기 방지) */
+            boolean modifyApprovedExists = source == RecognitionSource.OT_REQUEST
+                    && attendanceModifyRepository.existsByEmployee_EmpIdAndWorkDateAndAttenStatus(
+                            record.getEmployee().getEmpId(), workDate, ModifyStatus.APPROVED);
+            long[] rec = (autoRecognizeByGroup || recognizeByModifyApproval || modifyApprovedExists)
                     ? allocateRecognizedAll(checkIn, checkOut, workDate, wg, overtime, record.getHolidayReason())
                     : allocateRecognizedByApprovedOt(record, wg);
             recExt = rec[0]; recNight = rec[1]; recHoliday = rec[2];

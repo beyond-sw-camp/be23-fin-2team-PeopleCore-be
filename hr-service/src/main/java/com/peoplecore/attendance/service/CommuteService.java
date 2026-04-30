@@ -1,5 +1,6 @@
 package com.peoplecore.attendance.service;
 
+import com.peoplecore.alarm.publisher.HrAlarmPublisher;
 import com.peoplecore.attendance.dto.CheckInResDto;
 import com.peoplecore.attendance.dto.CheckOutResDto;
 import com.peoplecore.attendance.entity.CommuteRecord;
@@ -9,8 +10,10 @@ import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import com.peoplecore.attendance.util.ClientIpExtractor;
 import com.peoplecore.company.service.CompanyAllowedIpService;
+import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,6 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -48,6 +53,8 @@ public class CommuteService {
     private final WorkStatusResolver workStatusResolver;
     private final HolidayReasonResolver holidayReasonResolver;
     private final ClientIpExtractor clientIpExtractor;
+    private final OvertimeLimitChecker overtimeLimitChecker;
+    private final HrAlarmPublisher hrAlarmPublisher;
 
     @Autowired
     public CommuteService(CommuteRecordRepository commuteRecordRepository,
@@ -56,7 +63,9 @@ public class CommuteService {
                           PayrollMinutesCalculator payrollMinutesCalculator,
                           WorkStatusResolver workStatusResolver,
                           HolidayReasonResolver holidayReasonResolver,
-                          ClientIpExtractor clientIpExtractor) {
+                          ClientIpExtractor clientIpExtractor,
+                          OvertimeLimitChecker overtimeLimitChecker,
+                          HrAlarmPublisher hrAlarmPublisher) {
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
         this.companyAllowedIpService = companyAllowedIpService;
@@ -64,6 +73,8 @@ public class CommuteService {
         this.workStatusResolver = workStatusResolver;
         this.holidayReasonResolver = holidayReasonResolver;
         this.clientIpExtractor = clientIpExtractor;
+        this.overtimeLimitChecker = overtimeLimitChecker;
+        this.hrAlarmPublisher = hrAlarmPublisher;
     }
 
     /*
@@ -199,6 +210,9 @@ public class CommuteService {
         log.info("[checkOut] empId={}, workDate={}, checkOutAt={}, ip={}, workStatus={}",
                 empId, record.getWorkDate(), now, clientIp, finalStatus);
 
+        /* 주간 한도 초과 알림 - 인정 근무 분이 한도 초과면 본인+HR 알림 (실패해도 checkOut 성공) */
+        sendWeeklyLimitAlertIfExceeded(companyId, empId, record.getEmployee(), record.getWorkDate());
+
         /* 4. DTO 직접 빌드 (엔티티는 native UPDATE 후 stale - 읽지 않음) */
         return CheckOutResDto.builder()
                 .comRecId(record.getComRecId())
@@ -222,6 +236,39 @@ public class CommuteService {
                 .findByCompanyIdAndEmployee_EmpIdAndWorkDate(companyId, empId, workDate)
                 .ifPresent(record -> payrollMinutesCalculator.applyApprovedRecognition(
                         record, PayrollMinutesCalculator.RecognitionSource.OT_REQUEST));
+    }
+
+    /* 주간 인정 근무 분이 정책 한도를 초과하면 본인+HR 관리자에게 알림 발송.
+     * 알림 실패는 swallow - checkOut 자체 흐름을 막지 않음. */
+    private void sendWeeklyLimitAlertIfExceeded(UUID companyId, Long empId,
+                                                Employee employee, LocalDate workDate) {
+        try {
+            OvertimeLimitChecker.WeeklyUsage usage =
+                    overtimeLimitChecker.usageBefore(companyId, empId, workDate);
+            if (!usage.isExceeded()) return;
+
+            List<Employee> hrAdmins = employeeRepository.findByCompany_CompanyIdAndEmpRoleIn(
+                    companyId, List.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN));
+            List<Long> recipients = new ArrayList<>(hrAdmins.stream().map(Employee::getEmpId).toList());
+            if (!recipients.contains(empId)) recipients.add(empId);
+
+            long used = usage.usedMinutes();
+            long max = usage.weeklyMaxMinutes();
+            hrAlarmPublisher.publisher(AlarmEvent.builder()
+                    .companyId(companyId)
+                    .empIds(recipients)
+                    .alarmType("ATTENDANCE")
+                    .alarmTitle(employee.getEmpName() + " 사원의 주간 최대 근무시간 초과")
+                    .alarmContent("주간 누적 " + (used / 60) + "h " + (used % 60) + "m / 한도 "
+                            + (max / 60) + "h " + (max % 60) + "m")
+                    .alarmLink("/attendance/admin")
+                    .alarmRefType("WEEKLY_LIMIT")
+                    .build());
+            log.info("[checkOut] 주간 한도 초과 알림 발행 - empId={}, used={}m, max={}m",
+                    empId, used, max);
+        } catch (Exception e) {
+            log.error("[checkOut] 주간 한도 알림 실패 (swallow) - empId={}, err={}", empId, e.getMessage());
+        }
     }
 
 }
