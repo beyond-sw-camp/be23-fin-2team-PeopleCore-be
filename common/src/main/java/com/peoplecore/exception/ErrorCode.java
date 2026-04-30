@@ -98,6 +98,11 @@ public enum ErrorCode {
     PAYROLL_EMP_ALREADY_CONFIRMED(404, "이미 확정된 사원입니다. 되돌리기 후 수정하세요."),
     OVERTIME_ALREADY_APPLIED(400, "이미 초과근무 수당이 적용되어있는 건입니다."),
     APPROVAL_SNAPSHOT_NOT_FOUND(404, "전자결재 기록(스냅샷)을 찾을 수 없습니다."),
+    NO_PAYABLE_EMPLOYEES(404, "지급가능한 사원이 없습니다. (결재 승인된 사원만 지급 가능)"),
+    NO_TRANSFER_TARGETS(404,"이체 대상 사원이 비어 있습니다"),
+    PAYROLL_EMP_NOT_APPROVED(400, "결재 승인되지 않은 사원이 포함되어 있습니다"),
+
+
 
     // ── 정산보험료 ──
     INSURANCE_SETTLEMENT_NOT_FOUND(404, "정산보험료 데이터가 존재하지 않습니다."),

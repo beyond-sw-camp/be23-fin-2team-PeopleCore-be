@@ -396,64 +396,147 @@ public class PayrollService {
 
 ///    전자결재 결과 처리(kafka consumer)
     @Transactional
-    public void applyApprovalResult(PayrollApprovalResultEvent event){
+    public void applyApprovalResult(PayrollApprovalResultEvent event) {
         PayrollRuns run = findPayrollRun(event.getCompanyId(), event.getPayrollRunId());
 
 //        approvalDocId 보완
-        if(run.getApprovalDocId() == null && event.getApprovalDocId() != null){
+        if (run.getApprovalDocId() == null && event.getApprovalDocId() != null) {
             run.bindApprovalDoc(event.getApprovalDocId());
             run.submitApproval(event.getApprovalDocId());
         }
 
         String status = event.getStatus();
-        if ("APPROVED".equals(status)){
-            run.approve();
-            log.info("[PayrollService] 전자결재 승인 처리 완료 - payrollRunId={}",
-                    event.getPayrollRunId());
+        if ("APPROVED".equals(status)) {
+            Long docId = event.getApprovalDocId();
 
-            // 승인 시 redis에 저장해둔 캐시 무효화(invalidate)
-            List<Long> empIds = payrollDetailsRepository
-                    .findDistinctEmpIdsByPayrollRunId(event.getPayrollRunId());
+            // 1) 이 docId 에 바인딩된 사원만 APPROVED 로 전이
+            List<PayrollEmpStatus> bound = payrollEmpStatusRepository
+                    .findByPayrollRuns_PayrollRunIdAndApprovalDocId(event.getPayrollRunId(), docId);
+            bound.forEach(PayrollEmpStatus::approve);
+
+            // 2) run 의 모든 사원이 APPROVED/PAID 면 run 도 APPROVED 로 전이
+            boolean allEmpsApproved = payrollEmpStatusRepository
+                    .findByPayrollRuns_PayrollRunId(event.getPayrollRunId())
+                    .stream()
+                    .allMatch(p -> p.getStatus() == PayrollEmpStatusType.APPROVED
+                            || p.getStatus() == PayrollEmpStatusType.PAID);
+
+            if (allEmpsApproved && run.getPayrollStatus() == PayrollStatus.PENDING_APPROVAL) {
+                run.approve();
+            }
+
+            log.info("[PayrollService] 전자결재 승인 - runId={}, docId={}, 사원={}명, runApproved={}",
+                    event.getPayrollRunId(), docId, bound.size(), allEmpsApproved);
+
+            // 캐시 무효화 (기존 그대로)
+            List<Long> empIds = bound.stream()
+                    .map(p -> p.getEmployee().getEmpId()).toList();
             for (Long empId : empIds) {
                 mySalaryCacheService.evictSalaryInfoCache(event.getCompanyId(), empId);
                 mySalaryCacheService.evictStubListCache(event.getCompanyId(), empId);
                 mySalaryCacheService.evictSeveranceEstimateCache(event.getCompanyId(), empId);
             }
-            log.info("[PayrollService] 캐시 invalidate - runId={}, empCount={}",
-                    event.getPayrollRunId(), empIds.size());
-
         } else if ("REJECTED".equals(status) || "CANCELED".equals(status)) {
-            if ("REJECTED".equals(status)) {
-                run.rejectApproval();
-                log.info("[PayrollService] 전자결재 반려 처리 - payrollRunId={}, reason={}",
-                        event.getPayrollRunId(), event.getRejectReason());
-            } else {
-                run.cancelApproval();
-                log.info("[PayrollService] 전자결재 회수 - payrollRunId={}", event.getPayrollRunId());
-            }
-            // 이 결재 문서에 묶여있던 사원들의 approvalDocId 풀기 (재상신 가능 상태로)
             Long docId = event.getApprovalDocId();
             List<PayrollEmpStatus> bound = payrollEmpStatusRepository
                     .findByPayrollRuns_PayrollRunIdAndApprovalDocId(event.getPayrollRunId(), docId);
             bound.forEach(PayrollEmpStatus::unbindApprovalDoc);
 
-            log.info("[PayrollService] 전자결재 {} - payrollRunId={}, docId={}, 전자결재 연결(연동) 풀린 사원={}명",
-                    status, event.getPayrollRunId(), docId, bound.size());
+            // run 에 다른 진행 중 결재가 없을 때만 run 상태 되돌리기
+            boolean anyStillInApproval = payrollEmpStatusRepository
+                    .findByPayrollRuns_PayrollRunId(event.getPayrollRunId())
+                    .stream()
+                    .anyMatch(p -> p.getApprovalDocId() != null);
+
+            if (!anyStillInApproval) {
+                if ("REJECTED".equals(status)) run.rejectApproval();
+                else run.cancelApproval();
+            }
+
+            log.info("[PayrollService] 결재 {} - runId={}, docId={}, unbound 사원={}명, runRollback={}",
+                    status, event.getPayrollRunId(), docId, bound.size(), !anyStillInApproval);
         }
-//        else {
-//            log.warn("[PayrollService] 알 수 없는 status={} - payrollRunId={}",
-//                    status, event.getPayrollRunId());
-//        }
     }
 
 
 ///     지급 처리
     @Transactional
-    public void processPayment(UUID companyId, Long payrollRunId){
-        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
-        run.markPaid(LocalDate.now());
+    public void processPayment(UUID companyId, Long payrollRunId, List<Long> empIds){
+        PayrollRuns run = findPayrollRun(companyId, payrollRunId);// 대상 후보 — APPROVED 사원 전체 (empIds 비면) 또는 empIds ∩ APPROVED
+        List<PayrollEmpStatus> approvedAll = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndStatus(payrollRunId, PayrollEmpStatusType.APPROVED);
 
-        createPayStubs(run, run.getCompany());
+        List<PayrollEmpStatus> targets;
+        if (empIds == null || empIds.isEmpty()) {
+            targets = approvedAll;
+        } else {
+            Set<Long> requested = new HashSet<>(empIds);
+            targets = approvedAll.stream()
+                    .filter(p -> requested.contains(p.getEmployee().getEmpId()))
+                    .toList();
+        }
+
+        if (targets.isEmpty()) {
+            throw new CustomException(ErrorCode.NO_PAYABLE_EMPLOYEES);
+        }
+
+        // 대상 사원만 PAID 로 전이
+        LocalDate now = LocalDate.now();
+        targets.forEach(PayrollEmpStatus::markPaid);
+
+        // 해당 사원의 PayStub 만 생성 (이미 있으면 스킵 — createPayStubsForEmployees 내부에서 중복 검사)
+        Set<Long> targetEmpIds = targets.stream()
+                .map(p -> p.getEmployee().getEmpId())
+                .collect(Collectors.toSet());
+        createPayStubsForEmployees(run, run.getCompany(), targetEmpIds);
+
+        // run 의 모든 사원이 PAID 면 run 도 PAID 로 전이
+        boolean allPaid = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunId(payrollRunId)
+                .stream()
+                .allMatch(p -> p.getStatus() == PayrollEmpStatusType.PAID);
+
+        if (allPaid && run.getPayrollStatus() == PayrollStatus.APPROVED) {
+            run.markPaid(now);
+        }
+
+        log.info("[PayrollService] 지급처리 - runId={}, paid={}명, runMarkedPaid={}",
+                payrollRunId, targets.size(), allPaid);
+    }
+
+// 급여명세서
+    private void createPayStubsForEmployees(PayrollRuns run, Company company, Set<Long> empIds) {
+        List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRuns(run);
+        Map<Long, List<PayrollDetails>> byEmp = details.stream()
+                .filter(d -> empIds.contains(d.getEmployee().getEmpId()))
+                .collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()));
+
+        for (Map.Entry<Long, List<PayrollDetails>> entry : byEmp.entrySet()) {
+            Long empId = entry.getKey();
+
+            if (payStubsRepository.existsByEmpIdAndPayrollRunId(empId, run.getPayrollRunId())) continue;
+
+            long totalPay = entry.getValue().stream()
+                    .filter(d -> d.getPayItemType() == PayItemType.PAYMENT)
+                    .mapToLong(PayrollDetails::getAmount).sum();
+            long totalDeduction = entry.getValue().stream()
+                    .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
+                    .mapToLong(PayrollDetails::getAmount).sum();
+            long netPay = totalPay - totalDeduction;
+
+            PayStubs stub = PayStubs.builder()
+                    .empId(empId)
+                    .payrollRunId(run.getPayrollRunId())
+                    .payYearMonth(run.getPayYearMonth())
+                    .totalPay(totalPay)
+                    .totalDeduction(totalDeduction)
+                    .netPay(netPay)
+                    .sendStatus(SendStatus.PENDING)
+                    .issuedAT(LocalDateTime.now())
+                    .company(company)
+                    .build();
+            payStubsRepository.save(stub);
+        }
     }
 
 
@@ -461,10 +544,27 @@ public class PayrollService {
     public TransferFileResDto generateTransferFile(UUID companyId, Long payrollRunId, List<Long> empIds) {
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
 
-        if (run.getPayrollStatus() != PayrollStatus.PAID){
-            throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
+        if (empIds == null || empIds.isEmpty()) {
+            throw new CustomException(ErrorCode.NO_TRANSFER_TARGETS);
         }
 
+        // 선택된 사원이 모두 APPROVED 또는 PAID 인지 검증
+        Map<Long, PayrollEmpStatus> empStatusMap = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunId(payrollRunId)
+                .stream()
+                .collect(Collectors.toMap(p -> p.getEmployee().getEmpId(), p -> p));
+
+        for (Long empId : empIds) {
+            PayrollEmpStatus pes = empStatusMap.get(empId);
+            if (pes == null) {
+                throw new CustomException(ErrorCode.PAYROLL_EMP_NOT_FOUND);
+            }
+            PayrollEmpStatusType st = pes.getStatus();
+            if (st != PayrollEmpStatusType.APPROVED && st != PayrollEmpStatusType.PAID) {
+                throw new CustomException(ErrorCode.PAYROLL_EMP_NOT_APPROVED);
+            }
+        }
+//CompanyPaySettings 조회, PayrollDetails 조회, 이체파일 생성
         CompanyPaySettings settings = paySettingsRepository.findByCompany_CompanyId(companyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PAY_SETTINGS_NOT_FOUND));
 
@@ -861,41 +961,41 @@ public class PayrollService {
     }
 
 
-
-//    급여명세서 생성
-    private void createPayStubs(PayrollRuns run, Company company) {
-        List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRuns(run);
-        Map<Long, List<PayrollDetails>> byEmp = details.stream()
-                .collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()));
-
-        for (Map.Entry<Long, List<PayrollDetails>> entry : byEmp.entrySet()) {
-            Long empId = entry.getKey();
-
-            // 중복 방지
-            if (payStubsRepository.existsByEmpIdAndPayrollRunId(empId, run.getPayrollRunId())) continue;
-
-            long totalPay = entry.getValue().stream()
-                    .filter(d -> d.getPayItemType() == PayItemType.PAYMENT)
-                    .mapToLong(PayrollDetails::getAmount).sum();
-            long totalDeduction = entry.getValue().stream()
-                    .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
-                    .mapToLong(PayrollDetails::getAmount).sum();
-            long netPay = totalPay - totalDeduction;
-
-            PayStubs stub = PayStubs.builder()
-                    .empId(empId)
-                    .payrollRunId(run.getPayrollRunId())
-                    .payYearMonth(run.getPayYearMonth())
-                    .totalPay(totalPay)
-                    .totalDeduction(totalDeduction)
-                    .netPay(netPay)
-                    .sendStatus(SendStatus.PENDING)   // 초기 상태 (전송 대기)
-                    .issuedAT(LocalDateTime.now())
-                    .company(company)
-                    .build();
-            payStubsRepository.save(stub);
-        }
-    }
+//
+////    급여명세서 생성
+//    private void createPayStubs(PayrollRuns run, Company company) {
+//        List<PayrollDetails> details = payrollDetailsRepository.findByPayrollRuns(run);
+//        Map<Long, List<PayrollDetails>> byEmp = details.stream()
+//                .collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()));
+//
+//        for (Map.Entry<Long, List<PayrollDetails>> entry : byEmp.entrySet()) {
+//            Long empId = entry.getKey();
+//
+//            // 중복 방지
+//            if (payStubsRepository.existsByEmpIdAndPayrollRunId(empId, run.getPayrollRunId())) continue;
+//
+//            long totalPay = entry.getValue().stream()
+//                    .filter(d -> d.getPayItemType() == PayItemType.PAYMENT)
+//                    .mapToLong(PayrollDetails::getAmount).sum();
+//            long totalDeduction = entry.getValue().stream()
+//                    .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
+//                    .mapToLong(PayrollDetails::getAmount).sum();
+//            long netPay = totalPay - totalDeduction;
+//
+//            PayStubs stub = PayStubs.builder()
+//                    .empId(empId)
+//                    .payrollRunId(run.getPayrollRunId())
+//                    .payYearMonth(run.getPayYearMonth())
+//                    .totalPay(totalPay)
+//                    .totalDeduction(totalDeduction)
+//                    .netPay(netPay)
+//                    .sendStatus(SendStatus.PENDING)   // 초기 상태 (전송 대기)
+//                    .issuedAT(LocalDateTime.now())
+//                    .company(company)
+//                    .build();
+//            payStubsRepository.save(stub);
+//        }
+//    }
 
 
     private boolean isHolidayForWorkGroup(UUID companyId, LocalDate date, WorkGroup wg) {

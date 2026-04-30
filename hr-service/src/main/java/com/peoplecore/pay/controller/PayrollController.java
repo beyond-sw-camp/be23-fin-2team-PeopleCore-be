@@ -104,8 +104,9 @@ public class PayrollController {
     @PutMapping("/{payrollRunId}/pay")
     public ResponseEntity<Void> processPayment(
             @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long payrollRunId){
-        payrollService.processPayment(companyId, payrollRunId);
+            @PathVariable Long payrollRunId,
+            @RequestBody(required = false) List<Long> empIds){
+        payrollService.processPayment(companyId, payrollRunId, empIds);
         return ResponseEntity.ok().build();
     }
 

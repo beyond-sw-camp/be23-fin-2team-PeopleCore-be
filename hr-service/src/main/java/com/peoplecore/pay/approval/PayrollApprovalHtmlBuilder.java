@@ -225,7 +225,7 @@ public class PayrollApprovalHtmlBuilder {
                             + "<td>%s</td><td>%s</td><td>%s</td>"
                             + "<td class='currency'>%s</td>"
                             + "</tr>",
-                    escape(e.deptName), escape(e.empName), escape(e.gradeName), currency(e.totalPay)));
+                    escape(e.deptName), escape(e.empName), escape(e.gradeName), currency(e.netPay)));
         }
     }
 
@@ -318,30 +318,41 @@ public class PayrollApprovalHtmlBuilder {
     }
 
     /**
-     * 사원 명단 — 부서/사원명/직급/총지급액. 부서명 → 사원명 가나다순.
+     * 사원 명단 — 부서/사원명/직급/실지급액. 부서명 → 사원명 가나다순.
      */
     private List<EmpSummary> listEmployees(Long runId, Set<Long> empIds) {
         List<Employee> emps = employeeRepository.findAllById(empIds);
 
         List<PayrollDetails> details = payrollDetailsRepository
                 .findByPayrollRuns_PayrollRunIdAndEmployee_EmpIdIn(runId, empIds);
-        Map<Long, Long> empTotalPay = new HashMap<>();
+        // 사원별 지급 합계 / 공제 합계 분리
+        Map<Long, Long> empPay = new HashMap<>();
+        Map<Long, Long> empDeduct = new HashMap<>();
         for (PayrollDetails pd : details) {
-            if (pd.getPayItemType() != PayItemType.PAYMENT) continue;
-            empTotalPay.merge(pd.getEmployee().getEmpId(), pd.getAmount(), Long::sum);
+            Long empId = pd.getEmployee().getEmpId();
+            if (pd.getPayItemType() == PayItemType.PAYMENT) {
+                empPay.merge(empId, pd.getAmount(), Long::sum);
+            } else if (pd.getPayItemType() == PayItemType.DEDUCTION) {
+                empDeduct.merge(empId, pd.getAmount(), Long::sum);
+            }
         }
 
         return emps.stream()
                 .sorted(Comparator
                         .comparing((Employee e) -> e.getDept() != null ? e.getDept().getDeptName() : "")
                         .thenComparing(Employee::getEmpName))
-                .map(e -> new EmpSummary(
+                .map(e -> {
+                    long pay = empPay.getOrDefault(e.getEmpId(), 0L);
+                    long deduct = empDeduct.getOrDefault(e.getEmpId(), 0L);
+                    return new EmpSummary(
                         e.getDept() != null ? e.getDept().getDeptName() : "미배정",
                         e.getEmpName(),
                         e.getGrade() != null ? e.getGrade().getGradeName() : "",
-                        empTotalPay.getOrDefault(e.getEmpId(), 0L)))
+                        pay - deduct);   // ← 실지급액 = 지급 - 공제
+                 })
                 .toList();
     }
+
     /**
      * 헤더 영역 (data-key 기반)을 기존 양식의 키 그대로 채움.
      * 양식의 실제 data-key:
@@ -390,6 +401,7 @@ public class PayrollApprovalHtmlBuilder {
     }
     private record DeptSummary(String deptName, int empCount, long totalPay,
                                long totalDeduction, long netPay) {}
-    private record EmpSummary(String deptName, String empName, String gradeName, long totalPay) {}
+
+    private record EmpSummary(String deptName, String empName, String gradeName, long netPay) {}
 
 }
