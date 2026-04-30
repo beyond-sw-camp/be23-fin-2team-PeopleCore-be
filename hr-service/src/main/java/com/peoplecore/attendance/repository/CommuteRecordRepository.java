@@ -83,13 +83,14 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
                                  @Param("to") LocalDate to);
 
     /* 근태 정정 승인 native UPDATE - check-in/out + workStatus 일괄 교체.
+     * COALESCE: null 파라미터 시 기존값 유지 (부분 정정 방어 - 출근만 또는 퇴근만 정정).
      * workStatus 는 호출부(AttendanceModifyService)에서 새 시간 기준으로 산출해 전달.
      * 파티션 프루닝: WHERE work_date 포함 필수. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
             UPDATE commute_record
-               SET com_rec_check_in  = :newCheckIn,
-                   com_rec_check_out = :newCheckOut,
+               SET com_rec_check_in  = COALESCE(:newCheckIn, com_rec_check_in),
+                   com_rec_check_out = COALESCE(:newCheckOut, com_rec_check_out),
                    work_status       = :newStatus
              WHERE com_rec_id = :comRecId
                AND work_date  = :workDate

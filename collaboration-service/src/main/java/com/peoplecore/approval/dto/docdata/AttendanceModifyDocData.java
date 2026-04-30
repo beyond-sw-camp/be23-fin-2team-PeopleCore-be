@@ -1,6 +1,5 @@
 package com.peoplecore.approval.dto.docdata;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -14,7 +13,6 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 @Data
-@JsonIgnoreProperties(ignoreUnknown = true)
 public class AttendanceModifyDocData {
     /* 대상 출퇴근 기록 PK */
     private Long comRecId;
