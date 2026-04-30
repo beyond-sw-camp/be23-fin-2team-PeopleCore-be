@@ -164,29 +164,28 @@ public class AttendanceAdminQueryRepository {
         return result;
     }
 
+    /* 일자별 인정 OT 분 합 — CommuteRecord.recognizedExtendedMinutes 직접 합산.
+     * 데이터 흐름: OT 신청 APPROVED + 근태 정정 APPROVED 양쪽 모두
+     *   PayrollMinutesCalculator.applyApprovedRecognition 이 이 컬럼에 누적.
+     * → 두 인정 경로를 통합한 단일 진실 소스.
+     * 파티션 프루닝: workDate 동등 조건 (단일 월 파티션 스캔). */
     private Map<Long, Long> fetchApprovedOtMinutesMap(List<Long> empIds, LocalDate date) {
-        QOvertimeRequest ot = QOvertimeRequest.overtimeRequest;
-        LocalDateTime startOfDay = date.atStartOfDay();
-        LocalDateTime endOfDay = date.atTime(LocalTime.MAX);
-
-        NumberExpression<Long> minutes = Expressions.numberTemplate(Long.class,
-                "TIMESTAMPDIFF(MINUTE, {0}, {1})", ot.otPlanStart, ot.otPlanEnd);
+        QCommuteRecord cr = QCommuteRecord.commuteRecord;
 
         List<Tuple> list = queryFactory
-                .select(ot.employee.empId, minutes.sum())
-                .from(ot)
+                .select(cr.employee.empId, cr.recognizedExtendedMinutes.sum())
+                .from(cr)
                 .where(
-                        ot.employee.empId.in(empIds),
-                        ot.otStatus.eq(OtStatus.APPROVED),
-                        ot.otDate.between(startOfDay, endOfDay)
+                        cr.employee.empId.in(empIds),
+                        cr.workDate.eq(date)
                 )
-                .groupBy(ot.employee.empId)
+                .groupBy(cr.employee.empId)
                 .fetch();
 
         Map<Long, Long> result = new HashMap<>();
         for (Tuple t : list) {
-            Long m = t.get(minutes.sum());
-            result.put(t.get(ot.employee.empId), m != null ? m : 0L);
+            Long m = t.get(cr.recognizedExtendedMinutes.sum());
+            result.put(t.get(cr.employee.empId), m != null ? m : 0L);
         }
         return result;
     }
