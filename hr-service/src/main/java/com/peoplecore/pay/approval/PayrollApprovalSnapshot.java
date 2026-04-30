@@ -32,7 +32,7 @@ public class PayrollApprovalSnapshot {
     private UUID companyId;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String htmlSnapshot;
 
     @Column(nullable = false)

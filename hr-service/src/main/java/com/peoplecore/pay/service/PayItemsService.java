@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -105,14 +106,21 @@ public class PayItemsService {
             throw new CustomException(ErrorCode.NOT_FOUND);
         }
 
-//        항목 사용여부 검증 -> 사용시 소프트딜리트
-        for(PayItems item : items){
-            if (salaryContractDetailRepository.existsByPayItemId(item.getPayItemId()) || payrollDetailsRepository.existsByPayItems_PayItemId(item.getPayItemId())){
-                item.softDelete();
+        List<PayItems> hardDeletable = new ArrayList<>();
+        for (PayItems item : items) {
+            boolean referenced =
+                    salaryContractDetailRepository.existsByPayItemId(item.getPayItemId())
+                            || payrollDetailsRepository.existsByPayItems_PayItemId(item.getPayItemId());
+            if (referenced) {
+                item.softDelete();          // 참조 있음 → 소프트딜리트
+            } else {
+                hardDeletable.add(item);    // 참조 없음 → 하드딜리트
             }
         }
 
-        payItemsRepository.deleteAll(items);
+        if (!hardDeletable.isEmpty()) {
+            payItemsRepository.deleteAll(hardDeletable);
+        }
     }
 
 
