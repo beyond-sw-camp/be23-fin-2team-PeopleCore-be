@@ -140,6 +140,7 @@ public class HrCacheService {
         }
 
 //        2. 캐시 miss분 hr-service 호출
+//        2. 캐시 miss분 hr-service 호출
         if(!missedIds.isEmpty()){
             List<EmployeeSimpleResDto> fetched = hrServiceClient.getEmployees(missedIds);
 

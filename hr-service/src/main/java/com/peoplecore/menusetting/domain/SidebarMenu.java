@@ -22,20 +22,24 @@ public enum SidebarMenu {
     CALENDAR(false, EnumSet.noneOf(EmpRole.class), 3),
     /* 파일함 */
     FILES(false, EnumSet.noneOf(EmpRole.class), 4),
-    /* 근태 / 연차 */
+    /* 근태 */
     ATTENDANCE(false, EnumSet.noneOf(EmpRole.class), 5),
+    /* 휴가 */
+    LEAVE(false, EnumSet.noneOf(EmpRole.class), 6),
     /* 급여 */
-    PAYROLL(false, EnumSet.noneOf(EmpRole.class), 6),
+    PAYROLL(false, EnumSet.noneOf(EmpRole.class), 7),
     /* 성과 관리 */
-    PERFORMANCE(false, EnumSet.noneOf(EmpRole.class), 7),
+    PERFORMANCE(false, EnumSet.noneOf(EmpRole.class), 8),
     /* 사원 관리 - HR 관리자/최고관리자만 접근 */
-    EMPLOYEE_MGMT(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 8),
+    EMPLOYEE_MGMT(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 9),
     /* 급여 관리 - HR 관리자/최고관리자만 접근 */
-    PAYROLL_MGMT(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 9),
+    PAYROLL_MGMT(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 10),
     /* 인사통합 - HR 관리자/최고관리자만 접근 */
-    HR_INTEGRATION(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 10),
+    HR_INTEGRATION(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 11),
     /* 평가 관리 - HR 관리자/최고관리자만 접근 */
-    EVAL_ADMIN(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 11);
+    EVAL_ADMIN(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 12),
+    /* 근태/휴가 관리 - HR 관리자/최고관리자만 접근 */
+    ATTENDANCE_ADMIN(false, EnumSet.of(EmpRole.HR_ADMIN, EmpRole.HR_SUPER_ADMIN), 13);
 
     private final boolean alwaysOn;
     private final Set<EmpRole> requiredRoles;

@@ -97,6 +97,12 @@ public enum ErrorCode {
     NO_CONFIRMED_EMPLOYEES(400, "확정된 사원이 없습니다."),
     PAYROLL_EMP_ALREADY_CONFIRMED(404, "이미 확정된 사원입니다. 되돌리기 후 수정하세요."),
     OVERTIME_ALREADY_APPLIED(400, "이미 초과근무 수당이 적용되어있는 건입니다."),
+    APPROVAL_SNAPSHOT_NOT_FOUND(404, "전자결재 기록(스냅샷)을 찾을 수 없습니다."),
+    NO_PAYABLE_EMPLOYEES(404, "지급가능한 사원이 없습니다. (결재 승인된 사원만 지급 가능)"),
+    NO_TRANSFER_TARGETS(404,"이체 대상 사원이 비어 있습니다"),
+    PAYROLL_EMP_NOT_APPROVED(400, "결재 승인되지 않은 사원이 포함되어 있습니다"),
+
+
 
     // ── 정산보험료 ──
     INSURANCE_SETTLEMENT_NOT_FOUND(404, "정산보험료 데이터가 존재하지 않습니다."),
@@ -229,6 +235,7 @@ public enum ErrorCode {
     COMMUTE_ALREADY_CHECKED_IN(409, "이미 오늘 출근 체크가 완료되었습니다."),
     COMMUTE_NOT_CHECKED_IN(404, "오늘 출근 기록이 없어 퇴근 체크를 할 수 없습니다."),
     COMMUTE_ALREADY_CHECKED_OUT(409, "이미 오늘 퇴근 체크가 완료되었습니다."),
+    COMMUTE_IP_NOT_ALLOWED(403, "회사가 허용한 IP에서만 출퇴근 체크가 가능합니다."),
     EMPLOYEE_WORK_GROUP_NOT_ASSIGNED(409, "사원에게 근무 그룹이 배정되지 않았습니다."),
 
     /* 근태 정정 */
@@ -237,6 +244,9 @@ public enum ErrorCode {
     ATTENDANCE_RECORD_NOT_FOUND(404, "해당 날짜 출근 기록이 없습니다."),
     ATTENDANCE_MODIFY_FORM_NOT_FOUND(404, "근태 정정 양식이 존재하지 않습니다."),
     ATTENDANCE_MODIFY_APPLY_FAILED(500, "근태 정정 적용 중 오류가 발생했습니다."),
+
+    /*전자 결재 */
+    COMPANY_INIT_EVENT_PUBLISH_FAILED(404,"회사 생성 이벤트를 실행하였습니다."),
 
     /*휴가 */
     INVALID_REQUEST_STATUS_TRANSITION(400, "허용되지 않은 휴가 신청 상태 전이입니다."),

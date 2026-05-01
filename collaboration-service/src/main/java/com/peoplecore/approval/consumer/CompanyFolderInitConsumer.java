@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.approval.service.ApprovalFormService;
 import com.peoplecore.approval.service.ApprovalNumberRuleService;
 import com.peoplecore.event.CompanyCreateEvent;
-import com.peoplecore.exception.BusinessException;
 import com.peoplecore.filevault.entity.FolderType;
 import com.peoplecore.filevault.repository.FileFolderRepository;
 import com.peoplecore.filevault.service.FileFolderService;
@@ -64,8 +63,8 @@ public class CompanyFolderInitConsumer {
                 event.getCompanyId(), "전사 파일함", FolderType.COMPANY, null, null, 0L);
             log.info("[FileVault] 전사 기본 파일함 생성 완료 companyId={}", event.getCompanyId());
         } catch (Exception e) {
-            log.error("폴더 초기화 이벤트 처리 실패: {}", e.getMessage());
-            throw new BusinessException("오류 발생");
+            log.error("폴더 초기화 이벤트 처리 실패", e);
+            throw e instanceof RuntimeException re ? re : new RuntimeException(e);
         }
     }
 

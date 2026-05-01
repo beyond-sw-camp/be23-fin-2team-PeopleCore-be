@@ -42,6 +42,9 @@ public interface ApprovalDocumentCustomRepository {
     /*전체 문서함 건수 조회*/
     DocumentCountResponse countAllBoxes(UUID companyId, Long empId, Long deptId);
 
+    /* 결재 대기 건수만 단건 조회 (헤더 배지용 경량 쿼리) */
+    Long countWaitingDocuments(UUID companyId, Long empId);
+
     /*부서 문서함 deptId 기준 - 부서원이 기안 OR 결재라인 참여 */
     Page<DocumentListResponseDto> findDeptDocument(UUID companyId, Long deptId, DocumentListSearchDto searchDto, Pageable pageable);
 

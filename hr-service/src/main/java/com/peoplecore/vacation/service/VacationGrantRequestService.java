@@ -255,19 +255,21 @@ public class VacationGrantRequestService {
 
     /* APPROVED 시 Balance 적립 */
     /* balanceYear = 승인 시점 연도 (사용자 결정). 적립 후 request.markApplied() 로 year 기록 */
-    /* expiresAt = FAMILY_CARE 만 12/31, 나머지는 null=무기한 */
+    /* expiresAt = FAMILY_CARE 만 회계연도말(12/31), 나머지는 부여일 + 6개월 고정 */
+    /* 같은 (회사,사원,유형,연도) 행 존재 시: 가장 최근 부여 만료일로 덮어쓰기 (분할 부여 정책) */
     /* 3층 방어: cap 초과 시 자동 REJECT 전환 (race 가 1·2층 뚫었을 때 최종 가드) */
     private void applyApprovedAccrual(VacationGrantRequest request, Employee manager, Long managerId) {
         StatutoryVacationType statutoryType = StatutoryVacationType.fromCode(request.getVacationType().getTypeCode());
         int balanceYear = LocalDate.now().getYear();
         LocalDate grantedAt = LocalDate.now();
-        LocalDate expiresAt = resolveExpiresAt(statutoryType, balanceYear);
+        LocalDate expiresAt = resolveExpiresAt(statutoryType, balanceYear, grantedAt);
 
         VacationBalance balance = vacationBalanceRepository
                 .findOne(request.getCompanyId(),
                          request.getEmployee().getEmpId(),
                          request.getVacationType().getTypeId(),
                          balanceYear)
+                .map(b -> { b.updateExpiresAt(expiresAt); return b; })  // 기존 행: 새 부여 만료일로 덮어쓰기
                 .orElseGet(() -> vacationBalanceRepository.save(
                         VacationBalance.createNew(request.getCompanyId(), request.getVacationType(),
                                 request.getEmployee(), balanceYear, grantedAt, expiresAt)));
@@ -388,12 +390,13 @@ public class VacationGrantRequestService {
         return BigDecimal.valueOf(type.getDefaultDays());
     }
 
-    /* 만료일 결정 - FAMILY_CARE 만 연말 만료, 나머지는 무기한 */
-    private LocalDate resolveExpiresAt(StatutoryVacationType type, int balanceYear) {
+    /* 만료일 결정 - FAMILY_CARE 만 회계연도 정합성 위해 12/31 유지, 그 외(시스템 예약 + 커스텀) 부여일 + 6개월 고정 */
+    /* 6개월 고정 사유: 회사 커스텀 휴가도 동일 룰 적용해 결재 부여 시 무기한(null) 으로 떨어지는 운영 위험 차단 */
+    private LocalDate resolveExpiresAt(StatutoryVacationType type, int balanceYear, LocalDate grantedAt) {
         if (type == StatutoryVacationType.FAMILY_CARE) {
             return LocalDate.of(balanceYear, 12, 31);
         }
-        return null;
+        return grantedAt.plusMonths(6);
     }
 
     /* 회사 + requestId 단건 조회 - 타 회사 차단 */

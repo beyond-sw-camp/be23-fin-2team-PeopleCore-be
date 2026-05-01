@@ -2,7 +2,6 @@ package com.peoplecore.pay.approval;
 
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
-import com.peoplecore.event.PayrollApprovalDocCreatedEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.PayrollRuns;
@@ -32,18 +31,20 @@ public class PayrollApprovalDraftService {
     private final PayrollRunsRepository payrollRunsRepository;
     private final PayrollDetailsRepository payrollDetailsRepository;
     private final EmployeeRepository employeeRepository;
-    private final PayrollApprovalDocCreatedPublisher docCreatedPublisher;
+//    private final PayrollApprovalDocCreatedPublisher docCreatedPublisher;
     private final ApprovalFormCache approvalFormCache;
     private final PayrollEmpStatusRepository payrollEmpStatusRepository;
+    private final PayrollApprovalHtmlBuilder htmlBuilder;
+
 
     @Autowired
-    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, PayrollApprovalDocCreatedPublisher docCreatedPublisher, ApprovalFormCache approvalFormCache, PayrollEmpStatusRepository payrollEmpStatusRepository) {
+    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, ApprovalFormCache approvalFormCache, PayrollEmpStatusRepository payrollEmpStatusRepository, PayrollApprovalHtmlBuilder htmlBuilder) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
-        this.docCreatedPublisher = docCreatedPublisher;
         this.approvalFormCache = approvalFormCache;
         this.payrollEmpStatusRepository = payrollEmpStatusRepository;
+        this.htmlBuilder = htmlBuilder;
     }
 
     private static final DateTimeFormatter YMD = DateTimeFormatter.ISO_LOCAL_DATE;
@@ -54,23 +55,35 @@ public class PayrollApprovalDraftService {
     public ApprovalDraftResDto draft(UUID companyId, Long userId, Long payrollRunId){
         PayrollRuns run = payrollRunsRepository.findByPayrollRunIdAndCompany_CompanyId(payrollRunId, companyId).orElseThrow(()-> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
 
-//        결재 가능 상태 검증 (Confirmed 또는 PENDING_APPROVAL(재상신 케이스) 가능)
-        if (run.getPayrollStatus() != PayrollStatus.CONFIRMED
+//        결재 가능 상태 검증 (Confirmed 또는 PENDING_APPROVAL(재상신 케이스), CALCULATING(사원별 일부 확정후 부분결재) 가능)
+        if (run.getPayrollStatus() != PayrollStatus.CALCULATING
+                && run.getPayrollStatus() != PayrollStatus.CONFIRMED
                 && run.getPayrollStatus() != PayrollStatus.PENDING_APPROVAL){
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
 
         Employee drafter = employeeRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-        ApprovalFormCache.CachedForm form = approvalFormCache.get(companyId, ApprovalFormType.SALARY);
-        String htmlTemplate = form.formHtml();   // ← collab → MinIO 최신본
-        Map<String, String> dataMap = buildDataMap(run, drafter);
+        // 확정 + 아직 결재 안 올린 사원만
+        Set<Long> confirmedEmpIds = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndStatus(payrollRunId, PayrollEmpStatusType.CONFIRMED)
+                .stream()
+                .filter(p -> p.getApprovalDocId() == null)
+                .map(p -> p.getEmployee().getEmpId())
+                .collect(Collectors.toSet());
+
+        if (confirmedEmpIds.isEmpty()) {
+            throw new CustomException(ErrorCode.NO_CONFIRMED_EMPLOYEES);
+        }
+
+        // 빌더로 완성된 HTML 생성
+        String htmlTemplate = htmlBuilder.buildSalaryHtml(run, drafter, confirmedEmpIds);
 
         return ApprovalDraftResDto.builder()
                 .type(ApprovalFormType.SALARY)
                 .ledgerId(payrollRunId)
                 .htmlTemplate(htmlTemplate)
-                .dataMap(dataMap)
+                .dataMap(Collections.emptyMap())   // 사용 안 함 -> 빈 Map보내기
                 .build();
     }
 
@@ -78,10 +91,11 @@ public class PayrollApprovalDraftService {
         Map<String, String> m = new HashMap<>();
         Long runId = run.getPayrollRunId();
 
-        // 확정된 사원 ID Set 미리 추출
+        // 확정된 사원 + 전자결재 안올린 사원 ID Set 추출
         Set<Long> confirmedEmpIds = payrollEmpStatusRepository
                 .findByPayrollRuns_PayrollRunIdAndStatus(runId, PayrollEmpStatusType.CONFIRMED)
                 .stream()
+                .filter(p-> p.getApprovalDocId() == null)
                 .map(p -> p.getEmployee().getEmpId())
                 .collect(Collectors.toSet());
 
@@ -169,45 +183,4 @@ public class PayrollApprovalDraftService {
     }
 
 
-///    전자결재 상신 (Kafka 발행)
-    @Transactional
-    public void submit(UUID companyId, Long userId, ApprovalSubmitReqDto reqDto) {
-
-        PayrollRuns run = payrollRunsRepository
-                .findByPayrollRunIdAndCompany_CompanyId(reqDto.getLedgerId(), companyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
-
-        if (run.getPayrollStatus() != PayrollStatus.CONFIRMED) {
-            throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
-        }
-
-//  확정된 사원이 1명 이상 있어야 결재 상신 가능
-        long confirmedCount = payrollEmpStatusRepository
-                .findByPayrollRuns_PayrollRunIdAndStatus(reqDto.getLedgerId(), PayrollEmpStatusType.CONFIRMED)
-                .size();
-        if (confirmedCount == 0) {
-            throw new CustomException(ErrorCode.NO_CONFIRMED_EMPLOYEES);
-        }
-        ApprovalFormCache.CachedForm form =
-                approvalFormCache.get(companyId, ApprovalFormType.SALARY);
-
-        docCreatedPublisher.publish(PayrollApprovalDocCreatedEvent.builder()
-                .companyId(companyId)
-                .payrollRunId(run.getPayrollRunId())
-                .drafterId(userId)
-                .formId(form.formId())
-                .formCode(ApprovalFormType.SALARY.getFormCode())   // "PAYROLL_RESOLUTION"
-                .htmlContent(reqDto.getHtmlContent())
-                .approvalLine(reqDto.getApprovalLine())
-                .build());
-
-        log.info("[PayrollApproval] 상신 발행 - payrollRunId={}, formId={}, drafterId={}",
-                run.getPayrollRunId(), form.formId(), userId);
-
-        // 상태 전이: APPROVED → PENDING_APPROVAL (요구사항에 따라 조정)
-         run.submitApproval(null);
-
-    }
-
-    // currency, format helpers는 공용 유틸로 추출 권장
 }

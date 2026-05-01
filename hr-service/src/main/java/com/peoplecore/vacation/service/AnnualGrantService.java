@@ -107,9 +107,9 @@ public class AnnualGrantService {
         LocalDate periodEnd = today.minusDays(1);
 
         int coveredDays = attendanceCheckService.countCoveredBusinessDays(
-                companyId, emp.getEmpId(), hireDate, periodEnd);
+                companyId, emp.getEmpId(), emp.getWorkGroup(), hireDate, periodEnd);
         int totalBizDays = businessDayCalculator.countBusinessDays(
-                companyId, previousFiscalStart, periodEnd);
+                companyId, emp.getWorkGroup(), previousFiscalStart, periodEnd);
 
         if (totalBizDays == 0) {
             log.warn("[AnnualGrant-FISCAL-FIRST] totalBizDays=0 - empId={}, period={}~{}",

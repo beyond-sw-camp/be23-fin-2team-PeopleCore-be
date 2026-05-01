@@ -88,15 +88,21 @@ public class CompanyAllowedIpService {
         companyAllowedIpRepository.delete(ip);
     }
 
-    /* 클라이언트 IP가 해당 회사의 활성 러용 대역 중 하나에 속하는지 판정
-     * 출퇴근 체크인 시 근무지 내/외 판단 근거  */
-    public boolean matches(UUID companyId, String clientIp) {
-        if (clientIp == null || clientIp.isBlank()) return false;
+    /* 출퇴근 체크인/아웃 IP 정책 검증
+     * 활성 IP 0건  → 정책 미적용으로 보고 모든 IP 허용 (회사 초기 셋업 편의)
+     * 활성 IP 1건+ → 등록된 활성 대역에 포함된 IP만 허용
+     * @return true: 허용, false: 차단 */
+    public boolean isAllowed(UUID companyId, String clientIp) {
+        /* 활성 IP 목록 먼저 조회 → 0건이면 정책 미적용으로 즉시 통과 */
+        List<CompanyAllowedIp> activeCidrs = companyAllowedIpRepository.findByCompany_CompanyIdAndIsActiveTrue(companyId);
+        if (activeCidrs.isEmpty()) return true;
 
+        /* 활성 IP 등록된 회사인데 clientIp 가 비정상이면 차단 */
+        if (clientIp == null || clientIp.isBlank()) return false;
         byte[] clientBytes = parseIp(clientIp.trim());
         if (clientBytes == null) return false;
 
-        List<CompanyAllowedIp> activeCidrs = companyAllowedIpRepository.findByCompany_CompanyIdAndIsActiveTrue(companyId);
+        /* 등록된 활성 대역 중 하나라도 포함하면 허용 */
         for (CompanyAllowedIp ip : activeCidrs) {
             if (cidrContains(ip.getIpCidr(), clientBytes)) return true;
         }

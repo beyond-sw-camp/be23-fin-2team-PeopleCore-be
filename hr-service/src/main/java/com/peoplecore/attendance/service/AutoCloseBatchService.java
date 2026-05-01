@@ -10,6 +10,8 @@ import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.event.AlarmEvent;
+import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
+import com.peoplecore.vacation.service.BusinessDayCalculator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.YearMonth;
 import java.util.*;
 
 /*
@@ -49,6 +52,8 @@ public class AutoCloseBatchService {
     private final CommuteRecordRepository commuteRecordRepository;
     private final StringRedisTemplate redisTemplate;
     private final HrAlarmPublisher hrAlarmPublisher;
+    private final BusinessDayCalculator businessDayCalculator;
+    private final VacationRequestQueryRepository vacationRequestQueryRepository;
 
     @Autowired
     public AutoCloseBatchService(MyAttendanceQueryRepository myAttendanceQueryRepository,
@@ -56,13 +61,17 @@ public class AutoCloseBatchService {
                                  EmployeeRepository employeeRepository,
                                  CommuteRecordRepository commuteRecordRepository,
                                  StringRedisTemplate redisTemplate,
-                                 HrAlarmPublisher hrAlarmPublisher) {
+                                 HrAlarmPublisher hrAlarmPublisher,
+                                 BusinessDayCalculator businessDayCalculator,
+                                 VacationRequestQueryRepository vacationRequestQueryRepository) {
         this.myAttendanceQueryRepository = myAttendanceQueryRepository;
         this.workGroupRepository = workGroupRepository;
         this.employeeRepository = employeeRepository;
         this.commuteRecordRepository = commuteRecordRepository;
         this.redisTemplate = redisTemplate;
         this.hrAlarmPublisher = hrAlarmPublisher;
+        this.businessDayCalculator = businessDayCalculator;
+        this.vacationRequestQueryRepository = vacationRequestQueryRepository;
     }
 
     /*
@@ -124,26 +133,37 @@ public class AutoCloseBatchService {
 
         int success = 0;
         for (CommuteRecord record : targets) {
-            try {
-                record.markAutoClosed(closedAt);
-                Employee emp = record.getEmployee();
-                log.info("[AutoClose] 자동마감 — comRecId={}, empId={}, workDate={}",
-                        record.getComRecId(), emp.getEmpId(), targetDate);
-                publishAutoCloseAlarm(companyId, emp, targetDate, record.getComRecId(), hrAdminEmpIds);
-                success++;
-            } catch (IllegalStateException e) {
-                /* markAutoClosed 내부 가드 위반(중복 체크아웃 등) — 로그만 남기고 계속 */
-                log.warn("[AutoClose] 마감 실패 — comRecId={}, reason={}",
-                        record.getComRecId(), e.getMessage());
+            /* native UPDATE - 가드(체크인 있음 + 미체크아웃)는 WHERE 에 박힘. 영향행 0 이면 가드 위반 */
+            int affected = commuteRecordRepository.applyAutoClose(
+                    record.getComRecId(), record.getWorkDate(), closedAt);
+            if (affected != 1) {
+                log.warn("[AutoClose] 마감 스킵 - comRecId={}, affected={} (가드 위반/이미 처리됨)",
+                        record.getComRecId(), affected);
+                continue;
             }
+            Employee emp = record.getEmployee();
+            log.info("[AutoClose] 자동마감 - comRecId={}, empId={}, workDate={}",
+                    record.getComRecId(), emp.getEmpId(), targetDate);
+            publishAutoCloseAlarm(companyId, emp, targetDate, record.getComRecId(), hrAdminEmpIds);
+            success++;
         }
-        log.info("[AutoClose] 자동마감 완료 — workGroupId={}, targetDate={}, success={}/{}",
+        log.info("[AutoClose] 자동마감 완료 - workGroupId={}, targetDate={}, success={}/{}",
                 workGroupId, targetDate, success, targets.size());
     }
 
     /* CommuteRecord 없는 소속 사원에게 ABSENT 레코드 INSERT */
+    /* 제외 조건: 공휴일(NATIONAL/COMPANY) + 해당일 승인 휴가 보유 사원 */
     private void processAbsent(UUID companyId, Long workGroupId,
                                LocalDate targetDate, List<Long> hrAdminEmpIds) {
+        /* 공휴일이면 결근 처리 스킵 — 회사 단위 공휴일 캐시 1회 조회 */
+        Set<LocalDate> monthHolidays = businessDayCalculator.getHolidaysInMonth(
+                companyId, YearMonth.from(targetDate));
+        if (monthHolidays.contains(targetDate)) {
+            log.debug("[AutoClose] 공휴일이라 결근 스킵 — workGroupId={}, targetDate={}",
+                    workGroupId, targetDate);
+            return;
+        }
+
         List<Employee> absentTargets = myAttendanceQueryRepository
                 .findAbsentTargets(companyId, workGroupId, targetDate);
 
@@ -152,16 +172,23 @@ public class AutoCloseBatchService {
             return;
         }
 
+        /* 승인 휴가 보유 사원 제외 — 같은 그룹 + 단일 일자라 쿼리 한 번 */
+        Set<Long> onLeaveEmpIds = vacationRequestQueryRepository
+                .findOnLeaveEmpIds(companyId, workGroupId, targetDate);
+
+        int inserted = 0;
         for (Employee emp : absentTargets) {
-            /* save 결과 캡처 — 알림 refId 로 comRecId(도메인 PK) 사용 (codebase 알림 컨벤션) */
+            if (onLeaveEmpIds.contains(emp.getEmpId())) continue; // 휴가자 스킵
             CommuteRecord saved = commuteRecordRepository.save(
                     CommuteRecord.absent(emp, targetDate, companyId));
             log.info("[AutoClose] 결근 삽입 — comRecId={}, empId={}, empName={}, workDate={}",
                     saved.getComRecId(), emp.getEmpId(), emp.getEmpName(), targetDate);
             publishAbsentAlarm(companyId, emp, targetDate, saved.getComRecId(), hrAdminEmpIds);
+            inserted++;
         }
-        log.info("[AutoClose] 결근 처리 완료 — workGroupId={}, targetDate={}, count={}",
-                workGroupId, targetDate, absentTargets.size());
+        log.info("[AutoClose] 결근 처리 완료 — workGroupId={}, targetDate={}, inserted={}/{} (휴가제외={})",
+                workGroupId, targetDate, inserted, absentTargets.size(),
+                absentTargets.size() - inserted);
     }
 
     /* 자동마감 알림 — 본인 + HR 관리자. refId 는 CommuteRecord PK (codebase 알림 컨벤션) */
@@ -173,7 +200,7 @@ public class AutoCloseBatchService {
         hrAlarmPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("ATTENDANCE")
-                .alarmTitle("퇴근 미체크로 자동 마감 처리")
+                .alarmTitle("퇴근 미체크로 자동 마감 처리되었습니다.")
                 .alarmContent(emp.getEmpName() + " 사원의 " + targetDate
                         + " 근무 기록이 자동 마감되었습니다. 근태 정정 신청이 필요합니다.")
                 .alarmLink("/attendance?date=" + targetDate + "&empId=" + emp.getEmpId())

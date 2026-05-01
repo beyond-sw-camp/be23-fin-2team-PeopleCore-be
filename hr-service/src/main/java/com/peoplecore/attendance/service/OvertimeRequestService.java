@@ -238,7 +238,12 @@ public class OvertimeRequestService {
     }
 
     /**
-     * Kafka(approvalResult) Consumer 진입 — 결재 결과 캐시 적용 + APPROVED 시 CommuteRecord 재계산
+     * Kafka(approvalResult) Consumer 진입 — 결재 결과 캐시 적용 + CommuteRecord 분 컬럼 재계산.
+     * 재계산 트리거:
+     *  - 새 상태가 APPROVED → 인정구간 신규 반영
+     *  - 이전 상태가 APPROVED 였으나 REJECTED/CANCELED 로 이탈 → 잔존 recognized_* 정리
+     * applyApprovedRecognition 은 해당 일자 APPROVED OT 만 재조회해 분 컬럼을 다시 산출하므로
+     * 이탈 시점에는 이 OT 가 빠진 결과로 자동 정리됨.
      */
     public void applyApprovalResult(OvertimeApprovalResultEvent event) {
         // 회사 + otId 라우팅 검증 조회 — docId 기준으로도 찾을 수 있으나 otId 우선
@@ -250,6 +255,8 @@ public class OvertimeRequestService {
                 .orElseThrow(() -> new CustomException(ErrorCode.OVERTIME_REQUEST_NOT_FOUND));
 
         OtStatus newStatus = OtStatus.valueOf(event.getStatus());
+        // 상태 갱신 전 이전 상태 캡쳐 — APPROVED 이탈 검출용
+        OtStatus previousStatus = req.getOtStatus();
 
         // manager 는 REJECTED/APPROVED 에서만 의미 있음. CANCELED/회수에서 null 허용
         Employee manager = (event.getManagerId() != null)
@@ -258,14 +265,17 @@ public class OvertimeRequestService {
 
         req.applyApprovalResult(newStatus, manager);
 
-        // APPROVED 시 해당 날짜 CommuteRecord 재계산
-        if (newStatus == OtStatus.APPROVED) {
+        // APPROVED 진입 또는 APPROVED 이탈 케이스 모두 재계산 필요
+        boolean needsRecalc = (newStatus == OtStatus.APPROVED)
+                || (previousStatus == OtStatus.APPROVED && newStatus != OtStatus.APPROVED);
+        if (needsRecalc) {
             commuteService.recalcPayrollMinutes(
                     event.getCompanyId(),
                     req.getEmployee().getEmpId(),
                     req.getOtDate().toLocalDate());
         }
-        log.info("[OvertimeRequest] 결재 결과 반영 - otId={}, status={}", req.getOtId(), newStatus);
+        log.info("[OvertimeRequest] 결재 결과 반영 - otId={}, prev={}, new={}, recalc={}",
+                req.getOtId(), previousStatus, newStatus, needsRecalc);
     }
 
     /**

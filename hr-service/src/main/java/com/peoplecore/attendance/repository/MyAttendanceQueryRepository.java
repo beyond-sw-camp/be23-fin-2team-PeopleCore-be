@@ -81,6 +81,50 @@ public class MyAttendanceQueryRepository {
     }
 
     /**
+     * 월간 지각 발생일 조회.
+     * 조건: company + emp + workDate BETWEEN + workStatus IN (LATE, LATE_AND_EARLY) + checkIn NOT NULL
+     * 정렬: workDate ASC
+     * 파티션 프루닝: workDate 범위 조건으로 해당 월 파티션만 스캔.
+     * 사용: 월간 요약의 lateDays[] 채움. lateMinutes 는 service 에서 groupStartTime 으로 계산.
+     */
+    public List<CommuteRecord> findMonthlyLateRecords(UUID companyId, Long empId,
+                                                      LocalDate from, LocalDate to) {
+        QCommuteRecord c = QCommuteRecord.commuteRecord;
+        return queryFactory
+                .selectFrom(c)
+                .where(c.companyId.eq(companyId)
+                        .and(c.employee.empId.eq(empId))
+                        .and(c.workDate.between(from, to))
+                        .and(c.workStatus.in(WorkStatus.LATE, WorkStatus.LATE_AND_EARLY))
+                        .and(c.comRecCheckIn.isNotNull()))
+                .orderBy(c.workDate.asc())
+                .fetch();
+    }
+
+    /**
+     * 월간 초과근무 발생일 조회.
+     * 조건: company + emp + workDate BETWEEN + (recognizedExtended + recognizedNight + recognizedHoliday) > 0 + checkOut NOT NULL
+     * 정렬: workDate ASC
+     * 파티션 프루닝: workDate 범위 조건.
+     * 사용: 월간 요약의 overtimeDays[] 채움. overtimeStartAt/approvedOvertimeMinutes 는 service 에서 산출.
+     */
+    public List<CommuteRecord> findMonthlyOvertimeRecords(UUID companyId, Long empId,
+                                                          LocalDate from, LocalDate to) {
+        QCommuteRecord c = QCommuteRecord.commuteRecord;
+        return queryFactory
+                .selectFrom(c)
+                .where(c.companyId.eq(companyId)
+                        .and(c.employee.empId.eq(empId))
+                        .and(c.workDate.between(from, to))
+                        .and(c.comRecCheckOut.isNotNull())
+                        .and(c.recognizedExtendedMinutes
+                                .add(c.recognizedNightMinutes)
+                                .add(c.recognizedHolidayMinutes).gt(0L)))
+                .orderBy(c.workDate.asc())
+                .fetch();
+    }
+
+    /**
      * 특정 근무그룹 + 특정 날짜의 자동마감 대상 조회.
      * 조건: checkIn 있음 + checkOut 없음 + 해당 wg 소속.
      * AUTO_CLOSED 레코드는 checkOut 이 세팅되므로 별도 조건 불필요.

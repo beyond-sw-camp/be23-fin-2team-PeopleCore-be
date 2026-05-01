@@ -49,7 +49,7 @@ public class VacationUseFormHandler implements ApprovalFormHandler {
     }
 
     @Override
-    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {
+    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {
         try {
             VacationUseDocData data = objectMapper.readValue(document.getDocData(), VacationUseDocData.class);
             VacationApprovalDocCreatedEvent event = VacationApprovalDocCreatedEvent.builder()

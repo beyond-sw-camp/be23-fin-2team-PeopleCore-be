@@ -1,7 +1,6 @@
 package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
-import com.peoplecore.vacation.dto.CancelRequest;
 import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
 import com.peoplecore.vacation.dto.VacationAdminPeriodPageResponse;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
@@ -20,7 +19,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
-/* 휴가 신청 Controller - 사원/관리자 조회 + 취소 */
+/* 휴가 신청 Controller - 사원/관리자 조회 전용 (취소는 collab 결재 문서 회수 경로로 일원화) */
 @RestController
 @RequestMapping("/vacation/requests")
 public class VacationRequestController {
@@ -55,18 +54,6 @@ public class VacationRequestController {
             @PageableDefault(size = 20) Pageable pageable) {
         return ResponseEntity.ok(
                 vacationRequestService.listForAdminByPeriod(companyId, startDate, endDate, statuses, pageable));
-    }
-
-    /* 관리자 직권 취소 - 상태 전이 규칙 우회 (applyByAdmin) */
-    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
-    @PostMapping("/admin/{requestId}/cancel")
-    public ResponseEntity<Void> cancelAsAdmin(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long managerId,
-            @PathVariable Long requestId,
-            @RequestBody CancelRequest body) {
-        vacationRequestService.cancelByAdmin(companyId, managerId, requestId, body.getReason());
-        return ResponseEntity.noContent().build();
     }
 
     /* 본인 보유 휴가 유형 - 휴가 사용 신청 모달 드롭다운 */

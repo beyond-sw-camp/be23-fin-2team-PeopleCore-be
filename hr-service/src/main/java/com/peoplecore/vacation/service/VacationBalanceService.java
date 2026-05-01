@@ -22,6 +22,7 @@ import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.stereotype.Service;
@@ -89,6 +90,10 @@ public class VacationBalanceService {
         if (request.getDays() == null || request.getDays().signum() == 0) {
             throw new CustomException(ErrorCode.BAD_REQUEST);
         }
+        // 부여(days>0) 일 때만 expiresAt 필수 - 차감(days<0)은 사용 기록이라 만료일 무관
+        if (request.getDays().signum() > 0 && request.getExpiresAt() == null) {
+            throw new CustomException(ErrorCode.BAD_REQUEST);
+        }
 
         Integer targetYear = (request.getYear() != null) ? request.getYear() : LocalDate.now().getYear();
         LocalDate today = LocalDate.now();
@@ -111,8 +116,13 @@ public class VacationBalanceService {
         Employee emp = employeeRepository.findById(empId)
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
+        // 기존 행 발견 + 부여(days>0): 가장 최근 부여 만료일로 덮어쓰기. 차감(days<0)은 만료일 유지
         VacationBalance balance = vacationBalanceRepository
                 .findOne(companyId, empId, type.getTypeId(), year)
+                .map(b -> {
+                    if (days.signum() > 0) b.updateExpiresAt(expiresAt);
+                    return b;
+                })
                 .orElseGet(() -> vacationBalanceRepository.save(
                         VacationBalance.createNew(companyId, type, emp, year, grantedAt, expiresAt)));
 
@@ -250,6 +260,31 @@ public class VacationBalanceService {
                 .upcoming(upcoming)
                 .past(past)
                 .build();
+    }
+
+    /* 내 예정 휴가 페이지 조회 - 휴가현황 페이지 upcoming 탭 (페이지네이션 분리 endpoint) */
+    /* 분류 규칙은 getMyVacationStatus 와 동일. DB 레벨 필터 + 페이징으로 위임 */
+    public Page<MyVacationStatusResponseDto.RequestItem> listMyUpcoming(UUID companyId, Long empId,
+                                                                        int year, Pageable pageable) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime yearStart = LocalDate.of(year, 1, 1).atStartOfDay();
+        LocalDateTime yearEnd = LocalDate.of(year, 12, 31).atTime(23, 59, 59);
+
+        return vacationRequestQueryRepository
+                .findUpcomingPage(companyId, empId, yearStart, yearEnd, now, pageable)
+                .map(MyVacationStatusResponseDto.RequestItem::from);
+    }
+
+    /* 내 지난 휴가 페이지 조회 - 휴가현황 페이지 past 탭 (페이지네이션 분리 endpoint) */
+    public Page<MyVacationStatusResponseDto.RequestItem> listMyPast(UUID companyId, Long empId,
+                                                                    int year, Pageable pageable) {
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime yearStart = LocalDate.of(year, 1, 1).atStartOfDay();
+        LocalDateTime yearEnd = LocalDate.of(year, 12, 31).atTime(23, 59, 59);
+
+        return vacationRequestQueryRepository
+                .findPastPage(companyId, empId, yearStart, yearEnd, now, pageable)
+                .map(MyVacationStatusResponseDto.RequestItem::from);
     }
 
     /* VacationBalance → AnnualSummary 매핑 (ANNUAL/MONTHLY 공용) */

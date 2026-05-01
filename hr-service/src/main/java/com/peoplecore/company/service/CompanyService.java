@@ -128,16 +128,14 @@ public class CompanyService {
         // superAdmin 계정 생성
         superAdminAccountService.createSuperAdmin(company, reqDto);
 
+        // 결재 양식 폴더/채번 규칙 초기화 — collaboration-service 가 Kafka 컨슈머로 처리
+        // (실패 시 @RetryableTopic 으로 3회 재시도, 최종 실패는 DLT 로 이동)
         try {
-            collaborationClient.initDefaultFormFolder(company.getCompanyId());
-        } catch (Exception e) {
-            log.warn("양식 폴더 초기화 실패, Kafka 재시도 발행: {}", e.getMessage());
-            try {
-                String message = objectMapper.writeValueAsString(new CompanyCreateEvent(company.getCompanyId()));
-                kafkaTemplate.send("company-folder-init", String.valueOf(company.getCompanyId()), message);
-            } catch (JsonProcessingException ex) {
-                log.error("카프카 직렬화 실패 ");
-            }
+            String message = objectMapper.writeValueAsString(new CompanyCreateEvent(company.getCompanyId()));
+            kafkaTemplate.send("company-folder-init", String.valueOf(company.getCompanyId()), message);
+        } catch (JsonProcessingException ex) {
+            log.error("회사 생성 이벤트 직렬화 실패 companyId={}", company.getCompanyId(), ex);
+            throw new CustomException(ErrorCode.COMPANY_INIT_EVENT_PUBLISH_FAILED);
         }
 
         company.changeStatus(CompanyStatus.ACTIVE);

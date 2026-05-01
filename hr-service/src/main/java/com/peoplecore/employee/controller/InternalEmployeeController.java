@@ -7,6 +7,7 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -25,7 +26,8 @@ public class InternalEmployeeController {
 //    단건조회
     @GetMapping("/{empId}")
     public ResponseEntity<InternalEmployeeResDto> getEmployee(@PathVariable Long empId){
-        Employee employee = employeeRepository.findById(empId).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+        Employee employee = employeeRepository.findByEmpIdWithDeptAndGrade(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
         return ResponseEntity.ok(InternalEmployeeResDto.fromEntity(employee));
     }
 

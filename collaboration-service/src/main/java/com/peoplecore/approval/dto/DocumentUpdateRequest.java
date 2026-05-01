@@ -17,6 +17,7 @@ public class DocumentUpdateRequest {
     private String docData;
     private Boolean isEmergency;
     private String docOpinion;
+    private String htmlContent;     // 재기안 시점의 완성된 HTML
 
     /**
      * 결재선 수정

@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.UUID;
 
 @Repository
@@ -30,4 +31,8 @@ public interface CommonAlarmRepository extends JpaRepository<CommonAlarm, Long> 
 
     /* 전체 삭제 */
     void deleteByCompanyIdAndAlarmEmpId(UUID companyId, Long empId);
+
+    /*최근 알람 5건 조회 - 읽음/안읽음 여부 포함 */
+    List<CommonAlarm> findTop5ByCompanyIdAndAlarmEmpIdOrderByCreatedAtDesc(UUID companyId, Long empId);
+
 }

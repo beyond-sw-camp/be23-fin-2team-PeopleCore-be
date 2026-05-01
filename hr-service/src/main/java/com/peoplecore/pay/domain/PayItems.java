@@ -41,7 +41,7 @@ public class PayItems {
     @Builder.Default
     private Boolean isTaxable = true;
 
-//    고정항목 여부 (금액이 고정)
+//    고정수당 여부 (금액이 고정)
     @Builder.Default
     private Boolean isFixed = true;
 
@@ -87,9 +87,7 @@ public class PayItems {
             throw new CustomException(ErrorCode.SYSTEM_PAY_ITEM_NOT_EDITABLE);
         }
         if (Boolean.TRUE.equals(this.isProtected)) {
-            // 보호 항목: 비과세한도만 변경 허용
-            this.taxExemptLimit = taxExemptLimit;
-            return;
+            throw new CustomException(ErrorCode.PROTECTED_PAY_ITEM_NOT_EDITABLE);
         }
         this.payItemName = payItemName;
         this.isFixed = isFixed;

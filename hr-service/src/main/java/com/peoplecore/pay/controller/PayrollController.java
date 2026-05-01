@@ -1,13 +1,11 @@
 package com.peoplecore.pay.controller;
 
 import com.peoplecore.auth.RoleRequired;
-import com.peoplecore.pay.approval.ApprovalDraftResDto;
-import com.peoplecore.pay.approval.ApprovalSubmitReqDto;
-import com.peoplecore.pay.approval.PayrollApprovalDraftService;
+import com.peoplecore.exception.CustomException;
+import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.pay.approval.*;
 import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.service.PayrollService;
-import jakarta.validation.Valid;
-import jakarta.ws.rs.Path;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -50,13 +48,6 @@ public class PayrollController {
         return ResponseEntity.status(HttpStatus.CREATED).body(payrollService.createPayroll(companyId, payYearMonth));
     }
 
-//    전월복사
-    @PostMapping("/copy")
-    public ResponseEntity<PayrollRunResDto> copyFromPreviousMonth(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestParam String payYearMonth){
-        return ResponseEntity.status(HttpStatus.CREATED).body(payrollService.copyFromPreviousMonth(companyId, payYearMonth));
-    }
 
 //    사원별 급여 상세
     @GetMapping("/{payrollRunId}/employees/{empId}")
@@ -75,16 +66,6 @@ public class PayrollController {
             @PathVariable Long empId,
             @RequestBody PayrollDetailUpdateReqDto reqDto){
         payrollService.updateEmpDetails(companyId, payrollRunId, empId, reqDto);
-        return ResponseEntity.ok().build();
-    }
-
-//    급여 확정
-    @PutMapping("/{payrollRunId}/confirm")
-    public ResponseEntity<Void> confirmPayroll(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long actorEmpId,
-            @PathVariable Long payrollRunId){
-        payrollService.confirmPayroll(companyId, actorEmpId, payrollRunId);
         return ResponseEntity.ok().build();
     }
 
@@ -109,8 +90,6 @@ public class PayrollController {
         return ResponseEntity.ok().build();
     }
 
-
-
 ///    전자결재
 //  1. 전자결재 미리보기 데이터 조회 (모달 열때 호출)
     @GetMapping("/{payrollRunId}/approval/draft")
@@ -120,23 +99,14 @@ public class PayrollController {
             @PathVariable Long payrollRunId){
         return ResponseEntity.ok(payrollApprovalDraftService.draft(companyId, userId, payrollRunId));
     }
-//  2. 전자결재 상신
-    @PostMapping("/{payrollRunId}/submit-approval")
-    public ResponseEntity<Void> submitApproval(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long userId,
-            @PathVariable Long payrollRunId,
-            @RequestBody @Valid ApprovalSubmitReqDto reqDto){
-        payrollApprovalDraftService.submit(companyId, userId, reqDto);
-        return ResponseEntity.ok().build();
-    }
 
 //    지급처리
     @PutMapping("/{payrollRunId}/pay")
     public ResponseEntity<Void> processPayment(
             @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long payrollRunId){
-        payrollService.processPayment(companyId, payrollRunId);
+            @PathVariable Long payrollRunId,
+            @RequestBody(required = false) List<Long> empIds){
+        payrollService.processPayment(companyId, payrollRunId, empIds);
         return ResponseEntity.ok().build();
     }
 
@@ -194,4 +164,6 @@ public class PayrollController {
         return ResponseEntity.ok(
                 payrollService.calcDeductions(companyId, reqDto));
     }
+
+
 }

@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -86,4 +87,25 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
             @Param("type") PayItemType type,
             @Param("empIds") Set<Long> empIds);
 
+
+    Optional<PayrollDetails> findByPayrollRunsAndEmployee_EmpIdAndPayItems_PayItemId(
+            PayrollRuns run, Long empId, Long payItemId);
+
+
+
+    @Query("""
+    SELECT DISTINCT pd.payItems.payItemId
+    FROM PayrollDetails pd
+    WHERE pd.payrollRuns.payrollRunId = :runId
+      AND pd.employee.empId IN :empIds
+      AND pd.payItems.payItemType = :type
+    """)
+    Set<Long> findDistinctPayItemIdsByRunIdAndEmpIdInAndPayItemType(
+            @Param("runId") Long runId,
+            @Param("empIds") Set<Long> empIds,
+            @Param("type") PayItemType type);
+
+    // 부서별 요약 / 사원 명단 빌드에 사용 (derived query)
+    List<PayrollDetails> findByPayrollRuns_PayrollRunIdAndEmployee_EmpIdIn(
+            Long payrollRunId, Set<Long> empIds);
 }

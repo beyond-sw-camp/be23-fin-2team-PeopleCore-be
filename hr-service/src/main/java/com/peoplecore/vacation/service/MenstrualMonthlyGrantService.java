@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.temporal.TemporalAdjusters;
 import java.util.UUID;
 
 /* 생리휴가 월별 부여 서비스 - 사원 단위 트랜잭션(REQUIRES_NEW) */
@@ -67,6 +68,9 @@ public class MenstrualMonthlyGrantService {
             expireAndLog(balance, "생리휴가 전월 미사용 만료");
         }
 
+        // 만료일을 이번달 말일로 갱신 - BalanceExpiry 잡이 신규 적립분을 전월 만료일로 잘못 소멸시키지 않도록
+        balance.updateExpiresAt(today.with(TemporalAdjusters.lastDayOfMonth()));
+
         // 이번 달 1일 적립 - cap 없음
         BigDecimal before = balance.getTotalDays();
         balance.accrue(MONTHLY_GRANT_DAYS, null);
@@ -78,12 +82,14 @@ public class MenstrualMonthlyGrantService {
     }
 
     /* 당해 연도 첫 row 생성 + INITIAL_GRANT 로그 기록 */
-    /* expiresAt=null: 월 만료는 스케줄러가 expireRemaining 으로 직접 처리하므로 row 레벨 만료일 불필요 */
+    /* expiresAt = 지급월 말일 - BalanceExpiry 잡과 이중 가드 (스케줄러 expireRemaining 누락 시에도 안전) */
     private VacationBalance createAndLogInitial(UUID companyId, Employee emp, VacationType type,
                                                 int year, LocalDate today) {
+        LocalDate expiresAt = today.with(TemporalAdjusters.lastDayOfMonth());
         VacationBalance newBal = vacationBalanceRepository.save(
-                VacationBalance.createNew(companyId, type, emp, year, today, null));
-        log.info("[MenstrualGrant] 신규 Balance 생성 - empId={}, year={}", emp.getEmpId(), year);
+                VacationBalance.createNew(companyId, type, emp, year, today, expiresAt));
+        log.info("[MenstrualGrant] 신규 Balance 생성 - empId={}, year={}, expiresAt={}",
+                emp.getEmpId(), year, expiresAt);
         return newBal;
     }
 

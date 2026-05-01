@@ -2,6 +2,7 @@ package com.peoplecore.vacation.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.HolidayLookupRepository;
 import com.peoplecore.entity.Holidays;
 import lombok.extern.slf4j.Slf4j;
@@ -13,7 +14,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
-import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.YearMonth;
@@ -23,7 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/* 영업일 계산기 - 주말(토/일) + 공휴일 제외 일수 산출 */
+/* 영업일 계산기 - 근무그룹 비근무일 + 공휴일 제외 일수 산출 */
 /* 캐시: (companyId, yearMonth) → 공휴일 LocalDate Set (JSON). TTL 6시간 + write-through evict */
 /* 공휴일 변경 시 evictMonth/evictCompany/evictAll 로 즉시 무효화 가능 (정합성 보장) */
 /* 스케줄러(만근 판정, 월차 적립, 연차 발생) + 출퇴근 판정(CommuteService) 에서 재사용 */
@@ -50,23 +50,25 @@ public class BusinessDayCalculator {
         this.objectMapper = objectMapper;
     }
 
-    /* 영업일 수 산출 - [start, end] 포함. 주말 + 공휴일 제외 */
-    /* start > end 이면 0 반환 (방어) */
-    public int countBusinessDays(UUID companyId, LocalDate start, LocalDate end) {
+    /* 영업일 수 산출 - [start, end] 포함. 근무그룹 비근무일 + 공휴일 제외 */
+    /* start > end 이면 0 반환 (방어). wg null 은 호출 버그 - IllegalArgumentException */
+    public int countBusinessDays(UUID companyId, WorkGroup wg, LocalDate start, LocalDate end) {
+        if (wg == null) throw new IllegalArgumentException("WorkGroup null - companyId=" + companyId);
         if (start == null || end == null || start.isAfter(end)) return 0;
         Set<LocalDate> holidays = loadHolidaysInRange(companyId, start, end);
         int count = 0;
         for (LocalDate d = start; !d.isAfter(end); d = d.plusDays(1)) {
-            if (isBusinessDay(d, holidays)) count++;
+            if (isBusinessDay(d, wg, holidays)) count++;
         }
         return count;
     }
 
     /* 단일 날짜 영업일 여부 - 단건 조회 시에도 캐시 경유 (월 단위 캐시라 일 단위 호출 반복에도 이득) */
-    public boolean isBusinessDay(UUID companyId, LocalDate date) {
+    public boolean isBusinessDay(UUID companyId, WorkGroup wg, LocalDate date) {
+        if (wg == null) throw new IllegalArgumentException("WorkGroup null - companyId=" + companyId);
         if (date == null) return false;
         Set<LocalDate> holidays = loadHolidaysInRange(companyId, date, date);
-        return isBusinessDay(date, holidays);
+        return isBusinessDay(date, wg, holidays);
     }
 
     /* 월 단위 공휴일 Set 외부 노출 - 출퇴근 판정(CommuteService) 등에서 캐시 공유용 */
@@ -95,10 +97,11 @@ public class BusinessDayCalculator {
         if (!keys.isEmpty()) redisTemplate.delete(keys);
     }
 
-    /* 주말 + 공휴일 제외 - 내부 헬퍼 (holidays Set 이미 로드된 상태) */
-    private boolean isBusinessDay(LocalDate date, Set<LocalDate> holidays) {
-        DayOfWeek dow = date.getDayOfWeek();
-        if (dow == DayOfWeek.SATURDAY || dow == DayOfWeek.SUNDAY) return false;
+    /* 근무그룹 비근무일 + 공휴일 제외 - 내부 헬퍼 (holidays Set 이미 로드된 상태) */
+    private boolean isBusinessDay(LocalDate date, WorkGroup wg, Set<LocalDate> holidays) {
+        /* 소정근무요일 비트마스크 - 월=bit0 ~ 일=bit6 */
+        int bit = 1 << (date.getDayOfWeek().getValue() - 1);
+        if ((wg.getGroupWorkDay() & bit) == 0) return false;
         return !holidays.contains(date);
     }
 

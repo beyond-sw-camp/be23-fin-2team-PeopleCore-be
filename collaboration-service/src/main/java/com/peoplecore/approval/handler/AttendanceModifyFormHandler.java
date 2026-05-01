@@ -39,7 +39,7 @@ public class AttendanceModifyFormHandler implements ApprovalFormHandler {
     public boolean requiresIdempotencyKey() { return true; }
 
     @Override
-    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {
+    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {
         try {
             AttendanceModifyDocData data = objectMapper.readValue(document.getDocData(), AttendanceModifyDocData.class);
             AttendanceModifyDocCreatedEvent event = AttendanceModifyDocCreatedEvent.builder()
