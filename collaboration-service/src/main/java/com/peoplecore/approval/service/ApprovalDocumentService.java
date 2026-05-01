@@ -419,10 +419,11 @@ public class ApprovalDocumentService {
         newDoc.markSubmitted();
         documentRepository.save(newDoc);
 
-        /* 이전 반려 사유 조회 (history reason 용) */
+        /* 이전 반려 사유 조회 (history reason 용) — REJECTED 라인의 의견만 */
         List<ApprovalLine> prevLines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
         String rejectReason = prevLines.stream()
-                .map(ApprovalLine::getLineRejectReason)
+                .filter(l -> l.getApprovalLineStatus() == ApprovalLineStatus.REJECTED)
+                .map(ApprovalLine::getLineComment)
                 .filter(Objects::nonNull)
                 .findFirst().orElse(null);
 

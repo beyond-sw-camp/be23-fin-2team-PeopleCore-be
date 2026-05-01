@@ -67,7 +67,7 @@ public class DocumentDetailResponse {
         private Integer lineStep;
         private String approvalLineStatus;
         private LocalDateTime lineProcessedAt;
-        private String lineRejectReason;
+        private String lineComment;
         private Boolean isDelegated;
         private Boolean isRead;
         private String sigUrl;
@@ -89,7 +89,7 @@ public class DocumentDetailResponse {
                 .lineStep(line.getLineStep())
                 .approvalLineStatus(line.getApprovalLineStatus().name())
                 .lineProcessedAt(line.getLineProcessedAt())
-                .lineRejectReason(line.getLineRejectReason())
+                .lineComment(line.getLineComment())
                 .isDelegated(line.getIsDelegated())
                 .isRead(line.getIsRead())
                 .sigUrl(signatureMap.get(line.getEmpId()))
