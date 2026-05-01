@@ -44,6 +44,22 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
                                          LocalDateTime weekStart,
                                          LocalDateTime weekEnd);
 
+    /** 사원 + 주 범위 미래 OT 분 합계 (PENDING/APPROVED 중 ot_plan_end 가 :now 이후인 것만).
+     *  주간 한도 검증용 — 과거 OT 는 CommuteRecord.actualWorkMinutes 에 흡수되어 이중카운트 방지 위해 제외.
+     *  JPQL TIMESTAMPDIFF 미지원 → native */
+    @Query(value = """
+            SELECT COALESCE(SUM(TIMESTAMPDIFF(MINUTE, o.ot_plan_start, o.ot_plan_end)), 0)
+              FROM overtime_request o
+             WHERE o.emp_id = :empId
+               AND o.ot_status IN ('PENDING', 'APPROVED')
+               AND o.ot_plan_end > :now
+               AND o.ot_date BETWEEN :weekStart AND :weekEnd
+            """, nativeQuery = true)
+    Long sumFuturePlanMinutesInWeek(Long empId,
+                                    LocalDateTime now,
+                                    LocalDateTime weekStart,
+                                    LocalDateTime weekEnd);
+
     /** 사원 + 주 범위 DRAFT 제외 이력 — otDate ASC, otPlanStart ASC */
     @Query("""
             SELECT o FROM OvertimeRequest o

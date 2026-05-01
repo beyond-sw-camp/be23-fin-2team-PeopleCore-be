@@ -100,38 +100,64 @@ public class ApprovalFormService {
         this.self = self;
     }
 
-    //    결재 양식 폴더 조회하는 메서드
+    /* 사원용 폴더 트리 — 부모 숨김 cascade 정책 적용.
+     * 어느 조상이라도 숨김이면 해당 자손 폴더는 응답에서 제외. */
     public List<FormFolderResponse> getFormFolder(UUID companyId) {
-//        전체 폴더 조회
-        List<ApprovalFormFolder> allFolders = approvalFormFolderRepository
-                .findByFolderCompanyIdAndFolderIsVisibleTrueOrderByFolderSortOrder(companyId);
+        List<ApprovalFormFolder> visible = loadEffectiveVisibleFolders(companyId);
 
-//        DTO 변환후 map에 저장 (folderId -> dto
         Map<Long, FormFolderResponse> map = new LinkedHashMap<>();
-        for (ApprovalFormFolder folder : allFolders) {
+        for (ApprovalFormFolder folder : visible) {
             map.put(folder.getFolderId(), FormFolderResponse.from(folder));
         }
 
-        /*부모-자식 관계 조립*/
         List<FormFolderResponse> root = new ArrayList<>();
-        for (ApprovalFormFolder folder : allFolders) {
+        for (ApprovalFormFolder folder : visible) {
             FormFolderResponse dto = map.get(folder.getFolderId());
             if (folder.getParent() == null) {
                 root.add(dto);
             } else {
-//              부모 폴더에 자식 추가
                 FormFolderResponse parentDto = map.get(folder.getParent().getFolderId());
-                if (parentDto != null) {
-                    parentDto.getChildren().add(dto);
-                }
+                if (parentDto != null) parentDto.getChildren().add(dto);
             }
         }
         return root;
     }
 
+    /* cascade 가시성 적용된 폴더 목록 — 자기 + 모든 조상이 folderIsVisible=true.
+     * 입력은 isDeleted=false 폴더 전체. 메모이제이션으로 같은 조상 중복 평가 회피 */
+    private List<ApprovalFormFolder> loadEffectiveVisibleFolders(UUID companyId) {
+        List<ApprovalFormFolder> all = approvalFormFolderRepository.findAllByCompanyId(companyId);
+        Map<Long, ApprovalFormFolder> byId = new HashMap<>(all.size());
+        for (ApprovalFormFolder f : all) byId.put(f.getFolderId(), f);
+
+        Map<Long, Boolean> memo = new HashMap<>();
+        List<ApprovalFormFolder> visible = new ArrayList<>();
+        for (ApprovalFormFolder f : all) {
+            if (isEffectiveVisible(f, byId, memo)) visible.add(f);
+        }
+        return visible;
+    }
+
+    /* 단일 폴더의 유효 가시성 — 자기 + 조상 chain 전부 visible 일 때만 true. 트리 상향 재귀 */
+    private boolean isEffectiveVisible(ApprovalFormFolder f,
+                                       Map<Long, ApprovalFormFolder> byId,
+                                       Map<Long, Boolean> memo) {
+        Boolean cached = memo.get(f.getFolderId());
+        if (cached != null) return cached;
+
+        if (!Boolean.TRUE.equals(f.getFolderIsVisible())) {
+            memo.put(f.getFolderId(), false);
+            return false;
+        }
+        ApprovalFormFolder parent = (f.getParent() == null) ? null : byId.get(f.getParent().getFolderId());
+        boolean ok = (parent == null) || isEffectiveVisible(parent, byId, memo);
+        memo.put(f.getFolderId(), ok);
+        return ok;
+    }
+
     /*관리자용 전체 폴더 조회 (숨김 포함) */
     public List<FormFolderResponse> getAllFormFolders(UUID companyId) {
-        List<ApprovalFormFolder> allFolders = approvalFormFolderRepository.findByFolderCompanyIdOrderByFolderSortOrder(companyId);
+        List<ApprovalFormFolder> allFolders = approvalFormFolderRepository.findAllByCompanyId(companyId);
 
         Map<Long, FormFolderResponse> map = new LinkedHashMap<>();
         for (ApprovalFormFolder folder : allFolders) {
@@ -156,7 +182,7 @@ public class ApprovalFormService {
     /* 폴더 추가 */
     @Transactional
     public FormFolderResponse createFormFolder(UUID companyId, Long empId, ApprovalFormFolderCreateRequest request) {
-        if (approvalFormFolderRepository.existsByFolderCompanyIdAndFolderName(companyId, request.getFolderName())) {
+        if (approvalFormFolderRepository.existsActiveByCompanyIdAndFolderName(companyId, request.getFolderName())) {
             throw new BusinessException("이미 존재하는 폴더명입니다, ");
         }
         ApprovalFormFolder parent = null;
@@ -189,7 +215,7 @@ public class ApprovalFormService {
         if (!folder.getFolderCompanyId().equals(companyId)) {
             throw new BusinessException("접근 권한이 없습니다, ", HttpStatus.FORBIDDEN);
         }
-        if (approvalFormFolderRepository.existsByFolderCompanyIdAndFolderName(companyId, request.getFolderName())) {
+        if (approvalFormFolderRepository.existsActiveByCompanyIdAndFolderName(companyId, request.getFolderName())) {
             throw new BusinessException("이미 존재하는 폴더명입니다. ");
         }
 
@@ -197,7 +223,7 @@ public class ApprovalFormService {
         return FormFolderResponse.from(folder);
     }
 
-    /*폴더 삭제 */
+    /* 폴더 삭제 (soft) — 비가역. 양식이 남아있으면 차단, 이미 삭제된 폴더면 차단 */
     @Transactional
     public void deleteFormFolder(UUID companyId, Long folderId) {
         ApprovalFormFolder folder = approvalFormFolderRepository.findById(folderId).orElseThrow(() -> new BusinessException("폴더를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
@@ -205,11 +231,13 @@ public class ApprovalFormService {
         if (!folder.getFolderCompanyId().equals(companyId)) {
             throw new BusinessException("접근 권한이 없습니다, ", HttpStatus.FORBIDDEN);
         }
-
+        if (Boolean.TRUE.equals(folder.getIsDeleted())) {
+            throw new BusinessException("이미 삭제된 폴더입니다.");
+        }
         if (approvalFormFolderRepository.existsFormByFolderId(folderId)) {
             throw new BusinessException("양식이 존재하는 폴더는 삭제할 수 없습니다.");
         }
-        approvalFormFolderRepository.delete(folder);
+        folder.markAsDeleted();
     }
 
     /*폴더 노출 여부 변경 */
@@ -227,22 +255,43 @@ public class ApprovalFormService {
     }
 
     /*
-    양식 목록 조회(폴더별 필터도 가능함)
-    folderId가 null이면 전체, 있으면 해당 폴더 양식만 조회
+     * 양식 목록 조회 — 사원용 (기안 화면).
+     * folderId null 이면 cascade-노출 폴더 전체, 있으면 해당 폴더만.
+     * 비활성·옛 버전·삭제 양식 제외. 부모(또는 자기) 숨김 폴더면 빈 리스트
      */
     public List<FormListResponse> getForms(UUID companyId, Long folderId) {
-        if (folderId != null) {
-            return approvalFormRepository
-                    .findAllWithFolderByFolderId(companyId, folderId)
-                    .stream()
-                    .map(FormListResponse::from)
-                    .toList();
+        Set<Long> visibleFolderIds = new HashSet<>();
+        for (ApprovalFormFolder f : loadEffectiveVisibleFolders(companyId)) {
+            visibleFolderIds.add(f.getFolderId());
         }
-        return approvalFormRepository
-                .findAllWithFolder(companyId)
+        if (visibleFolderIds.isEmpty()) return List.of();
+
+        Collection<Long> target;
+        if (folderId != null) {
+            if (!visibleFolderIds.contains(folderId)) return List.of();  // 숨김/삭제/타사 폴더
+            target = List.of(folderId);
+        } else {
+            target = visibleFolderIds;
+        }
+
+        return approvalFormRepository.findAllWithFolderByFolderIds(companyId, target)
                 .stream()
                 .map(FormListResponse::from)
                 .toList();
+    }
+
+    /*
+     * 관리자용 전체 양식 목록 (일괄 설정 탭).
+     * folderId null 이면 회사 전체, 있으면 해당 폴더만.
+     * 비활성(isActive=false) 양식 + 숨긴 폴더 양식까지 모두 포함.
+     * isCurrent=true 만 — 옛 버전은 별도 이력 API.
+     * 응답 DTO 는 FormAdminListResponse — 사원용 대비 isProtected/isCurrent 노출
+     */
+    public List<FormAdminListResponse> getAllForms(UUID companyId, Long folderId) {
+        List<ApprovalForm> forms = (folderId != null)
+                ? approvalFormRepository.findAllForAdminByFolderId(companyId, folderId)
+                : approvalFormRepository.findAllForAdmin(companyId);
+        return forms.stream().map(FormAdminListResponse::from).toList();
     }
 
     /*
@@ -250,7 +299,8 @@ public class ApprovalFormService {
    인사과에서 양식 수정 시 또는 기안자가 새문서 작성시 사용
      */
     public FormDetailResponse getFormDetailEditing(UUID companyId, Long formId) {
-        ApprovalForm approvalForm = approvalFormRepository.findDetailById(formId, companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없음", HttpStatus.NOT_FOUND));
+        // 관리자 편집 화면 — isActive 무관 (비활성 양식도 편집 가능)
+        ApprovalForm approvalForm = approvalFormRepository.findCurrentById(formId, companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없음", HttpStatus.NOT_FOUND));
 
         /*minio 오브젝트 이름 : forms/{companyId}/{formCode}_v{version}.html*/
         String objectName = String.format("forms/%s/%s_v%d.html", companyId, approvalForm.getFormCode(), approvalForm.getFormVersion());
@@ -319,13 +369,13 @@ public class ApprovalFormService {
     /* 양식 추가 */
     @Transactional
     public FormDetailResponse createForm(UUID companyId, Long empId, ApprovalFormCreateRequest request) {
-        /*양식 코드 중복 체크 (활성 양식만) */
-        if (approvalFormRepository.existsByCompanyIdAndFormCodeAndIsActiveTrue(companyId, request.getFormCode())) {
+        /* 양식 코드 중복 체크 — 미삭제 현재 버전만 검사. 삭제된 코드는 재사용 가능 */
+        if (approvalFormRepository.existsActiveByCompanyIdAndFormCode(companyId, request.getFormCode())) {
             throw new BusinessException("이미 존재하는 양식 코드입니다. ");
         }
 
-        /*양식명 중복 체크 (활성 양식만) */
-        if (approvalFormRepository.existsByCompanyIdAndFormNameAndIsActiveTrue(companyId, request.getFormName())) {
+        /* 양식명 중복 체크 — 미삭제 현재 버전만 검사. 삭제된 이름은 재사용 가능 */
+        if (approvalFormRepository.existsActiveByCompanyIdAndFormName(companyId, request.getFormName())) {
             throw new BusinessException("이미 존재하는 양식명입니다, ");
         }
 
@@ -383,24 +433,62 @@ public class ApprovalFormService {
         return FormDetailResponse.from(saved);
     }
 
-    /*양식 수정 */
+    /* 양식 수정 — 새 버전 row INSERT (옛 row 는 obsolete 처리). 같은 formCode 의 MAX(formVersion)+1 로 번호 발급해 롤백 후 재수정 안전.
+     * FrequentForm 도 새 current row 로 마이그레이션해 즐겨찾기 끊김 방지 */
     @Transactional
     public FormDetailResponse updateForm(UUID companyId, Long formId, ApprovalFormUpdateRequest request) {
-        ApprovalForm form = approvalFormRepository.findDetailById(formId, companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다, ", HttpStatus.NOT_FOUND));
+        // 관리자 양식 수정 — isActive 무관 (비활성 양식도 새 버전 생성 가능)
+        ApprovalForm prev = approvalFormRepository.findCurrentById(formId, companyId)
+                .orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다, ", HttpStatus.NOT_FOUND));
 
-        form.updateForm(request.getFormName(), request.getFormHtml(), request.getFormWritePermission(), request.getFormIsPublic(), request.getFormRetentionYear(), request.getFormPreApprovalYn());
+        // 같은 formCode 그룹의 MAX 버전 + 1
+        int nextVersion = approvalFormRepository.findMaxVersionByFormCode(companyId, prev.getFormCode()) + 1;
 
-        /*minio에 Html 업뎅트 */
-        String objectName = String.format("forms/%s/%s_v%d.html", companyId, form.getFormCode(), form.getFormVersion());
+        // 새 row 빌드 (prev 의 보호 가드는 nextVersionFrom 안에서 호출됨) + 옛 row obsolete
+        ApprovalForm next = ApprovalForm.nextVersionFrom(
+                prev, nextVersion,
+                request.getFormName(), request.getFormHtml(),
+                request.getFormWritePermission(), request.getFormIsPublic(),
+                request.getFormRetentionYear(), request.getFormPreApprovalYn());
+        prev.markAsObsolete();
+        ApprovalForm saved = approvalFormRepository.save(next);
+
+        // 옛 row 가리키던 즐겨찾기를 새 row 로 이전
+        frequentFormRepository.migrateFormReference(prev.getFormId(), saved);
+
+        // MinIO 새 버전 객체 업로드 (버전별 키)
+        String objectName = String.format("forms/%s/%s_v%d.html", companyId, saved.getFormCode(), saved.getFormVersion());
         minioService.uploadFormHtml(objectName, request.getFormHtml());
+        return FormDetailResponse.from(saved);
+    }
+
+    /* 양식 사용여부 토글 — 현재 버전 row 만 변경 (옛 버전은 그대로).
+     * isActive 무관 단건 조회 사용 — 비활성 양식도 다시 활성화 가능해야 하므로.
+     * 비활성화 시 보호 양식 가드 발동, 삭제된 양식은 findCurrentById 의 isDeleted 필터가 차단 */
+    @Transactional
+    public FormDetailResponse setFormActive(UUID companyId, Long formId, Boolean isActive) {
+        ApprovalForm form = approvalFormRepository.findCurrentById(formId, companyId)
+                .orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        if (Boolean.TRUE.equals(isActive)) {
+            form.activate();
+        } else {
+            form.deactivate();  // 보호 가드 내장
+        }
         return FormDetailResponse.from(form);
     }
 
-    /*양식 삭제 (소프트 딜리트) */
+    /* 양식 삭제 (soft) — 같은 formCode 의 모든 버전 row 를 isDeleted=true. 비가역 (복원 불가).
+     * 공통코드 단건도 비활성화. 보호 양식은 markAsDeleted 에서 IllegalStateException */
     @Transactional
     public void deleteForm(UUID companyId, Long formId) {
-        ApprovalForm form = approvalFormRepository.findDetailById(formId, companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
-        form.deactivate();
+        // 관리자 삭제 — isActive 무관 (비활성 양식도 삭제 가능)
+        ApprovalForm form = approvalFormRepository.findCurrentById(formId, companyId)
+                .orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        form.markAsDeleted();  // 보호 가드 + 현재 row soft delete (영속성 컨텍스트)
+
+        // 옛 버전들도 일괄 soft delete — bulk update
+        approvalFormRepository.softDeleteAllVersionsByFormCode(companyId, form.getFormCode());
 
         /* 공통코드 테이블에서도 비활성화 */
         commonCodeGroupRepository
@@ -439,6 +527,66 @@ public class ApprovalFormService {
             form.updateBatchSettings(request.getFormIsPublic(), request.getFormPreApprovalYn());
         }
         return forms.stream().map(FormListResponse::from).toList();
+    }
+
+    /* === 관리자용 버전 관리 === */
+
+    /* 양식 버전 이력 조회 — 같은 formCode 의 모든 버전 메타. formHtml 은 슬림 DTO 라 제외. 최신 버전 먼저 정렬 */
+    public List<FormVersionResponse> getFormVersions(UUID companyId, Long formId) {
+        ApprovalForm form = approvalFormRepository
+                .findByFormIdAndCompanyIdForRollback(formId, companyId)
+                .orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        return approvalFormRepository.findAllVersionsByFormCode(companyId, form.getFormCode())
+                .stream()
+                .map(FormVersionResponse::from)
+                .toList();
+    }
+
+    /* 옛 버전 상세 조회 — 미리보기용. MinIO 에서 해당 버전 HTML 동시 fetch.
+     * isCurrent 무관 row 단위 조회 (롤백 화면에서 옛 본문 확인 용도) */
+    public FormDetailResponse getFormVersionDetail(UUID companyId, Long formId) {
+        ApprovalForm form = approvalFormRepository
+                .findByFormIdAndCompanyIdForRollback(formId, companyId)
+                .orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        String objectName = String.format("forms/%s/%s_v%d.html",
+                companyId, form.getFormCode(), form.getFormVersion());
+        String formHtml = minioService.getFormHtml(objectName);
+
+        FormDetailResponse response = FormDetailResponse.from(form);
+        response.setFormHtml(formHtml);
+        return response;
+    }
+
+    /* 옛 버전으로 롤백 — 새 row INSERT 없이 isCurrent flip.
+     * 옛 row.isCurrent=true (updatedAt 자동 갱신, 활성 시점 추적), 기존 current → obsolete.
+     * FrequentForm 도 옛 current → 새 target 으로 마이그레이션 */
+    @Transactional
+    public FormDetailResponse rollbackToVersion(UUID companyId, Long targetFormId) {
+        ApprovalForm target = approvalFormRepository
+                .findByFormIdAndCompanyIdForRollback(targetFormId, companyId)
+                .orElseThrow(() -> new BusinessException("롤백 대상 양식을 찾을 수 없습니다 (삭제된 양식이거나 존재하지 않음).", HttpStatus.NOT_FOUND));
+
+        if (Boolean.TRUE.equals(target.getIsCurrent())) {
+            throw new BusinessException("이미 현재 버전입니다.");
+        }
+
+        // 같은 formCode 의 현재 row 식별
+        ApprovalForm currentRow = approvalFormRepository
+                .findActiveByCompanyIdAndFormCode(companyId, target.getFormCode())
+                .orElseThrow(() -> new BusinessException("현재 활성 버전을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        Long oldCurrentFormId = currentRow.getFormId();
+
+        // flip — 같은 formCode 그룹 내 isCurrent 1행 불변식 유지
+        currentRow.markAsObsolete();
+        target.becomeCurrent();
+
+        // 즐겨찾기 마이그레이션
+        frequentFormRepository.migrateFormReference(oldCurrentFormId, target);
+
+        return FormDetailResponse.from(target);
     }
 
     private final List<String> subFolderNames = List.of("스크립트 양식", "보고-시행문", "회계-총무", "일반기안","휴가", "출장", "인사");
@@ -516,7 +664,7 @@ public class ApprovalFormService {
         String folderPath = "forms/" + companyId + "/양식모음";
 
         ApprovalFormFolder root = approvalFormFolderRepository
-                .findByFolderCompanyIdAndFolderNameAndParentIsNull(companyId, "양식모음")
+                .findRootByCompanyIdAndName(companyId, "양식모음")
                 .orElseGet(() -> approvalFormFolderRepository.save(
                         ApprovalFormFolder.builder()
                                 .folderCompanyId(companyId)
@@ -533,7 +681,7 @@ public class ApprovalFormService {
             String subName = subFolderNames.get(i);
             int sortOrder = i + 1;
             ApprovalFormFolder subFolder = approvalFormFolderRepository
-                    .findByFolderCompanyIdAndFolderNameAndParent(companyId, subName, root)
+                    .findSubFolderByCompanyIdAndNameAndParent(companyId, subName, root)
                     .orElseGet(() -> approvalFormFolderRepository.save(
                             ApprovalFormFolder.builder()
                                     .folderCompanyId(companyId)
@@ -573,7 +721,7 @@ public class ApprovalFormService {
                                    int sortOrder) {
 
         Optional<ApprovalForm> existing = approvalFormRepository
-                .findByCompanyIdAndFormNameAndIsCurrent(companyId, formName, true);
+                .findCurrentByCompanyIdAndFormName(companyId, formName);
         if (existing.isPresent()) {
             return existing.get();
         }
@@ -607,10 +755,10 @@ public class ApprovalFormService {
         return saved;
     }
 
-    /* formCode + companyId 로 활성 양식 ID 조회 — hr-service 의 ApprovalFormIdCache 가 REST 로 호출 */
+    /* formCode + companyId 로 활성·미삭제 양식 ID 조회 — hr-service 의 ApprovalFormIdCache 가 REST 로 호출 */
     public Long getFormIdByCode(UUID companyId, String formCode) {
         return approvalFormRepository
-                .findByCompanyIdAndFormCodeAndIsActiveTrueAndIsCurrentTrue(companyId, formCode)
+                .findActiveByCompanyIdAndFormCode(companyId, formCode)
                 .map(ApprovalForm::getFormId)
                 .orElse(null);
     }

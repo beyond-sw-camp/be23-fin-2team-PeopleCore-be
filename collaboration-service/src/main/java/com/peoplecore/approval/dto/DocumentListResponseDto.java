@@ -17,6 +17,7 @@ public class DocumentListResponseDto {
     private String docNum;
     private String docStatus;
     private Boolean isEmergency;
+    private Boolean isPublic;
     private String formName;
     private Long formId;        // 양식 PK — 클릭 시 양식 메타 조회용
     private String formCode;    // 양식 코드 — 분기/식별용

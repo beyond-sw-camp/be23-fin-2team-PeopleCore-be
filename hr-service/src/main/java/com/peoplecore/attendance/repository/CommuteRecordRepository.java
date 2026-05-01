@@ -83,13 +83,14 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
                                  @Param("to") LocalDate to);
 
     /* 근태 정정 승인 native UPDATE - check-in/out + workStatus 일괄 교체.
+     * COALESCE: null 파라미터 시 기존값 유지 (부분 정정 방어 - 출근만 또는 퇴근만 정정).
      * workStatus 는 호출부(AttendanceModifyService)에서 새 시간 기준으로 산출해 전달.
      * 파티션 프루닝: WHERE work_date 포함 필수. */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query(value = """
             UPDATE commute_record
-               SET com_rec_check_in  = :newCheckIn,
-                   com_rec_check_out = :newCheckOut,
+               SET com_rec_check_in  = COALESCE(:newCheckIn, com_rec_check_in),
+                   com_rec_check_out = COALESCE(:newCheckOut, com_rec_check_out),
                    work_status       = :newStatus
              WHERE com_rec_id = :comRecId
                AND work_date  = :workDate
@@ -186,33 +187,35 @@ public interface CommuteRecordRepository extends JpaRepository<CommuteRecord, Lo
      */
     Optional<CommuteRecord> findByComRecIdAndWorkDate(Long comRecId, LocalDate workDate);
 
-    /* 주간 actualWorkMinutes 합 - OT/정정 한도 검증용. work_date 범위라 파티션 프루닝 */
+    /* 주간 인정 근무 분 합 (actualWorkMinutes - unrecognizedOtMinutes) - 주 한도 검증용.
+     * 미인정 OT (결재 안 받은 야근) 는 한도 카운팅에서 제외.
+     * work_date 범위라 파티션 프루닝. */
     @Query("""
-            SELECT COALESCE(SUM(c.actualWorkMinutes), 0)
+            SELECT COALESCE(SUM(c.actualWorkMinutes - c.unrecognizedOtMinutes), 0)
               FROM CommuteRecord c
              WHERE c.companyId = :companyId
                AND c.employee.empId = :empId
                AND c.workDate BETWEEN :start AND :end
             """)
-    Long sumActualWorkMinutesInWeek(@Param("companyId") UUID companyId,
-                                    @Param("empId") Long empId,
-                                    @Param("start") LocalDate start,
-                                    @Param("end") LocalDate end);
+    Long sumRecognizedWorkMinutesInWeek(@Param("companyId") UUID companyId,
+                                        @Param("empId") Long empId,
+                                        @Param("start") LocalDate start,
+                                        @Param("end") LocalDate end);
 
-    /* 정정 대상 일자 제외 주간 합 - 정정 적용 후 합계 추정용 */
+    /* 정정 대상 일자 제외 주간 인정 근무 분 합 - 정정 적용 후 합계 추정용. 미인정 OT 제외. */
     @Query("""
-            SELECT COALESCE(SUM(c.actualWorkMinutes), 0)
+            SELECT COALESCE(SUM(c.actualWorkMinutes - c.unrecognizedOtMinutes), 0)
               FROM CommuteRecord c
              WHERE c.companyId = :companyId
                AND c.employee.empId = :empId
                AND c.workDate BETWEEN :start AND :end
                AND c.workDate <> :exclude
             """)
-    Long sumActualWorkMinutesInWeekExcluding(@Param("companyId") UUID companyId,
-                                             @Param("empId") Long empId,
-                                             @Param("start") LocalDate start,
-                                             @Param("end") LocalDate end,
-                                             @Param("exclude") LocalDate exclude);
+    Long sumRecognizedWorkMinutesInWeekExcluding(@Param("companyId") UUID companyId,
+                                                 @Param("empId") Long empId,
+                                                 @Param("start") LocalDate start,
+                                                 @Param("end") LocalDate end,
+                                                 @Param("exclude") LocalDate exclude);
 
 
     /*

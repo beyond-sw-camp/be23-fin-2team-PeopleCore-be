@@ -3,9 +3,11 @@ package com.peoplecore.approval.repository;
 import com.peoplecore.approval.dto.DocumentCountResponse;
 import com.peoplecore.approval.dto.DocumentListResponseDto;
 import com.peoplecore.approval.dto.DocumentListSearchDto;
+import com.peoplecore.approval.dto.SortBy;
 import com.peoplecore.approval.entity.*;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.Tuple;
+import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.Projections;
 import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
@@ -29,6 +31,7 @@ import java.util.stream.Collectors;
 public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCustomRepository {
 
     private final JPAQueryFactory jpaQueryFactory;
+    private final ApprovalFormRepository approvalFormRepository;
 
     /*Q클래스 선언 - 엔티티에 QueryDsl전용 객체 */
     private final QApprovalDocument doc = QApprovalDocument.approvalDocument;
@@ -38,8 +41,10 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
     private final QPersonalFolderDocument folderDoc = QPersonalFolderDocument.personalFolderDocument;
 
     @Autowired
-    public ApprovalDocumentCustomRepositoryImpl(JPAQueryFactory jpaQueryFactory) {
+    public ApprovalDocumentCustomRepositoryImpl(JPAQueryFactory jpaQueryFactory,
+                                                ApprovalFormRepository approvalFormRepository) {
         this.jpaQueryFactory = jpaQueryFactory;
+        this.approvalFormRepository = approvalFormRepository;
     }
 
     /*헬퍼 1 : 공통 검색/필터  조건빌더
@@ -72,9 +77,15 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
             builder.and(doc.createdAt.lt(searchDto.getEndDate().plusDays(1).atStartOfDay()));
         }
 
-        /*양식 필터 */
+        /* 양식 필터 — 양식 버전 박제 정책상 frontend 가 보내는 formId 는 현재 버전 row.
+         * 같은 formCode 의 옛 버전 시점에 상신된 문서까지 포함하려면 formCode 단위로 매칭 */
         if (searchDto.getFormId() != null) {
-            builder.and(doc.formId.formId.eq(searchDto.getFormId()));
+            String formCode = approvalFormRepository.findById(searchDto.getFormId())
+                    .map(ApprovalForm::getFormCode)
+                    .orElse(null);
+            if (formCode != null) {
+                builder.and(doc.formId.formCode.eq(formCode));
+            }
         }
 
         /*상태 필터 */
@@ -116,6 +127,22 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
     }
 
+    /* 헬퍼 4 : 일반 문서함 정렬 — sortBy=EMERGENCY 면 긴급 우선, 그 외(null 포함)는 최신순 */
+    private OrderSpecifier<?>[] resolveOrder(DocumentListSearchDto searchDto) {
+        boolean emergencyFirst = searchDto != null && searchDto.getSortBy() == SortBy.EMERGENCY;
+        return emergencyFirst
+                ? new OrderSpecifier<?>[]{ doc.isEmergency.desc(), doc.createdAt.desc() }
+                : new OrderSpecifier<?>[]{ doc.createdAt.desc() };
+    }
+
+    /* 헬퍼 5 : 결재함 계열 정렬 — isRead.asc() 가 항상 최우선, 그다음 sortBy 정책 */
+    private OrderSpecifier<?>[] resolveOrderWithRead(DocumentListSearchDto searchDto) {
+        boolean emergencyFirst = searchDto != null && searchDto.getSortBy() == SortBy.EMERGENCY;
+        return emergencyFirst
+                ? new OrderSpecifier<?>[]{ line.isRead.asc(), doc.isEmergency.desc(), doc.createdAt.desc() }
+                : new OrderSpecifier<?>[]{ line.isRead.asc(), doc.createdAt.desc() };
+    }
+
 
     /*결재 대기 상태
      * */
@@ -154,14 +181,14 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -191,14 +218,14 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count()).from(doc).where(builder);
@@ -239,14 +266,14 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -271,6 +298,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         doc.docNum,
                         doc.approvalStatus.stringValue(),
                         doc.isEmergency,
+                        doc.isPublic,
                         doc.formId.formName,
                         doc.formId.formId,
                         doc.formId.formCode,
@@ -281,7 +309,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());  // 긴급 우선, 최신순
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -307,6 +335,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         doc.docNum,
                         doc.approvalStatus.stringValue(),
                         doc.isEmergency,
+                        doc.isPublic,
                         doc.formId.formName,
                         doc.formId.formId,
                         doc.formId.formCode,
@@ -317,7 +346,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -347,14 +376,14 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count()).from(doc).where(builder);
@@ -371,7 +400,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -383,11 +412,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         line.approvalRole.in(ApprovalRole.REFERENCE, ApprovalRole.VIEWER)
                 )
                 .where(builder)
-                .orderBy(
-                        line.isRead.asc(),               // 미확인이 위로
-                        doc.isEmergency.desc(),
-                        doc.createdAt.desc()
-                );
+                .orderBy(resolveOrderWithRead(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -411,7 +436,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -422,11 +447,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         line.empId.eq(empId)
                 )
                 .where(builder)
-                .orderBy(
-                        line.isRead.asc(),
-                        doc.isEmergency.desc(),
-                        doc.createdAt.desc()
-                );
+                .orderBy(resolveOrderWithRead(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -448,7 +469,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
@@ -461,7 +482,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         folderDoc.personalFolderId.eq(folderId)
                 )
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count())
@@ -493,14 +514,14 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         JPAQuery<DocumentListResponseDto> contentQuery = jpaQueryFactory
                 .select(Projections.constructor(DocumentListResponseDto.class,
                         doc.docId, doc.docTitle, doc.docNum,
-                        doc.approvalStatus.stringValue(), doc.isEmergency,
+                        doc.approvalStatus.stringValue(), doc.isEmergency, doc.isPublic,
                         doc.formId.formName, doc.formId.formId, doc.formId.formCode,
                         doc.empName, doc.empDeptName,
                         doc.createdAt, hasAttachment()
                 ))
                 .from(doc)
                 .where(builder)
-                .orderBy(doc.isEmergency.desc(), doc.createdAt.desc());
+                .orderBy(resolveOrder(searchDto));
 
         JPAQuery<Long> countQuery = jpaQueryFactory
                 .select(doc.count()).from(doc).where(builder);

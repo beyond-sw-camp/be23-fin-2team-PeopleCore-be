@@ -41,10 +41,12 @@ public class ApprovalAttachmentController {
         return ResponseEntity.ok(attachmentService.getAttachments(docId));
     }
 
-    /** 첨부파일 다운로드 URL 발급 */
+    /** 첨부파일 다운로드 URL 발급 - 기안자/결재라인 본인만 통과 */
     @GetMapping("/attachments/{attachId}/download")
-    public ResponseEntity<String> getDownloadUrl(@PathVariable Long attachId) {
-        return ResponseEntity.ok(attachmentService.getDownloadUrl(attachId));
+    public ResponseEntity<String> getDownloadUrl(
+            @RequestHeader("X-User-Id") Long empId,
+            @PathVariable Long attachId) {
+        return ResponseEntity.ok(attachmentService.getDownloadUrl(empId, attachId));
     }
 
     /** 첨부파일 단건 삭제 */

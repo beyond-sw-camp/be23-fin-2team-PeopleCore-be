@@ -76,7 +76,7 @@ public class ApprovalLineService {
         validatePreviousStepApproved(docId, myLine.getLineStep());
 
         /*결재선 승인 처리 + 읽음 처리 */
-        myLine.approve();
+        myLine.approve(comment);
         myLine.markRead();
 
         /*결재자 승인 이력*/
@@ -407,7 +407,7 @@ public class ApprovalLineService {
 
         /*본인 포함 이후 모든 pending 결재선 일괄 승인 */
         approvalLines.stream().filter(l -> l.getLineStep() >= approvalLine.getLineStep() && l.getApprovalLineStatus() == ApprovalLineStatus.PENDING).forEach(l -> {
-            l.approve();
+            l.approve(comment != null ? comment : "전결 - " + l.getLineStep() + "단계");
             l.markRead();
             historyRepository.save(ApprovalStatusHistory.builder()
                     .docId(docId)

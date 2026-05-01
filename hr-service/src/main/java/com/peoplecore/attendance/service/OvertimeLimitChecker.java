@@ -46,11 +46,30 @@ public class OvertimeLimitChecker {
         WeekRange wr = WeekRange.of(workDate);
 
         long actualSum = nullToZero(commuteRecordRepository
-                .sumActualWorkMinutesInWeek(companyId, empId, wr.monday, wr.sunday));
+                .sumRecognizedWorkMinutesInWeek(companyId, empId, wr.monday, wr.sunday));
         long otSum = nullToZero(overtimeRequestRepository
-                .sumPendingApprovedMinutesInWeek(empId, wr.monday.atStartOfDay(), wr.sunday.atTime(LocalTime.MAX)));
+                .sumFuturePlanMinutesInWeek(empId, LocalDateTime.now(),
+                        wr.monday.atStartOfDay(), wr.sunday.atTime(LocalTime.MAX)));
 
         return new WeeklyUsage(pv.weeklyMax, actualSum + otSum, pv.action);
+    }
+
+    /* OT 신청 결재 통과 후 검증용 - 그 주 인정 근무 + 미래 OT plan + 신청 본 건의 plan */
+    public WeeklyUsage usageWithNewOt(UUID companyId, Long empId, LocalDate workDate,
+                                      LocalDateTime newOtPlanStart, LocalDateTime newOtPlanEnd) {
+        PolicyView pv = loadPolicy(companyId);
+        WeekRange wr = WeekRange.of(workDate);
+
+        long actualSum = nullToZero(commuteRecordRepository
+                .sumRecognizedWorkMinutesInWeek(companyId, empId, wr.monday, wr.sunday));
+        long otSum = nullToZero(overtimeRequestRepository
+                .sumFuturePlanMinutesInWeek(empId, LocalDateTime.now(),
+                        wr.monday.atStartOfDay(), wr.sunday.atTime(LocalTime.MAX)));
+        long newOtMin = (newOtPlanStart != null && newOtPlanEnd != null
+                        && newOtPlanEnd.isAfter(newOtPlanStart))
+                ? Duration.between(newOtPlanStart, newOtPlanEnd).toMinutes() : 0L;
+
+        return new WeeklyUsage(pv.weeklyMax, actualSum + otSum + newOtMin, pv.action);
     }
 
     /* 정정 적용 후 추정 합계 - consumer 검증용 */
@@ -61,10 +80,11 @@ public class OvertimeLimitChecker {
         WeekRange wr = WeekRange.of(workDate);
 
         long otherDaysActual = nullToZero(commuteRecordRepository
-                .sumActualWorkMinutesInWeekExcluding(companyId, empId, wr.monday, wr.sunday, workDate));
+                .sumRecognizedWorkMinutesInWeekExcluding(companyId, empId, wr.monday, wr.sunday, workDate));
         long modifiedActual = estimateActualMinutes(newCheckIn, newCheckOut, wg);
         long otSum = nullToZero(overtimeRequestRepository
-                .sumPendingApprovedMinutesInWeek(empId, wr.monday.atStartOfDay(), wr.sunday.atTime(LocalTime.MAX)));
+                .sumFuturePlanMinutesInWeek(empId, LocalDateTime.now(),
+                        wr.monday.atStartOfDay(), wr.sunday.atTime(LocalTime.MAX)));
 
         return new WeeklyUsage(pv.weeklyMax, otherDaysActual + modifiedActual + otSum, pv.action);
     }
