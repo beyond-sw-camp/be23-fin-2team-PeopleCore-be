@@ -9,5 +9,6 @@ import java.util.UUID;
 // KPI지표 커스텀 (부서/카테고리 필터 + 페이징 + 검색)
 public interface KpiTemplateRepositoryCustom {
 
-    Page<KpiTemplateResponse> searchTemplates(UUID companyId, Long deptId, String categoryLabel, String keyword, Pageable pageable);
+    // gradeId 선택 시: 해당 직급 OR 전 직급 공통(null) 모두 매칭
+    Page<KpiTemplateResponse> searchTemplates(UUID companyId, Long deptId, Long gradeId, String categoryLabel, String keyword, Pageable pageable);
 }

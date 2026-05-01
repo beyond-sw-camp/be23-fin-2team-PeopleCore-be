@@ -658,6 +658,7 @@ public class EvalGradeService {
         });
 
 //       ratio대로 위에서부터 등급 배정(마지막 등급은 잔여몰기)
+//       경계 동점자(biasAdjustedScore 동일)는 상위 등급으로 흡수 → 비율 초과분은 보정 단계에서 조정
         int total = ranked.size();
         List<FormSnapshotDto.GradeRule> gradeRules = snapshot.getGradeRules(); //등급규칙목록
         int idx = 0;
@@ -672,10 +673,19 @@ public class EvalGradeService {
                 quota = (int) Math.round(total * g.getRatio().doubleValue() / 100.0);
             }
             // 현재 idx 위치부터 quota 명에게 이 등급(g.getLabel())과 순위(idx+1) 부여
+            int prevIdx = idx;
             for (int i = 0; i < quota && idx < total; i++, idx++) {
                 ranked.get(idx).applyDistribution(g.getLabel(), idx + 1);
             }
 
+            // 경계 동점자 흡수 (마지막 등급 제외) — 컷오프 인원과 biasAdjustedScore 동일하면 같은 등급으로 끌어올림
+            if (gi < gradeRules.size() - 1 && idx > prevIdx && idx < total) {
+                BigDecimal cutoffScore = ranked.get(idx - 1).getBiasAdjustedScore();
+                while (idx < total && ranked.get(idx).getBiasAdjustedScore().compareTo(cutoffScore) == 0) {
+                    ranked.get(idx).applyDistribution(g.getLabel(), idx + 1);
+                    idx++;
+                }
+            }
         }
 
         return DistributionApplyResultDto.builder()

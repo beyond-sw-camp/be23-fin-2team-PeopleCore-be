@@ -2,6 +2,7 @@ package com.peoplecore.evaluation.domain;
 
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.entity.BaseTimeEntity;
+import com.peoplecore.grade.domain.Grade;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -25,6 +26,11 @@ public class KpiTemplate extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id", nullable = false)
     private Department department;
+
+    // 직급 — null 이면 해당 부서 전 직급 공통 KPI
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grade_id")
+    private Grade grade;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_option_id", nullable = false)
@@ -58,14 +64,16 @@ public class KpiTemplate extends BaseTimeEntity {
         this.isActive = false;
     }
 
-    // KPI 지표 수정 - 등록/수정 폼에서 받는 필드 일괄 갱신
+    // KPI 지표 수정 - 등록/수정 폼에서 받는 필드 일괄 갱신 (grade 는 nullable)
     public void update(Department department,
+                       Grade grade,
                        KpiOption category,
                        KpiOption unit,
                        String name,
                        String description,
                        KpiDirection direction) {
         this.department = department;
+        this.grade = grade;
         this.category = category;
         this.unit = unit;
         this.name = name;

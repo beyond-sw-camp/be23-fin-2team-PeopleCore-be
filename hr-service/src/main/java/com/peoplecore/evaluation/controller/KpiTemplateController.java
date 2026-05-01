@@ -23,15 +23,17 @@ public class KpiTemplateController {
     }
 
     // 1. 목록 조회 (필터 + 페이징 + 검색)
+    //    gradeId 선택 시: 해당 직급 OR 전 직급 공통(null) KPI 모두 노출
     @GetMapping
     public ResponseEntity<Page<KpiTemplateResponse>> getTemplates(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestParam(required = false) Long deptId,
+            @RequestParam(required = false) Long gradeId,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) String keyword,
             Pageable pageable) {
         return ResponseEntity.ok(
-                kpiTemplateService.getTemplates(companyId, deptId, category, keyword, pageable));
+                kpiTemplateService.getTemplates(companyId, deptId, gradeId, category, keyword, pageable));
     }
 
     // 2. 단건 조회 - 수정 모달 prefill 용
