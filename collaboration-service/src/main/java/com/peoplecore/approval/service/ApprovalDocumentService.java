@@ -163,7 +163,7 @@ public class ApprovalDocumentService {
 
         /* hr-service 에 docCreated 이벤트 발행 — 결재선 포함해 최종결재자까지 전달 */
         List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId());
-        approvalEventPublisher.publishDocCreated(document, savedLines);
+        approvalEventPublisher.publishDocCreated(document, savedLines, request.getHtmlContent());
 
         /* 첨부파일이 같이 왔으면 MinIO + DB 저장 (같은 트랜잭션) */
         if (files != null && !files.isEmpty()) {
@@ -516,7 +516,7 @@ public class ApprovalDocumentService {
 
         /* hr-service 에 docCreated 이벤트 발행 — 새 문서를 새 기안처럼 전파 */
         List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(newDoc.getDocId());
-        approvalEventPublisher.publishDocCreated(newDoc, savedLines);
+        approvalEventPublisher.publishDocCreated(newDoc, savedLines, request.getHtmlContent());
 
         /* 재기안 시 신규로 추가되는 첨부 업로드 (이전 첨부는 위에서 row 복제됨) */
         if (files != null && !files.isEmpty()) {

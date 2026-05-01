@@ -36,7 +36,7 @@ public class PayrollFormHandler implements ApprovalFormHandler {
     }
 
     @Override
-    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines) {
+    public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {
         try {
             Long payrollRunId = extractPayrollRunId(document);
             PayrollApprovalDocCreatedEvent event = PayrollApprovalDocCreatedEvent.builder()
@@ -45,6 +45,7 @@ public class PayrollFormHandler implements ApprovalFormHandler {
                     .payrollRunId(payrollRunId)
                     .drafterId(document.getEmpId())
                     .finalApproverEmpId(ApprovalFormHandler.findFinalApproverEmpId(lines))
+                    .htmlContent(htmlContent)
                     .build();
             kafkaTemplate.send(TOPIC_DOC_CREATED, objectMapper.writeValueAsString(event));
             log.info("[Kafka] Payroll docCreated 발행 - docId={}, payrollRunId={}",

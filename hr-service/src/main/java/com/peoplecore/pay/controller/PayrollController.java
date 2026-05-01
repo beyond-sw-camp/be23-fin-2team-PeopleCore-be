@@ -1,8 +1,9 @@
 package com.peoplecore.pay.controller;
 
 import com.peoplecore.auth.RoleRequired;
-import com.peoplecore.pay.approval.ApprovalDraftResDto;
-import com.peoplecore.pay.approval.PayrollApprovalDraftService;
+import com.peoplecore.exception.CustomException;
+import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.pay.approval.*;
 import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.service.PayrollService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -103,8 +104,9 @@ public class PayrollController {
     @PutMapping("/{payrollRunId}/pay")
     public ResponseEntity<Void> processPayment(
             @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long payrollRunId){
-        payrollService.processPayment(companyId, payrollRunId);
+            @PathVariable Long payrollRunId,
+            @RequestBody(required = false) List<Long> empIds){
+        payrollService.processPayment(companyId, payrollRunId, empIds);
         return ResponseEntity.ok().build();
     }
 
@@ -162,4 +164,6 @@ public class PayrollController {
         return ResponseEntity.ok(
                 payrollService.calcDeductions(companyId, reqDto));
     }
+
+
 }

@@ -18,6 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -52,6 +53,14 @@ public class PayItemsService {
     public PayItemResDto createPayItem(UUID companyId, PayItemReqDto reqDto){
         Company company = companyRepository.findById(companyId).orElseThrow(()-> new CustomException(ErrorCode.NOT_FOUND));
 
+        Integer sortOrder = reqDto.getSortOrder();
+        if (sortOrder == null) {
+            // 같은 회사 + 같은 type 의 일반 항목 (sortOrder < 100 인 것만 — 보호 항목 901~ 제외)
+            // 중 max + 1 부여. 일반 항목이 없으면 1.
+            Integer maxOrder = payItemsRepository
+                    .findMaxSortOrderByCompanyAndType(companyId, reqDto.getPayItemType());
+            sortOrder = (maxOrder == null) ? 1 : maxOrder + 1;
+        }
         PayItems items = PayItems.builder()
                 .payItemName(reqDto.getPayItemName())
                 .payItemType(reqDto.getPayItemType())
@@ -59,7 +68,7 @@ public class PayItemsService {
                 .isTaxable(reqDto.getIsTaxable())
                 .taxExemptLimit(reqDto.getTaxExemptLimit())
                 .payItemCategory(reqDto.getPayItemCategory())
-                .sortOrder(reqDto.getSortOrder())
+                .sortOrder(sortOrder)
                 .isActive(true)
                 .isLegal(false)
                 .company(company)
@@ -97,14 +106,21 @@ public class PayItemsService {
             throw new CustomException(ErrorCode.NOT_FOUND);
         }
 
-//        항목 사용여부 검증 -> 사용시 소프트딜리트
-        for(PayItems item : items){
-            if (salaryContractDetailRepository.existsByPayItemId(item.getPayItemId()) || payrollDetailsRepository.existsByPayItems_PayItemId(item.getPayItemId())){
-                item.softDelete();
+        List<PayItems> hardDeletable = new ArrayList<>();
+        for (PayItems item : items) {
+            boolean referenced =
+                    salaryContractDetailRepository.existsByPayItemId(item.getPayItemId())
+                            || payrollDetailsRepository.existsByPayItems_PayItemId(item.getPayItemId());
+            if (referenced) {
+                item.softDelete();          // 참조 있음 → 소프트딜리트
+            } else {
+                hardDeletable.add(item);    // 참조 없음 → 하드딜리트
             }
         }
 
-        payItemsRepository.deleteAll(items);
+        if (!hardDeletable.isEmpty()) {
+            payItemsRepository.deleteAll(hardDeletable);
+        }
     }
 
 
@@ -325,48 +341,48 @@ public class PayItemsService {
                 PayItems.builder()
                         .company(company).payItemName("건강보험정산추가징수")
                         .payItemType(PayItemType.DEDUCTION)
-                        .isSystem(true).isActive(true).isFixed(true)
-                        .isTaxable(false)
+                        .isSystem(true).isActive(true).isFixed(false)
+                        .isTaxable(false).isProtected(true)
                         .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(901)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("건강보험정산환급")
                         .payItemType(PayItemType.PAYMENT)
-                        .isSystem(true).isActive(true).isFixed(true)
-                        .isTaxable(false)
+                        .isSystem(true).isActive(true).isFixed(false)
+                        .isTaxable(false).isProtected(true)
                         .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(902)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("장기요양정산추가징수")
                         .payItemType(PayItemType.DEDUCTION)
-                        .isSystem(true).isActive(true).isFixed(true)
-                        .isTaxable(false)
+                        .isSystem(true).isActive(true).isFixed(false)
+                        .isTaxable(false).isProtected(true)
                         .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(903)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("장기요양정산환급")
                         .payItemType(PayItemType.PAYMENT)
-                        .isSystem(true).isActive(true).isFixed(true)
-                        .isTaxable(false)
+                        .isSystem(true).isActive(true).isFixed(false)
+                        .isTaxable(false).isProtected(true)
                         .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(904)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("고용보험정산추가징수")
                         .payItemType(PayItemType.DEDUCTION)
-                        .isSystem(true).isActive(true).isFixed(true)
-                        .isTaxable(false)
+                        .isSystem(true).isActive(true).isFixed(false)
+                        .isTaxable(false).isProtected(true)
                         .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(905)
                         .build(),
                 PayItems.builder()
                         .company(company).payItemName("고용보험정산환급")
                         .payItemType(PayItemType.PAYMENT)
-                        .isSystem(true).isActive(true).isFixed(true)
-                        .isTaxable(false)
+                        .isSystem(true).isActive(true).isFixed(false)
+                        .isTaxable(false).isProtected(true)
                         .payItemCategory(PayItemCategory.INSURANCE)
                         .sortOrder(906)
                         .build()

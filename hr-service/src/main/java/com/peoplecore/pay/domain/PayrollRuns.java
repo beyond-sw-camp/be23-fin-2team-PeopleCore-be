@@ -70,9 +70,11 @@ public class PayrollRuns {
 
 //    상태변경: 전자결재 상신
     public void submitApproval(Long approvalDocId){
-        if (this.payrollStatus != PayrollStatus.CALCULATING
-                && this.payrollStatus != PayrollStatus.CONFIRMED){
-            throw new IllegalStateException("산정중 또는 확정 상태에서만 전자결재 상신 가능합니다.");
+        // 부분 결재 허용: 이미 PENDING_APPROVAL 인 경우에도 추가 결재문서 상신 가능.
+        // APPROVED/PAID 단계에서는 더 이상 상신 불가 (이 단계에서 산정중/확정 사원은 정상적으로 존재할 수 없음).
+        if (this.payrollStatus == PayrollStatus.APPROVED
+                || this.payrollStatus == PayrollStatus.PAID){
+            throw new IllegalStateException("이미 승인 완료/지급완료된 급여대장은 추가 상신 불가합니다.");
         }
         this.approvalDocId = approvalDocId;
         this.payrollStatus = PayrollStatus.PENDING_APPROVAL;
@@ -88,8 +90,10 @@ public class PayrollRuns {
 
 //    상태 변경: 지급완료
     public void markPaid(LocalDate payDate){
-        if (this.payrollStatus != PayrollStatus.APPROVED){
-            throw new IllegalStateException("승인완료 상태에서만 지급처리 가능합니다.");
+        if (this.payrollStatus == PayrollStatus.PAID) return;  // 멱등
+        if (this.payrollStatus != PayrollStatus.APPROVED
+                && this.payrollStatus != PayrollStatus.PENDING_APPROVAL){
+            throw new IllegalStateException("결재 진행/완료 상태에서만 지급처리 가능합니다.");
         }
         this.payrollStatus = PayrollStatus.PAID;
         this.payDate = payDate;
@@ -97,11 +101,13 @@ public class PayrollRuns {
 
 //    상태변경: 전자결재 반려
     public void rejectApproval(){
+        if (this.payrollStatus == PayrollStatus.CONFIRMED) return;  // 이미 되돌려진 경우
         if (this.payrollStatus != PayrollStatus.PENDING_APPROVAL){
             throw new IllegalStateException("전자결재 진행중 상태에서만 반려 가능합니다.");
         }
         this.payrollStatus = PayrollStatus.CONFIRMED;
     }
+
 
 //    kafka 이벤트 수신 시 approvalDocId 바인딩
 //    - Kafka 발행 후 collab이 INSERT한 문서 ID를 역으로 주입받는 경로
@@ -114,6 +120,7 @@ public class PayrollRuns {
 
 //   결재 회수
     public void cancelApproval(){
+        if (this.payrollStatus == PayrollStatus.CONFIRMED) return;
         if (this.payrollStatus != PayrollStatus.PENDING_APPROVAL){
             throw new IllegalStateException("전자결재 진행중 상태에서만 회수 가능합니다.");
         }

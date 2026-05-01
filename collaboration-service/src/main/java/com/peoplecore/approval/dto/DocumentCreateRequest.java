@@ -29,6 +29,7 @@ public class DocumentCreateRequest {
     private Long deptFolderId;
     private String hrRefType;   // nullable — 프론트 직접 상신 시 null
     private Long hrRefId;       // nullable
+    private String htmlContent;     // 결재 상신 시점의 완성된 HTML
 
     //    결재선 목록
     private List<ApprovalLineRequest> approvalLines;

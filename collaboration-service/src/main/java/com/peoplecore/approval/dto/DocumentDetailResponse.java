@@ -44,6 +44,7 @@ public class DocumentDetailResponse {
     private String formHtml;
     private String formName;
     private Long formId;
+    private String formCode;
 
     //    결재선
     private List<ApprovalLineResponse> approvalLines;
@@ -118,6 +119,7 @@ public class DocumentDetailResponse {
                 .formHtml(doc.getFormId().getFormHtml())
                 .formName(doc.getFormId().getFormName())
                 .formId(doc.getFormId().getFormId())
+                .formCode(doc.getFormId().getFormCode())
                 .approvalLines(lineResponses).build();
     }
 }

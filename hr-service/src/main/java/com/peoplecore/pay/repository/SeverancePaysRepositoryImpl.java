@@ -178,8 +178,44 @@ public class SeverancePaysRepositoryImpl implements SeverancePaysRepositoryCusto
         ));
     }
 
+//    직전 N개월 PAYMENT 항목들의 비과세 누계
+    @Override
+    public Long sumNonTaxableLast3Months(Long empId, UUID companyId, List<String> months) {
 
-    //    DB형 기적립금 합계
+        // PayrollDetails + PayItems 조인해 PAYMENT 항목 raw 데이터 가져온 뒤
+        // 자바에서 항목별 정책에 맞춰 min(amount, taxExemptLimit) / 전액비과세 분기.
+        List<Tuple> rows = queryFactory
+                .select(pd.amount, pd.payItems.isTaxable, pd.payItems.taxExemptLimit)
+                .from(pd)
+                .join(pd.payrollRuns, pr)
+                .join(pd.payItems)
+                .where(
+                        pd.employee.empId.eq(empId),
+                        pd.company.companyId.eq(companyId),
+                        pr.payYearMonth.in(months),
+                        pd.payItemType.eq(PayItemType.PAYMENT)
+                )
+                .fetch();
+
+        long sum = 0L;
+        for (Tuple t : rows) {
+            Long amt = t.get(pd.amount);
+            Boolean taxable = t.get(pd.payItems.isTaxable);
+            Integer cap = t.get(pd.payItems.taxExemptLimit);
+            if (amt == null) continue;
+            long a = amt;
+            if (Boolean.FALSE.equals(taxable)) {
+                sum += a;                                  // 전액 비과세
+            } else {
+                int c = (cap == null) ? 0 : cap;
+                sum += Math.min(a, c);                     // 한도까지만 비과세
+            }
+        }
+        return sum;
+    }
+
+
+//    DB형 기적립금 합계
 //    RetirementPensionDeposits에서 COMPLETED 상태의 depositAmount합산
     @Override
     public Long sumDcDepositedTotal(Long empId, UUID companyId) {

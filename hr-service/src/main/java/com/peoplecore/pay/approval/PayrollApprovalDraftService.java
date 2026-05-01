@@ -34,14 +34,17 @@ public class PayrollApprovalDraftService {
 //    private final PayrollApprovalDocCreatedPublisher docCreatedPublisher;
     private final ApprovalFormCache approvalFormCache;
     private final PayrollEmpStatusRepository payrollEmpStatusRepository;
+    private final PayrollApprovalHtmlBuilder htmlBuilder;
+
 
     @Autowired
-    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository,  ApprovalFormCache approvalFormCache, PayrollEmpStatusRepository payrollEmpStatusRepository) {
+    public PayrollApprovalDraftService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, ApprovalFormCache approvalFormCache, PayrollEmpStatusRepository payrollEmpStatusRepository, PayrollApprovalHtmlBuilder htmlBuilder) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
         this.approvalFormCache = approvalFormCache;
         this.payrollEmpStatusRepository = payrollEmpStatusRepository;
+        this.htmlBuilder = htmlBuilder;
     }
 
     private static final DateTimeFormatter YMD = DateTimeFormatter.ISO_LOCAL_DATE;
@@ -61,15 +64,26 @@ public class PayrollApprovalDraftService {
 
         Employee drafter = employeeRepository.findById(userId).orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-        ApprovalFormCache.CachedForm form = approvalFormCache.get(companyId, ApprovalFormType.SALARY);
-        String htmlTemplate = form.formHtml();   // ← collab → MinIO 최신본
-        Map<String, String> dataMap = buildDataMap(run, drafter);
+        // 확정 + 아직 결재 안 올린 사원만
+        Set<Long> confirmedEmpIds = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunIdAndStatus(payrollRunId, PayrollEmpStatusType.CONFIRMED)
+                .stream()
+                .filter(p -> p.getApprovalDocId() == null)
+                .map(p -> p.getEmployee().getEmpId())
+                .collect(Collectors.toSet());
+
+        if (confirmedEmpIds.isEmpty()) {
+            throw new CustomException(ErrorCode.NO_CONFIRMED_EMPLOYEES);
+        }
+
+        // 빌더로 완성된 HTML 생성
+        String htmlTemplate = htmlBuilder.buildSalaryHtml(run, drafter, confirmedEmpIds);
 
         return ApprovalDraftResDto.builder()
                 .type(ApprovalFormType.SALARY)
                 .ledgerId(payrollRunId)
                 .htmlTemplate(htmlTemplate)
-                .dataMap(dataMap)
+                .dataMap(Collections.emptyMap())   // 사용 안 함 -> 빈 Map보내기
                 .build();
     }
 
@@ -77,10 +91,11 @@ public class PayrollApprovalDraftService {
         Map<String, String> m = new HashMap<>();
         Long runId = run.getPayrollRunId();
 
-        // 확정된 사원 ID Set 미리 추출
+        // 확정된 사원 + 전자결재 안올린 사원 ID Set 추출
         Set<Long> confirmedEmpIds = payrollEmpStatusRepository
                 .findByPayrollRuns_PayrollRunIdAndStatus(runId, PayrollEmpStatusType.CONFIRMED)
                 .stream()
+                .filter(p-> p.getApprovalDocId() == null)
                 .map(p -> p.getEmployee().getEmpId())
                 .collect(Collectors.toSet());
 
