@@ -872,7 +872,7 @@ public class PayrollService {
         long pension = Math.round(pensionBase * rates.getNationalPension().doubleValue() / 2);
 
         long health = Math.round(base * rates.getHealthInsurance().doubleValue() / 2);
-        long healthTotal = Math.round(base * rates.getHealthInsurance().doubleValue() / 2);
+        long healthTotal = Math.round(base * rates.getHealthInsurance().doubleValue());
         long ltc = Math.round(healthTotal * rates.getLongTermCare().doubleValue() / 2);
         long employment = Math.round(base * rates.getEmploymentInsurance().doubleValue());
 
