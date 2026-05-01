@@ -197,19 +197,33 @@ public class EmployeeService {
         return savedEmployee.getEmpId();
     }
 
-    //        사번생성: ex. YYYYMM-0001
+    //        사번 미리보기: ex. 26040001 (yyMM + 4자리 순번) — 락 없이 다음 사번 계산
+    @Transactional(readOnly = true)
+    public String previewEmpNum(UUID companyId, LocalDate hireDate) {
+        String prefix = hireDate.format(DateTimeFormatter.ofPattern("yyMM"));
+        Optional<String> maxEmpNum = employeeRepository.findMaxEmpNum(companyId, prefix);
+        long nextSeq;
+        if (maxEmpNum.isPresent()) {
+            nextSeq = Long.parseLong(maxEmpNum.get().substring(prefix.length())) + 1;
+        } else {
+            nextSeq = 1L;
+        }
+        return String.format("%s%04d", prefix, nextSeq);
+    }
+
+    //        사번생성: ex. 26040001 (yyMM + 4자리 순번)
     private String generateEmpNum(UUID companyId, LocalDate hireDate) {
-        String prefix = hireDate.format(DateTimeFormatter.ofPattern("yyyyMM"));
+        String prefix = hireDate.format(DateTimeFormatter.ofPattern("yyMM"));
 //        비관적 락, 가장 큰 사번 조회
         Optional<String>maxEmpNum = employeeRepository.findMaxEmpNumWithLock(companyId,prefix);
 //        다음 순번 계산
         long nextSeq;
         if(maxEmpNum.isPresent()){
-            nextSeq = Long.parseLong(maxEmpNum.get().split("-")[1])+1;
+            nextSeq = Long.parseLong(maxEmpNum.get().substring(prefix.length()))+1;
         }else{
             nextSeq = 1L;
         }
-        return String.format("%s-%04d", prefix, nextSeq);
+        return String.format("%s%04d", prefix, nextSeq);
     }
 
     //    비밀번호 검증 후 반환

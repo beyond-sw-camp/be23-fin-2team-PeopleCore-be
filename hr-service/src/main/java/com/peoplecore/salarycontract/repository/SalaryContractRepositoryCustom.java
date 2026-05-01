@@ -5,10 +5,11 @@ import com.peoplecore.salarycontract.domain.SalaryContractSortField;
 import com.peoplecore.salarycontract.dto.SalaryContractListResDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 
 import java.util.UUID;
 
 public interface SalaryContractRepositoryCustom {
-    Page<SalaryContractListResDto> findAllWithFilter(UUID companyId, String search, String year, SalaryContractSortField sortField, Pageable pageable);
+    Page<SalaryContractListResDto> findAllWithFilter(UUID companyId, String search, SalaryContractSortField sortField, Sort.Direction sortDirection, Pageable pageable);
 
 }

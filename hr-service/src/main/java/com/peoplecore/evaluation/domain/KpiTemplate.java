@@ -21,7 +21,7 @@ public class KpiTemplate extends BaseTimeEntity {
     @Column(name = "kpi_id")
     private Long kpiId; // KPI PK
 
-//    옵션관리는 depth 정책만 저장. 실제 부서는 조직도(Department) 직접 참조
+//    실제 부서는 조직도(Department) 직접 참조
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "department_id", nullable = false)
     private Department department;

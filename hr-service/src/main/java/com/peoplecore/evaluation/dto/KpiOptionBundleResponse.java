@@ -11,7 +11,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 
-// KPI 옵션 번들 응답 — 카테고리/단위/부서 depth 한 번에 내려줌
+// KPI 옵션 번들 응답 — 카테고리/단위 한 번에 내려줌
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
@@ -21,7 +21,6 @@ public class KpiOptionBundleResponse {
     // 각 항목에 DB id 포함 — 프론트가 저장 요청 시 이 id 로 매칭되어 rename/재정렬 감지
     private List<OptionItem> categories;
     private List<OptionItem> units;
-    private String departmentLevel;   // "1".."N" 또는 "leaf"
 
     // 옵션 1건 — id + label (label 은 option_value 를 그대로 노출)
     @Data
@@ -37,9 +36,7 @@ public class KpiOptionBundleResponse {
     public static KpiOptionBundleResponse from(Collection<KpiOption> rows) {
         List<OptionItem> categories = new ArrayList<>();
         List<OptionItem> units = new ArrayList<>();
-        String departmentLevel = "leaf";
 
-        // 타입별 분기 — DEPARTMENT 는 리스트가 아닌 단일 설정값
         for (KpiOption o : rows) {
             if (o.getType() == KpiOptionType.CATEGORY) {
                 categories.add(OptionItem.builder()
@@ -47,15 +44,12 @@ public class KpiOptionBundleResponse {
             } else if (o.getType() == KpiOptionType.UNIT) {
                 units.add(OptionItem.builder()
                         .id(o.getOptionId()).label(o.getOptionValue()).build());
-            } else if (o.getType() == KpiOptionType.DEPARTMENT) {
-                departmentLevel = o.getOptionValue();
             }
         }
 
         return KpiOptionBundleResponse.builder()
                 .categories(categories)
                 .units(units)
-                .departmentLevel(departmentLevel)
                 .build();
     }
 }

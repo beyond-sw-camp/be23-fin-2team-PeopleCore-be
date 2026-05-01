@@ -99,7 +99,7 @@ public class LeaveAllowanceService {
             }
 
 //            통상임금(월) = 연봉 / 12
-            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByContractYearDesc(empId).orElse(null);
+            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByApplyFromDesc(empId).orElse(null);
             if (contract == null) continue;
 
             long monthlySalary = contract.getTotalAmount().divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR).longValue();

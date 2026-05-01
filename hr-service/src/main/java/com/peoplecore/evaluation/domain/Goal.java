@@ -47,9 +47,11 @@ public class Goal extends BaseTimeEntity {
     @Column(name = "description", length = 500)
     private String description; // 설명
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "task_grade")
-    private TaskGrade taskGrade; // 업무 난이도 (상/중/하)
+    // 가중치(%) — KPI 만 값을 가짐 (OKR 은 null)
+    //   사원이 제출 화면에서 직접 입력. KPI 신규 등록 시 디폴트 10
+    //   본인의 KPI 합 = 100 일 때만 제출 허용 (GoalService.submitAllDrafts 검증)
+    @Column(name = "weight")
+    private Integer weight;
 
     @Column(name = "target_value", precision = 12, scale = 2)
     private BigDecimal targetValue; // 목표값 (KPI만)
@@ -75,7 +77,8 @@ public class Goal extends BaseTimeEntity {
     private LocalDateTime submittedAt; // 제출 시각
 
     // KPI 목표 수정 - 템플릿에서 필드 자동 복사
-    public void updateAsKpi(KpiTemplate template, BigDecimal targetValue, TaskGrade grade) {
+    //   weight 는 등록 시 디폴트 10 으로 박히고, 이후 changeWeight 로만 변경 (등록/수정 시 건드리지 않음)
+    public void updateAsKpi(KpiTemplate template, BigDecimal targetValue) {
         this.kpiTemplate = template;
         this.goalType = GoalType.KPI;
         this.category = template.getCategory().getOptionValue();
@@ -83,21 +86,30 @@ public class Goal extends BaseTimeEntity {
         this.description = template.getDescription();
         this.targetUnit = template.getUnit().getOptionValue();
         this.targetValue = targetValue;
-        this.taskGrade = grade;
         this.kpiDirection = template.getDirection();
+        if (this.weight == null) this.weight = 10;   // KPI 신규 등록 시 디폴트
     }
 
     // OKR 목표 수정 - 사원 입력값 그대로, KPI 관련 필드는 NULL 처리
-    public void updateAsOkr(String category, String title, String description, TaskGrade grade) {
+    //   OKR 은 가중치 개념 없음 - weight 는 항상 null
+    public void updateAsOkr(String category, String title, String description) {
         this.kpiTemplate = null;
         this.goalType = GoalType.OKR;
         this.category = category;
         this.title = title;
         this.description = description;
-        this.taskGrade = grade;
         this.targetValue = null;
         this.targetUnit = null;
         this.kpiDirection = null;
+        this.weight = null;
+    }
+
+    // 가중치 일괄 저장 — 제출 화면에서 호출
+    public void changeWeight(int weight) {
+        if (this.goalType != GoalType.KPI) {
+            throw new IllegalStateException("KPI 목표만 가중치를 가질 수 있습니다");
+        }
+        this.weight = weight;
     }
 
     // 반려된 목표 재수정 시 작성중 상태로 리셋 (재제출 가능)

@@ -22,9 +22,9 @@ import java.util.List;
 public class EvaluationRulesDto {
     private List<EvalItem> items;                  // 평가항목 (자기평가/상위자평가) — JSON에서 파싱
     private List<GradeItem> grades;                // 등급 체계 (S/A/B/C/D) — JSON에서 파싱
-    private List<AdjustItem> adjustments;          // 가감점 항목 (근태/징계/표창) — JSON에서 파싱
+    // 가감점 기능 제거 — 2026-04 (프론트 UI 삭제, 백엔드 보존)
+    // private List<AdjustItem> adjustments;          // 가감점 항목 (근태/징계/표창) — JSON에서 파싱
     private List<GradeRawScoreItem> rawScoreTable; // 등급 원점수 변환표 — JSON에서 파싱, grades.id 참조
-    private TaskGradeWeight taskGradeWeights;      // 업무등급(상/중/하) 가중 배수 — 엔티티 컬럼 3개 조합
     private KpiScoringConfig kpiScoring;           // KPI 점수 환산 규칙 — JSON에서 파싱
     private Boolean useBiasAdjustment;             // 팀장 편향 보정 사용 여부 — 엔티티 컬럼
     private BigDecimal biasWeight;                 // 편향 보정 강도 — 엔티티 컬럼
@@ -73,32 +73,20 @@ public class EvaluationRulesDto {
     }
 
 
+    // 가감점 기능 제거 — 2026-04 (프론트 UI 삭제, 백엔드 보존)
     // 가감점 (예: {id:"attendance", name:"근태 감점", points:-2, threshold:0, enabled:true})
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class AdjustItem {
-        private String id;         // 항목 식별자
-        private String name;       // 항목명
-        private Integer points;    // 점수 (음수=감점 / 양수=가산)
-        private Integer threshold; // 면제 횟수 - 이 횟수까지는 무감점, 초과분에만 points 적용 (null/0이면 면제 없음)
-        private Boolean enabled;   // 활성 여부
-    }
-
-
-    // 업무등급 가중 배수 (예: {상:3, 중:2, 하:1})
-    // 목표 난이도(상/중/하)에 따라 점수 반영 비중을 다르게 줄 때 사용
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class TaskGradeWeight {
-        private Integer 상;   // 상 난이도 배수
-        private Integer 중;   // 중 난이도 배수
-        private Integer 하;   // 하 난이도 배수
-    }
+//    @Data
+//    @Builder
+//    @AllArgsConstructor
+//    @NoArgsConstructor
+//    @JsonIgnoreProperties(ignoreUnknown = true)
+//    public static class AdjustItem {
+//        private String id;         // 항목 식별자
+//        private String name;       // 항목명
+//        private Integer points;    // 점수 (음수=감점 / 양수=가산)
+//        private Integer threshold; // 면제 횟수 - 이 횟수까지는 무감점, 초과분에만 points 적용 (null/0이면 면제 없음)
+//        private Boolean enabled;   // 활성 여부
+//    }
 
 
     // KPI 점수 환산 규칙  {cap:120, maintainTolerance:0, ...}
@@ -124,13 +112,11 @@ public class EvaluationRulesDto {
     private static class FormSnapshot {
         private List<EvalItem> itemList;
         private List<GradeItem> gradeRules;
-        private List<AdjustItem> adjustments;
+        // 가감점 기능 제거 — 2026-04
+        // private List<AdjustItem> adjustments;
         private List<GradeRawScoreItem> rawScoreTable;
         private KpiScoringConfig kpiScoring;
         // merged snapshot 전용 (회사 규칙 formValues JSON 엔 없음)
-        private Integer taskWeightSang;
-        private Integer taskWeightJung;
-        private Integer taskWeightHa;
         private Boolean useBiasAdjustment;
         private BigDecimal biasWeight;
         private Integer minTeamSize;
@@ -147,7 +133,6 @@ public class EvaluationRulesDto {
         FormSnapshot snap = parse(r.getFormValues(), mapper);
 
         return buildDto(snap,
-                r.getTaskWeightSang(), r.getTaskWeightJung(), r.getTaskWeightHa(),
                 r.getUseBiasAdjustment(), r.getBiasWeight(), r.getMinTeamSize(),
                 r.getFormVersion());
     }
@@ -162,27 +147,21 @@ public class EvaluationRulesDto {
 
         // 하드 컬럼 값은 병합 JSON 안에 그대로 박제돼 있음 — snap 에서 바로 꺼냄
         return buildDto(snap,
-                snap.taskWeightSang, snap.taskWeightJung, snap.taskWeightHa,
                 snap.useBiasAdjustment, snap.biasWeight, snap.minTeamSize,
                 formVersion);
     }
 
     // 공통 조립부 — JSON 파싱 결과 + 하드 컬럼 값으로 DTO 구성
     private static EvaluationRulesDto buildDto(FormSnapshot snap,
-                                               Integer sang, Integer jung, Integer ha,
                                                Boolean useBias, BigDecimal biasW, Integer minTeam,
                                                Long formVersion) {
         return EvaluationRulesDto.builder()
                 // JSON 필드가 누락돼도 null 대신 빈 리스트로 방어 (FE가 .map() 안 터지게)
                 .items(snap.itemList != null ? snap.itemList : Collections.emptyList())
                 .grades(snap.gradeRules != null ? snap.gradeRules : Collections.emptyList())
-                .adjustments(snap.adjustments != null ? snap.adjustments : Collections.emptyList())
+                // 가감점 기능 제거 — 2026-04
+                // .adjustments(snap.adjustments != null ? snap.adjustments : Collections.emptyList())
                 .rawScoreTable(snap.rawScoreTable != null ? snap.rawScoreTable : Collections.emptyList())
-                .taskGradeWeights(TaskGradeWeight.builder()
-                        .상(sang)
-                        .중(jung)
-                        .하(ha)
-                        .build())
                 // KPI 환산 규칙 — JSON에 없으면 기본값(120/0/0/1.0)으로 fallback (자기평가 만점은 100 고정)
                 .kpiScoring(snap.kpiScoring != null ? snap.kpiScoring : KpiScoringConfig.builder()
                         .cap(120)

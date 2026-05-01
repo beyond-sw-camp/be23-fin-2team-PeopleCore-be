@@ -22,7 +22,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Set;
 import java.util.UUID;
 
 // KPI지표 템플릿 - 부서/카테고리별 지표 관리
@@ -33,7 +32,6 @@ public class KpiTemplateService {
     private final KpiTemplateRepository kpiTemplateRepository;
     private final KpiOptionRepository kpiOptionRepository;
     private final DepartmentRepository departmentRepository;
-    private final DepartmentDepthResolver departmentDepthResolver;
     private final GoalRepository goalRepository;
     private final SeasonRepository seasonRepository;
     private final StageRepository stageRepository;
@@ -41,14 +39,12 @@ public class KpiTemplateService {
     public KpiTemplateService(KpiTemplateRepository kpiTemplateRepository,
                               KpiOptionRepository kpiOptionRepository,
                               DepartmentRepository departmentRepository,
-                              DepartmentDepthResolver departmentDepthResolver,
                               GoalRepository goalRepository,
                               SeasonRepository seasonRepository,
                               StageRepository stageRepository) {
         this.kpiTemplateRepository = kpiTemplateRepository;
         this.kpiOptionRepository = kpiOptionRepository;
         this.departmentRepository = departmentRepository;
-        this.departmentDepthResolver = departmentDepthResolver;
         this.goalRepository = goalRepository;
         this.seasonRepository = seasonRepository;
         this.stageRepository = stageRepository;
@@ -66,10 +62,9 @@ public class KpiTemplateService {
         }
     }
 
-    // 1번 - depth 정책 기반 부서 IN 필터 적용
+    // 1번 - 부서 IN 필터 없음, 회사 + 부서/카테고리/키워드 필터만
     public Page<KpiTemplateResponse> getTemplates(UUID companyId, Long deptId, String category, String keyword, Pageable pageable){
-        Set<Long> validDeptIds = departmentDepthResolver.resolveValidDeptIds(companyId);   // ★ 추가
-        return kpiTemplateRepository.searchTemplates(companyId, deptId, category, keyword, validDeptIds, pageable);
+        return kpiTemplateRepository.searchTemplates(companyId, deptId, category, keyword, pageable);
     }
 
     // 2번 단건 조회
@@ -81,17 +76,11 @@ public class KpiTemplateService {
         return KpiTemplateResponse.from(t);
     }
 
-//    3번 신규등록 -DepartmentDepthResolver호출
+//    3번 신규등록
     public KpiTemplateResponse createTemplate(UUID companyId, KpiTemplateRequest req){
 
         // 목표 등록 단계 진행 중에는 신규 등록 차단 (사원 폼별로 보이는 옵션이 달라지는 것 방지)
         requireGoalEntryNotInProgress(companyId);
-
-        // depth 정책 검증
-        Set<Long> validDeptIds = departmentDepthResolver.resolveValidDeptIds(companyId);
-        if (!validDeptIds.contains(req.getDeptId())) {
-            throw new IllegalArgumentException("현재 KPI depth 정책에 맞지 않는 부서입니다: " + req.getDeptId());
-        }
 
         Department department = departmentRepository.findById(req.getDeptId()).orElse(null);
         if(department == null){

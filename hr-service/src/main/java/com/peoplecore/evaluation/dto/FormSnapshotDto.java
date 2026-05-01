@@ -21,15 +21,13 @@ import java.util.List;
 public class FormSnapshotDto {
     // ─── formValues 섹션 ───
     private List<Item> itemList;             // 가중치설정 목록
-    private List<Adjustment> adjustments;    // 근태/징계 등 가감점
+    // 가감점 기능 제거 — 2026-04
+    // private List<Adjustment> adjustments;    // 근태/징계 등 가감점
     private List<GradeRule> gradeRules;      // 등급정의 (S/A/B/C/D)
     private List<RawScore> rawScoreTable;    // 팀장등급 → 원점수 환산
     private KpiScoring kpiScoring;           // KPI 달성률 환산
 
     // ─── 하드 컬럼 스냅샷 (시즌 OPEN 시점 값) ───
-    private Integer taskWeightSang;          // 상 난이도 배수
-    private Integer taskWeightJung;          // 중 난이도 배수
-    private Integer taskWeightHa;            // 하 난이도 배수
     private Boolean useBiasAdjustment;       // 편향보정 사용 여부
     private BigDecimal biasWeight;           // 편향보정 강도
     private Integer minTeamSize;             // 편향보정 소규모 팀 판정 기준 인원
@@ -48,18 +46,19 @@ public class FormSnapshotDto {
         private Boolean enabled;        // 고정 항목 사용 여부 (null/true면 사용, false면 점수 집계에서 제외)
     }
 
-    @Data
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public static class Adjustment {
-        private String id;
-        private String name;
-        private BigDecimal points; //가감점수
-        private Integer threshold; //면제 횟수 - 이 횟수까지는 무감점, 초과분에만 points 적용 (null/0이면 면제 없음)
-        private Boolean enabled; //사용여부
-    }
+    // 가감점 기능 제거 — 2026-04
+//    @Data
+//    @Builder
+//    @AllArgsConstructor
+//    @NoArgsConstructor
+//    @JsonIgnoreProperties(ignoreUnknown = true)
+//    public static class Adjustment {
+//        private String id;
+//        private String name;
+//        private BigDecimal points; //가감점수
+//        private Integer threshold; //면제 횟수 - 이 횟수까지는 무감점, 초과분에만 points 적용 (null/0이면 면제 없음)
+//        private Boolean enabled; //사용여부
+//    }
 
     @Data
     @Builder

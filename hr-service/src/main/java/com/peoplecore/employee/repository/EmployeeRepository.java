@@ -171,11 +171,22 @@ AND e.empNum LIKE :prefix%
 
 //    비관적 락: 해당prefix 중 가장 큰 값 조회
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT MAX(e.empNum)FROM Employee e " +
-            "WHERE e.company.companyId = :companyId " +
-            "AND e.empNum LIKE :prefix%")
-    Optional<String>findMaxEmpNumWithLock(@Param("companyId") UUID companyId,
-                                          @Param("prefix") String prefix);
+    @Query("""
+        SELECT MAX(e.empNum) FROM Employee e
+        WHERE e.company.companyId = :companyId
+        AND e.empNum LIKE CONCAT(:prefix, '%')
+    """)
+    Optional<String> findMaxEmpNumWithLock(@Param("companyId") UUID companyId,
+                                           @Param("prefix") String prefix);
+
+//    사번 미리보기용: 락 없이 prefix 중 가장 큰 값 조회
+    @Query("""
+        SELECT MAX(e.empNum) FROM Employee e
+        WHERE e.company.companyId = :companyId
+        AND e.empNum LIKE CONCAT(:prefix, '%')
+    """)
+    Optional<String> findMaxEmpNum(@Param("companyId") UUID companyId,
+                                   @Param("prefix") String prefix);
 
 
 //사원상세조회
@@ -205,8 +216,9 @@ AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
     List<Employee>findActiveByCompanyAndDept(@Param("companyId")UUID companyId,@Param("deptId") Long deptId);
 
 
-//    성과평가 대상자 - 재직중(ACTIVE) + 일반 사원(EMPLOYEE) + 평가자로 지정되지 않은 사람
-//    (HR_ADMIN/HR_SUPER_ADMIN, 휴직자, 부서 평가자는 평가 대상에서 제외)
+//    성과평가 대상자 - 재직중(ACTIVE) + 일반 사원(EMPLOYEE)
+//    (HR_ADMIN/HR_SUPER_ADMIN, 휴직자는 평가 대상에서 제외)
+//    평가자/피평가자 구분은 EmpEvaluatorGlobal 매핑으로 결정됨 — 평가자도 다른 사람의 피평가자가 될 수 있음.
     @Query("""
             SELECT e FROM Employee e
             JOIN FETCH e.dept
@@ -214,11 +226,6 @@ AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
             WHERE e.company.companyId = :companyId
               AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
               AND e.empRole = com.peoplecore.employee.domain.EmpRole.EMPLOYEE
-              AND e.empId NOT IN (
-                  SELECT a.employee.empId
-                  FROM EvaluatorRoleDeptAssignment a
-                  WHERE a.config.companyId = :companyId
-              )
 """)
     List<Employee> findEvalTargetsByCompany(@Param("companyId") UUID companyId);
 

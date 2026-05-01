@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,10 +40,10 @@ public class SalaryContractController {
     @GetMapping
     public ResponseEntity<Page<SalaryContractListResDto>> list(@RequestHeader("X-User-Company") String companyId,
                                                                @RequestParam(required = false) String search,
-                                                               @RequestParam(required = false) String year,
                                                                @RequestParam(required = false) SalaryContractSortField sortField,
+                                                               @RequestParam(required = false) Sort.Direction sortDirection,
                                                                Pageable pageable) {
-        return ResponseEntity.ok(salaryContractService.list(UUID.fromString(companyId), search, year, sortField, pageable));
+        return ResponseEntity.ok(salaryContractService.list(UUID.fromString(companyId), search, sortField, sortDirection, pageable));
     }
 
     //    2. 계약서 등록

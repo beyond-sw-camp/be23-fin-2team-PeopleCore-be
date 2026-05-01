@@ -15,14 +15,12 @@ import com.peoplecore.evaluation.domain.Calibration;
 import com.peoplecore.evaluation.domain.Goal;
 import com.peoplecore.evaluation.domain.GoalApprovalStatus;
 import com.peoplecore.evaluation.domain.GoalType;
-import com.peoplecore.evaluation.domain.EvaluationRules;
 import com.peoplecore.evaluation.domain.KpiDirection;
 import com.peoplecore.evaluation.domain.ManagerEvaluation;
 import com.peoplecore.evaluation.domain.MyResultStatus;
 import com.peoplecore.evaluation.domain.SelfEvalApprovalStatus;
 import com.peoplecore.evaluation.domain.SelfEvaluation;
 import com.peoplecore.evaluation.domain.SelfEvaluationFile;
-import com.peoplecore.evaluation.domain.TaskGrade;
 import com.peoplecore.evaluation.dto.*;
 import com.peoplecore.evaluation.domain.Stage;
 import com.peoplecore.evaluation.domain.StageStatus;
@@ -74,7 +72,6 @@ public class EvalGradeService {
     private final SelfEvaluationRepository selfEvaluationRepository;
     private final SelfEvaluationFileRepository selfEvaluationFileRepository;
     private final ManagerEvaluationRepository mgrEvalRepository;
-    private final EvaluationRulesService rulesService;
     private final HrAlarmPublisher hrAlarmPublisher;
     private final CommuteRecordRepository commuteRecordRepository;
 
@@ -89,7 +86,6 @@ public class EvalGradeService {
                             SelfEvaluationRepository selfEvaluationRepository,
                             SelfEvaluationFileRepository selfEvaluationFileRepository,
                             ManagerEvaluationRepository mgrEvalRepository,
-                            EvaluationRulesService rulesService,
                             HrAlarmPublisher hrAlarmPublisher,
                             CommuteRecordRepository commuteRecordRepository) {
         this.evalGradeRepository = evalGradeRepository;
@@ -103,7 +99,6 @@ public class EvalGradeService {
         this.selfEvaluationRepository = selfEvaluationRepository;
         this.selfEvaluationFileRepository = selfEvaluationFileRepository;
         this.mgrEvalRepository = mgrEvalRepository;
-        this.rulesService = rulesService;
         this.hrAlarmPublisher = hrAlarmPublisher;
         this.commuteRecordRepository = commuteRecordRepository;
     }
@@ -210,9 +205,11 @@ public class EvalGradeService {
             BigDecimal weighted = weightedSum.divide(weightTotal, 2, RoundingMode.HALF_UP);
 
 
+//            가감점 기능 제거 — 2026-04
 //            조정점수(근태 등) - 시즌 기간 내 지각/결근 카운트 × 항목별 점수
-            BigDecimal adjustment = aggregateAdustment(empId, companyId,
-                    season.getStartDate(), season.getEndDate(), snapshot);
+//            BigDecimal adjustment = aggregateAdustment(empId, companyId,
+//                    season.getStartDate(), season.getEndDate(), snapshot);
+            BigDecimal adjustment = BigDecimal.ZERO;
 
 //            종합점수
             BigDecimal total = weighted.add(adjustment);
@@ -249,7 +246,7 @@ public class EvalGradeService {
     }
 
     //    자기평가 점수 집계 결과 - clip 전 raw + clip 후 clipped 둘 다 보관
-    //      - raw    : taskGrade 가중평균 [0, cap] (DB 저장용 — 등급 보정 후보 판정)
+    //      - raw    : goal.weight 가중평균 [0, cap] (DB 저장용 — 등급 보정 후보 판정)
     //      - clipped: scaleTo 상한으로 자른 값 [0, scaleTo] (실제 점수 집계에 사용)
     private static class SelfScoreResult {
         final BigDecimal raw;
@@ -263,7 +260,7 @@ public class EvalGradeService {
     //    자기평가 점수 집계 - KPI Goal만 사용 (OKR 제외)
     //      1) 각 KPI rate = computeAchievementRate(direction, target, actual, cap, tolerance)
     //      2) per-goal score: clamp(rate, 0, cap) + 미달 패널티 (threshold > 0 && rate < threshold 면 × factor)
-    //      3) taskGrade(상/중/하) 가중평균 → raw [0, cap]
+    //      3) goal.weight (사원이 입력한 %) 가중평균 → raw [0, cap]
     //      4) scaleTo 상한 clip → clipped [0, scaleTo]
     //      cap 은 "초과 달성이 미달 커버" 버퍼, scaleTo 는 자기평가 최종 만점
     //      - 승인 KPI 0개, SelfEvaluation 미제출/actualValue null, rate 불능 시 null 반환 (부모 missing 처리)
@@ -312,13 +309,14 @@ public class EvalGradeService {
                 goalScore = goalScore.multiply(factor);
             }
 
-            int tw = weightOfTaskGradeFromSnapshot(g.getTaskGrade(), snapshot);
+            // KPI 만 도는 루프 안이고 KPI 는 weight 가 항상 박혀있음 (디폴트 10) — null 가드 불필요
+            int tw = g.getWeight();
             weightedSum = weightedSum.add(goalScore.multiply(BigDecimal.valueOf(tw)));
             totalWeight += tw;
         }
         if (totalWeight == 0) return null;
 
-        // raw: taskGrade 가중평균 [0, cap] — 초과 달성이 미달 커버 가능
+        // raw: weight 가중평균 [0, cap] — 합이 항상 100이라 분모 100 (분포 정규화 동일 효과)
         BigDecimal raw = weightedSum.divide(BigDecimal.valueOf(totalWeight), 2, RoundingMode.HALF_UP);
         // clipped: 자기평가 만점(100) 상한으로 자름 — 실제 점수 집계용
         BigDecimal clipped = raw.min(SCALE_TO).setScale(2, RoundingMode.HALF_UP);
@@ -341,62 +339,54 @@ public class EvalGradeService {
         return null;
     }
 
-    //    taskGrade 난이도 가중치 (스냅샷 기준 - 시즌 OPEN 당시 값)
-    //      - snapshot.taskWeightSang/Jung/Ha 사용. null 이면 업계 표준 기본값(3/2/1)
-    private int weightOfTaskGradeFromSnapshot(TaskGrade grade, FormSnapshotDto snapshot) {
-        if (grade == TaskGrade.HIGH) return snapshot.getTaskWeightSang() != null ? snapshot.getTaskWeightSang() : 3;
-        if (grade == TaskGrade.MID)  return snapshot.getTaskWeightJung() != null ? snapshot.getTaskWeightJung() : 2;
-        if (grade == TaskGrade.LOW)  return snapshot.getTaskWeightHa() != null ? snapshot.getTaskWeightHa() : 1;
-        return 0;
-    }
-
+    // 가감점 기능 제거 — 2026-04
     //    조정점수 집계 - enabled 항목만 합산
     //      - 'late'   : workStatus IN (LATE, LATE_AND_EARLY) 카운트
     //      - 'absent' : workStatus = ABSENT 카운트
     //    threshold 면제 횟수까지는 무감점, 초과분(count - threshold)에만 points 적용.
-    private BigDecimal aggregateAdustment(Long empId, UUID companyId,
-                                          LocalDate from, LocalDate to,
-                                          FormSnapshotDto snapshot) {
-        BigDecimal sum = BigDecimal.ZERO;
-        if (from == null || to == null) return sum;
-
-        for (FormSnapshotDto.Adjustment adj : snapshot.getAdjustments()) {
-            if (!Boolean.TRUE.equals(adj.getEnabled())) continue;
-
-            long count;
-            if ("late".equals(adj.getId())) {
-                count = countLate(companyId, empId, from, to);
-            } else if ("absent".equals(adj.getId())) {
-                count = countAbsent(companyId, empId, from, to);
-            } else {
-                count = 0;
-            }
-
-            long threshold = adj.getThreshold() != null ? Math.max(0, adj.getThreshold()) : 0;
-            long effective = Math.max(0, count - threshold);
-
-            if (effective > 0) {
-                sum = sum.add(adj.getPoints().multiply(BigDecimal.valueOf(effective)));
-            }
-        }
-        return sum;
-    }
-
-    //    지각 카운트 - LATE_AND_EARLY (지각+조퇴) 도 지각 1회로 집계
-    private long countLate(UUID companyId, Long empId, LocalDate from, LocalDate to) {
-        return commuteRecordRepository
-                .countByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndWorkStatusIn(
-                        companyId, empId, from, to,
-                        EnumSet.of(WorkStatus.LATE, WorkStatus.LATE_AND_EARLY));
-    }
-
-    //    결근 카운트 - 배치가 미출근일에 CommuteRecord.absent() 로 row 적재
-    private long countAbsent(UUID companyId, Long empId, LocalDate from, LocalDate to) {
-        return commuteRecordRepository
-                .countByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndWorkStatusIn(
-                        companyId, empId, from, to,
-                        EnumSet.of(WorkStatus.ABSENT));
-    }
+//    private BigDecimal aggregateAdustment(Long empId, UUID companyId,
+//                                          LocalDate from, LocalDate to,
+//                                          FormSnapshotDto snapshot) {
+//        BigDecimal sum = BigDecimal.ZERO;
+//        if (from == null || to == null) return sum;
+//
+//        for (FormSnapshotDto.Adjustment adj : snapshot.getAdjustments()) {
+//            if (!Boolean.TRUE.equals(adj.getEnabled())) continue;
+//
+//            long count;
+//            if ("late".equals(adj.getId())) {
+//                count = countLate(companyId, empId, from, to);
+//            } else if ("absent".equals(adj.getId())) {
+//                count = countAbsent(companyId, empId, from, to);
+//            } else {
+//                count = 0;
+//            }
+//
+//            long threshold = adj.getThreshold() != null ? Math.max(0, adj.getThreshold()) : 0;
+//            long effective = Math.max(0, count - threshold);
+//
+//            if (effective > 0) {
+//                sum = sum.add(adj.getPoints().multiply(BigDecimal.valueOf(effective)));
+//            }
+//        }
+//        return sum;
+//    }
+//
+//    //    지각 카운트 - LATE_AND_EARLY (지각+조퇴) 도 지각 1회로 집계
+//    private long countLate(UUID companyId, Long empId, LocalDate from, LocalDate to) {
+//        return commuteRecordRepository
+//                .countByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndWorkStatusIn(
+//                        companyId, empId, from, to,
+//                        EnumSet.of(WorkStatus.LATE, WorkStatus.LATE_AND_EARLY));
+//    }
+//
+//    //    결근 카운트 - 배치가 미출근일에 CommuteRecord.absent() 로 row 적재
+//    private long countAbsent(UUID companyId, Long empId, LocalDate from, LocalDate to) {
+//        return commuteRecordRepository
+//                .countByCompanyIdAndEmployee_EmpIdAndWorkDateBetweenAndWorkStatusIn(
+//                        companyId, empId, from, to,
+//                        EnumSet.of(WorkStatus.ABSENT));
+//    }
 
 
     //    3.z score편향 보정
@@ -559,9 +549,11 @@ public class EvalGradeService {
         BigDecimal mgrPart = adjustedMgr.multiply(mgrWeight);
 
         BigDecimal weighted = selfPart.add(mgrPart).divide(weightSum, 2, RoundingMode.HALF_UP);
-        BigDecimal adjustment = row.getAdjustmentScore() != null
-                ? row.getAdjustmentScore()
-                : BigDecimal.ZERO;
+        // 가감점 기능 제거 — 2026-04
+        // BigDecimal adjustment = row.getAdjustmentScore() != null
+        //         ? row.getAdjustmentScore()
+        //         : BigDecimal.ZERO;
+        BigDecimal adjustment = BigDecimal.ZERO;
         return weighted.add(adjustment).setScale(2, RoundingMode.HALF_UP);
     }
 
@@ -1385,18 +1377,14 @@ public class EvalGradeService {
             goalIds.add(go.getGoalId());
         }
 
-//        조회 - 회사 규칙 (목표 비율 계산용 taskWeight)
-        EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
-        Map<Long, BigDecimal> ratios = computeGoalRatios(goals, rules);
-
+        // weight 는 Goal 자체에 박제되어 있으므로 별도 계산 불필요 (OKR 은 null)
         List<EvalGradeDetailDto.GoalEntry> goalDtos = new ArrayList<>();
         for (Goal go : goals) {
             goalDtos.add(EvalGradeDetailDto.GoalEntry.builder()
                     .goalType(go.getGoalType())
                     .category(go.getCategory())
                     .title(go.getTitle())
-                    .grade(go.getTaskGrade())
-                    .ratio(ratios.get(go.getGoalId()))
+                    .weight(go.getWeight())
                     .targetValue(go.getTargetValue())
                     .targetUnit(go.getTargetUnit())
                     .build());
@@ -1455,7 +1443,7 @@ public class EvalGradeService {
             selfEntries.add(EvalGradeDetailDto.SelfEvalEntry.builder()
                     .goalType(go.getGoalType())
                     .title(go.getTitle())
-                    .grade(go.getTaskGrade())
+                    .weight(go.getWeight())
                     .targetValue(go.getTargetValue())
                     .targetUnit(go.getTargetUnit())
                     .actualValue(se.getActualValue())
@@ -1478,8 +1466,9 @@ public class EvalGradeService {
                     .build();
         }
 
+//        가감점 기능 제거 — 2026-04
 //        2d 조정 항목 (TODO: 근태 발생건수 집계 구현 후)
-        List<EvalGradeDetailDto.AdjustmentItem> adjDtos = new ArrayList<>();
+//        List<EvalGradeDetailDto.AdjustmentItem> adjDtos = new ArrayList<>();
 
 //        3 - 보정 이력
 //        조회 - 해당 등급의 보정 이력 시간순 전체
@@ -1508,7 +1497,8 @@ public class EvalGradeService {
                 .itemScores(itemScores)
                 .selfEvalEntries(selfEntries)
                 .managerEvalEntry(mgrDto)
-                .adjustments(adjDtos)
+                // 가감점 기능 제거 — 2026-04
+                // .adjustments(adjDtos)
                 .rawScore(g.getTotalScore())
                 .teamAvg(g.getTeamAvg())
                 .teamStd(g.getTeamStdDev())
@@ -1519,35 +1509,6 @@ public class EvalGradeService {
                 .calibrations(calibDtos)
                 .lockedAt(g.getLockedAt())
                 .build();
-    }
-
-
-    //    승인된 목표 중 taskWeight 기준 백분율 계산
-    private Map<Long, BigDecimal> computeGoalRatios(List<Goal> goals, EvaluationRules rules) {
-        int total = 0;
-        for (Goal go : goals) {
-            if (go.getApprovalStatus() == GoalApprovalStatus.APPROVED) {
-                total += weightOfTaskGrade(go.getTaskGrade(), rules);
-            }
-        }
-        Map<Long, BigDecimal> result = new HashMap<>();
-        if (total == 0) return result;
-        for (Goal go : goals) {
-            if (go.getApprovalStatus() != GoalApprovalStatus.APPROVED) continue;
-            int w = weightOfTaskGrade(go.getTaskGrade(), rules);
-            BigDecimal ratio = BigDecimal.valueOf(w)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(BigDecimal.valueOf(total), 1, RoundingMode.HALF_UP);
-            result.put(go.getGoalId(), ratio);
-        }
-        return result;
-    }
-
-    private int weightOfTaskGrade(TaskGrade grade, EvaluationRules rules) {
-        if (grade == TaskGrade.HIGH) return rules.getTaskWeightSang();
-        if (grade == TaskGrade.MID)  return rules.getTaskWeightJung();
-        if (grade == TaskGrade.LOW)  return rules.getTaskWeightHa();
-        return 0;
     }
 
 
@@ -1647,7 +1608,7 @@ public class EvalGradeService {
                         .goalType(go.getGoalType())
                         .category(go.getCategory())
                         .title(go.getTitle())
-                        .grade(go.getTaskGrade())
+                        .weight(go.getWeight())
                         .targetValue(go.getTargetValue())
                         .targetUnit(go.getTargetUnit())
                         .actualValue(actual)

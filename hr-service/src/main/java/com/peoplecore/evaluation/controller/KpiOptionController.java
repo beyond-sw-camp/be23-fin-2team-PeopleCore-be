@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-// KPI 옵션 - 카테고리 / 부서 depth 설정 / 단위 라벨
+// KPI 옵션 - 카테고리 / 단위 라벨
 @RestController
 @RequestMapping("/eval/kpi-option")
 public class KpiOptionController {
@@ -20,7 +20,7 @@ public class KpiOptionController {
         this.service = service;
     }
 
-    // 1. KPI 옵션 조회 (카테고리 / 부서 depth / 단위 라벨 묶음)
+    // 1. KPI 옵션 조회 (카테고리 / 단위 라벨 묶음)
     @GetMapping
     public ResponseEntity<KpiOptionBundleResponse> getOptions(
             @RequestHeader("X-User-Company") String companyId) {

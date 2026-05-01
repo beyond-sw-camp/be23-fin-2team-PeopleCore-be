@@ -147,7 +147,6 @@ public class EmpSalaryService {
                 .dependentsCount(employee.getDependentsCount())
                 .annualSalary(annualSalary)
                 .monthlySalary(monthlySalary)
-                .contractYear(contract != null ? contract.getContractYear() : null)
                 .contractStartDate(contract != null ? contract.getApplyFrom() : null)
                 .contractEndDate(contract != null ? contract.getApplyTo() : null)
                 .fixedPayItems(fixedPayItems)

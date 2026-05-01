@@ -144,7 +144,7 @@ public class MySalaryService {
     }
     /** 최신 연봉계약 기반 연봉/월급/고정수당 조립 */
     private MySalaryInfoResDto.SalaryInfoDto buildSalaryInfo(UUID companyId, Long empId) {
-        List<SalaryContract> contracts = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(companyId, empId);
+        List<SalaryContract> contracts = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByApplyFromDesc(companyId, empId);
 
         if (contracts.isEmpty()) {
             return MySalaryInfoResDto.SalaryInfoDto.builder()
@@ -319,7 +319,7 @@ public PayStubDetailResDto getPayStubDetail(UUID companyId, Long empId, Long stu
                 : "severance";
 
         // 최신 연봉 기반 월 적립금 (DC 형만 의미 있음)
-        long annual = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(companyId, empId)
+        long annual = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByApplyFromDesc(companyId, empId)
                 .stream().findFirst()
                 .map(c -> c.getTotalAmount() != null ? c.getTotalAmount().longValue() : 0L).orElse(0L);
         long monthlyDeposit = "DC".equals(retirementType) ? annual / 12 : 0L;
