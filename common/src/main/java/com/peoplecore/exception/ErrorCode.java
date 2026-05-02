@@ -81,7 +81,14 @@ public enum ErrorCode {
     EMP_ACCOUNT_NOT_FOUND(404, "사원 계좌 정보를 찾을 수 없습니다."),
     RETIREMENT_ACCOUNT_NOT_FOUND(404, "퇴직연금 계좌 정보를 찾을 수 없습니다."),
 
-    //    사원 퇴직연금 계좌
+    // 사원 계좌 검증 (오픈뱅킹)
+    ACCOUNT_VERIFY_FAILED(400, "계좌 실명조회에 실패했습니다. 입력값을 다시 확인해주세요."),
+    ACCOUNT_HOLDER_MISMATCH(400, "예금주명이 계좌 정보와 일치하지 않습니다."),
+    ACCOUNT_VERIFY_TOKEN_INVALID(400, "계좌 검증 정보가 없습니다. 인증을 먼저 진행해주세요."),
+    ACCOUNT_VERIFY_TOKEN_EXPIRED(400, "계좌 검증이 만료되었습니다. 다시 인증해주세요."),
+    ACCOUNT_VERIFY_TOKEN_MISMATCH(400, "검증한 계좌 정보와 다른 정보가 전송되었습니다. 다시 인증해주세요."),
+
+    // 사원 퇴직연금 계좌
     RETIREMENT_SETTINGS_NOT_FOUND(404, "회사 퇴직연금 설정 정보를 찾을 수 없습니다."),
     RETIREMENT_TYPE_NOT_CHANGEABLE(400, "회사 퇴직연금 설정이 DB_DC가 아니므로 변경할 수 없습니다."),
     INVALID_RETIREMENT_TYPE(400, "유효하지 않은 퇴직연금 유형입니다. DB 또는 DC만 선택 가능합니다."),
