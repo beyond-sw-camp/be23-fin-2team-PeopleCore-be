@@ -162,6 +162,9 @@ public class HrSelfServiceClient {
             out.put("ok", true);
             out.put("year", resolvedYear);
             // annual: 메인 연차 카드. 핵심 숫자만 노출.
+            // hr-service 가 ANNUAL/MONTHLY balance 가 없으면 annual 을 null 로 줌 →
+            // hasBalance=false 로 명시해 LLM 이 환각 placeholder 채우지 않도록 함
+            // (get_my_evaluation 의 hasSeason 패턴과 일관성).
             Object annual = body.get("annual");
             if (annual instanceof Map<?, ?> a) {
                 Map<String, Object> aOut = new LinkedHashMap<>();
@@ -170,7 +173,11 @@ public class HrSelfServiceClient {
                 aOut.put("usedDays", a.get("usedDays"));
                 aOut.put("pendingDays", a.get("pendingDays"));
                 aOut.put("availableDays", a.get("availableDays"));
+                out.put("hasBalance", true);
                 out.put("annual", aOut);
+            } else {
+                out.put("hasBalance", false);
+                out.put("message", resolvedYear + "년 연차 잔액 정보가 등록되어있지 않습니다.");
             }
             return out;
         } catch (RestClientResponseException e) {
