@@ -101,7 +101,7 @@ public class ResignService {
             employee.updateResignDate(resign.getResignDate());
             faceAuthService.cascadeUnregisterFace(employee.getEmpId(), employee.getCompany().getCompanyId());
 
-//            이벤트 발생(-> 퇴직금 산정)
+//            이벤트 발생(-> 퇴직금 산정) +평가자 중 퇴직자 알림(리스너 추가)
             eventPublisher.publishEvent(new EmployeeRetiredEvent(employee.getCompany().getCompanyId(),employee.getEmpId()));
         }
     }

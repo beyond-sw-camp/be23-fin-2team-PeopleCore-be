@@ -16,11 +16,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-// KPI 옵션 서비스 - 회사별 카테고리/단위/부서depth 일괄 관리 (diff-based + id 매칭)
+// KPI 옵션 서비스 - 회사별 카테고리/단위 일괄 관리 (diff-based + id 매칭)
 @Service
 @Transactional(readOnly = true)
 public class KpiOptionService {
@@ -39,8 +38,6 @@ public class KpiOptionService {
 
     private static final List<String> DEFAULT_UNITS =
             List.of("%", "건", "원", "시간", "점", "일");
-
-    private static final String DEFAULT_DEPARTMENT_LEVEL = "leaf";
 
     // 1. 조회 — 최초 진입 시 기본값 seed 후 반환
     @Transactional
@@ -64,7 +61,6 @@ public class KpiOptionService {
         // 타입별 개별 동기화
         syncListType(companyId, company, KpiOptionType.CATEGORY, req.getCategories());
         syncListType(companyId, company, KpiOptionType.UNIT, req.getUnits());
-        syncDepartmentLevel(companyId, company, req.getDepartmentLevel());
 
         // 반영 직후 최신 상태로 응답 재조립
         List<KpiOption> latest = repository.findByCompany_CompanyIdAndIsActiveTrueOrderByTypeAscSortOrderAsc(companyId);
@@ -84,7 +80,6 @@ public class KpiOptionService {
                 buildResetRequests(existingCategories, DEFAULT_CATEGORIES));
         syncListType(companyId, company, KpiOptionType.UNIT,
                 buildResetRequests(existingUnits, DEFAULT_UNITS));
-        syncDepartmentLevel(companyId, company, DEFAULT_DEPARTMENT_LEVEL);
 
         List<KpiOption> latest = repository.findByCompany_CompanyIdAndIsActiveTrueOrderByTypeAscSortOrderAsc(companyId);
         return KpiOptionBundleResponse.from(latest);
@@ -189,27 +184,6 @@ public class KpiOptionService {
         }
     }
 
-    // DEPARTMENT 단일 행 동기화 — optionValue(depth) 다르면 UPDATE, row 없으면 INSERT
-    private void syncDepartmentLevel(UUID companyId, Company company, String newLevel) {
-        Optional<KpiOption> existing = repository
-                .findFirstByCompany_CompanyIdAndType(companyId, KpiOptionType.DEPARTMENT);
-
-        if (existing.isPresent()) {
-            KpiOption dept = existing.get();
-            if (!newLevel.equals(dept.getOptionValue())) {
-                dept.updateValue(newLevel);
-                repository.save(dept);
-            }
-            return;
-        }
-
-        // row 없으면 최초 INSERT
-        repository.save(KpiOption.builder()
-                .company(company).type(KpiOptionType.DEPARTMENT)
-                .optionValue(newLevel)
-                .sortOrder(0).isActive(true).build());
-    }
-
     // 리셋용 - 기존 row 를 인덱스로 재활용해서 rename 만으로 기본값 복원(변경사항만 되돌림)
     //   - 기존 row 개수 > 기본값 개수: 초과분은 요청에 포함 안 됨 -> syncListType 에서 soft delete
     //   - 기존 row 개수 < 기본값 개수: 부족분은 id=null 로 신규 INSERT
@@ -250,12 +224,6 @@ public class KpiOptionService {
                     .optionValue(u).sortOrder(order).isActive(true).build());
             order++;
         }
-
-        // 부서 depth 기본 1행
-        defaults.add(KpiOption.builder()
-                .company(company).type(KpiOptionType.DEPARTMENT)
-                .optionValue(DEFAULT_DEPARTMENT_LEVEL)
-                .sortOrder(0).isActive(true).build());
 
         return repository.saveAll(defaults);
     }

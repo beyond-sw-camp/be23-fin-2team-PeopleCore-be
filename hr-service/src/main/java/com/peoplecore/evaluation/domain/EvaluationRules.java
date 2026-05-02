@@ -27,23 +27,6 @@ public class EvaluationRules extends BaseTimeEntity {
     private Company company;
 
     // ─────────────────────────────────────────────
-    //  업무등급 배수 (상/중/하) — 목표 난이도에 따른 가중치 승수
-    //    자기평가 점수 산정 시 목표별 비중 재정규화에 사용
-    //    (예: 상=3, 중=2, 하=1 → 상 목표 하나가 하 목표 3배 영향)
-    // ─────────────────────────────────────────────
-    @Column(name = "task_weight_sang")
-    @Builder.Default
-    private Integer taskWeightSang = 3;
-
-    @Column(name = "task_weight_jung")
-    @Builder.Default
-    private Integer taskWeightJung = 2;
-
-    @Column(name = "task_weight_ha")
-    @Builder.Default
-    private Integer taskWeightHa = 1;
-
-    // ─────────────────────────────────────────────
     // 팀장 편향 보정 설정 — 강제배분 단계에서 팀 간 점수 편차 보정에 사용
     // ─────────────────────────────────────────────
     @Column(name = "use_bias_adjustment")
@@ -71,16 +54,10 @@ public class EvaluationRules extends BaseTimeEntity {
     private Long formVersion = 0L;
 
     // 규칙 수정 — 하드 컬럼 + formValues JSON 동시 갱신, 버전 ++
-    public void updateRules(Integer taskWeightSang,
-                            Integer taskWeightJung,
-                            Integer taskWeightHa,
-                            Boolean useBiasAdjustment,
+    public void updateRules(Boolean useBiasAdjustment,
                             BigDecimal biasWeight,
                             Integer minTeamSize,
                             String formValues) {
-        this.taskWeightSang = taskWeightSang;
-        this.taskWeightJung = taskWeightJung;
-        this.taskWeightHa = taskWeightHa;
         this.useBiasAdjustment = useBiasAdjustment;
         this.biasWeight = biasWeight;
         this.minTeamSize = minTeamSize;

@@ -5,7 +5,6 @@ import com.peoplecore.evaluation.domain.KpiOptionType;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.UUID;
 
 // KPI 옵션 리포지토리
@@ -16,7 +15,4 @@ public interface KpiOptionRepository extends JpaRepository<KpiOption, Long> {
 
     // 특정 type 행들만 (CATEGORY/UNIT 묶음 조회용)
     List<KpiOption> findByCompany_CompanyIdAndTypeAndIsActiveTrueOrderBySortOrderAsc(UUID companyId, KpiOptionType type);
-
-    // 부서 depth 저장용 — DEPARTMENT 는 회사당 1행
-    Optional<KpiOption> findFirstByCompany_CompanyIdAndType(UUID companyId, KpiOptionType type);
 }

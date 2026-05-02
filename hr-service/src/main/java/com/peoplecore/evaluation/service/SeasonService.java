@@ -4,6 +4,7 @@ import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.repository.CompanyRepository;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.evaluation.domain.EmpEvaluatorGlobal;
 import com.peoplecore.evaluation.domain.EvalGrade;
 import com.peoplecore.evaluation.domain.EvalSeasonStatus;
 import com.peoplecore.evaluation.domain.EvaluationRules;
@@ -11,6 +12,7 @@ import com.peoplecore.evaluation.domain.Season;
 import com.peoplecore.evaluation.domain.Stage;
 import com.peoplecore.evaluation.domain.StageType;
 import com.peoplecore.evaluation.dto.*;
+import com.peoplecore.evaluation.repository.EmpEvaluatorGlobalRepository;
 import com.peoplecore.evaluation.repository.EvalGradeRepository;
 import com.peoplecore.evaluation.repository.SeasonRepository;
 import com.peoplecore.evaluation.repository.StageRepository;
@@ -20,7 +22,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 // 평가시즌 - 시즌 생성/조회/수정/삭제
@@ -34,15 +40,19 @@ public class SeasonService {
     private final CompanyRepository companyRepository;
     private final EmployeeRepository employeeRepository;
     private final EvalGradeRepository evalGradeRepository;
+    private final EmpEvaluatorGlobalRepository empEvaluatorGlobalRepository;
+    private final com.peoplecore.alarm.publisher.HrAlarmPublisher hrAlarmPublisher;
     private final ObjectMapper objectMapper;
 
-    public SeasonService(SeasonRepository seasonRepository, StageRepository stageRepository, EvaluationRulesService rulesService, CompanyRepository companyRepository, EmployeeRepository employeeRepository, EvalGradeRepository evalGradeRepository, ObjectMapper objectMapper) {
+    public SeasonService(SeasonRepository seasonRepository, StageRepository stageRepository, EvaluationRulesService rulesService, CompanyRepository companyRepository, EmployeeRepository employeeRepository, EvalGradeRepository evalGradeRepository, EmpEvaluatorGlobalRepository empEvaluatorGlobalRepository, com.peoplecore.alarm.publisher.HrAlarmPublisher hrAlarmPublisher, ObjectMapper objectMapper) {
         this.seasonRepository = seasonRepository;
         this.stageRepository = stageRepository;
         this.rulesService = rulesService;
         this.companyRepository = companyRepository;
         this.employeeRepository = employeeRepository;
         this.evalGradeRepository = evalGradeRepository;
+        this.empEvaluatorGlobalRepository = empEvaluatorGlobalRepository;
+        this.hrAlarmPublisher = hrAlarmPublisher;
         this.objectMapper = objectMapper;
     }
 
@@ -94,6 +104,24 @@ public class SeasonService {
 
         // 시즌 간 기간 겹침 금지 (같은 회사 내)
         validateNoOverlap(companyId, requestDto.getStartDate(), requestDto.getEndDate(), null);
+
+        // 평가자 매핑 가드 — 그 시점 active 사원 중 매핑/제외 결정 안 된 사람 있으면 차단 (HR 즉시 인지)
+        // (DRAFT~OPEN 사이 신규 입사자는 OPEN 시 미지정 처리 + 알림 발송)
+        List<Employee> activeEmployees = employeeRepository.findEvalTargetsByCompany(companyId);
+        Set<Long> mappedEmpIds = new HashSet<>();
+        for (EmpEvaluatorGlobal m : empEvaluatorGlobalRepository.findByCompanyId(companyId)) {
+            mappedEmpIds.add(m.getEvaluatee().getEmpId());
+        }
+        List<String> undecided = new ArrayList<>();
+        for (Employee emp : activeEmployees) {
+            if (!mappedEmpIds.contains(emp.getEmpId())) {
+                undecided.add(emp.getEmpName() + "(" + emp.getEmpNum() + ")");
+            }
+        }
+        if (!undecided.isEmpty()) {
+            throw new IllegalArgumentException(
+                "매핑/제외 결정이 안 된 사원이 있어 시즌을 만들 수 없습니다: " + String.join(", ", undecided));
+        }
 
         // 단계 스펙(이름+타입) 먼저 구성 -> 검증/저장에 재사용
         List<StageSpec> stageSpecs = buildStageSpecs(companyId);
@@ -391,24 +419,85 @@ public class SeasonService {
         season.freezeSnapshot(mergedJson, rules.getFormVersion());
 
         // 3) 평가 대상자 EvalGrade row 일괄 INSERT — 점수/등급 컬럼은 NULL 로 시작
-        //    재직중(ACTIVE) + 일반 사원(EMPLOYEE) + 평가자로 지정되지 않은 사람
-        //    dept/title 은 스냅샷 컬럼에 박제
+        //    재직중(ACTIVE) + 일반 사원(EMPLOYEE)
+        //    dept/title/평가자 는 스냅샷 컬럼에 박제
         List<Employee> employees = employeeRepository.findEvalTargetsByCompany(companyId);
 
+        // 글로벌 매핑 미리 로드 (한 번에) — evaluatee_emp_id → mapping
+        Map<Long, EmpEvaluatorGlobal> mappingByEmp = new HashMap<>();
+        for (EmpEvaluatorGlobal m : empEvaluatorGlobalRepository.findByCompanyId(companyId)) {
+            mappingByEmp.put(m.getEvaluatee().getEmpId(), m);
+        }
+
+        // EvalGrade 박제 — 매핑 있으면 평가자 박제, 없으면 미지정(null), 평가 제외는 row skip.
+        // 창립 가드를 통과했어도 DRAFT~OPEN 사이 신규 입사자가 미지정 상태로 들어올 수 있음 → 알림으로 처리.
+        int unmappedCount = 0;
         List<EvalGrade> rows = new ArrayList<>();
         for (Employee emp : employees) {
+            EmpEvaluatorGlobal mapping = mappingByEmp.get(emp.getEmpId());
+
+            // 평가 제외 명시된 사원은 그 시즌 평가 대상 X (row 자체 안 만듦)
+            if (mapping != null && mapping.isExcluded()) {
+                continue;
+            }
+
+            Long evId = null;
+            String evName = null;
+            if (mapping != null && mapping.getEvaluator() != null) {
+                evId = mapping.getEvaluator().getEmpId();
+                evName = mapping.getEvaluator().getEmpName();
+            } else {
+                // 매핑 없음 — 미지정 상태로 박제 (HR이 OPEN 후 사후 처리)
+                unmappedCount++;
+            }
+
             EvalGrade row = EvalGrade.builder()
                     .emp(emp)
-                    .season(season) //이번에 오픈되는 fk
-                    .isCalibrated(false) //보정이력 초기화
-                    .deptIdSnapshot(emp.getDept() != null ? emp.getDept().getDeptId() : null) //시즌 오픈시 부서id 박제
-                    .deptNameSnapshot(emp.getDept() != null ? emp.getDept().getDeptName() : null) //시즌 오픈시 부서명 박제
-                    .positionSnapshot(emp.getTitle() != null ? emp.getTitle().getTitleName() : null) //직급명 박제
+                    .season(season)
+                    .isCalibrated(false)
+                    .deptIdSnapshot(emp.getDept() != null ? emp.getDept().getDeptId() : null)
+                    .deptNameSnapshot(emp.getDept() != null ? emp.getDept().getDeptName() : null)
+                    .positionSnapshot(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
+                    .evaluatorIdSnapshot(evId)        // null 가능
+                    .evaluatorNameSnapshot(evName)
                     .build();
-//            점수/등급등은 모두 null로 시작
             rows.add(row);
         }
         evalGradeRepository.saveAll(rows);
+
+        // 미지정자 있으면 HR 관리자에게 알림 발송 (DRAFT~OPEN 사이 신규 입사자 등)
+        if (unmappedCount > 0) {
+            notifyUnmappedAtOpen(season, unmappedCount);
+        }
+    }
+
+    // OPEN 시 미지정자 발생 알림 — HR_ADMIN/SUPER_ADMIN 에게 발송
+    private void notifyUnmappedAtOpen(Season season, int unmappedCount) {
+        UUID companyId = season.getCompany().getCompanyId();
+
+        // HR 관리자 empId 수집
+        List<com.peoplecore.employee.domain.EmpRole> hrRoles = new ArrayList<>();
+        hrRoles.add(com.peoplecore.employee.domain.EmpRole.HR_ADMIN);
+        hrRoles.add(com.peoplecore.employee.domain.EmpRole.HR_SUPER_ADMIN);
+        List<Employee> hrAdmins = employeeRepository
+            .findByCompany_CompanyIdAndEmpRoleIn(companyId, hrRoles);
+        List<Long> hrAdminEmpIds = new ArrayList<>();
+        for (Employee admin : hrAdmins) {
+            hrAdminEmpIds.add(admin.getEmpId());
+        }
+        if (hrAdminEmpIds.isEmpty()) return;
+
+        hrAlarmPublisher.publisher(com.peoplecore.event.AlarmEvent.builder()
+            .companyId(companyId)
+            .alarmType("HR")
+            .alarmTitle("평가자 지정 필요")
+            .alarmContent(season.getName() + " 시즌 시작 — 평가자가 지정되지 않은 사원 "
+                + unmappedCount + "명이 있습니다.")
+            .alarmLink("/eval-admin?tab=emp-evaluator")
+            .alarmRefType("EVAL_SEASON")
+            .alarmRefId(season.getSeasonId())
+            .empIds(hrAdminEmpIds)
+            .build());
     }
 
 

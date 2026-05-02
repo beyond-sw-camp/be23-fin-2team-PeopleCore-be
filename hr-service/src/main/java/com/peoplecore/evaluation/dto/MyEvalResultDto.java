@@ -3,7 +3,6 @@ package com.peoplecore.evaluation.dto;
 import com.peoplecore.evaluation.domain.AchievementLevel;
 import com.peoplecore.evaluation.domain.GoalType;
 import com.peoplecore.evaluation.domain.MyResultStatus;
-import com.peoplecore.evaluation.domain.TaskGrade;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -37,7 +36,7 @@ public class MyEvalResultDto {
         private GoalType goalType;
         private String category;
         private String title;
-        private TaskGrade grade;
+        private Integer weight;                 // 가중치(%) - KPI 만 값, OKR 은 null
         private BigDecimal targetValue;
         private String targetUnit;
         private BigDecimal actualValue;

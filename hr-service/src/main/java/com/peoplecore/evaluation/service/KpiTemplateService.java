@@ -17,12 +17,13 @@ import com.peoplecore.evaluation.repository.KpiOptionRepository;
 import com.peoplecore.evaluation.repository.KpiTemplateRepository;
 import com.peoplecore.evaluation.repository.SeasonRepository;
 import com.peoplecore.evaluation.repository.StageRepository;
+import com.peoplecore.grade.domain.Grade;
+import com.peoplecore.grade.repository.GradeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Set;
 import java.util.UUID;
 
 // KPI지표 템플릿 - 부서/카테고리별 지표 관리
@@ -33,7 +34,7 @@ public class KpiTemplateService {
     private final KpiTemplateRepository kpiTemplateRepository;
     private final KpiOptionRepository kpiOptionRepository;
     private final DepartmentRepository departmentRepository;
-    private final DepartmentDepthResolver departmentDepthResolver;
+    private final GradeRepository gradeRepository;
     private final GoalRepository goalRepository;
     private final SeasonRepository seasonRepository;
     private final StageRepository stageRepository;
@@ -41,17 +42,24 @@ public class KpiTemplateService {
     public KpiTemplateService(KpiTemplateRepository kpiTemplateRepository,
                               KpiOptionRepository kpiOptionRepository,
                               DepartmentRepository departmentRepository,
-                              DepartmentDepthResolver departmentDepthResolver,
+                              GradeRepository gradeRepository,
                               GoalRepository goalRepository,
                               SeasonRepository seasonRepository,
                               StageRepository stageRepository) {
         this.kpiTemplateRepository = kpiTemplateRepository;
         this.kpiOptionRepository = kpiOptionRepository;
         this.departmentRepository = departmentRepository;
-        this.departmentDepthResolver = departmentDepthResolver;
+        this.gradeRepository = gradeRepository;
         this.goalRepository = goalRepository;
         this.seasonRepository = seasonRepository;
         this.stageRepository = stageRepository;
+    }
+
+    // 직급 조회 — null 허용 (전 직급 공통). 값 있을 때만 회사 스코프 검증
+    private Grade resolveGrade(UUID companyId, Long gradeId) {
+        if (gradeId == null) return null;
+        return gradeRepository.findByGradeIdAndCompanyId(gradeId, companyId)
+                .orElseThrow(() -> new IllegalArgumentException("직급을 찾을 수 없습니다"));
     }
 
     // 회사의 OPEN 시즌에서 GOAL_ENTRY 단계가 IN_PROGRESS 면 KPI 템플릿 변경 차단
@@ -66,10 +74,10 @@ public class KpiTemplateService {
         }
     }
 
-    // 1번 - depth 정책 기반 부서 IN 필터 적용
-    public Page<KpiTemplateResponse> getTemplates(UUID companyId, Long deptId, String category, String keyword, Pageable pageable){
-        Set<Long> validDeptIds = departmentDepthResolver.resolveValidDeptIds(companyId);   // ★ 추가
-        return kpiTemplateRepository.searchTemplates(companyId, deptId, category, keyword, validDeptIds, pageable);
+    // 1번 - 부서 IN 필터 없음, 회사 + 부서/직급/카테고리/키워드 필터만
+    // 직급 필터: 선택 시 (해당 직급 OR 전 직급 공통) 모두 노출
+    public Page<KpiTemplateResponse> getTemplates(UUID companyId, Long deptId, Long gradeId, String category, String keyword, Pageable pageable){
+        return kpiTemplateRepository.searchTemplates(companyId, deptId, gradeId, category, keyword, pageable);
     }
 
     // 2번 단건 조회
@@ -81,17 +89,11 @@ public class KpiTemplateService {
         return KpiTemplateResponse.from(t);
     }
 
-//    3번 신규등록 -DepartmentDepthResolver호출
+//    3번 신규등록
     public KpiTemplateResponse createTemplate(UUID companyId, KpiTemplateRequest req){
 
         // 목표 등록 단계 진행 중에는 신규 등록 차단 (사원 폼별로 보이는 옵션이 달라지는 것 방지)
         requireGoalEntryNotInProgress(companyId);
-
-        // depth 정책 검증
-        Set<Long> validDeptIds = departmentDepthResolver.resolveValidDeptIds(companyId);
-        if (!validDeptIds.contains(req.getDeptId())) {
-            throw new IllegalArgumentException("현재 KPI depth 정책에 맞지 않는 부서입니다: " + req.getDeptId());
-        }
 
         Department department = departmentRepository.findById(req.getDeptId()).orElse(null);
         if(department == null){
@@ -119,9 +121,13 @@ public class KpiTemplateService {
             throw new IllegalArgumentException("사용할 수 없는 단위입니다");
         }
 
+        // 직급 — null 이면 해당 부서 전 직급 공통 KPI
+        Grade grade = resolveGrade(companyId, req.getGradeId());
+
 //        entity build+ save (baseline 은 NULL 유지 - 시즌 마감 시 자동 집계)
         KpiTemplate t = KpiTemplate.builder()
                 .department(department)
+                .grade(grade)
                 .category(category)
                 .unit(unit)
                 .name(req.getName())
@@ -172,8 +178,11 @@ public class KpiTemplateService {
             throw new IllegalArgumentException("다른 회사 단위는 사용할 수 없습니다");
         }
 
+        // 직급 — null 이면 해당 부서 전 직급 공통 KPI
+        Grade grade = resolveGrade(companyId, req.getGradeId());
+
         // 도메인 메서드로 일괄 갱신 (dirty checking 으로 자동 UPDATE)
-        t.update(department, category, unit, req.getName(), req.getDescription(), req.getDirection());
+        t.update(department, grade, category, unit, req.getName(), req.getDescription(), req.getDirection());
 
         return KpiTemplateResponse.from(t);
     }

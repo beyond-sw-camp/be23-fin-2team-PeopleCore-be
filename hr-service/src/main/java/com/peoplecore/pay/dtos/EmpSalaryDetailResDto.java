@@ -34,7 +34,6 @@ public class EmpSalaryDetailResDto {
     private BigDecimal annualSalary;
     private Long monthlySalary;
 
-    private Integer contractYear;
     private LocalDate contractStartDate;
     private LocalDate contractEndDate;
 

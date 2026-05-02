@@ -185,7 +185,7 @@ public class PayrollService {
 
         for (Employee emp : employees) {
 //            최신 연봉계약 조회
-            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByContractYearDesc(emp.getEmpId()).orElse(null);
+            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByApplyFromDesc(emp.getEmpId()).orElse(null);
             if (contract == null) continue;
 
             // 사원별 산정 상태 (기본 CALCULATING)
@@ -621,7 +621,7 @@ public class PayrollService {
 
 //        최신 연봉계약의 통상임금
         SalaryContract contract = salaryContractRepository
-                .findTopByEmployee_EmpIdOrderByContractYearDesc(empId).orElseThrow(()-> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
+                .findTopByEmployee_EmpIdOrderByApplyFromDesc(empId).orElseThrow(()-> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
 
         long monthlySalary = contract.getTotalAmount().divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR).longValue();
 

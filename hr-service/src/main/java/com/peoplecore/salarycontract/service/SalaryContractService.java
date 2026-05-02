@@ -29,6 +29,7 @@ import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -72,8 +73,8 @@ public class SalaryContractService {
 
     //    1. 목록 조회
     @Transactional(readOnly = true)
-    public Page<SalaryContractListResDto> list(UUID companyId, String search, String year, SalaryContractSortField sortField, Pageable pageable) {
-        return salaryContractRepository.findAllWithFilter(companyId, search, year, sortField, pageable);
+    public Page<SalaryContractListResDto> list(UUID companyId, String search, SalaryContractSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
+        return salaryContractRepository.findAllWithFilter(companyId, search, sortField, sortDirection, pageable);
     }
 
 //    2. 계약서 생성
@@ -89,10 +90,7 @@ public class SalaryContractService {
             fieldMap.put(fv.getFieldKey(), fv.getValue());
         }
 
-//        contractYear, applyFrom, applyTo 추출
-        String contractYearStr = fieldMap.get("contractYear");
-        Integer contractYear = (contractYearStr != null && !contractYearStr.isBlank()) ? Integer.parseInt(contractYearStr):null;
-
+//        applyFrom, applyTo 추출
         String applyFromStr = fieldMap.get("contractStart");
         LocalDate applyFrom = (applyFromStr != null && !applyFromStr.isBlank()) ? LocalDate.parse(applyFromStr):null;
 
@@ -125,22 +123,23 @@ public class SalaryContractService {
             }
         }
 
-//        연봉 하한선 검증 — 고정수당(isFixed=true) 합 × 12 ≤ annualSalary
+//        연봉 정합성 검증 — annualSalary == 고정수당 합 × 12 + 비고정수당 합
         String annualSalaryStr = fieldMap.get("annualSalary");
         if (annualSalaryStr != null && !annualSalaryStr.isBlank() && !payItemAmountMap.isEmpty()) {
             List<PayItems> payItemEntities = payItemsRepository.findByPayItemIdInAndCompany_CompanyId(
                     new ArrayList<>(payItemAmountMap.keySet()), companyId);
             long fixedMonthlySum = 0L;
+            long nonFixedSum = 0L;
             for (PayItems pi : payItemEntities) {
-                if (Boolean.TRUE.equals(pi.getIsFixed())) {
-                    Integer amt = payItemAmountMap.get(pi.getPayItemId());
-                    if (amt != null) fixedMonthlySum += amt;
-                }
+                Integer amt = payItemAmountMap.get(pi.getPayItemId());
+                if (amt == null) continue;
+                if (Boolean.TRUE.equals(pi.getIsFixed())) fixedMonthlySum += amt;
+                else nonFixedSum += amt;
             }
-            long minAnnual = fixedMonthlySum * 12L;
+            long expected = fixedMonthlySum * 12L + nonFixedSum;
             long annualSalary = Long.parseLong(annualSalaryStr);
-            if (annualSalary < minAnnual) {
-                throw new CustomException(ErrorCode.ANNUAL_SALARY_BELOW_MINIMUM);
+            if (annualSalary != expected) {
+                throw new CustomException(ErrorCode.ANNUAL_SALARY_MISMATCH);
             }
         }
 
@@ -167,7 +166,6 @@ public class SalaryContractService {
             }
         }
 
-        String annualSalary = fieldMap.get("annualSalary");
         BigDecimal annualSalaryBD = (annualSalaryStr != null && !annualSalaryStr.isBlank()) ? new BigDecimal(annualSalaryStr) : totalAmount;
 
 //      계약서 저장 — details 도 builder 에 포함시켜야 CascadeType.ALL 로 자식 insert 됨
@@ -179,7 +177,6 @@ public class SalaryContractService {
                 .formValues(toJson(fieldMap))
                 .formSnapshot(formSnapshot)
                 .formVersion(formVersion)
-                .contractYear(contractYear)
                 .applyFrom(applyFrom)
                 .applyTo(applyTo)
                 .fileName(fileName)
@@ -310,7 +307,7 @@ public class SalaryContractService {
         Employee emp = employeeRepository.findById(empId).orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
 //        해당 사원 목록 조회(최신계약먼저: 내림차순)
-        List<SalaryContract> contracts = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(companyId, empId);
+        List<SalaryContract> contracts = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByApplyFromDesc(companyId, empId);
 
 //        계약서-> dto변환
         List<SalaryContractHisToryResDto> result = new ArrayList<>();
@@ -322,7 +319,7 @@ public class SalaryContractService {
                     .empName(emp.getEmpName())
                     .department(emp.getDept().getDeptName())
                     .rank(emp.getGrade().getGradeName())
-                    .year(c.getContractYear())
+                    .year(c.getApplyFrom() != null ? c.getApplyFrom().getYear() : null)
                     .annualSalary(c.getTotalAmount())
                     .contractStart(c.getApplyFrom())
                     .contractEnd(c.getApplyTo())

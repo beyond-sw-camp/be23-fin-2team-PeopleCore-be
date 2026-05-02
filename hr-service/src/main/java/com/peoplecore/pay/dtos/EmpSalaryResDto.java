@@ -30,7 +30,6 @@ public class EmpSalaryResDto {
     private BigDecimal annualSalary;
     private Long monthlySalary;
 
-    private Integer contractYear;
     private LocalDate contractStartDate;   // applyFrom
     private LocalDate contractEndDate;     // applyTo (정규직 등은 null)
 
@@ -55,7 +54,6 @@ public class EmpSalaryResDto {
                 .empType(emp.getEmpType().name())
                 .annualSalary(annualSalary)
                 .monthlySalary(monthlySalary)
-                .contractYear(contract != null ? contract.getContractYear() : null)
                 .contractStartDate(contract != null ? contract.getApplyFrom() : null)
                 .contractEndDate(contract != null ? contract.getApplyTo() : null)
                 .bankName(accounts != null ? accounts.getBankName() : null)

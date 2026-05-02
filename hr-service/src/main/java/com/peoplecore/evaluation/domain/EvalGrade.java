@@ -49,8 +49,9 @@ public class EvalGrade extends BaseTimeEntity {
     @Column(name = "weighted_score", precision = 6, scale = 2)
     private BigDecimal weightedScore; // 자기+팀장 가중평균 (비율)
 
-    @Column(name = "adjustment_score", precision = 6, scale = 2)
-    private BigDecimal adjustmentScore; // 가감점수
+    // 가감점 기능 제거 — 2026-04
+//    @Column(name = "adjustment_score", precision = 6, scale = 2)
+//    private BigDecimal adjustmentScore; // 가감점수
 
     @Column(name = "bias_adjusted_score", precision = 6, scale = 2)
     private BigDecimal biasAdjustedScore; // 편향보정 후 최종 점수 (랭킹/배분 기준)
@@ -100,8 +101,24 @@ public class EvalGrade extends BaseTimeEntity {
     @Column(name = "position_snapshot", length = 20)
     private String positionSnapshot; // 시즌 시작 시점 직급
 
+    @Column(name = "evaluator_id_snapshot")
+    private Long evaluatorIdSnapshot; // 시즌 시작 시점 평가자 emp_id
 
-    
+    @Column(name = "evaluator_name_snapshot", length = 50)
+    private String evaluatorNameSnapshot; // 시즌 시작 시점 평가자 이름
+
+
+    // 평가자 퇴사로 자동 정리 — 미지정 상태로 풀rl -> HR이 새 평가자 지정 가능
+    public void clearEvaluator() {
+        this.evaluatorIdSnapshot = null;
+        this.evaluatorNameSnapshot = null;
+    }
+
+    // HR이 미지정 상태인 행에 새 평가자 지정 (시즌 진행 중)
+    public void changeEvaluator(Long newEvaluatorId, String newEvaluatorName) {
+        this.evaluatorIdSnapshot = newEvaluatorId;
+        this.evaluatorNameSnapshot = newEvaluatorName;
+    }
 
 //    강제배분 결과 - autoGrade(불변 원본) + finalGrade(초기값=autoGrade) + 순위 저장
 //    - autoGrade: 자동 산정 시점 고정값, 5번 재산정 시에만 갱신
@@ -121,7 +138,8 @@ public class EvalGrade extends BaseTimeEntity {
         this.selfScore = selfScore;
         this.managerScore = managerScore;
         this.weightedScore = weighted;
-        this.adjustmentScore = adjustment;
+        // 가감점 기능 제거 — 2026-04 (adjustment 파라미터는 호환성 위해 유지하나 사용하지 않음)
+        // this.adjustmentScore = adjustment;
         this.totalScore = total;
     }
 

@@ -16,6 +16,9 @@ public class KpiTemplateRequest {
     @NotNull(message = "부서는 필수입니다")
     private Long deptId; //Department.deptId
 
+    // 직급 — null 이면 해당 부서 전 직급 공통 KPI
+    private Long gradeId;
+
     @NotNull(message = "카테고리는 필수입니다")
     private Long categoryOptionId; // KpiOption(CATEGORY).optionId
 
