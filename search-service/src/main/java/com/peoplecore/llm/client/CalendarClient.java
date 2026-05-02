@@ -10,6 +10,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +99,52 @@ public class CalendarClient {
         } catch (Exception e) {
             log.error("createEvent failed", e);
             return error("일정 생성 실패: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 본인 + 관심 캘린더의 오늘 일정 조회 (다이제스트용).
+     * GET /calendar/events?start=YYYY-MM-DDT00:00:00&end=YYYY-MM-DDT00:00:00
+     * date 미지정 시 오늘. LLM 친화 컴팩트 형태(eventsId/title/startAt/endAt/location)로 변환.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getMyEventsForDate(UUID companyId, Long empId, LocalDate date) {
+        LocalDate d = date == null ? LocalDate.now() : date;
+        String start = d + "T00:00:00";
+        String end = d.plusDays(1) + "T00:00:00";
+        try {
+            HttpHeaders headers = headers(companyId, empId);
+            String url = BASE + "/calendar/events?start=" + start + "&end=" + end;
+            ResponseEntity<List> resp = restTemplate.exchange(
+                    url, HttpMethod.GET, new HttpEntity<>(headers), List.class);
+            List<Map<String, Object>> raw = resp.getBody() == null
+                    ? List.of() : (List<Map<String, Object>>) resp.getBody();
+
+            List<Map<String, Object>> items = new ArrayList<>();
+            for (Map<String, Object> e : raw) {
+                Map<String, Object> one = new LinkedHashMap<>();
+                one.put("eventsId", e.get("eventsId"));
+                one.put("title", e.get("title"));
+                one.put("startAt", e.get("startAt"));
+                one.put("endAt", e.get("endAt"));
+                one.put("location", e.get("location"));
+                one.put("isAllDay", e.get("isAllDay"));
+                items.add(one);
+            }
+
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("date", d.toString());
+            out.put("count", items.size());
+            out.put("items", items);
+            return out;
+        } catch (RestClientResponseException e) {
+            log.warn("getMyEventsForDate http error: status={}, body={}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            return error("일정 조회 실패(" + e.getStatusCode().value() + ")");
+        } catch (Exception e) {
+            log.error("getMyEventsForDate failed", e);
+            return error("일정 조회 실패: " + e.getMessage());
         }
     }
 
