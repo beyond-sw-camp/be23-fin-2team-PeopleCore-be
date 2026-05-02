@@ -39,8 +39,8 @@ import java.util.UUID;
  * 멀티 인스턴스 fire 차단: Quartz JDBC 클러스터링 (QRTZ_LOCKS row lock) 이 보장.
  * 별도 분산락 코드 불필요 — 트리거당 한 노드만 fire.
  */
-@Service
 @Slf4j
+@Service
 public class AutoCloseBatchService {
 
     private final MyAttendanceQueryRepository myAttendanceQueryRepository;
