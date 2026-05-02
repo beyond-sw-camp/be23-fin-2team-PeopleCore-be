@@ -24,6 +24,8 @@ import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.repository.SalaryContractDetailRepository;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
+import com.peoplecore.vacation.entity.VacationPolicy;
+import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import com.peoplecore.vacation.service.BusinessDayCalculator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -62,11 +64,14 @@ public class PayrollService {
     private final MySalaryCacheService mySalaryCacheService;
     private final PayrollEmpStatusRepository payrollEmpStatusRepository;
     private final PayStubsRepository payStubsRepository;
+    private final VacationPolicyRepository vacationPolicyRepository;
+    private final LeaveAllowanceService leaveAllowanceService;
+    private final LeaveAllowanceRepository leaveAllowanceRepository;
 
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceService leaveAllowanceService, LeaveAllowanceRepository leaveAllowanceRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -86,6 +91,9 @@ public class PayrollService {
         this.mySalaryCacheService = mySalaryCacheService;
         this.payrollEmpStatusRepository = payrollEmpStatusRepository;
         this.payStubsRepository = payStubsRepository;
+        this.vacationPolicyRepository = vacationPolicyRepository;
+        this.leaveAllowanceService = leaveAllowanceService;
+        this.leaveAllowanceRepository = leaveAllowanceRepository;
     }
 
 ///       급여대장 조회(특정 월)
@@ -251,6 +259,34 @@ public class PayrollService {
 //        합계 갱신
         run.updateTotals(employees.size(), totalPay, totalDeduction, totalPay - totalDeduction);
 
+// 회사 연차 정책이 입사일 기준이면 이 달 입사기념일 도래자에 대해 자동 후보 + 산정
+        VacationPolicy policy = vacationPolicyRepository.findByCompanyId(companyId).orElse(null);
+        if (policy != null && policy.getPolicyBaseType() == VacationPolicy.PolicyBaseType.HIRE) {
+            int month = Integer.parseInt(payYearMonth.substring(5, 7));
+
+            // 1) 후보 INSERT
+            leaveAllowanceService.createAnniversaryPendingRecords(companyId, year, month);
+
+            // 2) PENDING 상태인 사원만 모아 자동 산정
+            List<Long> pendingEmpIds = leaveAllowanceRepository
+                    .findAllByCompanyAndYearAndType(companyId, year, AllowanceType.ANNIVERSARY)
+                    .stream()
+                    .filter(la -> la.getStatus() == AllowanceStatus.PENDING)
+                    .filter(la -> la.getEmployee().getEmpHireDate() != null
+                            && la.getEmployee().getEmpHireDate().getMonthValue() == month)
+                    .map(la -> la.getEmployee().getEmpId())
+                    .toList();
+
+            if (!pendingEmpIds.isEmpty()) {
+                try {
+                    leaveAllowanceService.calculate(companyId, year, AllowanceType.ANNIVERSARY, pendingEmpIds);
+                } catch (Exception e) {
+                    log.warn("[연차수당 자동산정 실패] type=ANNIVERSARY, year={}, month={}, msg={}",
+                            year, month, e.getMessage());
+                }
+            }
+        }
+
         return getPayroll(companyId, payYearMonth);
     }
 
@@ -263,8 +299,9 @@ public class PayrollService {
     public PayrollSyncResultResDto syncEmployees(UUID companyId, Long payrollRunId) {
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
 
-        // 산정중 외엔 차단
-        if (run.getPayrollStatus() != PayrollStatus.CALCULATING) {
+        // CALCULATING / PENDING_APPROVAL 만 허용 (APPROVED/PAID 단계에선 차단)
+        if (run.getPayrollStatus() != PayrollStatus.CALCULATING
+                && run.getPayrollStatus() != PayrollStatus.PENDING_APPROVAL) {
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
 
