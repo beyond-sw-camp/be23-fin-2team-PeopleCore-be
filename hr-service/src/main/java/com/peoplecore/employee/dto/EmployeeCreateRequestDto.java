@@ -3,6 +3,7 @@ package com.peoplecore.employee.dto;
 import com.peoplecore.employee.domain.EmpGender;
 import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.EmpType;
+import com.peoplecore.pay.enums.RetirementType;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -86,6 +87,18 @@ public class EmployeeCreateRequestDto {
     private String initialPassword;
 
     private Long workGroupId;
+
+    // 급여계좌 (오픈뱅킹 검증 필수)
+    private String salaryBankCode;
+    private String salaryBankName;
+    private String salaryAccountNumber;
+    private String salaryAccountHolder;
+    private String salaryAccountVerificationToken;
+    // 퇴직연금계좌 (회사 pensionType이 DC/DB_DC일 때만)
+    private RetirementType retirementType;          // DB or DC
+    private String retirementAccountNumber;          // DC형일 때만 필수
+    // 부양가족수 (기본 1)
+    private Integer dependentsCount;
 
 }
 

@@ -195,6 +195,9 @@ public enum ErrorCode {
     GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다."),
     TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다."),
 
+    // 퇴직연금 계좌 (사원 신규등록)
+    RETIREMENT_TYPE_NOT_ALLOWED(400, "회사 퇴직연금 정책으로 인해 해당 유형은 선택할 수 없습니다."),
+    RETIREMENT_ACCOUNT_REQUIRED(400, "DC형 퇴직연금은 사원 본인 계좌번호가 필요합니다."),
 
     //    연봉
     SALARY_CONTRACT_NOT_FOUND(404, "계약서를 찾을 수 없습니다."),

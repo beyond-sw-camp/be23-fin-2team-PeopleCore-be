@@ -21,8 +21,17 @@ import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.grade.repository.GradeRepository;
 import com.peoplecore.minio.service.MinioService;
+import com.peoplecore.pay.domain.EmpAccounts;
+import com.peoplecore.pay.domain.EmpRetirementAccount;
 import com.peoplecore.pay.domain.InsuranceJobTypes;
+import com.peoplecore.pay.domain.RetirementSettings;
+import com.peoplecore.pay.enums.PensionType;
+import com.peoplecore.pay.enums.RetirementType;
+import com.peoplecore.pay.repository.EmpAccountsRepository;
+import com.peoplecore.pay.repository.EmpRetirementAccountRepository;
 import com.peoplecore.pay.repository.InsuranceJobTypesRepository;
+import com.peoplecore.pay.repository.RetirementSettingsRepository;
+import com.peoplecore.pay.service.AccountVerifyService;
 import com.peoplecore.title.domain.Title;
 import com.peoplecore.title.repository.TitleRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -58,11 +67,15 @@ public class EmployeeService {
     private final WorkGroupRepository workGroupRepository;
     private final FaceAuthService faceAuthService;
     private final InsuranceJobTypesRepository insuranceJobTypesRepository;
+    private final AccountVerifyService accountVerifyService;
+    private final EmpAccountsRepository empAccountsRepository;
+    private final EmpRetirementAccountRepository empRetirementAccountRepository;
+    private final RetirementSettingsRepository retirementSettingsRepository;
 
     public static final String DEFAULT_CODE = "DEFAULT";
 
     @Autowired
-    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService, InsuranceJobTypesRepository insuranceJobTypesRepository) {
+    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService, InsuranceJobTypesRepository insuranceJobTypesRepository, AccountVerifyService accountVerifyService, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository) {
         this.employeeRepository = employeeRepository;
         this.companyRepository = companyRepository;
         this.departmentRepository = departmentRepository;
@@ -74,6 +87,10 @@ public class EmployeeService {
         this.workGroupRepository = workGroupRepository;
         this.faceAuthService = faceAuthService;
         this.insuranceJobTypesRepository = insuranceJobTypesRepository;
+        this.accountVerifyService = accountVerifyService;
+        this.empAccountsRepository = empAccountsRepository;
+        this.empRetirementAccountRepository = empRetirementAccountRepository;
+        this.retirementSettingsRepository = retirementSettingsRepository;
     }
 
     private static final String EMAIL_DOMAIN = "@peoplecore.com";
@@ -170,9 +187,72 @@ public class EmployeeService {
                 .empStatus(EmpStatus.ACTIVE)
                 .workGroup(workGroup)
                 .workGroupAssignedAt(LocalDateTime.now())
+                .workGroup(workGroup)
+                .workGroupAssignedAt(LocalDateTime.now())
+                .dependentsCount(requestDto.getDependentsCount() != null ? requestDto.getDependentsCount() : 1)
                 .build();
 
         Employee savedEmployee = employeeRepository.save(employee);
+
+//  급여계좌 (토큰 검증 + 저장)
+        if (hasSalaryAccountInput(requestDto)) {
+            // 토큰 검증 (토큰 미존재/만료/불일치 시 CustomException 발생)
+            accountVerifyService.consumeToken(
+                    requestDto.getSalaryAccountVerificationToken(),
+                    requestDto.getSalaryBankCode(),
+                    requestDto.getSalaryAccountNumber(),
+                    requestDto.getSalaryAccountHolder()
+            );
+
+            EmpAccounts salaryAccount = EmpAccounts.builder()
+                    .employee(savedEmployee)
+                    .company(company)
+                    .bankCode(requestDto.getSalaryBankCode())
+                    .bankName(requestDto.getSalaryBankName())
+                    .accountNumber(requestDto.getSalaryAccountNumber())
+                    .accountHolder(requestDto.getSalaryAccountHolder())
+                    .build();
+            empAccountsRepository.save(salaryAccount);
+        }
+
+// 퇴직연금계좌 (회사 pensionType 분기)
+        if (requestDto.getRetirementType() != null) {
+            RetirementSettings settings = retirementSettingsRepository
+                    .findByCompany_CompanyId(companyId)
+                    .orElseThrow(() -> new CustomException(ErrorCode.RETIREMENT_SETTINGS_NOT_FOUND));
+
+            PensionType companyType = settings.getPensionType();
+
+            // 회사가 severance 또는 DB면 사원 계좌 입력 자체가 잘못됨
+            if (companyType == PensionType.severance || companyType == PensionType.DB) {
+                throw new CustomException(ErrorCode.RETIREMENT_TYPE_NOT_ALLOWED);
+            }
+
+            // DB_DC 병행이면 사원 retirementType이 DB/DC 둘 다 가능, 단일 DC면 DC만 가능
+            if (companyType == PensionType.DC && requestDto.getRetirementType() != RetirementType.DC) {
+                throw new CustomException(ErrorCode.RETIREMENT_TYPE_NOT_ALLOWED);
+            }
+
+            // DC 선택 시 계좌번호 필수
+            if (requestDto.getRetirementType() == RetirementType.DC
+                    && (requestDto.getRetirementAccountNumber() == null
+                    || requestDto.getRetirementAccountNumber().isBlank())) {
+                throw new CustomException(ErrorCode.RETIREMENT_ACCOUNT_REQUIRED);
+            }
+
+            EmpRetirementAccount retirementAccount = EmpRetirementAccount.builder()
+                    .employee(savedEmployee)
+                    .company(company)
+                    .retirementType(requestDto.getRetirementType())
+                    .pensionProvider(settings.getPensionProvider())   // 회사 운용사 사용
+                    .accountNumber(
+                            requestDto.getRetirementType() == RetirementType.DC
+                                    ? requestDto.getRetirementAccountNumber()
+                                    : ""    // DB는 회사 운용이라 계좌 번호 미사용 — 빈 문자열
+                    )
+                    .build();
+            empRetirementAccountRepository.save(retirementAccount);
+        }
 
 //        파일 minio업로드
         if (files != null && !files.isEmpty()) {
@@ -311,6 +391,12 @@ public class EmployeeService {
         Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
         faceAuthService.cascadeUnregisterFace(empId, companyId);
         employee.softDelete();
+    }
+
+
+
+    private boolean hasSalaryAccountInput(EmployeeCreateRequestDto dto) {
+        return dto.getSalaryAccountNumber() != null && !dto.getSalaryAccountNumber().isBlank();
     }
 
 }

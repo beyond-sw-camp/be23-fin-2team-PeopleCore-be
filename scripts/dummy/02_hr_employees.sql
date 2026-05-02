@@ -1,4 +1,4 @@
-
+use peoplecore;
 -- =====================================================================
 -- HR Service 더미 사원 데이터 (Employee × 100명) — lookup 변수 방식
 -- ---------------------------------------------------------------------
@@ -39,7 +39,7 @@
 -- =====================================================================
 
 -- ▼ 회사 + 비밀번호 ▼
-SET @company_name := 'peoplecore';
+SET @company_name := 'testcompany';
 SET @cid := (SELECT company_id FROM company WHERE company_name = @company_name);
 SET @pwd := '$2a$10$EblZqNptyYvcLm/VwDCVAuBjzZOI7khzdyGPBr08PpIi0na624b8.';
 

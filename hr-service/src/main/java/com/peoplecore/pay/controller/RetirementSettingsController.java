@@ -13,7 +13,6 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/pay/superadmin/retirement")
-@RoleRequired({"HR_SUPER_ADMIN"})
 public class RetirementSettingsController {
 
     private final RetirementService retirementService;
@@ -24,6 +23,7 @@ public class RetirementSettingsController {
 
 //    퇴직연금 설정 조회
     @GetMapping
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
     public ResponseEntity<RetirementSettingsResDto> getRetirementSettings(
             @RequestHeader("X-User-Company") UUID companyId){
         return ResponseEntity.ok(retirementService.getRetirementSettings(companyId));
@@ -31,6 +31,7 @@ public class RetirementSettingsController {
 
 //    퇴직연금설정 저장/수정
     @PutMapping
+    @RoleRequired({"HR_SUPER_ADMIN"})
     public ResponseEntity<RetirementSettingsResDto> saveRetirementSettings(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestBody @Valid RetirementSettingsReqDto reqDto){
