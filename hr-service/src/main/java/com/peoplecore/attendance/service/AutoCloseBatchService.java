@@ -13,11 +13,9 @@ import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
 import com.peoplecore.vacation.service.BusinessDayCalculator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.YearMonth;
@@ -38,20 +36,17 @@ import java.util.UUID;
  *  2. ABSENT 상태 CommuteRecord INSERT
  *  3. 대상 사원 본인에게 알림 발송
  *
- * 멀티 인스턴스 분산 락: 같은 workGroupId + targetDate 조합에 한 번만 실행
+ * 멀티 인스턴스 fire 차단: Quartz JDBC 클러스터링 (QRTZ_LOCKS row lock) 이 보장.
+ * 별도 분산락 코드 불필요 — 트리거당 한 노드만 fire.
  */
 @Service
 @Slf4j
 public class AutoCloseBatchService {
 
-    /* 분산 락 TTL — 배치 실행 시간 여유 + 같은 날 중복 방지 */
-    private static final Duration LOCK_TTL = Duration.ofMinutes(5);
-
     private final MyAttendanceQueryRepository myAttendanceQueryRepository;
     private final WorkGroupRepository workGroupRepository;
     private final EmployeeRepository employeeRepository;
     private final CommuteRecordRepository commuteRecordRepository;
-    private final StringRedisTemplate redisTemplate;
     private final HrAlarmPublisher hrAlarmPublisher;
     private final BusinessDayCalculator businessDayCalculator;
     private final VacationRequestQueryRepository vacationRequestQueryRepository;
@@ -61,7 +56,6 @@ public class AutoCloseBatchService {
                                  WorkGroupRepository workGroupRepository,
                                  EmployeeRepository employeeRepository,
                                  CommuteRecordRepository commuteRecordRepository,
-                                 StringRedisTemplate redisTemplate,
                                  HrAlarmPublisher hrAlarmPublisher,
                                  BusinessDayCalculator businessDayCalculator,
                                  VacationRequestQueryRepository vacationRequestQueryRepository) {
@@ -69,7 +63,6 @@ public class AutoCloseBatchService {
         this.workGroupRepository = workGroupRepository;
         this.employeeRepository = employeeRepository;
         this.commuteRecordRepository = commuteRecordRepository;
-        this.redisTemplate = redisTemplate;
         this.hrAlarmPublisher = hrAlarmPublisher;
         this.businessDayCalculator = businessDayCalculator;
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
@@ -83,16 +76,6 @@ public class AutoCloseBatchService {
     public void autoCloseForWorkGroup(Long workGroupId) {
 
         LocalDate targetDate = LocalDate.now().minusDays(1);
-
-        /* 분산락 획득 — 멀티 인스턴스 중 한 곳만 진입 */
-        String lockKey = buildLockKey(workGroupId, targetDate);
-        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", LOCK_TTL);
-        if (!Boolean.TRUE.equals(acquired)) {
-            log.info("[AutoClose] 다른 인스턴스가 처리 중 — skip. workGroupId={}, targetDate={}",
-                    workGroupId, targetDate);
-            return;
-        }
-        log.debug("[AutoClose] 락 획득 — key={}", lockKey);
 
         /* 근무 그룹 로드 */
         WorkGroup wg = workGroupRepository.findById(workGroupId).orElse(null);
@@ -216,10 +199,5 @@ public class AutoCloseBatchService {
                 .alarmRefId(comRecId)
                 .empIds(List.of(emp.getEmpId()))
                 .build());
-    }
-
-    /* 락키 규격: auto-close:wg:{workGroupId}:date:{yyyy-MM-dd} */
-    private String buildLockKey(Long workGroupId, LocalDate targetDate) {
-        return String.format("auto-close:wg:%d:date:%s", workGroupId, targetDate);
     }
 }
