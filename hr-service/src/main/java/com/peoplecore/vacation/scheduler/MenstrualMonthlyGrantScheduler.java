@@ -12,84 +12,60 @@ import com.peoplecore.vacation.repository.VacationTypeRepository;
 import com.peoplecore.vacation.service.MenstrualMonthlyGrantService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
-/* 생리휴가 월별 자동 적립 스케줄러 - 매월 1일 00:05 KST 실행 */
-/* 분산 락으로 멀티 인스턴스 중복 실행 방지 (락 키: menstrual-monthly-grant:{yyyy-MM}) */
+/* 생리휴가 월별 자동 적립 본체 — 매월 1일 처리 */
+/* 정기 fire = MenstrualMonthlyGrantJob (Quartz) → run() 호출 */
+/* 수동 트리거 = 관리 API → run() 호출 */
 /* 사원 단위 처리는 MenstrualMonthlyGrantService 로 위임 (REQUIRES_NEW 격리) */
 /* 대상: 회사 ACTIVE + 사원 FEMALE + ACTIVE + not deleted */
+/* 멀티 노드 한 대만 fire = QRTZ_LOCKS row lock 보장 (Redis 분산락 불필요) */
 @Component
 @Slf4j
 public class MenstrualMonthlyGrantScheduler {
 
-    /* 분산 락 TTL - 월별 1회 실행이라 여유있게 설정 */
-    private static final Duration LOCK_TTL = Duration.ofMinutes(30);
-
-    /* 락 키 prefix - 년월 기준 */
-    private static final String LOCK_KEY_PREFIX = "menstrual-monthly-grant";
-
     /* KST 고정 - 서버 로컬 타임존과 무관하게 정책 시각 준수 */
     private static final ZoneId ZONE_SEOUL = ZoneId.of("Asia/Seoul");
 
-    private final StringRedisTemplate redisTemplate;
     private final CompanyRepository companyRepository;
     private final VacationTypeRepository vacationTypeRepository;
     private final EmployeeRepository employeeRepository;
     private final MenstrualMonthlyGrantService menstrualMonthlyGrantService;
 
     @Autowired
-    public MenstrualMonthlyGrantScheduler(StringRedisTemplate redisTemplate,
-                                          CompanyRepository companyRepository,
+    public MenstrualMonthlyGrantScheduler(CompanyRepository companyRepository,
                                           VacationTypeRepository vacationTypeRepository,
                                           EmployeeRepository employeeRepository,
                                           MenstrualMonthlyGrantService menstrualMonthlyGrantService) {
-        this.redisTemplate = redisTemplate;
         this.companyRepository = companyRepository;
         this.vacationTypeRepository = vacationTypeRepository;
         this.employeeRepository = employeeRepository;
         this.menstrualMonthlyGrantService = menstrualMonthlyGrantService;
     }
 
-    /* 매월 1일 00:05 KST 실행 - 여성 사원 전체 생리휴가 월 적립 + 전월 미사용 만료 */
-    /* cron: 초 분 시 일 월 요일 */
-    @Scheduled(cron = "0 5 0 1 * *", zone = "Asia/Seoul")
+    /* 정기/수동 공용 진입점 — 여성 사원 전체 생리휴가 월 적립 + 전월 미사용 만료 */
     public void run() {
         LocalDate today = LocalDate.now(ZONE_SEOUL);
-        // 년월 기준 락 키 - 같은 달 중복 실행 방지
-        String lockKey = LOCK_KEY_PREFIX + ":" + today.getYear() + "-" + today.getMonthValue();
-
-        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", LOCK_TTL);
-        if (!Boolean.TRUE.equals(acquired)) {
-            log.info("[MenstrualGrant] 다른 인스턴스 진행 중 - skip. date={}", today);
-            return;
-        }
         log.info("[MenstrualGrant] 시작 - date={}", today);
-        try {
-            List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
-            int processedCompanies = 0;
-            for (Company company : activeCompanies) {
-                try {
-                    processCompany(company, today);
-                    processedCompanies++;
-                } catch (Exception e) {
-                    log.error("[MenstrualGrant] 회사 처리 실패 - companyId={}, err={}",
-                            company.getCompanyId(), e.getMessage(), e);
-                }
+
+        List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
+        int processedCompanies = 0;
+        for (Company company : activeCompanies) {
+            try {
+                processCompany(company, today);
+                processedCompanies++;
+            } catch (Exception e) {
+                log.error("[MenstrualGrant] 회사 처리 실패 - companyId={}, err={}",
+                        company.getCompanyId(), e.getMessage(), e);
             }
-            log.info("[MenstrualGrant] 완료 - date={}, companies={}/{}",
-                    today, processedCompanies, activeCompanies.size());
-        } finally {
-            // 스케줄러 종료 즉시 해제 - 다음 달 재실행 필요 시 락 빠르게 반환
-            redisTemplate.delete(lockKey);
         }
+        log.info("[MenstrualGrant] 완료 - date={}, companies={}/{}",
+                today, processedCompanies, activeCompanies.size());
     }
 
     /* 회사 단위 처리 - MENSTRUAL 유형 조회 + 여성 ACTIVE 사원 순회 */

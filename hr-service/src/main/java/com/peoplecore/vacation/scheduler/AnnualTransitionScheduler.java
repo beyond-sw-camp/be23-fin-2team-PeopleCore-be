@@ -13,27 +13,24 @@ import com.peoplecore.vacation.repository.VacationTypeRepository;
 import com.peoplecore.vacation.service.AnnualTransitionService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
-/* 월차→연차 전환 스케줄러 - 매일 자정. 1주년 도달 사원 처리 */
+/* 월차→연차 전환 본체 — 1주년 도달 사원 처리 */
+/* 정기 fire = AnnualTransitionJob (Quartz) → run() 호출 */
+/* 수동 트리거 = 관리 API → run() 호출 */
 /* HIRE: 월차 소멸 + 1년차 연차 발생 / FISCAL: 월차 소멸만 */
+/* 멀티 노드 한 대만 fire = QRTZ_LOCKS row lock 보장 (Redis 분산락 불필요) */
 @Component
 @Slf4j
 public class AnnualTransitionScheduler {
 
-    private static final Duration LOCK_TTL = Duration.ofMinutes(10);
-    private static final String LOCK_KEY_PREFIX = "annual-transition";
     private static final ZoneId ZONE_SEOUL = ZoneId.of("Asia/Seoul");
 
-    private final StringRedisTemplate redisTemplate;
     private final CompanyRepository companyRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
     private final VacationTypeRepository vacationTypeRepository;
@@ -41,13 +38,11 @@ public class AnnualTransitionScheduler {
     private final AnnualTransitionService annualTransitionService;
 
     @Autowired
-    public AnnualTransitionScheduler(StringRedisTemplate redisTemplate,
-                                     CompanyRepository companyRepository,
+    public AnnualTransitionScheduler(CompanyRepository companyRepository,
                                      VacationPolicyRepository vacationPolicyRepository,
                                      VacationTypeRepository vacationTypeRepository,
                                      EmployeeRepository employeeRepository,
                                      AnnualTransitionService annualTransitionService) {
-        this.redisTemplate = redisTemplate;
         this.companyRepository = companyRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
         this.vacationTypeRepository = vacationTypeRepository;
@@ -55,34 +50,23 @@ public class AnnualTransitionScheduler {
         this.annualTransitionService = annualTransitionService;
     }
 
-    /* 매일 00:05 KST - MonthlyAccrual(00:00) 직후 실행 */
-    @Scheduled(cron = "0 5 0 * * *", zone = "Asia/Seoul")
+    /* 정기/수동 공용 진입점 */
     public void run() {
         LocalDate today = LocalDate.now(ZONE_SEOUL);
-        String lockKey = LOCK_KEY_PREFIX + ":" + today;
-
-        Boolean acquired = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", LOCK_TTL);
-        if (!Boolean.TRUE.equals(acquired)) {
-            log.info("[AnnualTransition] 다른 인스턴스 진행 중 - skip. date={}", today);
-            return;
-        }
         log.info("[AnnualTransition] 시작 - date={}", today);
-        try {
-            List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
-            int processed = 0;
-            for (Company company : activeCompanies) {
-                try {
-                    processCompany(company, today);
-                    processed++;
-                } catch (Exception e) {
-                    log.error("[AnnualTransition] 회사 처리 실패 - companyId={}, err={}",
-                            company.getCompanyId(), e.getMessage(), e);
-                }
+
+        List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
+        int processed = 0;
+        for (Company company : activeCompanies) {
+            try {
+                processCompany(company, today);
+                processed++;
+            } catch (Exception e) {
+                log.error("[AnnualTransition] 회사 처리 실패 - companyId={}, err={}",
+                        company.getCompanyId(), e.getMessage(), e);
             }
-            log.info("[AnnualTransition] 완료 - date={}, companies={}/{}", today, processed, activeCompanies.size());
-        } finally {
-            redisTemplate.delete(lockKey);
         }
+        log.info("[AnnualTransition] 완료 - date={}, companies={}/{}", today, processed, activeCompanies.size());
     }
 
     /* 회사 단위 - 정책/유형 조회 후 1주년 도달 사원 처리 */
