@@ -58,6 +58,18 @@ public class VacationBalanceController {
                 companyId, empId, year, typeId, pageable));
     }
 
+    /* 관리자용 - 특정 사원의 휴가 잔여 전체 조회 */
+    /* 휴가 유형별 한 행. 만료된 balance 포함 */
+    /* 예: GET /vacation/balances/employees/3?year=2026 */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @GetMapping("/employees/{empId}")
+    public ResponseEntity<List<VacationBalanceResponse>> listEmployeeBalances(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long empId,
+            @RequestParam int year) {
+        return ResponseEntity.ok(vacationBalanceService.listEmployeeBalances(companyId, empId, year));
+    }
+
     /* 내 휴가 현황 조회 - 휴가현황 페이지 */
     /* year 필수 (프론트 전송). 예: GET /vacation/balances/me/status?year=2026 */
     /* 응답: 연차 카드 + 기타 휴가 + 예정/지난 신청 */

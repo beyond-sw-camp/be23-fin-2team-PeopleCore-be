@@ -77,6 +77,16 @@ public class ApprovalFormController {
         return ResponseEntity.ok(approvalFormService.getAllFormFolders(companyId));
     }
 
+    // 관리자용 - 전체 양식 조회 (비활성·숨김 폴더 양식 포함, 일괄 설정 탭용)
+    // folderId 미지정 시 회사 전체, 지정 시 해당 폴더만 (숨김 폴더라도 통과)
+    @RoleRequired({"HR_SUPER_ADMIN"})
+    @GetMapping("/form/all")
+    public ResponseEntity<List<FormAdminListResponse>> getAllForms(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam(required = false) Long folderId) {
+        return ResponseEntity.ok(approvalFormService.getAllForms(companyId, folderId));
+    }
+
     // 폴더 추가
     @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
     @PostMapping("/form-folder")
@@ -150,6 +160,43 @@ public class ApprovalFormController {
             @PathVariable Long formId) {
         approvalFormService.deleteForm(companyId, formId);
         return ResponseEntity.noContent().build();
+    }
+
+    // 양식 사용여부 토글 (사용 ON/OFF) — 보호 양식은 OFF 차단
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @PatchMapping("/forms/{formId}/active")
+    public ResponseEntity<FormDetailResponse> setFormActive(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long formId,
+            @RequestBody ApprovalFormActiveRequest request) {
+        return ResponseEntity.ok(approvalFormService.setFormActive(companyId, formId, request.getIsActive()));
+    }
+
+    // 양식 버전 이력 조회 — 같은 formCode 의 모든 버전 메타 (formHtml 제외 슬림)
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @GetMapping("/forms/{formId}/versions")
+    public ResponseEntity<List<FormVersionResponse>> getFormVersions(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long formId) {
+        return ResponseEntity.ok(approvalFormService.getFormVersions(companyId, formId));
+    }
+
+    // 옛 버전 단건 미리보기 — formId 는 옛 row, MinIO 에서 해당 버전 HTML 동시 fetch
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @GetMapping("/forms/versions/{formId}")
+    public ResponseEntity<FormDetailResponse> getFormVersionDetail(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long formId) {
+        return ResponseEntity.ok(approvalFormService.getFormVersionDetail(companyId, formId));
+    }
+
+    // 옛 버전으로 롤백 — formId 는 롤백 타깃 옛 row. isCurrent flip + FrequentForm 마이그레이션
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @PostMapping("/forms/versions/{formId}/rollback")
+    public ResponseEntity<FormDetailResponse> rollbackToVersion(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long formId) {
+        return ResponseEntity.ok(approvalFormService.rollbackToVersion(companyId, formId));
     }
 
     // 양식 순서 변경

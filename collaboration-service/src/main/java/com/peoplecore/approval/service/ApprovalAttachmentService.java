@@ -6,6 +6,7 @@ import com.peoplecore.approval.entity.ApprovalAttachment;
 import com.peoplecore.approval.entity.ApprovalDocument;
 import com.peoplecore.approval.repository.ApprovalAttachmentRepository;
 import com.peoplecore.approval.repository.ApprovalDocumentRepository;
+import com.peoplecore.approval.repository.ApprovalLineRepository;
 import com.peoplecore.common.service.MinioService;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
@@ -26,14 +27,17 @@ public class ApprovalAttachmentService {
 
     private final ApprovalAttachmentRepository attachmentRepository;
     private final ApprovalDocumentRepository documentRepository;
+    private final ApprovalLineRepository lineRepository;
     private final MinioService minioService;
 
     @Autowired
     public ApprovalAttachmentService(ApprovalAttachmentRepository attachmentRepository,
                                      ApprovalDocumentRepository documentRepository,
+                                     ApprovalLineRepository lineRepository,
                                      MinioService minioService) {
         this.attachmentRepository = attachmentRepository;
         this.documentRepository = documentRepository;
+        this.lineRepository = lineRepository;
         this.minioService = minioService;
     }
 
@@ -96,10 +100,17 @@ public class ApprovalAttachmentService {
                 .toList();
     }
 
-    /** 첨부파일 다운로드 URL 발급 (단건) */
-    public String getDownloadUrl(Long attachId) {
-        ApprovalAttachment attachment = attachmentRepository.findById(attachId)
+    /** 첨부파일 다운로드 URL 발급 (단건) - 기안자 또는 결재라인(결재/참조/열람) 본인만 통과, 그 외 403 */
+    public String getDownloadUrl(Long empId, Long attachId) {
+        ApprovalAttachment attachment = attachmentRepository.findWithDocById(attachId)
                 .orElseThrow(() -> new BusinessException("첨부파일을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        ApprovalDocument doc = attachment.getDocId();
+        boolean isDrafter = doc.getEmpId().equals(empId);
+        boolean inLine = lineRepository.findByDocId_DocIdAndEmpId(doc.getDocId(), empId).isPresent();
+        if (!isDrafter && !inLine) {
+            throw new BusinessException("첨부파일에 접근할 권한이 없습니다.", HttpStatus.FORBIDDEN);
+        }
         return minioService.getPresignedUrl(attachment.getObjectName());
     }
 

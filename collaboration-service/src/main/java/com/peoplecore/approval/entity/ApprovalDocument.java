@@ -119,6 +119,14 @@ public class ApprovalDocument extends BaseTimeEntity {
     private Boolean isEmergency = false;
 
     /**
+     * 공개 여부 - default == true
+     * false (비공개) 시 부서 문서함에 목록은 노출되지만 상세 진입은 차단됨 (기안자 + 결재라인 본인만 통과, HR_ADMIN 도 차단)
+     */
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isPublic = true;
+
+    /**
      * 제출 일시 - 채번이 새겨지는 시점
      */
     private LocalDateTime docSubmittedAt;
@@ -232,6 +240,13 @@ public class ApprovalDocument extends BaseTimeEntity {
     /*부서 문서함 배정*/
     public void assignDeptFolder(Long deptFolderId) {
         this.deptFolderId = deptFolderId;
+    }
+
+    /* 공개 여부 변경 - 상신 시점에 호출, null 이면 기존 값 유지 */
+    public void changeVisibility(Boolean isPublic) {
+        if (isPublic != null) {
+            this.isPublic = isPublic;
+        }
     }
 
     /*완성 문서 URL 저장*/

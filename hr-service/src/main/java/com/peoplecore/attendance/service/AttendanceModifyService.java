@@ -13,6 +13,8 @@ import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.publisher.AttendanceModifyRejectedByHrPublisher;
 import com.peoplecore.attendance.repository.AttendanceModifyRepository;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
+import com.peoplecore.attendance.service.result.ApprovalResultHandler;
+import com.peoplecore.attendance.service.result.ApprovalResultHandlerRegistry;
 import com.peoplecore.employee.domain.EmpRole;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
@@ -59,9 +61,8 @@ public class AttendanceModifyService {
     private final VacationRequestQueryRepository vacationRequestQueryRepository;
     private final HolidayReasonResolver holidayReasonResolver;
     private final BusinessDayCalculator businessDayCalculator;
-    private final WorkStatusResolver workStatusResolver;
     private final OvertimeLimitChecker overtimeLimitChecker;
-    private final PayrollMinutesCalculator payrollMinutesCalculator;
+    private final ApprovalResultHandlerRegistry resultHandlerRegistry;
 
     @Autowired
     public AttendanceModifyService(AttendanceModifyRepository attendanceModifyRepository,
@@ -73,9 +74,8 @@ public class AttendanceModifyService {
                                    VacationRequestQueryRepository vacationRequestQueryRepository,
                                    HolidayReasonResolver holidayReasonResolver,
                                    BusinessDayCalculator businessDayCalculator,
-                                   WorkStatusResolver workStatusResolver,
                                    OvertimeLimitChecker overtimeLimitChecker,
-                                   PayrollMinutesCalculator payrollMinutesCalculator) {
+                                   ApprovalResultHandlerRegistry resultHandlerRegistry) {
         this.attendanceModifyRepository = attendanceModifyRepository;
         this.commuteRecordRepository = commuteRecordRepository;
         this.employeeRepository = employeeRepository;
@@ -85,9 +85,8 @@ public class AttendanceModifyService {
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
         this.holidayReasonResolver = holidayReasonResolver;
         this.businessDayCalculator = businessDayCalculator;
-        this.workStatusResolver = workStatusResolver;
         this.overtimeLimitChecker = overtimeLimitChecker;
-        this.payrollMinutesCalculator = payrollMinutesCalculator;
+        this.resultHandlerRegistry = resultHandlerRegistry;
     }
 
     /* ===================== 1) 프리필 ===================== */
@@ -221,7 +220,7 @@ public class AttendanceModifyService {
 
     /*
      * collab 결재 결과 이벤트 수신 → 상태 반영.
-     * 승인 시 comRecId 있으면 native UPDATE, 없으면 신규 CommuteRecord INSERT (휴일근무 미입력 정정 등).
+     * status 별 처리는 ApprovalResultHandlerRegistry 로 dispatch (객체 다형성).
      */
     public void applyApprovalResult(AttendanceModifyResultEvent event) {
         AttendanceModify am = attendanceModifyRepository
@@ -232,88 +231,15 @@ public class AttendanceModifyService {
                 ? employeeRepository.findById(event.getManagerId()).orElse(null)
                 : null;
 
-        switch (event.getStatus()) {
-            case "승인" -> {
-                am.approve(manager);
-                applyApprovedRecord(am);
-                notifyRequester(am, "근태 정정 신청이 승인되었습니다.",
-                        "수정된 출퇴근 시각이 반영되었습니다.");
-            }
-            case "반려" -> {
-                am.reject(manager, event.getRejectReason());
-                notifyRequester(am, "근태 정정 신청이 반려되었습니다.",
-                        event.getRejectReason() != null ? event.getRejectReason() : "반려 사유 없음");
-            }
-            case "취소" -> {
-                am.cancel();
-                notifyRequester(am, "근태 정정 신청이 회수되었습니다.",
-                        "기안자가 문서를 회수했습니다.");
-            }
-            default -> log.warn("[AttendanceModify] 알 수 없는 status - {}", event.getStatus());
-        }
-        log.info("[AttendanceModify] 결과 반영 - attenModiId={}, status={}",
-                am.getAttenModiId(), event.getStatus());
-    }
-
-    /* 정정 승인 반영
-     *  - comRecId 있으면 native UPDATE (check-in/out + workStatus 일괄, work_date 포함)
-     *  - 없으면 신규 INSERT (휴일근무 미입력 정정 등)
-     * 두 케이스 모두 끝에 PayrollMinutesCalculator.applyApprovedRecognition 호출 → native UPDATE 로 분 컬럼 재계산.
-     * workStatus: 새 시간 기준 final 까지 자바에서 산출(NORMAL/LATE/EARLY_LEAVE/LATE_AND_EARLY/HOLIDAY_WORK). */
-    private void applyApprovedRecord(AttendanceModify am) {
-        Employee emp = am.getEmployee();
-        WorkGroup wg = emp.getWorkGroup();
-        HolidayReason reason = holidayReasonResolver.resolve(am.getCompanyId(), am.getWorkDate(), wg);
-        /* 새 시간 기준 final WorkStatus 자바에서 미리 산출 - DB 일률 변환 금지 */
-        WorkStatus newStatus = resolveCorrectedStatus(
-                am.getAttenReqCheckIn(), am.getAttenReqCheckOut(), wg, reason);
-
-        if (am.getComRecId() != null) {
-            /* native UPDATE - check-in/out + status 일괄, work_date 포함(파티션 프루닝) */
-            int updated = commuteRecordRepository.applyAttendanceModify(
-                    am.getComRecId(), am.getWorkDate(),
-                    am.getAttenReqCheckIn(), am.getAttenReqCheckOut(),
-                    newStatus.name());
-            if (updated != 1) {
-                log.error("[AttendanceModify] CommuteRecord UPDATE 실패 - attenModiId={}, affected={}",
-                        am.getAttenModiId(), updated);
-                throw new CustomException(ErrorCode.ATTENDANCE_MODIFY_APPLY_FAILED);
-            }
-            /* native UPDATE 직후 영속성 컨텍스트 비워진 상태 → 최신값 다시 로드해 분 컬럼 재계산 */
-            CommuteRecord reloaded = commuteRecordRepository
-                    .findByComRecIdAndWorkDate(am.getComRecId(), am.getWorkDate())
-                    .orElseThrow(() -> new CustomException(ErrorCode.ATTENDANCE_MODIFY_APPLY_FAILED));
-            payrollMinutesCalculator.applyApprovedRecognition(reloaded);
-            log.info("[AttendanceModify] UPDATE + 상태/분 재판정 - attenModiId={}, comRecId={}, status={}",
-                    am.getAttenModiId(), am.getComRecId(), newStatus);
+        Optional<ApprovalResultHandler> handler = resultHandlerRegistry.find(event.getStatus());
+        if (handler.isEmpty()) {
+            log.warn("[AttendanceModify] 알 수 없는 status - {}", event.getStatus());
             return;
         }
+        handler.get().handle(am, manager, event.getRejectReason());
 
-        /* INSERT 케이스 - 신규 record (INSERT 는 work_date 컬럼값으로 partition routing 자동) */
-        CommuteRecord saved = commuteRecordRepository.save(CommuteRecord.builder()
-                .workDate(am.getWorkDate())
-                .companyId(am.getCompanyId())
-                .employee(emp)
-                .comRecCheckIn(am.getAttenReqCheckIn())
-                .comRecCheckOut(am.getAttenReqCheckOut())
-                .holidayReason(reason)
-                .workStatus(newStatus)
-                .build());
-        payrollMinutesCalculator.applyApprovedRecognition(saved);
-        log.info("[AttendanceModify] INSERT + 상태/분 재판정 - attenModiId={}, comRecId={}, status={}",
-                am.getAttenModiId(), saved.getComRecId(), newStatus);
-    }
-
-    /* 새 checkIn/checkOut 기준 final WorkStatus 산출.
-     * checkIn null → NORMAL 폴백(체크인 없는 정정은 비정상 케이스).
-     * checkOut null → initial 만 반환(조퇴 판정 불가). */
-    private WorkStatus resolveCorrectedStatus(LocalDateTime ci, LocalDateTime co,
-                                              WorkGroup wg, HolidayReason reason) {
-        if (ci == null) return WorkStatus.NORMAL;
-        WorkStatus initial = workStatusResolver.resolveInitial(
-                ci.toLocalTime(), wg.getGroupStartTime(), reason);
-        if (co == null) return initial;
-        return workStatusResolver.resolveFinal(initial, co.toLocalTime(), wg.getGroupEndTime());
+        log.info("[AttendanceModify] 결과 반영 - attenModiId={}, status={}",
+                am.getAttenModiId(), event.getStatus());
     }
 
 
@@ -353,19 +279,6 @@ public class AttendanceModifyService {
                 .alarmTitle(title)
                 .alarmContent(content)
                 .alarmLink("/attendance/admin")
-                .alarmRefType(ALARM_REF_TYPE)
-                .alarmRefId(am.getAttenModiId())
-                .build());
-    }
-
-    private void notifyRequester(AttendanceModify am, String title, String content) {
-        hrAlarmPublisher.publisher(AlarmEvent.builder()
-                .companyId(am.getCompanyId())
-                .empIds(List.of(am.getEmployee().getEmpId()))
-                .alarmType(ALARM_TYPE_ATTENDANCE)
-                .alarmTitle(title)
-                .alarmContent(content)
-                .alarmLink("/attendance/my")
                 .alarmRefType(ALARM_REF_TYPE)
                 .alarmRefId(am.getAttenModiId())
                 .build());

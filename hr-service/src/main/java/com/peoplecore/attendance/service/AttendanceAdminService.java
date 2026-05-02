@@ -22,7 +22,6 @@ import com.peoplecore.attendance.entity.WorkStatus;
 import com.peoplecore.attendance.repository.AttendanceAdminQueryRepository;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import com.peoplecore.attendance.repository.OverTimePolicyRepository;
-import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.vacation.service.BusinessDayCalculator;
@@ -34,7 +33,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Date;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -78,7 +76,6 @@ public class AttendanceAdminService {
     private final HistoricalDayJudge historicalDayJudge;
     private final EmployeeRepository employeeRepository;
     private final CommuteRecordRepository commuteRecordRepository;
-    private final OvertimeRequestRepository overtimeRequestRepository;
     private final CardDetailFormatter cardDetailFormatter;
     private final BusinessDayCalculator businessDayCalculator;
 
@@ -89,7 +86,6 @@ public class AttendanceAdminService {
                                   HistoricalDayJudge historicalDayJudge,
                                   EmployeeRepository employeeRepository,
                                   CommuteRecordRepository commuteRecordRepository,
-                                  OvertimeRequestRepository overtimeRequestRepository,
                                   CardDetailFormatter cardDetailFormatter,
                                   BusinessDayCalculator businessDayCalculator) {
         this.queryRepository = queryRepository;
@@ -98,7 +94,6 @@ public class AttendanceAdminService {
         this.historicalDayJudge = historicalDayJudge;
         this.employeeRepository = employeeRepository;
         this.commuteRecordRepository = commuteRecordRepository;
-        this.overtimeRequestRepository = overtimeRequestRepository;
         this.cardDetailFormatter = cardDetailFormatter;
         this.businessDayCalculator = businessDayCalculator;
     }
@@ -815,7 +810,7 @@ public class AttendanceAdminService {
                         companyId, empId, from, date, pageable);
 
         // 9. 페이지 내 workDate 범위만 승인 OT 집계 (최소 스캔)
-        Map<LocalDate, Long> approvedOtByDate = loadApprovedOtByDate(empId, crPage.getContent());
+        Map<LocalDate, Long> approvedOtByDate = loadApprovedOtByDate(crPage.getContent());
 
         // 10. 사원 근무그룹 스냅샷 — 판정에 사용 (현재 시점의 그룹 기준)
         WorkGroup wg = employee.getWorkGroup();
@@ -846,27 +841,16 @@ public class AttendanceAdminService {
                 .build();
     }
 
-    /*
-     * 페이지 내 레코드 중 workDate 최소~최대 범위에 대해 APPROVED OT 분을 일자별 맵으로 반환.
-     */
-    private Map<LocalDate, Long> loadApprovedOtByDate(Long empId, List<CommuteRecord> records) {
+    /* 페이지 내 CommuteRecord 의 인정 OT 분(workDate→recognizedExtendedMinutes) 매핑.
+     * records 자체가 인정 분 컬럼을 들고 있어 추가 쿼리 불필요 — 1쿼리 절감.
+     * recognizedExtendedMinutes = OT 신청 APPROVED + 근태 정정 APPROVED 통합 인정 분.
+     * 같은 workDate 가 중복 들어올 일은 없지만(UNIQUE 제약) 방어적으로 merge 사용. */
+    private Map<LocalDate, Long> loadApprovedOtByDate(List<CommuteRecord> records) {
         if (records.isEmpty()) return Map.of();
-        LocalDate minDate = records.get(0).getWorkDate();
-        LocalDate maxDate = records.get(0).getWorkDate();
+        Map<LocalDate, Long> out = new HashMap<>(records.size() * 2);
         for (CommuteRecord c : records) {
-            if (c.getWorkDate().isBefore(minDate)) minDate = c.getWorkDate();
-            if (c.getWorkDate().isAfter(maxDate)) maxDate = c.getWorkDate();
-        }
-        LocalDateTime fromDt = minDate.atStartOfDay();
-        LocalDateTime toDt = maxDate.atTime(LocalTime.MAX);
-
-        List<Object[]> raw = overtimeRequestRepository.sumApprovedOtMinutesByDate(empId, fromDt, toDt);
-        Map<LocalDate, Long> out = new HashMap<>(raw.size() * 2);
-        for (Object[] row : raw) {
-            // row[0] = java.sql.Date / row[1] = Number (BigInteger or Long)
-            LocalDate d = ((Date) row[0]).toLocalDate();
-            long minutes = ((Number) row[1]).longValue();
-            out.put(d, minutes);
+            long ot = c.getRecognizedExtendedMinutes() != null ? c.getRecognizedExtendedMinutes() : 0L;
+            out.merge(c.getWorkDate(), ot, Long::sum);
         }
         return out;
     }

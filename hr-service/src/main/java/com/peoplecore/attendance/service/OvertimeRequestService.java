@@ -8,6 +8,7 @@ import com.peoplecore.attendance.entity.OtStatus;
 import com.peoplecore.attendance.entity.OvertimePolicy;
 import com.peoplecore.attendance.entity.OvertimeRequest;
 import com.peoplecore.attendance.entity.WorkGroup;
+import com.peoplecore.attendance.publisher.OvertimeRequestRejectedByHrPublisher;
 import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import com.peoplecore.attendance.repository.OverTimePolicyRepository;
 import com.peoplecore.employee.domain.EmpRole;
@@ -16,6 +17,7 @@ import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.event.OvertimeApprovalDocCreatedEvent;
 import com.peoplecore.event.OvertimeApprovalResultEvent;
+import com.peoplecore.event.OvertimeRequestRejectedByHrEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
@@ -47,18 +49,24 @@ public class OvertimeRequestService {
     private final EmployeeRepository employeeRepository;
     private final CommuteService commuteService;
     private final HrAlarmPublisher hrAlarmPublisher;
+    private final OvertimeLimitChecker overtimeLimitChecker;
+    private final OvertimeRequestRejectedByHrPublisher rejectedPublisher;
 
     @Autowired
     public OvertimeRequestService(OvertimeRequestRepository overtimeRequestRepository,
                                   OverTimePolicyRepository overtimePolicyRepository,
                                   EmployeeRepository employeeRepository,
                                   CommuteService commuteService,
-                                  HrAlarmPublisher hrAlarmPublisher) {
+                                  HrAlarmPublisher hrAlarmPublisher,
+                                  OvertimeLimitChecker overtimeLimitChecker,
+                                  OvertimeRequestRejectedByHrPublisher rejectedPublisher) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.overtimePolicyRepository = overtimePolicyRepository;
         this.employeeRepository = employeeRepository;
         this.commuteService = commuteService;
         this.hrAlarmPublisher = hrAlarmPublisher;
+        this.overtimeLimitChecker = overtimeLimitChecker;
+        this.rejectedPublisher = rejectedPublisher;
     }
 
     /**
@@ -166,6 +174,17 @@ public class OvertimeRequestService {
                     employee.getEmpId(), event.getApprovalDocId(), wg.getWorkGroupId());
         }
 
+        /* 주간 한도 검증 - INSERT 전 선행. BLOCK + 초과 시 역방향 반려 (우회 차단) */
+        OvertimeLimitChecker.WeeklyUsage usage = overtimeLimitChecker.usageWithNewOt(
+                event.getCompanyId(), event.getEmpId(),
+                event.getOtDate().toLocalDate(),
+                event.getOtPlanStart(), event.getOtPlanEnd());
+        if (usage.isExceeded() && usage.exceedAction() == OtExceedAction.BLOCK) {
+            publishRejection(event,
+                    "주간 최대 근무시간(" + (usage.weeklyMaxMinutes() / 60) + "h)을 초과합니다.");
+            return;
+        }
+
         // PENDING 으로 insert
         OvertimeRequest entity = OvertimeRequest.builder()
                 .companyId(event.getCompanyId())
@@ -182,8 +201,20 @@ public class OvertimeRequestService {
         log.info("[OvertimeRequest] docCreated → insert - otId={}, docId={}, empId={}",
                 saved.getOtId(), saved.getApprovalDocId(), employee.getEmpId());
 
-        // 정책 검증 — NOTIFY/BLOCK 시 버퍼 초과면 관리자 알림
-        checkExceedAndNotify(event, employee, saved);
+        // NOTIFY + 초과면 관리자/최종결재자 알림
+        if (usage.isExceeded()) {
+            checkExceedAndNotify(event, employee, saved);
+        }
+    }
+
+    /* 역방향 반려 이벤트 발행 - BLOCK 한도 초과 시 */
+    private void publishRejection(OvertimeApprovalDocCreatedEvent event, String reason) {
+        rejectedPublisher.publish(OvertimeRequestRejectedByHrEvent.builder()
+                .companyId(event.getCompanyId())
+                .approvalDocId(event.getApprovalDocId())
+                .rejectReason(reason)
+                .build());
+        log.info("[OvertimeRequest] 한도 초과 BLOCK → 역방향 반려 - docId={}", event.getApprovalDocId());
     }
 
     /**

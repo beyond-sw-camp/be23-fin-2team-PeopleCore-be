@@ -97,14 +97,15 @@ public class ApprovalDocumentController {
         return ResponseEntity.ok().build();
     }
 
-    /* 임시 저장 -> 결재 요청 전환 (첨부 없음) */
+    /* 임시 저장 -> 결재 요청 전환 (첨부 없음) - isPublic 미지정 시 기존 값(default true) 유지 */
     @PostMapping("/{docId}/submit")
     public ResponseEntity<Void> submitDocument(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestHeader("X-User-Department") Long deptId,
-            @PathVariable Long docId) {
-        approvalDocumentService.submitDocument(companyId, deptId, empId, docId);
+            @PathVariable Long docId,
+            @RequestParam(required = false) Boolean isPublic) {
+        approvalDocumentService.submitDocument(companyId, deptId, empId, docId, isPublic);
         return ResponseEntity.ok().build();
     }
 

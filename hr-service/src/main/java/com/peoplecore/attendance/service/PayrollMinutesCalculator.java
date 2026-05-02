@@ -2,8 +2,10 @@ package com.peoplecore.attendance.service;
 
 import com.peoplecore.attendance.entity.CommuteRecord;
 import com.peoplecore.attendance.entity.HolidayReason;
+import com.peoplecore.attendance.entity.ModifyStatus;
 import com.peoplecore.attendance.entity.OvertimeRequest;
 import com.peoplecore.attendance.entity.WorkGroup;
+import com.peoplecore.attendance.repository.AttendanceModifyRepository;
 import com.peoplecore.attendance.repository.CommuteRecordRepository;
 import com.peoplecore.attendance.repository.OvertimeRequestRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +19,7 @@ import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
+/*
  * CommuteRecord 급여 연동 분 계산 유틸.
  *
  * 두 진입점:
@@ -38,18 +40,29 @@ public class PayrollMinutesCalculator {
 
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final CommuteRecordRepository commuteRecordRepository;
+    private final AttendanceModifyRepository attendanceModifyRepository;
 
     @Autowired
     public PayrollMinutesCalculator(OvertimeRequestRepository overtimeRequestRepository,
-                                    CommuteRecordRepository commuteRecordRepository) {
+                                    CommuteRecordRepository commuteRecordRepository,
+                                    AttendanceModifyRepository attendanceModifyRepository) {
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.commuteRecordRepository = commuteRecordRepository;
+        this.attendanceModifyRepository = attendanceModifyRepository;
     }
 
     /* 분 컬럼 산출 결과 - native UPDATE 호출부에 전달 */
     public record PayrollMinutes(long actual, long overtime, long unrecognizedOt,
                                  long recExt, long recNight, long recHoliday) {
         public static final PayrollMinutes ZERO = new PayrollMinutes(0L, 0L, 0L, 0L, 0L, 0L);
+    }
+
+    /* 인정 분 재산출 호출 출처 - 분기 로직에 영향 */
+    public enum RecognitionSource {
+        /* OT 결재 승인/이탈 - APPROVAL 그룹은 APPROVED OvertimeRequest 구간만 인정 */
+        OT_REQUEST,
+        /* 정정 결재 승인 - 사실관계 인정으로 APPROVAL 그룹에서도 overtime 전체 인정 */
+        ATTENDANCE_MODIFY
     }
 
     /**
@@ -84,10 +97,15 @@ public class PayrollMinutesCalculator {
     }
 
     /**
-     * OT 승인 / 근태 정정 승인 시 호출. actual/overtime 재계산 후 recognize 타입별 분기.
+     * OT 승인 / 근태 정정 승인 시 호출. actual/overtime 재계산 후 인정 분 분배.
      * 파티션 규칙 준수: 엔티티 mutate 대신 native UPDATE (work_date 포함).
+     *
+     * 인정 분배 분기:
+     *  - ALL 그룹: source 무관, overtime 전체 인정 (출퇴근만으로 자동)
+     *  - APPROVAL 그룹 + ATTENDANCE_MODIFY: 정정 결재 통과 → overtime 전체 인정
+     *  - APPROVAL 그룹 + OT_REQUEST: APPROVED OvertimeRequest 구간만 인정
      */
-    public void applyApprovedRecognition(CommuteRecord record) {
+    public void applyApprovedRecognition(CommuteRecord record, RecognitionSource source) {
         WorkGroup wg = record.getEmployee().getWorkGroup();
         if (wg == null || wg.getGroupStartTime() == null || wg.getGroupEndTime() == null
                 || record.getComRecCheckIn() == null || record.getComRecCheckOut() == null) {
@@ -102,7 +120,16 @@ public class PayrollMinutesCalculator {
 
         long recExt = 0L, recNight = 0L, recHoliday = 0L;
         if (overtime > 0) {
-            long[] rec = (wg.getGroupOvertimeRecognize() == WorkGroup.GroupOvertimeRecognize.ALL)
+            /* 그룹 정책상 자동 인정 (ALL) */
+            boolean autoRecognizeByGroup =
+                    wg.getGroupOvertimeRecognize() == WorkGroup.GroupOvertimeRecognize.ALL;
+            /* 정정 결재 통과 → 사실관계 인정 */
+            boolean recognizeByModifyApproval = source == RecognitionSource.ATTENDANCE_MODIFY;
+            /* OT 결재 경로에서도 그 날 APPROVED 정정 이력이 있으면 정정 우선 처리 (덮어쓰기 방지) */
+            boolean modifyApprovedExists = source == RecognitionSource.OT_REQUEST
+                    && attendanceModifyRepository.existsByEmployee_EmpIdAndWorkDateAndAttenStatus(
+                            record.getEmployee().getEmpId(), workDate, ModifyStatus.APPROVED);
+            long[] rec = (autoRecognizeByGroup || recognizeByModifyApproval || modifyApprovedExists)
                     ? allocateRecognizedAll(checkIn, checkOut, workDate, wg, overtime, record.getHolidayReason())
                     : allocateRecognizedByApprovedOt(record, wg);
             recExt = rec[0]; recNight = rec[1]; recHoliday = rec[2];
@@ -117,8 +144,8 @@ public class PayrollMinutesCalculator {
             throw new IllegalStateException(
                     "PayrollMinutes UPDATE 실패 - comRecId=" + record.getComRecId() + ", affected=" + updated);
         }
-        log.debug("[Payroll-recog] comRecId={}, recognize={}, actual={}, ot={}, unrecognizedOt={}, ext={}, night={}, holiday={}",
-                record.getComRecId(), wg.getGroupOvertimeRecognize(),
+        log.debug("[Payroll-recog] comRecId={}, recognize={}, source={}, actual={}, ot={}, unrecognizedOt={}, ext={}, night={}, holiday={}",
+                record.getComRecId(), wg.getGroupOvertimeRecognize(), source,
                 actual, overtime, unrecognizedOt, recExt, recNight, recHoliday);
     }
 

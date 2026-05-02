@@ -6,6 +6,7 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.dto.MyVacationStatusResponseDto;
 import com.peoplecore.vacation.dto.VacationAdjustmentHistoryResponseDto;
+import com.peoplecore.vacation.dto.VacationBalanceResponse;
 import com.peoplecore.vacation.dto.VacationManualGrantRequest;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.entity.VacationBalance;
@@ -152,6 +153,22 @@ public class VacationBalanceService {
         return vacationPolicyRepository.findByCompanyId(companyId)
                 .map(VacationPolicy::isAdvanceUseActive)
                 .orElse(false);
+    }
+
+    /* 관리자용 - 특정 사원의 연도별 휴가 잔여 전체 조회 */
+    /* 휴가 유형별 한 행(VacationBalanceResponse). 만료된 balance(expiredDays>0) 포함 */
+    /* 사용처: GET /vacation/balances/employees/{empId}?year= */
+    /* N+1 방지: Repository 에서 VacationType fetch join. 정렬: sortOrder ASC */
+    /* 사원 미존재 시 EMPLOYEE_NOT_FOUND. 다른 회사 사원이면 companyId 필터로 빈 리스트 반환 */
+    public List<VacationBalanceResponse> listEmployeeBalances(UUID companyId, Long empId, int year) {
+        employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        return vacationBalanceQueryRepository
+                .findByEmpAndYearFetchType(companyId, empId, year)
+                .stream()
+                .map(VacationBalanceResponse::from)
+                .toList();
     }
 
     /* 관리자 수동 조정 이력 조회 - MANUAL_GRANT / MANUAL_USED 만. 스크롤형 Slice */

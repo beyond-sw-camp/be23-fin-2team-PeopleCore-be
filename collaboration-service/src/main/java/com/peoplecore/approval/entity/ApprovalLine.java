@@ -85,10 +85,10 @@ public class ApprovalLine extends BaseTimeEntity {
     /* 처리 일시 */
     private LocalDateTime lineProcessedAt;
 
-    /**
-     * 반려 사유
+    /*
+     * 결재 의견
      */
-    private String lineRejectReason;
+    private String lineComment;
 
     /**
      * 위임 처리 여부 - default == false
@@ -127,20 +127,23 @@ public class ApprovalLine extends BaseTimeEntity {
     public void resetStatus() {
         this.approvalLineStatus = ApprovalLineStatus.PENDING;
         this.lineProcessedAt = null;
-        this.lineRejectReason = null;
+        this.lineComment = null;
     }
 
     /*결재 승인 처리*/
-    public void approve() {
+    public void approve(String comment) {
         this.approvalLineStatus = ApprovalLineStatus.APPROVED;
         this.lineProcessedAt = LocalDateTime.now();
+        if (comment != null && !comment.isBlank()) {
+            this.lineComment = comment;
+        }
     }
 
     /*결재 반려 처리 */
     public void reject(String reason) {
         this.approvalLineStatus = ApprovalLineStatus.REJECTED;
         if (reason != null) {
-            this.lineRejectReason = reason;
+            this.lineComment = reason;
         }
         this.lineProcessedAt = LocalDateTime.now();
     }
