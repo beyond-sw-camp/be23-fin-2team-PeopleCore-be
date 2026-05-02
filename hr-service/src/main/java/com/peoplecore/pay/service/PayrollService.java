@@ -191,10 +191,23 @@ public class PayrollService {
         long totalPay = 0L;
         long totalDeduction = 0L;
 
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd   = payMonth.atEndOfMonth();
+
+        // 한 번에 모든 사원의 적용 가능 계약 조회
+        List<Long> empIds = employees.stream().map(Employee::getEmpId).toList();
+        Map<Long, SalaryContract> contractMap = salaryContractRepository
+                .findActiveContractsByEmpIds(companyId, empIds, monthStart, monthEnd)
+                .stream()
+                .collect(Collectors.toMap(
+                        c -> c.getEmployee().getEmpId(),
+                        Function.identity(),
+                        (a, b) -> a   // applyFrom DESC 정렬 → 첫 번째가 최신
+                ));
+
         for (Employee emp : employees) {
-//            최신 연봉계약 조회
-            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByApplyFromDesc(emp.getEmpId()).orElse(null);
-            if (contract == null) continue;
+            SalaryContract contract = contractMap.get(emp.getEmpId());
+            if (contract == null) continue; // 이 달 적용 가능한 계약 없음 → skip
 
             // 사원별 산정 상태 (기본 CALCULATING)
             payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
@@ -731,11 +744,16 @@ public class PayrollService {
 ///    일당/시급 기준 조회
     public WageInfoResDto getWageInfo(UUID companyId, Long payrollRunId, Long empId){
 
-        findPayrollRun(companyId, payrollRunId);
+        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
+        YearMonth payMonth = YearMonth.parse(run.getPayYearMonth());
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd   = payMonth.atEndOfMonth();
 
-//        최신 연봉계약의 통상임금
+//        최신 (유효한) 연봉계약의 통상임금
         SalaryContract contract = salaryContractRepository
-                .findTopByEmployee_EmpIdOrderByApplyFromDesc(empId).orElseThrow(()-> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
+                .findActiveContractsByEmpIds(companyId, List.of(empId), monthStart, monthEnd)
+                .stream().findFirst()
+                .orElseThrow(() -> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
 
         long monthlySalary = contract.getTotalAmount().divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR).longValue();
 
@@ -807,10 +825,22 @@ public class PayrollService {
         WageInfoResDto wageInfo = getWageInfo(companyId, payrollRunId, empId);
         long hourlyWage = wageInfo.getHourlyWage();
 
-        long extendedPay = Math.round(hourlyWage * 0.5 * totalExtMin / 60.0); //분 -> 시로 변환
+// 휴일 8시간 초과분 분리
+        long holNormalMin = Math.min(totalHolidayMin, 8L * 60);  // 휴일 8h 이내
+        long holOverMin   = Math.max(0L, totalHolidayMin - 8L * 60);  // 휴일 8h 초과
+
+// 정상분 + 가산분 한꺼번에 산정
+        long extendedPay = Math.round(hourlyWage * 1.5 * totalExtMin / 60.0);   // /60 : 분-> 시로 변환
+
+        long holidayPay  = Math.round(
+                hourlyWage * 1.5 * holNormalMin / 60.0
+                        + hourlyWage * 2.0 * holOverMin   / 60.0
+        );
+
+// 야간은 가산분(0.5)만 — 정상분은 ext/hol 에서 처리됨
         long nightPay = Math.round(hourlyWage * 0.5 * totalNightMin / 60.0);
-        long holidayPay = Math.round(hourlyWage * 0.5 * totalHolidayMin / 60.0);
-        long totalAmount = extendedPay + nightPay + holidayPay;
+
+        long totalAmount = extendedPay + holidayPay + nightPay;
 
 //        이미 적용 여부 확인(해당 사원의 초과근무 수당 PayrollDetails 존재 여부)
         boolean applied = payrollDetailsRepository.existsByPayrollRunsAndEmployee_EmpIdAndIsOvertimePayTrue(run, empId);
@@ -1152,9 +1182,15 @@ public class PayrollService {
                                            int year,
                                            InsuranceRates rates,
                                            Map<String, PayItems> deductionMap) {
+        // 해당 월에 적용 가능한 최신 계약
+        YearMonth payMonth = YearMonth.parse(run.getPayYearMonth());
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd   = payMonth.atEndOfMonth();
+
         // 최신 연봉계약 조회
         SalaryContract contract = salaryContractRepository
-                .findTopByEmployee_EmpIdOrderByContractYearDesc(emp.getEmpId())
+                .findActiveContractsByEmpIds(companyId, List.of(emp.getEmpId()), monthStart, monthEnd)
+                .stream().findFirst()
                 .orElse(null);
         if (contract == null) return new long[]{0L, 0L};
 

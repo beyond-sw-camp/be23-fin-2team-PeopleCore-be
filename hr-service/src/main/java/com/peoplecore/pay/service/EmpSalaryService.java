@@ -61,7 +61,11 @@ public class EmpSalaryService {
     public Page<EmpSalaryResDto> getEmpSalaryList(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, Integer year, Pageable pageable) {
 
 //        1. Employee 페이지 조회
-        Page<Employee> employees = employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, null, null, pageable);
+        // 퇴직자는 사원별 급여관리 화면에서 제외
+        if (empStatus == EmpStatus.RESIGNED) {
+            return Page.empty(pageable);
+        }
+        Page<Employee> employees =  (empStatus == null) ? employeeRepository.findActiveOrOnLeaveWithFilter(companyId, keyword, deptId, empType, pageable) :  employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, null, null, pageable);
 
         if (employees.isEmpty()) {
             return employees.map(employee -> {

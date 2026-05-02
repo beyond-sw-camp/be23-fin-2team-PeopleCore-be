@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
@@ -98,8 +99,13 @@ public class LeaveAllowanceService {
                 continue;
             }
 
+            // 통상임금 기준일 결정
+            LocalDate basisDate = resolveBasisDate(type, year, emp);
 //            통상임금(월) = 연봉 / 12
-            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByApplyFromDesc(empId).orElse(null);
+            SalaryContract contract = salaryContractRepository
+                    .findActiveContractsByEmpIds(companyId, List.of(empId), basisDate, basisDate)
+                    .stream().findFirst()
+                    .orElse(null);
             if (contract == null) continue;
 
             long monthlySalary = contract.getTotalAmount().divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR).longValue();
@@ -491,4 +497,30 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
 
         run.updateTotals(empCount, totalPay, totalDeduction, totalPay - totalDeduction);
      }
+
+
+    /**
+     * 연차수당 통상임금 기준일 결정
+     * - RESIGNED: 퇴직일
+     * - ANNIVERSARY: 그 해의 입사기념일
+     * - FISCAL_YEAR: 그 해 12-31
+     */
+    private LocalDate resolveBasisDate(AllowanceType type, int year, Employee emp) {
+        if (type == AllowanceType.RESIGNED) {
+            // 퇴직일이 없으면 fallback (방어 — 자동 산정 트리거에서 미설정 사원 걸러짐)
+            return emp.getEmpResignDate() != null ? emp.getEmpResignDate() : LocalDate.of(year, 12, 31);
+        }
+        if (type == AllowanceType.ANNIVERSARY) {
+            LocalDate hire = emp.getEmpHireDate();
+            if (hire == null) return LocalDate.of(year, 12, 31);
+            // 그 year 의 입사 기념일 (윤년 2-29 입사자 보정)
+            try {
+                return LocalDate.of(year, hire.getMonthValue(), hire.getDayOfMonth());
+            } catch (DateTimeException e) {
+                return LocalDate.of(year, hire.getMonthValue(), 28);
+            }
+        }
+        // FISCAL_YEAR
+        return LocalDate.of(year, 12, 31);
+    }
 }
