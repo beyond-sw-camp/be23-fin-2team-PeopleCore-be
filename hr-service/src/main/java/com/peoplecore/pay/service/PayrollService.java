@@ -115,6 +115,13 @@ public class PayrollService {
                         s -> s
                 ));
 
+        // OT 이미 적용된 사원 ID 집합
+        Set<Long> appliedOtEmpIds = payrollDetailsRepository
+                .findByPayrollRunsAndIsOvertimePayTrue(run)
+                .stream()
+                .map(d -> d.getEmployee().getEmpId())
+                .collect(Collectors.toSet());
+
         List<PayrollEmpResDto> empList = detailsByEmp.entrySet().stream().map(entry -> {
             Employee emp = entry.getValue().get(0).getEmployee();
             List<PayrollDetails> details = entry.getValue();
@@ -130,6 +137,15 @@ public class PayrollService {
         String empStatusValue = pes != null ? pes.getStatus().name() : "CALCULATING";
         Long approvalDocIdValue = pes != null ? pes.getApprovalDocId() : null;
 
+        // pendingOvertimeAmount 계산
+        Long pendingOtValue;
+        if (appliedOtEmpIds.contains(emp.getEmpId())) {
+            pendingOtValue = 0L;   // 이미 적용 완료
+        } else {
+            ApprovedOvertimeResDto ot = getApprovedOvertime(companyId, run.getPayrollRunId(), emp.getEmpId());
+            pendingOtValue = ot.getTotalAmount() > 0 ? ot.getTotalAmount() : null;
+        }
+
         return PayrollEmpResDto.builder()
                 .empId(emp.getEmpId())
                 .empName(emp.getEmpName())
@@ -144,6 +160,7 @@ public class PayrollService {
                 .totalDeduction(deduction)
                 .netPay(pay-deduction)
                 .unpaid(run.getPayrollStatus() == PayrollStatus.PAID ? 0L : pay - deduction)
+                .pendingOvertimeAmount(pendingOtValue)
                 .build();
         })
         .toList();
