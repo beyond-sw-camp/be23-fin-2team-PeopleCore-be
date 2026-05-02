@@ -329,9 +329,9 @@ public class PayrollService {
     public PayrollSyncResultResDto syncEmployees(UUID companyId, Long payrollRunId) {
         PayrollRuns run = findPayrollRun(companyId, payrollRunId);
 
-        // CALCULATING / PENDING_APPROVAL 만 허용 (APPROVED/PAID 단계에선 차단)
-        if (run.getPayrollStatus() != PayrollStatus.CALCULATING
-                && run.getPayrollStatus() != PayrollStatus.PENDING_APPROVAL) {
+        // CALCULATING / CONFIRMED / PENDING_APPROVAL 허용 (APPROVED/PAID 단계에선 차단)
+         if (run.getPayrollStatus() == PayrollStatus.APPROVED
+                || run.getPayrollStatus() == PayrollStatus.PAID) {
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
 
