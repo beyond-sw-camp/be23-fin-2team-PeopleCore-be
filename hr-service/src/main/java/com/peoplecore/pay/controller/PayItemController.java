@@ -28,6 +28,7 @@ public class PayItemController {
 
 //    지급/공제 항목 조회(공용)
     @GetMapping
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
     public ResponseEntity<List<PayItemResDto>> getPayItems(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestParam PayItemType type,

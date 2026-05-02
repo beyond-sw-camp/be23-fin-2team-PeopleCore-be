@@ -108,4 +108,8 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
     // 부서별 요약 / 사원 명단 빌드에 사용 (derived query)
     List<PayrollDetails> findByPayrollRuns_PayrollRunIdAndEmployee_EmpIdIn(
             Long payrollRunId, Set<Long> empIds);
+
+//    급여대장에서 OT수당이 적용된 사원 목록
+    List<PayrollDetails> findByPayrollRunsAndIsOvertimePayTrue(PayrollRuns run);
+
 }

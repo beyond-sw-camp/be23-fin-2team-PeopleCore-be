@@ -62,6 +62,42 @@ public class EmployeeRepositoryImpl implements EmployeeRepositoryCustom {
     }
 
     @Override
+    public Page<Employee> findActiveOrOnLeaveWithFilter(UUID companyId, String keyword, Long deptId, EmpType empType, Pageable pageable) {
+        // 실제 데이터 조회 (fetch join으로 N+1 방지)
+        List<Employee> content = queryFactory
+                .selectFrom(qEmployee)                      // Employee 테이블 조회
+                .join(qEmployee.dept).fetchJoin()               // 부서 한번에 조회
+                .join(qEmployee.grade).fetchJoin()          // 직급 한번에 조회
+                .leftJoin(qEmployee.title).fetchJoin()      // 직책 한번에 조회 (nullable)
+                .where(
+                        companyEq(companyId),               // 회사 필터 (필수)
+                        keywordContains(keyword),           // 이름 또는 사번 검색 (null이면 조건 무시)
+                        deptEq(deptId),                     // 부서 필터 (null이면 조건 무시)
+                        empTypeEq(empType),                 // 고용형태 필터 (null이면 조건 무시)
+                        qEmployee.empStatus.in(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE)   // 퇴직 제외
+                )
+                .orderBy(qEmployee.empId.asc())
+                .offset(pageable.getOffset())               // 시작 위치
+                .limit(pageable.getPageSize())              // 한 페이지 개수
+                .fetch();
+
+//        전체 개수 조회(페이징 처리를 위해 count쿼리 분리)
+        Long total = queryFactory
+                .select(qEmployee.count())
+                .from(qEmployee)
+                .where(
+                        companyEq(companyId),
+                        keywordContains(keyword),
+                        deptEq(deptId),
+                        empTypeEq(empType),                 // 고용형태 필터 (null이면 조건 무시)
+                        qEmployee.empStatus.in(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE)
+                )
+                .fetchOne();
+//                        데이터, 페이지정보, 전체개수 합쳐서 반환
+        return new PageImpl<>(content,pageable,total != null ? total : 0L);
+    }
+
+    @Override
     public List<Employee> findAllForPayroll(UUID companyId, YearMonth payMonth) {
         LocalDate monthStart = payMonth.atDay(1);
         LocalDate monthEnd = payMonth.atEndOfMonth();

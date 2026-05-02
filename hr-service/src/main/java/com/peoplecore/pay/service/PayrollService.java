@@ -24,6 +24,8 @@ import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.repository.SalaryContractDetailRepository;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
+import com.peoplecore.vacation.entity.VacationPolicy;
+import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import com.peoplecore.vacation.service.BusinessDayCalculator;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -62,11 +64,14 @@ public class PayrollService {
     private final MySalaryCacheService mySalaryCacheService;
     private final PayrollEmpStatusRepository payrollEmpStatusRepository;
     private final PayStubsRepository payStubsRepository;
+    private final VacationPolicyRepository vacationPolicyRepository;
+    private final LeaveAllowanceService leaveAllowanceService;
+    private final LeaveAllowanceRepository leaveAllowanceRepository;
 
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceService leaveAllowanceService, LeaveAllowanceRepository leaveAllowanceRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -86,6 +91,9 @@ public class PayrollService {
         this.mySalaryCacheService = mySalaryCacheService;
         this.payrollEmpStatusRepository = payrollEmpStatusRepository;
         this.payStubsRepository = payStubsRepository;
+        this.vacationPolicyRepository = vacationPolicyRepository;
+        this.leaveAllowanceService = leaveAllowanceService;
+        this.leaveAllowanceRepository = leaveAllowanceRepository;
     }
 
 ///       급여대장 조회(특정 월)
@@ -107,6 +115,13 @@ public class PayrollService {
                         s -> s
                 ));
 
+        // OT 이미 적용된 사원 ID 집합
+        Set<Long> appliedOtEmpIds = payrollDetailsRepository
+                .findByPayrollRunsAndIsOvertimePayTrue(run)
+                .stream()
+                .map(d -> d.getEmployee().getEmpId())
+                .collect(Collectors.toSet());
+
         List<PayrollEmpResDto> empList = detailsByEmp.entrySet().stream().map(entry -> {
             Employee emp = entry.getValue().get(0).getEmployee();
             List<PayrollDetails> details = entry.getValue();
@@ -122,6 +137,15 @@ public class PayrollService {
         String empStatusValue = pes != null ? pes.getStatus().name() : "CALCULATING";
         Long approvalDocIdValue = pes != null ? pes.getApprovalDocId() : null;
 
+        // pendingOvertimeAmount 계산
+        Long pendingOtValue;
+        if (appliedOtEmpIds.contains(emp.getEmpId())) {
+            pendingOtValue = 0L;   // 이미 적용 완료
+        } else {
+            ApprovedOvertimeResDto ot = getApprovedOvertime(companyId, run.getPayrollRunId(), emp.getEmpId());
+            pendingOtValue = ot.getTotalAmount() > 0 ? ot.getTotalAmount() : null;
+        }
+
         return PayrollEmpResDto.builder()
                 .empId(emp.getEmpId())
                 .empName(emp.getEmpName())
@@ -136,6 +160,7 @@ public class PayrollService {
                 .totalDeduction(deduction)
                 .netPay(pay-deduction)
                 .unpaid(run.getPayrollStatus() == PayrollStatus.PAID ? 0L : pay - deduction)
+                .pendingOvertimeAmount(pendingOtValue)
                 .build();
         })
         .toList();
@@ -183,10 +208,23 @@ public class PayrollService {
         long totalPay = 0L;
         long totalDeduction = 0L;
 
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd   = payMonth.atEndOfMonth();
+
+        // 한 번에 모든 사원의 적용 가능 계약 조회
+        List<Long> empIds = employees.stream().map(Employee::getEmpId).toList();
+        Map<Long, SalaryContract> contractMap = salaryContractRepository
+                .findActiveContractsByEmpIds(companyId, empIds, monthStart, monthEnd)
+                .stream()
+                .collect(Collectors.toMap(
+                        c -> c.getEmployee().getEmpId(),
+                        Function.identity(),
+                        (a, b) -> a   // applyFrom DESC 정렬 → 첫 번째가 최신
+                ));
+
         for (Employee emp : employees) {
-//            최신 연봉계약 조회
-            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByApplyFromDesc(emp.getEmpId()).orElse(null);
-            if (contract == null) continue;
+            SalaryContract contract = contractMap.get(emp.getEmpId());
+            if (contract == null) continue; // 이 달 적용 가능한 계약 없음 → skip
 
             // 사원별 산정 상태 (기본 CALCULATING)
             payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
@@ -251,11 +289,117 @@ public class PayrollService {
 //        합계 갱신
         run.updateTotals(employees.size(), totalPay, totalDeduction, totalPay - totalDeduction);
 
+// 회사 연차 정책이 입사일 기준이면 이 달 입사기념일 도래자에 대해 자동 후보 + 산정
+        VacationPolicy policy = vacationPolicyRepository.findByCompanyId(companyId).orElse(null);
+        if (policy != null && policy.getPolicyBaseType() == VacationPolicy.PolicyBaseType.HIRE) {
+            int month = Integer.parseInt(payYearMonth.substring(5, 7));
+
+            // 1) 후보 INSERT
+            leaveAllowanceService.createAnniversaryPendingRecords(companyId, year, month);
+
+            // 2) PENDING 상태인 사원만 모아 자동 산정
+            List<Long> pendingEmpIds = leaveAllowanceRepository
+                    .findAllByCompanyAndYearAndType(companyId, year, AllowanceType.ANNIVERSARY)
+                    .stream()
+                    .filter(la -> la.getStatus() == AllowanceStatus.PENDING)
+                    .filter(la -> la.getEmployee().getEmpHireDate() != null
+                            && la.getEmployee().getEmpHireDate().getMonthValue() == month)
+                    .map(la -> la.getEmployee().getEmpId())
+                    .toList();
+
+            if (!pendingEmpIds.isEmpty()) {
+                try {
+                    leaveAllowanceService.calculate(companyId, year, AllowanceType.ANNIVERSARY, pendingEmpIds);
+                } catch (Exception e) {
+                    log.warn("[연차수당 자동산정 실패] type=ANNIVERSARY, year={}, month={}, msg={}",
+                            year, month, e.getMessage());
+                }
+            }
+        }
+
         return getPayroll(companyId, payYearMonth);
     }
 
 //    공제 항목명 목록
     private static final List<String> DEDUCTION_ITEM_NAMES = List.of("국민연금", "건강보험", "장기요양보험", "고용보험", "근로소득세", "근로지방소득세", "산재보험");
+
+
+//    급여대장 - 사원동기화 (급여대장 생성이후(혹은 누락된) 등록된 사원(계약완료) 추가 등록)
+    @Transactional
+    public PayrollSyncResultResDto syncEmployees(UUID companyId, Long payrollRunId) {
+        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
+
+        // CALCULATING / CONFIRMED / PENDING_APPROVAL 허용 (APPROVED/PAID 단계에선 차단)
+         if (run.getPayrollStatus() == PayrollStatus.APPROVED
+                || run.getPayrollStatus() == PayrollStatus.PAID) {
+            throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
+        }
+
+        Company company = run.getCompany();
+        YearMonth payMonth = YearMonth.parse(run.getPayYearMonth());
+        int year = payMonth.getYear();
+
+        // 현재 시점 급여 대상 사원
+        List<Employee> currentEmps = employeeRepository.findAllForPayroll(companyId, payMonth);
+
+        // 이미 들어와 있는 사원 ID
+        Set<Long> existingEmpIds = payrollEmpStatusRepository
+                .findByPayrollRuns_PayrollRunId(payrollRunId)
+                .stream()
+                .map(s -> s.getEmployee().getEmpId())
+                .collect(Collectors.toSet());
+
+        // 누락된 사원만 필터
+        List<Employee> missing = currentEmps.stream()
+                .filter(e -> !existingEmpIds.contains(e.getEmpId()))
+                .toList();
+
+        if (missing.isEmpty()) {
+            return PayrollSyncResultResDto.builder()
+                    .addedCount(0)
+                    .totalEmployeesAfter(existingEmpIds.size())
+                    .build();
+        }
+
+        // 보험요율 + 공제항목 마스터 (createPayroll 와 동일)
+        InsuranceRates rates = insuranceRatesRepository
+                .findByCompany_CompanyIdAndYear(companyId, year)
+                .orElse(null);
+        Map<String, PayItems> deductionMap = payItemsRepository
+                .findByCompany_CompanyIdAndPayItemTypeAndPayItemNameIn(
+                        companyId, PayItemType.DEDUCTION, DEDUCTION_ITEM_NAMES)
+                .stream()
+                .collect(Collectors.toMap(PayItems::getPayItemName, Function.identity()));
+
+        int addedCount = 0;
+        for (Employee emp : missing) {
+            long[] sub = bootstrapEmployeeForRun(run, emp, company, companyId, year, rates, deductionMap);
+            // 연봉계약 없는 사원은 sub = [0, 0] 반환되며 EmpStatus 도 안 만들어짐 → 카운트 제외
+            if (sub[0] > 0 || sub[1] > 0) {
+                addedCount++;
+            }
+        }
+
+        // run 합계 재집계 (기존 사원 + 신규 추가분 모두 포함)
+        payrollDetailsRepository.flush();
+        List<PayrollDetails> all = payrollDetailsRepository.findByPayrollRuns(run);
+        long totalPay = all.stream()
+                .filter(d -> d.getPayItemType() == PayItemType.PAYMENT)
+                .mapToLong(PayrollDetails::getAmount).sum();
+        long totalDeduction = all.stream()
+                .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
+                .mapToLong(PayrollDetails::getAmount).sum();
+        int totalEmps = (int) payrollEmpStatusRepository.countByPayrollRuns_PayrollRunId(payrollRunId);
+        run.updateTotals(totalEmps, totalPay, totalDeduction, totalPay - totalDeduction);
+
+        log.info("[Payroll] 사원 동기화 완료 - runId={}, ym={}, added={}, totalAfter={}",
+                payrollRunId, run.getPayYearMonth(), addedCount, totalEmps);
+
+        return PayrollSyncResultResDto.builder()
+                .addedCount(addedCount)
+                .totalEmployeesAfter(totalEmps)
+                .build();
+    }
 
 
 
@@ -564,7 +708,7 @@ public class PayrollService {
                 throw new CustomException(ErrorCode.PAYROLL_EMP_NOT_APPROVED);
             }
         }
-//CompanyPaySettings 조회, PayrollDetails 조회, 이체파일 생성
+//    CompanyPaySettings 조회, PayrollDetails 조회, 이체파일 생성
         CompanyPaySettings settings = paySettingsRepository.findByCompany_CompanyId(companyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PAY_SETTINGS_NOT_FOUND));
 
@@ -617,11 +761,16 @@ public class PayrollService {
 ///    일당/시급 기준 조회
     public WageInfoResDto getWageInfo(UUID companyId, Long payrollRunId, Long empId){
 
-        findPayrollRun(companyId, payrollRunId);
+        PayrollRuns run = findPayrollRun(companyId, payrollRunId);
+        YearMonth payMonth = YearMonth.parse(run.getPayYearMonth());
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd   = payMonth.atEndOfMonth();
 
-//        최신 연봉계약의 통상임금
+//        최신 (유효한) 연봉계약의 통상임금
         SalaryContract contract = salaryContractRepository
-                .findTopByEmployee_EmpIdOrderByApplyFromDesc(empId).orElseThrow(()-> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
+                .findActiveContractsByEmpIds(companyId, List.of(empId), monthStart, monthEnd)
+                .stream().findFirst()
+                .orElseThrow(() -> new CustomException(ErrorCode.SALARY_CONTRACT_NOT_FOUND));
 
         long monthlySalary = contract.getTotalAmount().divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR).longValue();
 
@@ -693,10 +842,22 @@ public class PayrollService {
         WageInfoResDto wageInfo = getWageInfo(companyId, payrollRunId, empId);
         long hourlyWage = wageInfo.getHourlyWage();
 
-        long extendedPay = Math.round(hourlyWage * 0.5 * totalExtMin / 60.0); //분 -> 시로 변환
+// 휴일 8시간 초과분 분리
+        long holNormalMin = Math.min(totalHolidayMin, 8L * 60);  // 휴일 8h 이내
+        long holOverMin   = Math.max(0L, totalHolidayMin - 8L * 60);  // 휴일 8h 초과
+
+// 정상분 + 가산분 한꺼번에 산정
+        long extendedPay = Math.round(hourlyWage * 1.5 * totalExtMin / 60.0);   // /60 : 분-> 시로 변환
+
+        long holidayPay  = Math.round(
+                hourlyWage * 1.5 * holNormalMin / 60.0
+                        + hourlyWage * 2.0 * holOverMin   / 60.0
+        );
+
+// 야간은 가산분(0.5)만 — 정상분은 ext/hol 에서 처리됨
         long nightPay = Math.round(hourlyWage * 0.5 * totalNightMin / 60.0);
-        long holidayPay = Math.round(hourlyWage * 0.5 * totalHolidayMin / 60.0);
-        long totalAmount = extendedPay + nightPay + holidayPay;
+
+        long totalAmount = extendedPay + holidayPay + nightPay;
 
 //        이미 적용 여부 확인(해당 사원의 초과근무 수당 PayrollDetails 존재 여부)
         boolean applied = payrollDetailsRepository.existsByPayrollRunsAndEmployee_EmpIdAndIsOvertimePayTrue(run, empId);
@@ -795,7 +956,7 @@ public class PayrollService {
         long pension = Math.round(pensionBase * rates.getNationalPension().doubleValue() / 2);
 
         long health = Math.round(base * rates.getHealthInsurance().doubleValue() / 2);
-        long healthTotal = Math.round(base * rates.getHealthInsurance().doubleValue() / 2);
+        long healthTotal = Math.round(base * rates.getHealthInsurance().doubleValue());
         long ltc = Math.round(healthTotal * rates.getLongTermCare().doubleValue() / 2);
         long employment = Math.round(base * rates.getEmploymentInsurance().doubleValue());
 
@@ -1027,5 +1188,88 @@ public class PayrollService {
         LocalDateTime s = aS.isAfter(bS) ? aS : bS;
         LocalDateTime e = aE.isBefore(bE) ? aE : bE;
         return e.isAfter(s) ? Duration.between(s, e).toMinutes() : 0L;
+    }
+
+//    생성된 급여대장에 새로운 사원 추가시, 한 사원에 대해
+//    PayrollEmpStatus + PayrollDetails(지급) + 4대보험/소득세 detail 생성
+    private long[] bootstrapEmployeeForRun(PayrollRuns run,
+                                           Employee emp,
+                                           Company company,
+                                           UUID companyId,
+                                           int year,
+                                           InsuranceRates rates,
+                                           Map<String, PayItems> deductionMap) {
+        // 해당 월에 적용 가능한 최신 계약
+        YearMonth payMonth = YearMonth.parse(run.getPayYearMonth());
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd   = payMonth.atEndOfMonth();
+
+        // 최신 연봉계약 조회
+        SalaryContract contract = salaryContractRepository
+                .findActiveContractsByEmpIds(companyId, List.of(emp.getEmpId()), monthStart, monthEnd)
+                .stream().findFirst()
+                .orElse(null);
+        if (contract == null) return new long[]{0L, 0L};
+
+        // 사원별 산정 상태 (기본 CALCULATING)
+        payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
+                .payrollRuns(run)
+                .employee(emp)
+                .status(PayrollEmpStatusType.CALCULATING)
+                .companyId(companyId)
+                .build());
+
+        // 1. 계약 상세 항목 (지급항목)
+        List<SalaryContractDetail> contractDetails =
+                salaryContractDetailRepository.findByContract_ContractId(contract.getContractId());
+
+        List<Long> payItemIds = contractDetails.stream()
+                .map(SalaryContractDetail::getPayItemId)
+                .toList();
+        Map<Long, PayItems> payItemMap = payItemsRepository
+                .findByPayItemIdInAndCompany_CompanyId(payItemIds, companyId)
+                .stream()
+                .collect(Collectors.toMap(PayItems::getPayItemId, Function.identity()));
+
+        long taxableMonthly = 0L;
+        long payAdded = 0L;
+        long deductionAdded = 0L;
+
+        for (SalaryContractDetail detail : contractDetails) {
+            PayItems payItem = payItemMap.get(detail.getPayItemId());
+            if (payItem == null) continue;
+
+            long amt = detail.getAmount().longValue();
+
+            payrollDetailsRepository.save(PayrollDetails.builder()
+                    .payrollRuns(run)
+                    .employee(emp)
+                    .payItems(payItem)
+                    .payItemName(payItem.getPayItemName())
+                    .payItemType(payItem.getPayItemType())
+                    .amount(amt)
+                    .company(company)
+                    .build());
+
+            if (payItem.getPayItemType() == PayItemType.PAYMENT) {
+                payAdded += amt;
+                taxableMonthly += TaxableCalc.taxablePart(payItem, amt);
+            } else {
+                deductionAdded += amt;
+            }
+        }
+
+        // 2. 4대보험 + 세금 자동 계산
+        long monthlySalary = (contract.getTotalAmount() != null)
+                ? contract.getTotalAmount()
+                  .divide(BigDecimal.valueOf(12), 0, RoundingMode.HALF_UP)
+                  .longValue()
+                : 0L;
+
+        long calcDed = insertCalculatedDeductions(
+                run, emp, company, monthlySalary, taxableMonthly, year, rates, deductionMap);
+        deductionAdded += calcDed;
+
+        return new long[]{payAdded, deductionAdded};
     }
 }

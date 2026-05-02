@@ -48,6 +48,13 @@ public class PayrollController {
         return ResponseEntity.status(HttpStatus.CREATED).body(payrollService.createPayroll(companyId, payYearMonth));
     }
 
+    // 사원 동기화 — 신규 입사자 추가
+    @PostMapping("/{payrollRunId}/sync-employees")
+    public ResponseEntity<PayrollSyncResultResDto> syncEmployees(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long payrollRunId) {
+        return ResponseEntity.ok(payrollService.syncEmployees(companyId, payrollRunId));
+    }
 
 //    사원별 급여 상세
     @GetMapping("/{payrollRunId}/employees/{empId}")

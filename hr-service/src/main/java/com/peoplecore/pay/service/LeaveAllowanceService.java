@@ -7,18 +7,13 @@ import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
-import com.peoplecore.pay.domain.LeaveAllowance;
-import com.peoplecore.pay.domain.PayItems;
-import com.peoplecore.pay.domain.PayrollDetails;
-import com.peoplecore.pay.domain.PayrollRuns;
+import com.peoplecore.pay.domain.*;
+import com.peoplecore.pay.dtos.ApplyResultDto;
 import com.peoplecore.pay.dtos.LeaveAllowanceResDto;
 import com.peoplecore.pay.dtos.LeaveAllowanceSummaryResDto;
 import com.peoplecore.pay.dtos.LeavePolicyTypeResDto;
 import com.peoplecore.pay.enums.*;
-import com.peoplecore.pay.repository.LeaveAllowanceRepository;
-import com.peoplecore.pay.repository.PayItemsRepository;
-import com.peoplecore.pay.repository.PayrollDetailsRepository;
-import com.peoplecore.pay.repository.PayrollRunsRepository;
+import com.peoplecore.pay.repository.*;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
 import com.peoplecore.vacation.entity.VacationBalance;
@@ -35,6 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DateTimeException;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -54,9 +52,11 @@ public class LeaveAllowanceService {
     private final PayrollRunsRepository payrollRunsRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
     private final VacationPromotionNoticeRepository vacationPromotionNoticeRepository;  // 촉진 통지 이력 (면제 판정용)
+    private final PayrollEmpStatusRepository payrollEmpStatusRepository;
+
 
     @Autowired
-    public LeaveAllowanceService(CompanyRepository companyRepository, PayItemsRepository payItemsRepository, EmployeeRepository employeeRepository, LeaveAllowanceRepository leaveAllowanceRepository, SalaryContractRepository salaryContractRepository, VacationBalanceRepository vacationBalanceRepository, VacationTypeRepository vacationTypeRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, VacationPolicyRepository vacationPolicyRepository, VacationPromotionNoticeRepository vacationPromotionNoticeRepository) {
+    public LeaveAllowanceService(CompanyRepository companyRepository, PayItemsRepository payItemsRepository, EmployeeRepository employeeRepository, LeaveAllowanceRepository leaveAllowanceRepository, SalaryContractRepository salaryContractRepository, VacationBalanceRepository vacationBalanceRepository, VacationTypeRepository vacationTypeRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, VacationPolicyRepository vacationPolicyRepository, VacationPromotionNoticeRepository vacationPromotionNoticeRepository, PayrollEmpStatusRepository payrollEmpStatusRepository) {
         this.companyRepository = companyRepository;
         this.payItemsRepository = payItemsRepository;
         this.employeeRepository = employeeRepository;
@@ -68,6 +68,7 @@ public class LeaveAllowanceService {
         this.payrollRunsRepository = payrollRunsRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
         this.vacationPromotionNoticeRepository = vacationPromotionNoticeRepository;
+        this.payrollEmpStatusRepository = payrollEmpStatusRepository;
     }
 
 
@@ -98,8 +99,13 @@ public class LeaveAllowanceService {
                 continue;
             }
 
+            // 통상임금 기준일 결정
+            LocalDate basisDate = resolveBasisDate(type, year, emp);
 //            통상임금(월) = 연봉 / 12
-            SalaryContract contract = salaryContractRepository.findTopByEmployee_EmpIdOrderByApplyFromDesc(empId).orElse(null);
+            SalaryContract contract = salaryContractRepository
+                    .findActiveContractsByEmpIds(companyId, List.of(empId), basisDate, basisDate)
+                    .stream().findFirst()
+                    .orElse(null);
             if (contract == null) continue;
 
             long monthlySalary = contract.getTotalAmount().divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR).longValue();
@@ -176,9 +182,50 @@ public class LeaveAllowanceService {
         }
     }
 
+    /**
+     * 퇴직 처리 시 호출 — 후보 INSERT + 즉시 산정 (CALCULATED 까지)
+     * 통상임금 정보 부족 등으로 산정 실패하면 PENDING 으로 남김.
+     */
+    @Transactional
+    public void createResignedAndCalculate(UUID companyId, Long empId, LocalDate resignDate) {
+        int year = resignDate.getYear();
+
+        // 중복 방지
+        if (leaveAllowanceRepository.existsByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(
+                companyId, empId, year, AllowanceType.RESIGNED)) {
+            return;
+        }
+
+        Company company = companyRepository.findById(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
+        Employee emp = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+
+        LeaveAllowance allowance = LeaveAllowance.builder()
+                .company(company)
+                .employee(emp)
+                .year(year)
+                .allowanceType(AllowanceType.RESIGNED)
+                .resignDate(resignDate)
+                .status(AllowanceStatus.PENDING)
+                .build();
+        leaveAllowanceRepository.save(allowance);
+
+        // 자동 산정 (실패해도 PENDING 으로 남기고 예외 무시)
+        try {
+            calculate(companyId, year, AllowanceType.RESIGNED, List.of(empId));
+        } catch (Exception e) {
+            log.warn("[연차수당 자동산정 실패] empId={}, type=RESIGNED, msg={}", empId, e.getMessage());
+        }
+    }
+
     ///    급여대장 반영(선택된 대상자)
     @Transactional
-    public void applyToPayroll(UUID companyId, List<Long> allowanceIds) {
+    public ApplyResultDto applyToPayroll(UUID companyId, List<Long> allowanceIds) {
+
+        int appliedCount = 0;
+        int skippedCount = 0;
+        List<Long> skippedAllowanceIds = new ArrayList<>();
 
         List<LeaveAllowance> allowances = leaveAllowanceRepository.findByAllowanceIdInAndCompany_CompanyId(allowanceIds, companyId);
 
@@ -197,8 +244,26 @@ public class LeaveAllowanceService {
 //            해당 월 급여대장 조회(없으면 에러)
             PayrollRuns run = payrollRunsRepository.findByCompany_CompanyIdAndPayYearMonth(companyId, targetMonth).orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
 
-            if (run.getPayrollStatus() != PayrollStatus.CALCULATING) {
-                throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
+// run-level 은 PAID 만 차단
+            if (run.getPayrollStatus() == PayrollStatus.PAID) {
+                skippedCount++;
+                skippedAllowanceIds.add(la.getAllowanceId());
+                log.warn("[연차수당 반영 skip] runId={}, 이미 지급완료", run.getPayrollRunId());
+                continue;
+            }
+
+// 사원별 PayrollEmpStatus 검증
+            PayrollEmpStatus pes = payrollEmpStatusRepository
+                    .findByPayrollRuns_PayrollRunIdAndEmployee_EmpId(
+                            run.getPayrollRunId(), la.getEmployee().getEmpId())
+                    .orElse(null);
+
+            if (pes != null && pes.getStatus() != PayrollEmpStatusType.CALCULATING) {
+                skippedCount++;
+                skippedAllowanceIds.add(la.getAllowanceId());
+                log.warn("[연차수당 반영 skip] empId={} 사원 상태={}, runId={}",
+                        la.getEmployee().getEmpId(), pes.getStatus(), run.getPayrollRunId());
+                continue;
             }
 
 //            PayrollDetails  추가
@@ -218,8 +283,17 @@ public class LeaveAllowanceService {
 
             la.markApplied(run.getPayrollRunId(), targetMonth);
 
+            // 반영 성공 카운트
+            appliedCount++;
         }
-    }
+
+        return ApplyResultDto.builder()
+                .appliedCount(appliedCount)
+                .skippedCount(skippedCount)
+                .skippedAllowanceIds(skippedAllowanceIds)
+                .build();
+        }
+
 
 ///    회사 연차정책 타입 조회
     public LeavePolicyTypeResDto getPolicyType(UUID companyId){
@@ -377,7 +451,7 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
         }
     }
 
-//    입사일기준 대상사원 PENDING 레코드 생성
+//   이번달이 입사일기준 대상사원 PENDING 레코드 생성
     @Transactional
     public void createAnniversaryPendingRecords(UUID companyId, int year, int month){
         Company company = companyRepository.findById(companyId).orElseThrow(()-> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
@@ -423,4 +497,30 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
 
         run.updateTotals(empCount, totalPay, totalDeduction, totalPay - totalDeduction);
      }
+
+
+    /**
+     * 연차수당 통상임금 기준일 결정
+     * - RESIGNED: 퇴직일
+     * - ANNIVERSARY: 그 해의 입사기념일
+     * - FISCAL_YEAR: 그 해 12-31
+     */
+    private LocalDate resolveBasisDate(AllowanceType type, int year, Employee emp) {
+        if (type == AllowanceType.RESIGNED) {
+            // 퇴직일이 없으면 fallback (방어 — 자동 산정 트리거에서 미설정 사원 걸러짐)
+            return emp.getEmpResignDate() != null ? emp.getEmpResignDate() : LocalDate.of(year, 12, 31);
+        }
+        if (type == AllowanceType.ANNIVERSARY) {
+            LocalDate hire = emp.getEmpHireDate();
+            if (hire == null) return LocalDate.of(year, 12, 31);
+            // 그 year 의 입사 기념일 (윤년 2-29 입사자 보정)
+            try {
+                return LocalDate.of(year, hire.getMonthValue(), hire.getDayOfMonth());
+            } catch (DateTimeException e) {
+                return LocalDate.of(year, hire.getMonthValue(), 28);
+            }
+        }
+        // FISCAL_YEAR
+        return LocalDate.of(year, 12, 31);
+    }
 }
