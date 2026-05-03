@@ -3,6 +3,7 @@ package com.peoplecore.department.controller;
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.department.dto.DepartmentCreateRequest;
 import com.peoplecore.department.dto.DepartmentDetailResponse;
+import com.peoplecore.department.dto.DepartmentReorderRequest;
 import com.peoplecore.department.dto.DepartmentResponse;
 import com.peoplecore.department.dto.DepartmentUpdateRequest;
 import com.peoplecore.department.dto.OrgChartResponse;
@@ -102,6 +103,18 @@ public class DepartmentController {
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long deptId) {
         departmentService.deleteDepartment(companyId, deptId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
+     * 조직도 일괄 순서/위치 변경 (드래그&드롭 저장)
+     */
+    @RoleRequired({"HR_SUPER_ADMIN", "HR_ADMIN"})
+    @PatchMapping("/order")
+    public ResponseEntity<Void> reorderDepartments(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestBody DepartmentReorderRequest request) {
+        departmentService.reorderDepartments(companyId, request);
         return ResponseEntity.noContent().build();
     }
 }

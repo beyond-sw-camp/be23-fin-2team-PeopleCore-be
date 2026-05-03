@@ -15,6 +15,7 @@ public class DepartmentResponse {
     private Long parentDeptId;
     private String deptName;
     private String deptCode;
+    private Integer sortOrder;
     private long memberCount;
     private List<DepartmentResponse> children;
 
@@ -24,6 +25,7 @@ public class DepartmentResponse {
                 .parentDeptId(dept.getParentDeptId())
                 .deptName(dept.getDeptName())
                 .deptCode(dept.getDeptCode())
+                .sortOrder(dept.getSortOrder())
                 .memberCount(memberCount)
                 .children(List.of())
                 .build();
@@ -35,6 +37,7 @@ public class DepartmentResponse {
                 .parentDeptId(dept.getParentDeptId())
                 .deptName(dept.getDeptName())
                 .deptCode(dept.getDeptCode())
+                .sortOrder(dept.getSortOrder())
                 .memberCount(memberCount)
                 .children(children)
                 .build();

@@ -10,6 +10,7 @@ import com.peoplecore.department.domain.Department;
 import com.peoplecore.department.domain.UseStatus;
 import com.peoplecore.department.dto.DepartmentCreateRequest;
 import com.peoplecore.department.dto.DepartmentDetailResponse;
+import com.peoplecore.department.dto.DepartmentReorderRequest;
 import com.peoplecore.department.dto.DepartmentResponse;
 import com.peoplecore.department.dto.DepartmentUpdateRequest;
 import com.peoplecore.department.dto.OrgChartMemberDto;
@@ -56,7 +57,7 @@ public class DepartmentService {
      */
     public List<DepartmentResponse> getOrgTree(UUID companyId) {
         List<Department> allDepts = departmentRepository
-                .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y);
+                .findByCompany_CompanyIdAndIsUseOrderBySortOrderAscDeptIdAsc(companyId, UseStatus.Y);
 
         Map<Long, Long> memberCountMap = getMemberCountMap(companyId);
 
@@ -73,7 +74,7 @@ public class DepartmentService {
         Map<Long, Long> memberCountMap = getMemberCountMap(companyId);
 
         return departmentRepository
-                .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y)
+                .findByCompany_CompanyIdAndIsUseOrderBySortOrderAscDeptIdAsc(companyId, UseStatus.Y)
                 .stream()
                 .map(dept -> DepartmentResponse.from(
                         dept,
@@ -113,7 +114,7 @@ public class DepartmentService {
     @Transactional(readOnly = true)
     public List<OrgChartResponse> getOrgChartWithMembers(UUID companyId) {
         List<Department> allDepts = departmentRepository
-                .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y);
+                .findByCompany_CompanyIdAndIsUseOrderBySortOrderAscDeptIdAsc(companyId, UseStatus.Y);
 
         List<Employee> allEmployees = employeeRepository.findAll().stream()
                 .filter(e -> e.getCompany().getCompanyId().equals(companyId))
@@ -173,15 +174,30 @@ public class DepartmentService {
                 .companyId(companyId)
                 .build();
 
+        int nextSortOrder = nextSortOrderForParent(companyId, request.getParentDeptId());
+
         Department dept = Department.builder()
                 .company(company)
                 .parentDeptId(request.getParentDeptId())
                 .deptName(request.getDeptName())
                 .deptCode(request.getDeptCode().toUpperCase())
+                .sortOrder(nextSortOrder)
                 .build();
 
         Department saved = departmentRepository.save(dept);
         return DepartmentResponse.from(saved, 0);
+    }
+
+    private int nextSortOrderForParent(UUID companyId, Long parentDeptId) {
+        return departmentRepository
+                .findByCompany_CompanyIdAndIsUseOrderBySortOrderAscDeptIdAsc(companyId, UseStatus.Y)
+                .stream()
+                .filter(d -> java.util.Objects.equals(d.getParentDeptId(), parentDeptId))
+                .map(Department::getSortOrder)
+                .filter(java.util.Objects::nonNull)
+                .max(Integer::compareTo)
+                .map(max -> max + 1)
+                .orElse(1);
     }
 
     // ========================= 수정 =========================
@@ -228,6 +244,79 @@ public class DepartmentService {
 
         long memberCount = countMembers(companyId, deptId);
         return DepartmentResponse.from(dept, memberCount);
+    }
+
+    // ========================= 순서/위치 일괄 변경 =========================
+
+    /**
+     * 조직도 드래그&드롭 저장 — parentDeptId, sortOrder를 한 번의 트랜잭션으로 일괄 반영.
+     * 모든 항목 검증 후 적용하므로 일부 실패 시 전체 롤백된다.
+     */
+    @Transactional
+    public void reorderDepartments(UUID companyId, DepartmentReorderRequest request) {
+        if (request == null || request.getItems() == null || request.getItems().isEmpty()) {
+            return;
+        }
+
+        List<Department> allDepts = departmentRepository
+                .findByCompany_CompanyIdAndIsUseOrderBySortOrderAscDeptIdAsc(companyId, UseStatus.Y);
+
+        Map<Long, Department> deptById = allDepts.stream()
+                .collect(Collectors.toMap(Department::getDeptId, d -> d));
+
+        // 적용 후 parent 맵 — 사이클 검증용 (제출된 변경을 모두 반영했다고 가정한 그래프)
+        Map<Long, Long> nextParentMap = allDepts.stream()
+                .collect(Collectors.toMap(
+                        Department::getDeptId,
+                        d -> d.getParentDeptId() != null ? d.getParentDeptId() : -1L
+                ));
+
+        for (DepartmentReorderRequest.Item item : request.getItems()) {
+            if (item.getDeptId() == null) {
+                throw new CustomException(ErrorCode.DEPARTMENT_NOT_FOUND);
+            }
+            Department dept = deptById.get(item.getDeptId());
+            if (dept == null) {
+                throw new CustomException(ErrorCode.DEPARTMENT_NOT_FOUND);
+            }
+            Long newParentId = item.getParentDeptId();
+            if (newParentId != null) {
+                if (newParentId.equals(item.getDeptId())) {
+                    throw new CustomException(ErrorCode.DEPARTMENT_CIRCULAR_REFERENCE);
+                }
+                if (!deptById.containsKey(newParentId)) {
+                    throw new CustomException(ErrorCode.DEPARTMENT_NOT_FOUND);
+                }
+            }
+            nextParentMap.put(item.getDeptId(), newParentId != null ? newParentId : -1L);
+        }
+
+        // 사이클 검증 — 적용 후 그래프에서 deptId → 루트 경로상 자기 자신이 다시 나오면 안 됨
+        for (DepartmentReorderRequest.Item item : request.getItems()) {
+            Long current = nextParentMap.get(item.getDeptId());
+            int guard = nextParentMap.size() + 1;
+            while (current != null && current != -1L && guard-- > 0) {
+                if (current.equals(item.getDeptId())) {
+                    throw new CustomException(ErrorCode.DEPARTMENT_CIRCULAR_REFERENCE);
+                }
+                current = nextParentMap.get(current);
+            }
+            if (guard < 0) {
+                throw new CustomException(ErrorCode.DEPARTMENT_CIRCULAR_REFERENCE);
+            }
+        }
+
+        // 적용
+        for (DepartmentReorderRequest.Item item : request.getItems()) {
+            Department dept = deptById.get(item.getDeptId());
+            int sort = item.getSortOrder() != null ? item.getSortOrder() : 0;
+            dept.updatePositionAndOrder(item.getParentDeptId(), sort);
+        }
+
+        // 트리 캐시 갱신용 이벤트
+        for (DepartmentReorderRequest.Item item : request.getItems()) {
+            publishDeptUpdatedEvent(item.getDeptId());
+        }
     }
 
     // ========================= 삭제 =========================
@@ -279,7 +368,7 @@ public class DepartmentService {
     private void validateNoCircularReference(UUID companyId, Long deptId, Long newParentId) {
 
         List<Department> allDepts = departmentRepository
-                .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y);
+                .findByCompany_CompanyIdAndIsUseOrderBySortOrderAscDeptIdAsc(companyId, UseStatus.Y);
 
         Map<Long, Long> parentMap = allDepts.stream()
                 .collect(Collectors.toMap(
