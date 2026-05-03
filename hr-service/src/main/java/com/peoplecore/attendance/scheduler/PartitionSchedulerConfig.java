@@ -32,10 +32,12 @@ import java.util.TimeZone;
 public class PartitionSchedulerConfig {
 
     // Quartz Key 의 group 부분. 도메인별 잡 격리용 (auto-close, partition, vacation 식 구분)
-    private static final String JOB_GROUP = "partition";
+    // public 노출 — AdminAttendanceJobController 가 매직 스트링 회피용으로 참조
+    public static final String JOB_GROUP = "partition";
 
     // JobDetail/Trigger 식별자. 파티션 잡은 단일이라 고정 문자열. (AutoClose 는 wg-{id} 처럼 동적)
-    private static final String JOB_NAME = "partition-ensure";
+    // public 노출 — AdminAttendanceJobController 가 매직 스트링 회피용으로 참조
+    public static final String JOB_NAME = "partition-ensure";
 
     // Quartz cron = 6필드 (초 분 시 일 월 요일). 일=25, 요일=? (둘 중 하나는 ? 강제)
     // → 매월 25일 03:00:00 KST

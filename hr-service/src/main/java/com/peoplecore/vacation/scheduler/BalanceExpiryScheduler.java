@@ -57,6 +57,7 @@ public class BalanceExpiryScheduler {
     /* 정기/수동 공용 진입점 */
     public void run() {
         LocalDate today = LocalDate.now(ZONE_SEOUL);
+        log.info("[BalanceExpiryBatch] 시작 - date={}", today);
         List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
         int launched = 0;
         int skipped = 0;

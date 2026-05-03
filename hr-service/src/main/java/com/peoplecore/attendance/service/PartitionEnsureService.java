@@ -19,8 +19,8 @@ import java.util.List;
  *
  * 호출 경로:
  *  - PartitionEnsureJob (Quartz fire) — 매월 25일 03:00 KST 정기 실행
- *  - PartitionScheduler.triggerNow() — 운영자 수동 트리거
- *  두 경로 모두 같은 ensureNextMonthPartition() 통과 — 동작 일관성 보장.
+ *  - AdminAttendanceJobController → quartzScheduler.triggerJob(partition-ensure) — 운영자 수동 트리거
+ *  두 경로 모두 같은 PartitionEnsureJob.execute() 거쳐 ensureNextMonthPartition() 호출 — 동작 일관성 보장.
  *
  * 주의:
  *  - 단순 ADD PARTITION 은 pmax(MAXVALUE) 때문에 실패. REORGANIZE 로 pmax 를 쪼개야 함.

@@ -1,5 +1,6 @@
 package com.peoplecore.attendance.controller;
 
+import com.peoplecore.attendance.scheduler.PartitionSchedulerConfig;
 import com.peoplecore.auth.RoleRequired;
 import lombok.extern.slf4j.Slf4j;
 import org.quartz.JobKey;
@@ -36,7 +37,9 @@ public class AdminAttendanceJobController {
     @RoleRequired({"HR_SUPER_ADMIN"})
     @PostMapping("/partition/ensure")
     public ResponseEntity<Void> ensurePartition(@RequestHeader("X-User-Id") String userId) {
-        return triggerOrFail(JobKey.jobKey("partition-ensure", "partition"), userId);
+        return triggerOrFail(
+                JobKey.jobKey(PartitionSchedulerConfig.JOB_NAME, PartitionSchedulerConfig.JOB_GROUP),
+                userId);
     }
 
     /*
