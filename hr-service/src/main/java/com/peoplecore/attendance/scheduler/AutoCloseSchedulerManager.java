@@ -95,8 +95,10 @@ public class AutoCloseSchedulerManager {
 
     /* JobDetail / Trigger 식별용 그룹명 — Quartz Key 의 group 부분 */
     private static final String JOB_GROUP = "auto-close";
-    /* JobDataMap 키 — AutoCloseJob 의 KEY_WORK_GROUP_ID 와 일치해야 함 */
+    /* JobDataMap 키 — AutoCloseJob 의 KEY_WORK_GROUP_ID / KEY_COMPANY_ID 와 일치해야 함 */
     private static final String KEY_WORK_GROUP_ID = "workGroupId";
+    /* companyId 는 Spring Batch JobParameters 로 전파 → BatchFailureListener Discord 라벨 생성용 */
+    private static final String KEY_COMPANY_ID = "companyId";
     /* 모든 트리거 cron 평가 기준 타임존 (EKS UTC 기본값 우회) */
     private static final TimeZone TZ_SEOUL = TimeZone.getTimeZone("Asia/Seoul");
 
@@ -160,6 +162,7 @@ public class AutoCloseSchedulerManager {
             JobDetail jobDetail = JobBuilder.newJob(AutoCloseJob.class)
                     .withIdentity(jobKey)
                     .usingJobData(KEY_WORK_GROUP_ID, workGroupId)
+                    .usingJobData(KEY_COMPANY_ID, wg.getCompany().getCompanyId().toString())
                     .storeDurably()  // 트리거 없이도 잡 정의 유지 (재등록 안전성)
                     .build();
             scheduler.addJob(jobDetail, true);
