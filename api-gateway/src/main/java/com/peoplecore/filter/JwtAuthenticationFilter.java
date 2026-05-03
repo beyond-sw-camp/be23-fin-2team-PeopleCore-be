@@ -56,8 +56,11 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/collaboration-service/filevault/admin-capability/config"
     );
 
-    //  서버운영팀 전용 경로 (API Key 인증)
-    private static final String INTERNAL_PATH_PREFIX = "/hr-service/internal/";
+    //  서버운영팀·서비스간 호출 전용 경로 (API Key 인증)
+    private static final List<String> INTERNAL_PATH_PREFIXES = List.of(
+            "/hr-service/internal/",
+            "/collaboration-service/internal/"
+    );
 
 
     @PostConstruct
@@ -78,8 +81,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             return chain.filter(exchange);
         }
 
-        // 서버운영팀 → API Key 인증 (JWT 아님)
-        if (path.startsWith(INTERNAL_PATH_PREFIX)) {
+        // 서버운영팀·내부 서비스 → API Key 인증 (JWT 아님)
+        if (INTERNAL_PATH_PREFIXES.stream().anyMatch(path::startsWith)) {
             return handleInternalAuth(exchange, chain, request);
         }
 

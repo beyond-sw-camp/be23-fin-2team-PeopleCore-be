@@ -16,9 +16,17 @@ import com.peoplecore.evaluation.repository.GoalRepository;
 import com.peoplecore.evaluation.repository.KpiOptionRepository;
 import com.peoplecore.evaluation.repository.KpiTemplateRepository;
 import com.peoplecore.evaluation.repository.SeasonRepository;
+import com.peoplecore.evaluation.repository.SelfEvaluationRepository;
 import com.peoplecore.evaluation.repository.StageRepository;
 import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.grade.repository.GradeRepository;
+
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -38,6 +46,7 @@ public class KpiTemplateService {
     private final GoalRepository goalRepository;
     private final SeasonRepository seasonRepository;
     private final StageRepository stageRepository;
+    private final SelfEvaluationRepository selfEvaluationRepository;
 
     public KpiTemplateService(KpiTemplateRepository kpiTemplateRepository,
                               KpiOptionRepository kpiOptionRepository,
@@ -45,7 +54,8 @@ public class KpiTemplateService {
                               GradeRepository gradeRepository,
                               GoalRepository goalRepository,
                               SeasonRepository seasonRepository,
-                              StageRepository stageRepository) {
+                              StageRepository stageRepository,
+                              SelfEvaluationRepository selfEvaluationRepository) {
         this.kpiTemplateRepository = kpiTemplateRepository;
         this.kpiOptionRepository = kpiOptionRepository;
         this.departmentRepository = departmentRepository;
@@ -53,6 +63,7 @@ public class KpiTemplateService {
         this.goalRepository = goalRepository;
         this.seasonRepository = seasonRepository;
         this.stageRepository = stageRepository;
+        this.selfEvaluationRepository = selfEvaluationRepository;
     }
 
     // 직급 조회 — null 허용 (전 직급 공통). 값 있을 때만 회사 스코프 검증
@@ -76,8 +87,37 @@ public class KpiTemplateService {
 
     // 1번 - 부서 IN 필터 없음, 회사 + 부서/직급/카테고리/키워드 필터만
     // 직급 필터: 선택 시 (해당 직급 OR 전 직급 공통) 모두 노출
-    public Page<KpiTemplateResponse> getTemplates(UUID companyId, Long deptId, Long gradeId, String category, String keyword, Pageable pageable){
-        return kpiTemplateRepository.searchTemplates(companyId, deptId, gradeId, category, keyword, pageable);
+    // 사내평균(baseline) — 항상 동적 계산:
+    //   yearFrom/yearTo 지정 시 그 범위, 미지정 시 전체 기간
+    //   시즌 endDate 기준 + APPROVED 자기평가 actualValue 평균
+    public Page<KpiTemplateResponse> getTemplates(UUID companyId, Long deptId, Long gradeId,
+                                                  String category, String keyword,
+                                                  Integer yearFrom, Integer yearTo,
+                                                  Pageable pageable){
+        Page<KpiTemplateResponse> page = kpiTemplateRepository.searchTemplates(
+                companyId, deptId, gradeId, category, keyword, pageable);
+
+        if (!page.getContent().isEmpty()) {
+            LocalDate from = LocalDate.of(yearFrom != null ? yearFrom : 1900, 1, 1);
+            LocalDate to   = LocalDate.of(yearTo   != null ? yearTo   : 9999, 12, 31);
+
+            List<Long> kpiIds = new ArrayList<>();
+            for (KpiTemplateResponse r : page.getContent()) {
+                kpiIds.add(r.getKpiId());
+            }
+
+            List<SelfEvaluationRepository.KpiAvgRow> rows =
+                    selfEvaluationRepository.averageByKpiInRange(kpiIds, from, to);
+            Map<Long, BigDecimal> avgMap = new HashMap<>();
+            for (SelfEvaluationRepository.KpiAvgRow row : rows) {
+                avgMap.put(row.getKpiId(), row.getAvg());
+            }
+
+            for (KpiTemplateResponse r : page.getContent()) {
+                r.setBaseline(avgMap.get(r.getKpiId()));
+            }
+        }
+        return page;
     }
 
     // 2번 단건 조회

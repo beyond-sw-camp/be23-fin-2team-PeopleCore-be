@@ -29,7 +29,7 @@ use peoplecore;
 -- =====================================================================
 
 -- ▼ 회사 생성 시 입력한 회사명. 디폴트 그대로 사용 시 수정 불필요 ▼
-SET @company_name := 'testcompany';
+SET @company_name := 'peoplecore';
 
 -- 회사명으로 UUID 자동 조회 (BINARY(16) 그대로 반환)
 SET @cid := (SELECT company_id FROM company WHERE company_name = @company_name);

@@ -116,28 +116,7 @@ public class GoalController {
         return ResponseEntity.ok(goalService.getTeamGoals(companyId, managerId));
     }
 
-    // 8. 단건 승인
-    @PostMapping("/{id}/approve")
-    public ResponseEntity<GoalResponse> approveGoal(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long managerId,
-            @PathVariable Long id) {
-        requireEvaluator(companyId, managerId);
-        return ResponseEntity.ok(goalService.approveGoal(companyId, managerId, id));
-    }
-
-    // 9. 단건 반려 (body 에 사유)
-    @PostMapping("/{id}/reject")
-    public ResponseEntity<GoalResponse> rejectGoal(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long managerId,
-            @PathVariable Long id,
-            @RequestBody @Valid GoalRejectRequest request) {
-        requireEvaluator(companyId, managerId);
-        return ResponseEntity.ok(goalService.rejectGoal(companyId, managerId, id, request.getRejectReason()));
-    }
-
-    // 10. 팀원 단위 대기 건 일괄 승인
+    // 팀원 단위 대기 건 일괄 승인
     @PostMapping("/approve-all/{empId}")
     public ResponseEntity<List<GoalResponse>> approveAllPending(
             @RequestHeader("X-User-Company") UUID companyId,
@@ -145,6 +124,17 @@ public class GoalController {
             @PathVariable Long empId) {
         requireEvaluator(companyId, managerId);
         return ResponseEntity.ok(goalService.approveAllPending(companyId, managerId, empId));
+    }
+
+    // 팀원 단위 대기 건 일괄 반려 (body 에 사유)
+    @PostMapping("/reject-all/{empId}")
+    public ResponseEntity<List<GoalResponse>> rejectAllPending(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long managerId,
+            @PathVariable Long empId,
+            @RequestBody @Valid GoalRejectRequest request) {
+        requireEvaluator(companyId, managerId);
+        return ResponseEntity.ok(goalService.rejectAllPending(companyId, managerId, empId, request.getRejectReason()));
     }
 
     // 각 엔드포인트 앞에서 호출되는 평가자 가드. empId 가 부서별 배정에 있는지만 확인.
