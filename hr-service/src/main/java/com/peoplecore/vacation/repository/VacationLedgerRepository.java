@@ -11,6 +11,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
@@ -76,4 +77,25 @@ public interface VacationLedgerRepository extends JpaRepository<VacationLedger, 
     List<ManualGrantSumQueryDto> sumManualGrantByEmpsAndYear(@Param("companyId") UUID companyId,
                                                              @Param("empIds") Collection<Long> empIds,
                                                              @Param("year") Integer year);
+
+    /*
+     * 잔여별 ACCRUAL 이벤트의 동월 존재 여부
+     * 용도: MenstrualMonthlyGrantService 동월 재실행 멱등 가드
+     *      (cron 1일 + 관리자 수동 트리거 N회 동일월 호출 시 만료/적립 페어 누적 방지)
+     * 조건: company + balance + eventType=ACCRUAL + createdAt ∈ [monthStart, nextMonthStart)
+     * 인덱스: idx_vacation_ledger_balance_created 활용
+     */
+    @Query("""
+            SELECT (COUNT(l) > 0)
+              FROM VacationLedger l
+             WHERE l.companyId = :companyId
+               AND l.vacationBalance.balanceId = :balanceId
+               AND l.eventType = com.peoplecore.vacation.entity.LedgerEventType.ACCRUAL
+               AND l.createdAt >= :monthStart
+               AND l.createdAt < :nextMonthStart
+            """)
+    boolean existsAccrualInMonth(@Param("companyId") UUID companyId,
+                                 @Param("balanceId") Long balanceId,
+                                 @Param("monthStart") LocalDateTime monthStart,
+                                 @Param("nextMonthStart") LocalDateTime nextMonthStart);
 }

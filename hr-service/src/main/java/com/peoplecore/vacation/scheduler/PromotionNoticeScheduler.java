@@ -14,7 +14,6 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -22,8 +21,10 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
-/* 연차 촉진 통지 Batch 런처 - 회사별 1차/2차 Job 을 (companyId, targetDate, stage) 키로 런칭 */
-/* BATCH_JOB_INSTANCE 유니크로 중복 실행 자동 차단 (Redis 락 불필요) */
+/* 연차 촉진 통지 Batch 런처 본체 — 회사별 1차/2차 Job 을 (companyId, targetDate, stage) 키로 런칭 */
+/* 정기 fire = PromotionNoticeJob (Quartz) → run() 호출 */
+/* 수동 트리거 = 관리 API → run() 호출 */
+/* BATCH_JOB_INSTANCE 유니크로 중복 실행 자동 차단 → misfire FIRE_NOW 안전 */
 /* 매일 00:15 KST - 발생 잡(00:10) 후 잔여 측정이 정확 */
 @Component
 @Slf4j
@@ -47,7 +48,7 @@ public class PromotionNoticeScheduler {
         this.promotionNoticeJob = promotionNoticeJob;
     }
 
-    @Scheduled(cron = "0 15 0 * * *", zone = "Asia/Seoul")
+    /* 정기/수동 공용 진입점 */
     public void run() {
         LocalDate today = LocalDate.now(ZONE_SEOUL);
         log.info("[PromotionNoticeBatch] 런처 시작 - date={}", today);

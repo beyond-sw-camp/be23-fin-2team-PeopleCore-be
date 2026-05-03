@@ -1,8 +1,8 @@
 <span style="font-family: &quot;맑은 고딕&quot;; font-size: 10pt; line-height: normal; margin-top: 0px; margin-bottom: 0px;"><span style="font-family: &quot;맑은 고딕&quot;; font-size: 10pt; line-height: normal; margin-top: 0px; margin-bottom: 0px;"><p style="font-family: &quot;맑은 고딕&quot;; font-size: 10pt; line-height: 20px; margin-top: 0px; margin-bottom: 0px;"><br></p><!-- Template Ver 1.1.2 (2016.11.2) author : shindj --><!-- Page Wrapping (start) : Style retention -->
 <div id="divCustomWrapper" style="font-family: &quot;malgun gothic&quot;, dotum, arial, tahoma; font-size: 9pt; line-height: normal; margin-top: 0px; margin-bottom: 0px;">  <!-- Embededd Style이 적용받는 범위 입니다. 상단의 스타일은 이 요소 안에서만 동작합니다. --> 
-   <!-- 1. Title Section (start) : 문서제목이 작성되는 영역입니다.-->
    
-<div id="titleSection" style="font-family: &quot;malgun gothic&quot;, dotum, arial, tahoma; font-size: 19pt; line-height: normal; margin-top: 0px; margin-bottom: 0px;">회계(입금.출금.대체)품의서</div><!-- 1. Title Section (end) -->
+   
+
    
    <!-- Subject Section (start) : 제목이 작성되는 영역입니다. -->
 <table class="detailSection" style="margin-top:30px;">
@@ -344,21 +344,19 @@
     #divCustomWrapper { word-break: break-all; font-family: malgun gothic, dotum, arial, tahoma; font-size: 12px; width:800px !important; }
     #divCustomWrapper * { max-width: 800px !important; }
     /* (1) Section(제목, 결재선, 내용) */
-    #divCustomWrapper #titleSection,
     #divCustomWrapper #draftSection,
     #divCustomWrapper #detailSection { display: inline-block; width:800px !important; clear:both; margin-top: 20px; vertical-align: middle; }
-    #divCustomWrapper #titleSection { text-align: center; font-size: 25px; font-weight: bold; margin-bottom: 10px; }
-    #divCustomWrapper #detailSection > * { margin-bottom: 10px; }
+#divCustomWrapper #detailSection > * { margin-bottom: 10px; }
     /* (2) Table */
     #divCustomWrapper table { border-collapse: collapse; }
     #divCustomWrapper .detailSection table { width: 800px; }
 </style><style type="text/css">
   /* 2. Option style : 용도에 따라 적용합니다.*/
     /* (1) Table option : 2Type(subject / detail), Affacted elements(td), Range(divCustomWrapper 하단요소) */
-    #divCustomWrapper td.subjectColumn { border: 1px solid black; height:22px; padding: 3px 1px 3px 1px;/*top right bottom left*/ }
-    #divCustomWrapper td.detailColumn { border: 1px solid black; height:22px; padding: 3px 5px 3px 5px;/*top right bottom left*/ }
+    #divCustomWrapper td.subjectColumn { border: 1px solid #d1d5db; height:22px; padding: 3px 1px 3px 1px;/*top right bottom left*/ }
+    #divCustomWrapper td.detailColumn { border: 1px solid #d1d5db; height:22px; padding: 3px 5px 3px 5px;/*top right bottom left*/ }
     #divCustomWrapper td.detailColumn { text-align: left; }
-    #divCustomWrapper td.subjectColumn { background: rgb(221, 221, 221); font-weight: bold; text-align: center; vertical-align: middle; }
+    #divCustomWrapper td.subjectColumn { background: #f9fafb; font-weight: bold; text-align: center; vertical-align: middle; }
     /* (2) Indent option : 2Type(one / two), Affcted elements(All) */
     #divCustomWrapper .oneDepth { margin-left: 15px; }
     #divCustomWrapper .twoDepth { margin-left: 37px; }

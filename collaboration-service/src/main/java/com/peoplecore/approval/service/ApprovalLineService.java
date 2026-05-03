@@ -405,9 +405,14 @@ public class ApprovalLineService {
         /*전체 결재선 조회 */
         List<ApprovalLine> approvalLines = lineRepository.findByDocId_DocIdOrderByLineStep(docId, ApprovalRole.APPROVER);
 
-        /*본인 포함 이후 모든 pending 결재선 일괄 승인 */
+        /*본인 포함 이후 모든 pending 결재선 일괄 승인
+         *  - 본인 결재선: 입력한 comment(미입력 시 "전결") 저장
+         *  - 이후 결재선: 본인 의견 복제 X, "전결 - N단계" 시스템 메시지만 기록 */
         approvalLines.stream().filter(l -> l.getLineStep() >= approvalLine.getLineStep() && l.getApprovalLineStatus() == ApprovalLineStatus.PENDING).forEach(l -> {
-            l.approve(comment != null ? comment : "전결 - " + l.getLineStep() + "단계");
+            String lineComment = l.getLineId().equals(approvalLine.getLineId())
+                    ? (comment != null ? comment : "전결")
+                    : "전결 - " + l.getLineStep() + "단계";
+            l.approve(lineComment);
             l.markRead();
             historyRepository.save(ApprovalStatusHistory.builder()
                     .docId(docId)
