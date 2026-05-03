@@ -79,6 +79,7 @@ public enum ErrorCode {
 
     // 사원 계좌
     EMP_ACCOUNT_NOT_FOUND(404, "사원 계좌 정보를 찾을 수 없습니다."),
+    EMP_ACCOUNT_NOT_REGISTERED(400, "계좌 정보가 등록되지 않은 사원이 포함되어 있습니다."),
     RETIREMENT_ACCOUNT_NOT_FOUND(404, "퇴직연금 계좌 정보를 찾을 수 없습니다."),
 
     // 사원 계좌 검증 (오픈뱅킹)
@@ -108,7 +109,8 @@ public enum ErrorCode {
     NO_PAYABLE_EMPLOYEES(404, "지급가능한 사원이 없습니다. (결재 승인된 사원만 지급 가능)"),
     NO_TRANSFER_TARGETS(404,"이체 대상 사원이 비어 있습니다"),
     PAYROLL_EMP_NOT_APPROVED(400, "결재 승인되지 않은 사원이 포함되어 있습니다"),
-
+    TRANSFER_FILE_GENERATION_FAILED(500, "이체파일 생성 중 오류가 발생했습니다."),
+    PAYROLL_EMP_NOT_CONFIRMABLE(400, "이미 확정/결재중/승인/지급 상태인 사원은 다시 확정할 수 없습니다."),
 
 
     // ── 정산보험료 ──

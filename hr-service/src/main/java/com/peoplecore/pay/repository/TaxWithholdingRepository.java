@@ -24,6 +24,9 @@ public interface TaxWithholdingRepository extends JpaRepository<TaxWithholdingTa
      Optional<TaxWithholdingTable> findByTaxYearAndSalaryMinLessThanEqualAndSalaryMaxGreaterThan(
              Integer taxYear, Integer salaryMin, Integer salaryMax);
 
+//    해당 연도 표의 마지막(최대 salaryMax) 행 - 세액 최대치 구간
+    Optional<TaxWithholdingTable> findTopByTaxYearOrderBySalaryMaxDesc(Integer taxYear);
+
     // 업로드 시 같은 연도 데이터 갱신용
     @Modifying
     @Query("DELETE FROM TaxWithholdingTable t WHERE t.taxYear = :year")

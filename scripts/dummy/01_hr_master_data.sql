@@ -134,6 +134,39 @@ VALUES
 
 
 -- =====================================================================
+-- 6) CompanyPaySettings  (회사 급여 지급 설정 — 자동 시드된 행 갱신)
+-- ---------------------------------------------------------------------
+--   ⚠️ 회사 생성 시 PaySettingsService.initDefault() 가 이미 1행 자동 생성
+--      (NEXT 익월 / 25일 / 004 국민). INSERT 하면 중복 → NonUniqueResultException.
+--      따라서 UPDATE 로 자동 시드 행을 더미 의도(CURRENT 당월)로 변경.
+--   ※ company_id 당 1행. UI 에서 변경 시 update().
+-- =====================================================================
+
+UPDATE company_pay_settings
+   SET salary_pay_day      = 25,
+       salary_pay_last_day = FALSE,
+       salary_pay_month    = 'CURRENT',     -- 자동 시드는 NEXT(익월) → 당월 지급으로 변경
+       main_bank_code      = '004',
+       main_bank_name      = '국민은행'
+ WHERE company_id = @cid;
+
+
+-- =====================================================================
+-- 7) RetirementSettings  (회사 퇴직연금 설정 1건)
+-- ---------------------------------------------------------------------
+--   pension_type = 'DB_DC' (병행) → 사원별로 DB/DC 선택 가능 (가장 풍부한 테스트)
+--   운용사: 미래에셋증권
+--   회사 운용계좌(pension_account): DB/DB_DC 시에만 의미 있음
+--   ※ RetirementSettings 는 BaseTimeEntity 미상속 → created_at/updated_at 컬럼 없음
+-- =====================================================================
+
+INSERT INTO retirement_settings
+  (company_id, pension_type, pension_provider, pension_account)
+VALUES
+  (@cid, 'DB_DC', '미래에셋증권', '123-456-789012');
+
+
+-- =====================================================================
 -- [검증 쿼리] 실행 후 카운트 확인 (자동 + 추가)
 --   department         : 8  (자동 1 + 추가 7)
 --   grade              : 7  (자동 1 + 추가 6)
