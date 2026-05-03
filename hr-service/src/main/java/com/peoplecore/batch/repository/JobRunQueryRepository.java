@@ -170,9 +170,12 @@ public class JobRunQueryRepository {
     }
 
     /* Step 일람 조회 - STEP_EXECUTION_ID 오름차순 (실행 순서 보존) */
+    /* Spring Batch 5 부터 SKIP_COUNT 단일 컬럼이 READ/WRITE/PROCESS 3개로 분리됨 → 합산해서 노출 */
     private List<StepRunResDto> fetchSteps(Long jobExecutionId) {
         String sql = "SELECT STEP_EXECUTION_ID, STEP_NAME, STATUS, " +
-                " READ_COUNT, WRITE_COUNT, SKIP_COUNT, COMMIT_COUNT, ROLLBACK_COUNT " +
+                " READ_COUNT, WRITE_COUNT, " +
+                " (READ_SKIP_COUNT + WRITE_SKIP_COUNT + PROCESS_SKIP_COUNT) AS SKIP_COUNT, " +
+                " COMMIT_COUNT, ROLLBACK_COUNT " +
                 " FROM BATCH_STEP_EXECUTION " +
                 " WHERE JOB_EXECUTION_ID = ? " +
                 " ORDER BY STEP_EXECUTION_ID ";
