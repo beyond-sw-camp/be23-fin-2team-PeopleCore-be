@@ -16,7 +16,6 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -24,10 +23,11 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
-/* 만료 Batch 런처 - 회사별 Job 인스턴스 분리 */
-/* JobInstance 식별자: (companyId, targetDate) 조합 - 같은 회사 같은 날 재실행은 dedup, 다른 회사는 독립 */
-/* 매일 00:20 KST 전 회사 런칭 - Balance 의 expiresAt 은 연차/월차(정책 기반) 뿐 아니라 EVENT_BASED(MATERNITY 등) */
-/* 및 관리자 수동 지급 Balance 도 가지므로 정책 타입별 날짜 가드는 두지 않음. expireRemaining 은 멱등이라 no-op 안전 */
+/* 만료 Batch 런처 본체 — 회사별 Job 인스턴스 분리 */
+/* 정기 fire = BalanceExpiryJob (Quartz) → run() 호출 */
+/* 수동 트리거 = 관리 API → run() 호출 */
+/* JobInstance 식별자: (companyId, targetDate) 조합 - 같은 회사 같은 날 재실행 dedup, 다른 회사는 독립 */
+/* 매일 00:20 KST 전 회사 런칭 - Balance 의 expiresAt 은 연차/월차(정책) + EVENT_BASED + 관리자 수동 지급 모두 포함 */
 @Component
 @Slf4j
 public class BalanceExpiryScheduler {
@@ -54,9 +54,10 @@ public class BalanceExpiryScheduler {
         this.vacationPolicyRepository = vacationPolicyRepository;
     }
 
-    @Scheduled(cron = "0 20 0 * * *", zone = "Asia/Seoul")
+    /* 정기/수동 공용 진입점 */
     public void run() {
         LocalDate today = LocalDate.now(ZONE_SEOUL);
+        log.info("[BalanceExpiryBatch] 시작 - date={}", today);
         List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
         int launched = 0;
         int skipped = 0;
@@ -78,8 +79,7 @@ public class BalanceExpiryScheduler {
                 today, activeCompanies.size(), launched, skipped);
     }
 
-    /* 회사 단위 잡 런칭 판단 + 실행 - 정책별 가드 적용 */
-    /* @return true = 런칭 성공, false = 정책/상태 가드로 스킵 */
+    /* 회사 단위 잡 런칭 판단 + 실행 - 정책별 가드 적용. true = 런칭 성공, false = 정책/상태 가드로 스킵 */
     private boolean launchForCompany(UUID companyId, LocalDate today) {
         VacationPolicy policy = vacationPolicyRepository.findByCompanyId(companyId).orElse(null);
         if (policy == null) {
@@ -87,8 +87,8 @@ public class BalanceExpiryScheduler {
             return false;
         }
 
-        /* FISCAL 정책: 회계연도 종료일(12-31) 하루만 런칭 - 다른 날은 소멸 대상 없어 풀스캔 낭비 */
-        /* HIRE 정책: 사원별 expiresAt 이 분산되어 있으므로 매일 런칭 */
+        /* FISCAL 정책: 회계연도 종료일(12-31) 하루만 런칭 - 다른 날은 풀스캔 낭비 */
+        /* HIRE 정책: 사원별 expiresAt 분산 → 매일 런칭 */
         if (policy.getPolicyBaseType() == VacationPolicy.PolicyBaseType.FISCAL
                 && !(today.getMonthValue() == FISCAL_END_MONTH && today.getDayOfMonth() == FISCAL_END_DAY)) {
             log.debug("[BalanceExpiryBatch] FISCAL 정책 - 회계연도 종료일 아님 skip. companyId={}, date={}",

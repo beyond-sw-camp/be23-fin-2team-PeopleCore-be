@@ -5,11 +5,12 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class DepartmentSimpleResponse {
-    private Long deptId;
-    private String deptName;
+public class TitleOrderRequest {
+    private List<Long> titleIds;
 }

@@ -52,7 +52,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/resign",
             "/hr-service/auth/face/register",
             "/hr-service/auth/face/unregister",
-            "/hr-service/auth/face/employees"
+            "/hr-service/auth/face/employees",
+            "/collaboration-service/filevault/admin-capability/config"
     );
 
     //  서버운영팀 전용 경로 (API Key 인증)

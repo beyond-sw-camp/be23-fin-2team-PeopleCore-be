@@ -72,7 +72,7 @@ public class AttendanceStatusJudge {
         boolean hasVacation = Boolean.TRUE.equals(r.getHasApprovedVacationToday());
         boolean recordMissing = r.getComRecId() == null;
 
-        /* 가상 결근 — 배치 전이라도 결근 확정 케이스. AutoCloseBatchService.processAbsent 와 동일 조건 */
+        /* 가상 결근 — 배치 전이라도 결근 확정 케이스. AutoCloseJobConfig.absentReader 가드 와 동일 조건 */
         if (recordMissing && scheduledWorkDay && !hasVacation && !isHoliday
                 && isWorkdayOver(date, r.getGroupEndTime())) {
             out.add(AttendanceCardType.ABSENT);

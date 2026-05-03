@@ -46,7 +46,8 @@ public class RetirementService {
     @Transactional
     public RetirementSettingsResDto saveRetirementSettings(UUID companyId, RetirementSettingsReqDto reqDto){
 
-        if (reqDto.getPensionType() == PensionType.DB || reqDto.getPensionType() == PensionType.DB_DC){
+        // 운용사: severance 제외하고 모두 필수
+        if (reqDto.getPensionType() != PensionType.severance){
             if(reqDto.getPensionProvider() == null || reqDto.getPensionProvider().isBlank()){
                 throw new CustomException(ErrorCode.RETIREMENT_PROVIDER_REQUIRED);
             }

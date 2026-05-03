@@ -20,17 +20,21 @@ public class Title {
     @Column(name = "company_id", nullable = false)
     private UUID companyId;
 
-    @Column(name = "dept_id")
-    private Long deptId;
-
     @Column(name = "title_name", nullable = false)
     private String titleName;
 
     @Column(name = "title_code", nullable = false)
     private String titleCode;
 
-    public void update(String titleName, Long deptId) {
+    @Column(name = "title_order", nullable = false)
+    @Builder.Default
+    private Integer titleOrder = 0;
+
+    public void update(String titleName) {
         this.titleName = titleName;
-        this.deptId = deptId;
+    }
+
+    public void updateOrder(Integer order) {
+        this.titleOrder = order;
     }
 }

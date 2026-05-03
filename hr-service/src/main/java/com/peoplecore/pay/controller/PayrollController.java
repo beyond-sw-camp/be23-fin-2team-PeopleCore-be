@@ -1,5 +1,7 @@
 package com.peoplecore.pay.controller;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
@@ -48,6 +50,13 @@ public class PayrollController {
         return ResponseEntity.status(HttpStatus.CREATED).body(payrollService.createPayroll(companyId, payYearMonth));
     }
 
+    // 사원 동기화 — 신규 입사자 추가
+    @PostMapping("/{payrollRunId}/sync-employees")
+    public ResponseEntity<PayrollSyncResultResDto> syncEmployees(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long payrollRunId) {
+        return ResponseEntity.ok(payrollService.syncEmployees(companyId, payrollRunId));
+    }
 
 //    사원별 급여 상세
     @GetMapping("/{payrollRunId}/employees/{empId}")
@@ -115,15 +124,23 @@ public class PayrollController {
     public ResponseEntity<byte[]> downloadTransferFile(
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long payrollRunId,
-            @RequestBody List<Long> empIds){
+            @RequestBody List<Long> empIds) throws Exception {
 
         TransferFileResDto result = payrollService.generateTransferFile(companyId, payrollRunId, empIds);
 
-        return ResponseEntity.ok()
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
                         "attachment; filename=" + URLEncoder.encode(result.getFileName(), StandardCharsets.UTF_8))
-                .contentType(MediaType.APPLICATION_OCTET_STREAM)
-                .body(result.getFileBytes());
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+
+        // 스킵 명단 있으면 헤더로 전달 (URL-인코딩된 JSON)
+        if (result.getSkippedEmployees() != null && !result.getSkippedEmployees().isEmpty()) {
+            String json = new ObjectMapper().writeValueAsString(result.getSkippedEmployees());
+            builder.header("X-Skipped-Employees", URLEncoder.encode(json, StandardCharsets.UTF_8));
+        }
+
+        return builder.body(result.getFileBytes());
     }
 
 //    일당/시급 기준 조회

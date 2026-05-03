@@ -31,6 +31,7 @@ out/
 payroll-ledger-code.md
 severance-estimate-code.md
 severance-ledger-code.md
+hr-service/docs/troubleshooting-quartz-migration.md
 
 # ============================
 # Spring Boot
