@@ -18,6 +18,7 @@ public class SeveranceResDto {
 
     private Long sevId;
     private Long empId;
+    private String empNum;
     private String empName;
     private String deptName;
     private String gradeName;
@@ -39,6 +40,7 @@ public class SeveranceResDto {
         return SeveranceResDto.builder()
                 .sevId(s.getSevId())
                 .empId(s.getEmployee().getEmpId())
+                .empNum(s.getEmployee().getEmpNum())
                 .empName(s.getEmpName())
                 .deptName(s.getDeptName())
                 .gradeName(s.getGradeName())

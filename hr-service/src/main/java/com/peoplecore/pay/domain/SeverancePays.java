@@ -129,7 +129,6 @@ public class SeverancePays extends BaseTimeEntity {
     private Company company;
 
 //    지급일
-    @Column(nullable = false)
     private LocalDate transferDate; //실제 이체일
 
 //    확정자

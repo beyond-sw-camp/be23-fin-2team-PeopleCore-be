@@ -15,6 +15,8 @@ import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.enums.*;
 import com.peoplecore.pay.repository.*;
 import com.peoplecore.pay.tax.RetirementIncomeTaxCalculator;
+import com.peoplecore.resign.domain.Resign;
+import com.peoplecore.resign.repository.ResignRepository;
 import com.peoplecore.vacation.entity.VacationPolicy;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -47,9 +49,10 @@ public class SeveranceService {
     private final VacationPolicyRepository vacationPolicyRepository;
     private final LeaveAllowanceRepository leaveAllowanceRepository;
     private final RetirementIncomeTaxCalculator retirementIncomeTaxCalculator;
+    private final ResignRepository resignRepository;
 
     @Autowired
-    public SeveranceService(SeverancePaysRepository severanceRepository, CompanyRepository companyRepository, EmployeeRepository employeeRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, SeverancePaysRepositoryImpl severanceRepositoryImpl, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceRepository leaveAllowanceRepository, RetirementIncomeTaxCalculator retirementIncomeTaxCalculator, SeverancePaysRepository severancePaysRepository) {
+    public SeveranceService(SeverancePaysRepository severanceRepository, CompanyRepository companyRepository, EmployeeRepository employeeRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, SeverancePaysRepositoryImpl severanceRepositoryImpl, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceRepository leaveAllowanceRepository, RetirementIncomeTaxCalculator retirementIncomeTaxCalculator, SeverancePaysRepository severancePaysRepository, ResignRepository resignRepository) {
         this.companyRepository = companyRepository;
         this.employeeRepository = employeeRepository;
         this.empRetirementAccountRepository = empRetirementAccountRepository;
@@ -59,6 +62,7 @@ public class SeveranceService {
         this.leaveAllowanceRepository = leaveAllowanceRepository;
         this.retirementIncomeTaxCalculator = retirementIncomeTaxCalculator;
         this.severancePaysRepository = severancePaysRepository;
+        this.resignRepository = resignRepository;
     }
 
 //    사원 퇴직 이벤트 발생시 퇴직금 자동산정용 메서드
@@ -99,8 +103,13 @@ public class SeveranceService {
         LocalDate hireDate = emp.getEmpHireDate();
         LocalDate resignDate = emp.getEmpResignDate();
 
-        if (resignDate == null){
-            throw new CustomException(ErrorCode.RESIGN_DATE_NOT_SET);
+// Employee.empResignDate 미설정(아직 RESIGNED 상태가 아님) → 활성 Resign 의 퇴직예정일 fallback
+// 운영 시나리오: CONFIRMED 상태에서 퇴직금 사전 산정 (직원 사전 통보 + 대장작성 사전 시작)
+        if (resignDate == null) {
+            resignDate = resignRepository
+                    .findActiveOrConfirmedByEmpId(companyId, empId)
+                    .map(Resign::getResignDate)
+                    .orElseThrow(() -> new CustomException(ErrorCode.RESIGN_DATE_NOT_SET));
         }
 
 //        근속일수 / 근속연수
@@ -120,14 +129,17 @@ public class SeveranceService {
 //        직전 3개월 총 일수
         int last3MonthDays = calcTotalDays(resignDate.minusMonths(3), resignDate);
 
-//        급여 데이터 조회(QueryDSL)
-        Long last3MonthPay = severancePaysRepository.sumLast3MonthPay(empId,companyId,last3Months);
-
+//        급여 데이터 조회(QueryDSL) — 사전 산정 시 데이터 부재 가능 → null 방지
+        Long last3MonthPay = severancePaysRepository.sumLast3MonthPay(empId, companyId, last3Months);
+        if (last3MonthPay == null || last3MonthPay == 0L) {
+            throw new CustomException(ErrorCode.SEVERANCE_NO_PAYROLL_DATA);
+        }
 //        직전 1년 상여금
         List<String> last12Months = buildMonthRange(
                 resignYm.minusMonths(12),
                 resignYm.minusMonths(1));
         Long lastYearBonus = severancePaysRepository.sumLastYearBonus(empId, companyId, last12Months);
+        if (lastYearBonus == null) lastYearBonus = 0L;     // 상여금은 실제로 0 가능 → fallback OK
 
 //        상여금 가산액 = 직전 1년 상여금 * (3/12)
          BigDecimal bonusAdded = BigDecimal.valueOf(lastYearBonus)
@@ -186,6 +198,8 @@ public class SeveranceService {
         // 직전 3개월 비과세 누계 → 퇴직소득세 계산에 반영
         Long nonTaxableSum = severanceRepositoryImpl
                 .sumNonTaxableLast3Months(empId, companyId, last3Months);
+        if (nonTaxableSum == null) nonTaxableSum = 0L;
+
 
 //        퇴직소득세/지방소득세 자동산출
 //        퇴직소득세는 분류과세라서 인적공제(부양가족공제) 없음
@@ -228,7 +242,7 @@ public class SeveranceService {
                     .annualLeaveOnRetirement(annualLeaveOnRetirement)
                     .avgDailyWage(avgDailyWage)
                     .severanceAmount(severanceAmount)
-                    .last3MonthDays(last3MonthDays)
+                    .last3MonthPay(last3MonthPay)
                     .taxAmount(retirementIncomeTax)
                     .localIncomeTax(localIncomeTax)
                     .taxYear(taxYear)

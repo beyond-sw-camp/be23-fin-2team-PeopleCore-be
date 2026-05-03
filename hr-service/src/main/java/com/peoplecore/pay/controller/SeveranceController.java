@@ -59,7 +59,7 @@ public class SeveranceController {
     @PutMapping("/{sevId}/confirm")
     public ResponseEntity<Void> confirm(
             @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-EmpId") Long empId,
+            @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long sevId) {
         severanceService.confirmSeverance(companyId, sevId, empId);
         return ResponseEntity.ok().build();

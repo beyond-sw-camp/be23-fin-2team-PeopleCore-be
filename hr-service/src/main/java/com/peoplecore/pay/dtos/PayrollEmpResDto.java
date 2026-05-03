@@ -13,6 +13,7 @@ public class PayrollEmpResDto {
 //    급여대장 사원 행
 
     private Long empId;
+    private String empNum;
     private String empName;
     private String deptName;
     private String gradeName;

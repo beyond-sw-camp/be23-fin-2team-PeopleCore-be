@@ -11,6 +11,7 @@ import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.event.PayrollApprovalResultEvent;
+import com.peoplecore.event.PayrollPaidEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.*;
@@ -28,6 +29,7 @@ import com.peoplecore.vacation.entity.VacationPolicy;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import com.peoplecore.vacation.service.BusinessDayCalculator;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,23 +58,21 @@ public class PayrollService {
     private final PaySettingsRepository paySettingsRepository;
     private final BankTransferFileFactory bankTransferFileFactory;
     private final EmpAccountsRepository empAccountsRepository;
-    private final CommuteRecordRepository commuteRecordRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
     private final BusinessDayCalculator businessDayCalculator;
     private final InsuranceRatesRepository insuranceRatesRepository;
     private final TaxWithholdingService taxWithholdingService;
-    private final RetirementPensionDepositsRepository depositRepository;
     private final MySalaryCacheService mySalaryCacheService;
     private final PayrollEmpStatusRepository payrollEmpStatusRepository;
     private final PayStubsRepository payStubsRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
     private final LeaveAllowanceService leaveAllowanceService;
     private final LeaveAllowanceRepository leaveAllowanceRepository;
-
+    private final ApplicationEventPublisher eventPublisher;
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementPensionDepositsRepository depositRepository, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceService leaveAllowanceService, LeaveAllowanceRepository leaveAllowanceRepository) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository,  OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceService leaveAllowanceService, LeaveAllowanceRepository leaveAllowanceRepository, ApplicationEventPublisher eventPublisher) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -83,18 +83,17 @@ public class PayrollService {
         this.paySettingsRepository = paySettingsRepository;
         this.bankTransferFileFactory = bankTransferFileFactory;
         this.empAccountsRepository = empAccountsRepository;
-        this.commuteRecordRepository = commuteRecordRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
         this.businessDayCalculator = businessDayCalculator;
         this.insuranceRatesRepository = insuranceRatesRepository;
         this.taxWithholdingService = taxWithholdingService;
-        this.depositRepository = depositRepository;
         this.mySalaryCacheService = mySalaryCacheService;
         this.payrollEmpStatusRepository = payrollEmpStatusRepository;
         this.payStubsRepository = payStubsRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
         this.leaveAllowanceService = leaveAllowanceService;
         this.leaveAllowanceRepository = leaveAllowanceRepository;
+        this.eventPublisher = eventPublisher;
     }
 
 ///       급여대장 조회(특정 월)
@@ -149,6 +148,7 @@ public class PayrollService {
 
         return PayrollEmpResDto.builder()
                 .empId(emp.getEmpId())
+                .empNum(emp.getEmpNum())
                 .empName(emp.getEmpName())
                 .deptName(emp.getDept().getDeptName())
                 .gradeName(emp.getGrade().getGradeName())
@@ -160,7 +160,7 @@ public class PayrollService {
                 .totalPay(pay)
                 .totalDeduction(deduction)
                 .netPay(pay-deduction)
-                .unpaid(run.getPayrollStatus() == PayrollStatus.PAID ? 0L : pay - deduction)
+                .unpaid("PAID".equals(empStatusValue) ? 0L : pay - deduction)
                 .pendingOvertimeAmount(pendingOtValue)
                 .build();
         })
@@ -650,6 +650,9 @@ public class PayrollService {
 
         if (allPaid && run.getPayrollStatus() == PayrollStatus.APPROVED) {
             run.markPaid(now);
+            // run 이 PAID 로 전이된 시점에만 이벤트 발행 (개별 사원 PAID 가 아님)
+            eventPublisher.publishEvent(new PayrollPaidEvent(
+                    companyId, run.getPayYearMonth(), run.getPayrollRunId()));
         }
 
         log.info("[PayrollService] 지급처리 - runId={}, paid={}명, runMarkedPaid={}",
@@ -989,7 +992,7 @@ public class PayrollService {
     }
 
 
-//    지급합계 기반 공제항목 실시간 계산
+///    지급합계 기반 공제항목 실시간 계산
 //   4대보험·소득세 base 모두 비과세 차감된 taxableBase 사용 (법령상 원칙)
     public CalcDeductionResDto calcDeductions(UUID companyId, CalcDeductionReqDto reqDto){
 

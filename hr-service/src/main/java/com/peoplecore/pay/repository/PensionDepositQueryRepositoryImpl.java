@@ -180,6 +180,7 @@ public class PensionDepositQueryRepositoryImpl implements PensionDepositQueryRep
         List<Tuple> rows = queryFactory
                 .select(
                         rpd.employee.empId,
+                        rpd.employee.empNum,
                         rpd.employee.empName,
                         rpd.employee.dept.deptName,
                         monthCountExpr,
@@ -189,7 +190,8 @@ public class PensionDepositQueryRepositoryImpl implements PensionDepositQueryRep
                 .from(rpd)
                 .join(rpd.employee, qEmp)
                 .where(buildByEmployeeWhere(companyId, fromYm, toYm, search, deptId, status, null, null))
-                .groupBy(rpd.employee.empId, rpd.employee.empName, rpd.employee.dept.deptName)
+                .groupBy(rpd.employee.empId,
+                        rpd.employee.empNum, rpd.employee.empName, rpd.employee.dept.deptName)
                 .orderBy(rpd.employee.empName.asc())
                 .fetch();
 
@@ -216,6 +218,7 @@ public class PensionDepositQueryRepositoryImpl implements PensionDepositQueryRep
             Long empId = t.get(rpd.employee.empId);
             result.add(PensionDepositByEmployeeResDto.builder()
                     .empId(empId)
+                    .empNum(t.get(rpd.employee.empNum))
                     .empName(t.get(rpd.employee.empName))
                     .deptName(t.get(rpd.employee.dept.deptName))
                     .monthCount(t.get(monthCountExpr))
@@ -236,7 +239,8 @@ public class PensionDepositQueryRepositoryImpl implements PensionDepositQueryRep
         where.and(rpd.company.companyId.eq(companyId));
         if (fromYm != null && !fromYm.isBlank()) where.and(rpd.payYearMonth.goe(fromYm));
         if (toYm != null && !toYm.isBlank()) where.and(rpd.payYearMonth.loe(toYm));
-        if (search != null && !search.isBlank()) where.and(rpd.employee.empName.containsIgnoreCase(search));
+        if (search != null && !search.isBlank()) where.and(rpd.employee.empName.containsIgnoreCase(search)
+                .or(rpd.employee.empNum.containsIgnoreCase(search)));
         if (deptId != null) where.and(rpd.employee.dept.deptId.eq(deptId));
         if (status != null) where.and(rpd.depStatus.eq(status));
         if (isManualFlag != null) where.and(rpd.isManual.eq(isManualFlag));
