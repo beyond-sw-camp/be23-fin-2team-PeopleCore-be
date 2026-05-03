@@ -43,9 +43,10 @@ public class EmpSalaryService {
     private final TaxWithholdingService taxWithholdingService;
     private final RetirementRepository retirementRepository;
     private final EmpSalaryCacheService empSalaryCacheService;
+    private final AccountVerifyService accountVerifyService;
 
     @Autowired
-    public EmpSalaryService(EmployeeRepository employeeRepository, EmpAccountsRepository empAccountsRepository, SalaryContractRepository salaryContractRepository, PayItemsRepository payItemsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementRepository retirementRepository, EmpSalaryCacheService empSalaryCacheService) {
+    public EmpSalaryService(EmployeeRepository employeeRepository, EmpAccountsRepository empAccountsRepository, SalaryContractRepository salaryContractRepository, PayItemsRepository payItemsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, RetirementRepository retirementRepository, EmpSalaryCacheService empSalaryCacheService, AccountVerifyService accountVerifyService) {
         this.employeeRepository = employeeRepository;
         this.empAccountsRepository = empAccountsRepository;
         this.salaryContractRepository = salaryContractRepository;
@@ -55,13 +56,18 @@ public class EmpSalaryService {
         this.taxWithholdingService = taxWithholdingService;
         this.retirementRepository = retirementRepository;
         this.empSalaryCacheService = empSalaryCacheService;
+        this.accountVerifyService = accountVerifyService;
     }
 
 /// 사원 급여 목록
     public Page<EmpSalaryResDto> getEmpSalaryList(UUID companyId, String keyword, Long deptId, EmpType empType, EmpStatus empStatus, Integer year, Pageable pageable) {
 
 //        1. Employee 페이지 조회
-        Page<Employee> employees = employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, null, null, pageable);
+        // 퇴직자는 사원별 급여관리 화면에서 제외
+        if (empStatus == EmpStatus.RESIGNED) {
+            return Page.empty(pageable);
+        }
+        Page<Employee> employees =  (empStatus == null) ? employeeRepository.findActiveOrOnLeaveWithFilter(companyId, keyword, deptId, empType, pageable) :  employeeRepository.findAllWithFilter(companyId, keyword, deptId, empType, empStatus, null, null, pageable);
 
         if (employees.isEmpty()) {
             return employees.map(employee -> {
@@ -147,7 +153,6 @@ public class EmpSalaryService {
                 .dependentsCount(employee.getDependentsCount())
                 .annualSalary(annualSalary)
                 .monthlySalary(monthlySalary)
-                .contractYear(contract != null ? contract.getContractYear() : null)
                 .contractStartDate(contract != null ? contract.getApplyFrom() : null)
                 .contractEndDate(contract != null ? contract.getApplyTo() : null)
                 .fixedPayItems(fixedPayItems)
@@ -185,9 +190,17 @@ public class EmpSalaryService {
     }
 
 
-//    급여계좌 변경 (캐시 무효화 evict)
+///    급여계좌 변경 (캐시 무효화 evict)
     @Transactional
     public void updateEmpAccount(UUID companyId, Long empId, EmpAccountReqDto reqDto){
+
+        // 토큰 검증
+        accountVerifyService.consumeToken(
+                reqDto.getVerificationToken(),
+                reqDto.getBankCode(),
+                reqDto.getAccountNumber(),
+                reqDto.getAccountHolder()
+        );
 
         Optional<EmpAccounts> empAccount = empAccountsRepository.findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
 
@@ -205,6 +218,7 @@ public class EmpSalaryService {
             EmpAccounts newAccount = EmpAccounts.builder()
                     .employee(emp)
                     .bankName(reqDto.getBankName())
+                    .bankCode(reqDto.getBankCode())
                     .accountNumber(reqDto.getAccountNumber())
                     .accountHolder(reqDto.getAccountHolder())
                     .company(emp.getCompany())
@@ -216,7 +230,7 @@ public class EmpSalaryService {
         empSalaryCacheService.evictByEmpId(companyId, empId);
     }
 
-//    퇴직연금계좌 변경
+///    퇴직연금계좌 변경
     @Transactional
     public void updateRetirementAccount(UUID companyId, Long empId, EmpRetirementAccountReqDto reqDto){
         Optional<EmpRetirementAccount> retAccount = empRetirementAccountRepository.findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
@@ -241,12 +255,12 @@ public class EmpSalaryService {
         empSalaryCacheService.evictByEmpId(companyId, empId);
     }
 
-//    퇴직연금 유형 변경 (회사설정 DB_DC 일때만)
+///    퇴직연금 유형 변경 (회사설정 DB_DC 일때만)
     @Transactional
     public void updateRetirementType(UUID companyId, Long empId, RetirementTypeUpdateReqDto reqDto){
         Employee emp = employeeRepository.findById(empId).filter(e -> e.getCompany().getCompanyId().equals(companyId)).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-//        1. 회사 퇴직연금 설정 조회
+//      1. 회사 퇴직연금 설정 조회
         RetirementSettings retirementSettings = retirementRepository.findByCompany_CompanyId(companyId).orElseThrow(()-> new CustomException(ErrorCode.RETIREMENT_SETTINGS_NOT_FOUND));
 
 //      2. 회사 설정이 DB_DC일때만 변경 가능

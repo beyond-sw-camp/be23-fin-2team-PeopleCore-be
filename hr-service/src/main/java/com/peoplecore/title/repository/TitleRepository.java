@@ -9,11 +9,11 @@ import java.util.UUID;
 
 public interface TitleRepository extends JpaRepository<Title, Long> {
     List<Title> findAllByCompanyId(UUID companyId);
-    boolean existsByTitleNameAndCompanyIdAndDeptId(String titleName, UUID companyId, Long deptId);
+    boolean existsByTitleNameAndCompanyId(String titleName, UUID companyId);
     long countByCompanyId(UUID companyId);
 
-    boolean existsByTitleNameAndCompanyIdAndDeptIdAndTitleIdNot(
-            String titleName, UUID companyId, Long deptId, Long titleId);
+    boolean existsByTitleNameAndCompanyIdAndTitleIdNot(
+            String titleName, UUID companyId, Long titleId);
 
     Optional<Title> findTopByCompanyIdOrderByTitleCodeDesc(UUID companyId);
     Optional<Title> findByCompanyIdAndTitleName(UUID companyId, String titleName);

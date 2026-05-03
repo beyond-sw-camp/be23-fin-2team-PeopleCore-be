@@ -14,16 +14,14 @@ public class TitleResponse {
     private Long titleId;
     private String titleName;
     private String titleCode;
-    private Long deptId;
-    private String deptName;
+    private Integer titleOrder;
 
-    public static TitleResponse from(Title title, String deptName) {
+    public static TitleResponse from(Title title) {
         return TitleResponse.builder()
                 .titleId(title.getTitleId())
                 .titleName(title.getTitleName())
                 .titleCode(title.getTitleCode())
-                .deptId(title.getDeptId())
-                .deptName(deptName)
+                .titleOrder(title.getTitleOrder())
                 .build();
     }
 }

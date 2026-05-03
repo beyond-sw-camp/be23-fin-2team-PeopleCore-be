@@ -13,6 +13,4 @@ import lombok.NoArgsConstructor;
 public class TitleUpdateRequest {
     @NotBlank
     private String titleName;
-
-    private Long deptId;
 }

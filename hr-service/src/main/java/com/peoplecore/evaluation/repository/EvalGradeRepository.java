@@ -109,5 +109,6 @@ public interface EvalGradeRepository extends JpaRepository<EvalGrade, Long>, Eva
             """)
     int lockAllAssigned(@Param("seasonId") Long seasonId, @Param("now") LocalDateTime now);
 
-
+    // 평가자 퇴사 시 정리 — 시즌 + 그 사원이 평가자로 박제된 row 들 조회
+    List<EvalGrade> findBySeason_SeasonIdAndEvaluatorIdSnapshot(Long seasonId, Long evaluatorIdSnapshot);
 }

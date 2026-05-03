@@ -52,4 +52,9 @@ public interface LeaveAllowanceRepository extends JpaRepository<LeaveAllowance, 
             @Param("companyId") UUID companyId,
             @Param("empId") Long empID,
             @Param("statuses") List<AllowanceStatus> statuses);
+
+
+    // 특정 월에 검토 대기(CALCULATED + 미반영) 건수
+    long countByCompany_CompanyIdAndStatusAndAppliedMonthIsNull(UUID companyId, AllowanceStatus status);
+
 }

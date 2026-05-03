@@ -16,9 +16,9 @@ import java.util.UUID;
 @Repository
 public interface SalaryContractRepository extends JpaRepository<SalaryContract, Long>, SalaryContractRepositoryCustom {
 
-    List<SalaryContract>findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(UUID companyId, Long empId);
+    List<SalaryContract>findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByApplyFromDesc(UUID companyId, Long empId);
 
-    Optional<SalaryContract> findTopByEmployee_EmpIdOrderByContractYearDesc(Long employeeId);
+    Optional<SalaryContract> findTopByEmployee_EmpIdOrderByApplyFromDesc(Long employeeId);
 
     /*  사원ID 리스트 + 기간(periodStart ~ periodEnd) 안에 적용된 유효 계약을 한 번의 쿼리로 조회.
      * - year 미지정: today ~ today
@@ -32,7 +32,7 @@ public interface SalaryContractRepository extends JpaRepository<SalaryContract, 
               AND c.deletedAt IS NULL
               AND (c.applyFrom IS NULL OR c.applyFrom <= :periodEnd)
               AND (c.applyTo IS NULL OR c.applyTo >= :periodStart)
-            ORDER BY c.applyFrom DESC, c.contractYear DESC
+            ORDER BY c.applyFrom DESC
             """)
     List<SalaryContract> findActiveContractsByEmpIds(
             @Param("companyId") UUID companyId,

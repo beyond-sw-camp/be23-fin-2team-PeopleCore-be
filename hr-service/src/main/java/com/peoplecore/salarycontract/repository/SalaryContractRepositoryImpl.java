@@ -11,6 +11,7 @@ import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Repository;
 
 import java.util.ArrayList;
@@ -30,7 +31,7 @@ public class SalaryContractRepositoryImpl implements SalaryContractRepositoryCus
 
 
     @Override
-    public Page<SalaryContractListResDto> findAllWithFilter(UUID companyId, String search, String year, SalaryContractSortField sortField, Pageable pageable) {
+    public Page<SalaryContractListResDto> findAllWithFilter(UUID companyId, String search, SalaryContractSortField sortField, Sort.Direction sortDirection, Pageable pageable) {
 
         //    데이터 조회 fetch join
         List<SalaryContract> content = queryFactory
@@ -42,10 +43,9 @@ public class SalaryContractRepositoryImpl implements SalaryContractRepositoryCus
                 .where(
                         companyEq(companyId),        //회사필터
                         searchContains(search),     //이름/사번 검색
-                        yearEq(year),  //연도필터
                         qSalaryContract.deletedAt.isNull()
                 )
-                .orderBy(getOrderSpecifier(sortField))  //정렬
+                .orderBy(getOrderSpecifier(sortField, sortDirection))  //정렬
                 .offset(pageable.getOffset())       //시작위치
                 .limit(pageable.getPageSize())      //한 페이지 개수
                 .fetch();   //실행 -> List반환
@@ -58,7 +58,6 @@ public class SalaryContractRepositoryImpl implements SalaryContractRepositoryCus
                 .where(
                         companyEq(companyId), //회사Id일치
                         searchContains(search), //검색어 필터
-                        yearEq(year), //연도필터
                         qSalaryContract.deletedAt.isNull()
                 )
                 .fetchOne(); //count값으로 단일값
@@ -91,22 +90,17 @@ public class SalaryContractRepositoryImpl implements SalaryContractRepositoryCus
 
 
 
-//  정렬 기준 매핑  Enum사용
-    private OrderSpecifier<?>getOrderSpecifier(SalaryContractSortField sortField) {
+//  정렬 기준 매핑  Enum사용 (양방향 지원)
+    private OrderSpecifier<?> getOrderSpecifier(SalaryContractSortField sortField, Sort.Direction direction) {
         if (sortField == null) {
-            return qSalaryContract.contractId.desc(); // 최신계약순
+            return qSalaryContract.contractId.desc(); // 기본: 최신계약순
         }
-        switch (sortField){
-            case EMP_NUM:
-                return qEmployee.empNum.asc(); // 사번 오름차순
-            case EMP_NAME:
-                return qEmployee.empName.asc(); //이름 가나다순
-            case CONTRACT_START:
-                return qSalaryContract.applyFrom.desc();   //계약 최신순
-            default:
-                return qSalaryContract.contractId.desc();   //계약ID 기준 최신순 (기본 정렬)
-
-        }
+        boolean desc = direction == Sort.Direction.DESC;
+        return switch (sortField) {
+            case EMP_NUM        -> desc ? qEmployee.empNum.desc()         : qEmployee.empNum.asc();         // 사번
+            case EMP_NAME       -> desc ? qEmployee.empName.desc()        : qEmployee.empName.asc();        // 이름
+            case CONTRACT_START -> desc ? qSalaryContract.applyFrom.desc(): qSalaryContract.applyFrom.asc();// 계약시작일
+        };
     }
 
     //    회사 id필터
@@ -123,14 +117,6 @@ public class SalaryContractRepositoryImpl implements SalaryContractRepositoryCus
             return null;
         }
         return qEmployee.empName.contains(search).or(qEmployee.empNum.contains(search));
-    }
-
-    //    계약년도 필터
-    private BooleanExpression yearEq(String year) {
-        if (year == null || year.isBlank()) {
-            return null;
-        }
-        return qSalaryContract.contractYear.eq(Integer.parseInt(year));
     }
 
 ////    soft delete필터(삭제되지 않은 건만 조회)

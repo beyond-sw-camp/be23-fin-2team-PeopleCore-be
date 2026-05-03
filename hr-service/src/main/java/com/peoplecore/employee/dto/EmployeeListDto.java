@@ -19,6 +19,7 @@ public class EmployeeListDto {
     private Long empId;
     private String empNum;
     private String empName;
+    private Long deptId;        // 평가자-피평가자 부서 계층 검증용 (같은 부서/상위 부서만 허용)
     private String deptName;
     private String gradeName;
     private String titleName;
@@ -32,13 +33,13 @@ public class EmployeeListDto {
                 .empId(employee.getEmpId())
                 .empNum(employee.getEmpNum())
                 .empName(employee.getEmpName())
+                .deptId(employee.getDept().getDeptId())
                 .deptName(employee.getDept().getDeptName())
                 .gradeName(employee.getGrade().getGradeName())
                 .titleName(employee.getTitle() != null ? employee.getTitle().getTitleName() : null)
                 .empType(employee.getEmpType())
                 .empHireDate(employee.getEmpHireDate())
                 .empStatus(employee.getEmpStatus())
-                .empId(employee.getEmpId())
                 .build();
     }
 }

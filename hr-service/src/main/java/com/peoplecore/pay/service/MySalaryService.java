@@ -36,10 +36,10 @@ public class MySalaryService {
     private final PayItemsRepository payItemsRepository;
     private final EmpAccountsRepository empAccountsRepository;
     private final EmpRetirementAccountRepository empRetirementAccountRepository;
-        private final MySalaryCacheService cacheService;
-        private final PayStubsRepository payStubsRepository;
-        private final MySalaryQueryRepository mySalaryQueryRepository;
-        private final RetirementPensionDepositsRepository pensionDepositsRepository;
+    private final MySalaryCacheService cacheService;
+    private final PayStubsRepository payStubsRepository;
+    private final MySalaryQueryRepository mySalaryQueryRepository;
+    private final RetirementPensionDepositsRepository pensionDepositsRepository;
     private final MySalaryCacheService mySalaryCacheService;
     private final PayrollDetailsRepository payrollDetailsRepository;
     private final RetirementRepository retirementRepository;
@@ -144,7 +144,7 @@ public class MySalaryService {
     }
     /** 최신 연봉계약 기반 연봉/월급/고정수당 조립 */
     private MySalaryInfoResDto.SalaryInfoDto buildSalaryInfo(UUID companyId, Long empId) {
-        List<SalaryContract> contracts = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(companyId, empId);
+        List<SalaryContract> contracts = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByApplyFromDesc(companyId, empId);
 
         if (contracts.isEmpty()) {
             return MySalaryInfoResDto.SalaryInfoDto.builder()
@@ -291,9 +291,7 @@ public PayStubDetailResDto getPayStubDetail(UUID companyId, Long empId, Long stu
     return result;
 }
 
-    /**
-     * PayStubItem 리스트에서 특정 PayItemType 만 재귀 필터링.
-     */
+    // PayStubItem 리스트에서 특정 PayItemType 만 재귀 필터링.
     private List<PayStubItemResDto> filterByType(
             List<PayStubItemResDto> items, int index,
             PayItemType type, List<PayStubItemResDto> acc) {
@@ -319,7 +317,7 @@ public PayStubDetailResDto getPayStubDetail(UUID companyId, Long empId, Long stu
                 : "severance";
 
         // 최신 연봉 기반 월 적립금 (DC 형만 의미 있음)
-        long annual = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByContractYearDesc(companyId, empId)
+        long annual = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByApplyFromDesc(companyId, empId)
                 .stream().findFirst()
                 .map(c -> c.getTotalAmount() != null ? c.getTotalAmount().longValue() : 0L).orElse(0L);
         long monthlyDeposit = "DC".equals(retirementType) ? annual / 12 : 0L;
@@ -416,46 +414,6 @@ public PayStubDetailResDto getPayStubDetail(UUID companyId, Long empId, Long stu
                 .displayAmount(row.getDisplayAmount())
                 .calculatedAt(LocalDateTime.now())
                 .build();
-    }
-
-    //    부양가족수 변경
-    @Transactional
-    public void updateMyDependents(UUID companyId, Long empId, Integer dependentsCount){
-        Employee emp = employeeRepository.findById(empId)
-                .filter(e -> e.getCompany().getCompanyId().equals(companyId))
-                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
-
-        emp.updateDependentsCount(dependentsCount);
-
-        // 캐시 무효화 (내 급여 + 관리자측 둘 다)
-        mySalaryCacheService.evictSalaryInfoCache(companyId, empId);
-        empSalaryCacheService.evictByEmpId(companyId, empId);
-        empSalaryCacheService.evictExpected(companyId);
-    }
-
-
-
-//    급여 계좌 변경
-    @Transactional
-    public void updateSalaryAccount(UUID companyId, Long empId, AccountUpdateReqDto req) {
-        EmpAccounts existing = empAccountsRepository
-                .findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId)
-                .orElseThrow(() -> new CustomException(ErrorCode.EMP_ACCOUNT_NOT_FOUND));
-
-        // EmpAccounts 는 update 메서드가 없으므로 builder 로 재구성 후 save
-        EmpAccounts updated = EmpAccounts.builder()
-                .empAccountId(existing.getEmpAccountId())       // 동일 PK → save 시 update
-                .employee(existing.getEmployee())
-                .company(existing.getCompany())
-                .bankName(req.getBankName())
-                .accountNumber(req.getAccountNumber())
-                .accountHolder(req.getAccountHolder())
-                .build();
-        empAccountsRepository.save(updated);
-
-        // 캐시 무효화
-        cacheService.evictSalaryInfoCache(companyId, empId);
-        log.info("[MySalary] 급여 계좌 변경 완료 - empId={}, bank={}", empId, req.getBankName());
     }
 
 

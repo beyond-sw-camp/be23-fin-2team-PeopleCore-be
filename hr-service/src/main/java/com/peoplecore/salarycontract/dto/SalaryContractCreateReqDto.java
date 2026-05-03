@@ -27,14 +27,14 @@ public class SalaryContractCreateReqDto {
     public static class FieldValue {
 
         @NotBlank(message = "필드키는 필수입니다")
-        private String fieldKey; //필드 식별자(ex.contractYear,annualSalary)
+        private String fieldKey; //필드 식별자(ex.contractStart,annualSalary)
 
         private String value; //입력값
 
 //    ex. "empId": 1,
 //        "fields": [
-//        { "fieldKey": "contractYear",  "value": "2026" },
-//        { "fieldKey": "contractStart", "value": "2026-01-01" }
+//        { "fieldKey": "contractStart", "value": "2026-01-01" },
+//        { "fieldKey": "contractEnd", "value": "2026-12-31" }
 //        ]
 
     }

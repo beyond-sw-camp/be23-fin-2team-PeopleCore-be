@@ -4,6 +4,7 @@ import com.peoplecore.evaluation.dto.GoalDeleteResultDto;
 import com.peoplecore.evaluation.dto.GoalRejectRequest;
 import com.peoplecore.evaluation.dto.GoalRequest;
 import com.peoplecore.evaluation.dto.GoalResponse;
+import com.peoplecore.evaluation.dto.GoalWeightsRequest;
 import com.peoplecore.evaluation.dto.TeamMemberGoalResponse;
 import com.peoplecore.evaluation.service.EvaluatorRoleService;
 import com.peoplecore.evaluation.service.GoalService;
@@ -87,11 +88,21 @@ public class GoalController {
     */
 
     // 6. 본인의 작성중 목표 일괄 제출
+    //    - 제출 직전 KPI weight 합 = 100 검증 (서비스에서)
     @PostMapping("/submit-all")
     public ResponseEntity<List<GoalResponse>> submitAllDrafts(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId) {
         return ResponseEntity.ok(goalService.submitAllDrafts(companyId, empId));
+    }
+
+    // 6-1. 본인 KPI 목표 가중치 일괄 저장 (제출 화면 임시저장 — 합계 100 미검증)
+    @PutMapping("/weights")
+    public ResponseEntity<List<GoalResponse>> updateWeights(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestBody @Valid GoalWeightsRequest request) {
+        return ResponseEntity.ok(goalService.updateWeights(companyId, empId, request));
     }
 
 //    평가자 목표 조회 및 승인
@@ -138,7 +149,7 @@ public class GoalController {
 
     // 각 엔드포인트 앞에서 호출되는 평가자 가드. empId 가 부서별 배정에 있는지만 확인.
     private void requireEvaluator(UUID companyId, Long empId) {
-        if (!evaluatorRoleService.isEvaluator(companyId, empId)) {
+        if (!evaluatorRoleService.me(companyId, empId).isEvaluator()) {
             throw new BusinessException("평가자 권한이 없습니다.", HttpStatus.FORBIDDEN);
         }
     }

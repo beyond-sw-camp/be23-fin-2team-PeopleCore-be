@@ -13,10 +13,12 @@ import jakarta.validation.Valid;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -56,10 +58,18 @@ public class EmployeeController {
 //
 ////    3. 신규등록
     @PostMapping
-    public ResponseEntity<Long>createEmployee(@RequestHeader("X-User-Company")UUID companyId,
+    public ResponseEntity<Long> createEmployee(@RequestHeader("X-User-Company")UUID companyId,
                                               @Valid @ModelAttribute EmployeeCreateRequestDto responseDto,
                                               @RequestPart(required = false) List<MultipartFile> files){
         return ResponseEntity.ok(employeeService.createEmployee(companyId, responseDto,files));
+    }
+
+//    3-1. 사번 미리보기 (락 x)
+    @GetMapping("/preview-empnum")
+    public ResponseEntity<String> previewEmpNum(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate hireDate){
+        return ResponseEntity.ok(employeeService.previewEmpNum(companyId, hireDate));
     }
 
 

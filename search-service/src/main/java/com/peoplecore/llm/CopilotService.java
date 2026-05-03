@@ -64,6 +64,12 @@ public class CopilotService {
                결재 양식이 열렸을 때는 "잔여 일정/날짜는 모달에서 선택해주세요" 라고 안내합니다.
             7) 사용자 권한·회사 컨텍스트는 서버가 자동 적용합니다. 도구 input 에 회사/사번/캘린더 ID 를
                명시하지 마세요.
+            8) 사용자가 "오늘 할 일", "오늘 다이제스트", "출근하면 뭐부터", "내 오늘 일정과 결재",
+               "오늘 뭐 봐야" 같은 **종합 요약** 을 요청하면 get_my_today_digest 를 호출합니다.
+               이 도구는 결재 대기 + 오늘 일정을 한 번에 묶어 반환하므로 search_documents 를 따로
+               부르지 마세요. 결과의 pendingApprovals 는 결재 대기 top 5(긴급 우선),
+               todaySchedules 는 오늘 일정 목록입니다 — 두 영역을 모두 짧게 요약해 답변합니다.
+               단일 영역(결재만 / 일정만) 조회 발화는 search_documents 로 처리.
             """;
 
     private static String buildSystemPrompt(CopilotRequest.PageContext pageContext) {
@@ -100,6 +106,7 @@ public class CopilotService {
     private final SensitiveDetector sensitiveDetector;
     private final SearchService searchService;
     private final CalendarClient calendarClient;
+    private final com.peoplecore.llm.client.ApprovalClient approvalClient;
     private final HrSelfServiceClient hrSelfServiceClient;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final int maxIterations;
@@ -110,6 +117,7 @@ public class CopilotService {
             SensitiveDetector sensitiveDetector,
             SearchService searchService,
             CalendarClient calendarClient,
+            com.peoplecore.llm.client.ApprovalClient approvalClient,
             HrSelfServiceClient hrSelfServiceClient,
             @Value("${anthropic.max-tool-iterations:4}") int maxIterations
     ) {
@@ -118,6 +126,7 @@ public class CopilotService {
         this.sensitiveDetector = sensitiveDetector;
         this.searchService = searchService;
         this.calendarClient = calendarClient;
+        this.approvalClient = approvalClient;
         this.hrSelfServiceClient = hrSelfServiceClient;
         this.maxIterations = maxIterations;
     }
@@ -155,7 +164,8 @@ public class CopilotService {
         List<Map<String, Object>> tools = List.of(
                 buildSearchTool(),
                 buildCreateCalendarEventTool(),
-                buildPrefillApprovalFormTool()
+                buildPrefillApprovalFormTool(),
+                buildTodayDigestTool()
         );
         String systemPrompt = buildSystemPrompt(req.getPageContext());
 
@@ -284,6 +294,27 @@ public class CopilotService {
                result.feedback 은 매니저 피드백이며 GRADING 단계 전에는 비어있을 수 있음 — 비어있으면
                "피드백이 아직 공개되지 않았다" 라고 답변.
 
+            5) get_my_vacation_status — 본인 연차 잔액·사용 이력 조회.
+               args: {} (올해 자동) 또는 {"year": 2025} (특정 연도).
+               응답 구조 (데이터 있음):
+                 { ok:true, year, hasBalance:true, annual:{ typeName, totalDays, usedDays, pendingDays, availableDays } }
+               응답 구조 (데이터 없음):
+                 { ok:true, year, hasBalance:false, message:"YYYY년 연차 잔액 정보가 등록되어있지 않습니다." }
+               availableDays = 신청 가능 일수, usedDays = 사용한 일수, pendingDays = 결재 대기 중.
+
+               **답변 규칙**:
+               - hasBalance:true 이면 annual 객체의 **실제 숫자값** 을 인용해 답변
+                 (예: "올해 잔여 연차는 15일 남았습니다. 사용 0일, 결재 대기 0일.")
+               - hasBalance:false 이면 message 그대로 안내 + "인사팀에 확인해주세요" 추가.
+                 추측 답변·placeholder 텍스트 금지.
+
+               트리거: 사용자가 "잔여연차/잔여휴가/연차잔액/연차 며칠/휴가 며칠 남았/올해 연차"
+               등 **잔액 조회** 또는 "작년 연차/작년 휴가 며칠 썼" 등 **연도별 사용 이력** 발화를 할 때.
+               연도가 명시되면 args.year 에 정수로 넣고(예: "작년" → 2025, "올해" → 2026), 미명시 시 args:{}.
+               **휴가 신청** 발화 ("휴가 신청해줘", "올려줘") 는 이 도구 대상이 아님 — 결재 신청은
+               별도 흐름이라 이 모드에선 처리하지 않습니다. 잔액 조회 후 사용자에게 "휴가 신청은
+               근태 화면 또는 결재 화면에서 진행해주세요" 라고 안내하세요.
+
             ### 출력 예시 (반드시 따라하세요)
 
             예시 1 — 본인 개인정보 호출:
@@ -310,11 +341,26 @@ public class CopilotService {
             [사용자] 내 목표 어떻게 돼?
             [당신] [[CALL]]{"name":"get_my_evaluation","args":{}}[[/CALL]]
 
+            예시 5-a — 잔여 연차 호출 (올해):
+            [사용자] 잔여 연차 며칠 남았어?
+            [당신] [[CALL]]{"name":"get_my_vacation_status","args":{}}[[/CALL]]
+
+            예시 5-b — 잔여 휴가 호출 (올해):
+            [사용자] 올해 내 휴가 잔액 알려줘
+            [당신] [[CALL]]{"name":"get_my_vacation_status","args":{}}[[/CALL]]
+
+            예시 5-c — 작년 사용 이력 호출 (year 명시):
+            [사용자] 작년에 연차 며칠 썼어?
+            [당신] [[CALL]]{"name":"get_my_vacation_status","args":{"year":2025}}[[/CALL]]
+
             ### 절대 하지 마세요 (anti-pattern)
             아래는 모두 **잘못된 응답** 입니다 — 도구를 호출하지 않고 추측·회피로 답하면 안 됩니다.
               - "현재 평가가 진행 중이라 결과를 확인하기 어렵습니다" ← 추측 금지. 도구를 호출하세요.
               - "아직 등급이 확정되지 않은 것 같습니다" ← 추측 금지. 도구를 호출하세요.
               - "인사팀에 문의해주세요" ← 도구 호출 없이 안내 금지. 먼저 도구를 호출하세요.
+              - "[결과 데이터에서 X 값 인용]" / "[X 일 남았습니다]" / "**남은 일수**" ← placeholder·치환문구 절대 금지.
+                도구 결과 JSON 의 **실제 값** 을 그대로 인용하세요. 값이 없으면 hasBalance/hasSeason 등
+                플래그를 보고 "정보가 없다" 고 안내하세요. 추측해 임의의 숫자나 placeholder 를 넣지 마세요.
             평가/고과/목표/자기평가 단어가 발화에 있으면 **무조건** 첫 turn 에 [[CALL]] 만 출력합니다.
             도구 결과를 받기 전에는 데이터 상태를 절대 단정하지 마세요.
 
@@ -484,6 +530,11 @@ public class CopilotService {
                 result = hrSelfServiceClient.getMyOverview(companyId, empId, role);
             } else if ("get_my_evaluation".equals(name)) {
                 result = hrSelfServiceClient.getMyEvaluation(companyId, empId, role);
+            } else if ("get_my_vacation_status".equals(name)) {
+                // year 옵션 — LLM 이 args.year 에 정수를 넣을 수도 있고 비울 수도 있음.
+                // 합리적 범위(현재년도 ±5) 외의 값은 null 처리해 BE 가 올해로 폴백시킴.
+                Integer year = parseYearArg(args, LocalDate.now().getYear());
+                result = hrSelfServiceClient.getMyVacationStatus(companyId, empId, role, year);
             } else {
                 return "{\"ok\":false,\"error\":\"unknown tool: " + escape(name) + "\"}";
             }
@@ -493,6 +544,28 @@ public class CopilotService {
             log.error("[Copilot] EXAONE tool failed: name={}, err={}", name, e.getMessage());
             return "{\"ok\":false,\"error\":\"" + escape(e.getMessage()) + "\"}";
         }
+    }
+
+    /**
+     * args.year 안전 추출. LLM 이 정수·문자열 어느 쪽으로 보내도 흡수하고,
+     * 현재년도 ±5 범위 밖이거나 파싱 실패 시 null 반환 → HrSelfServiceClient 가 올해로 폴백.
+     * 환각으로 9999 같은 비정상 값을 넣어도 BE 가 안전하게 처리.
+     */
+    private Integer parseYearArg(Map<String, Object> args, int currentYear) {
+        if (args == null) return null;
+        Object raw = args.get("year");
+        if (raw == null) return null;
+        int year;
+        if (raw instanceof Number n) {
+            year = n.intValue();
+        } else if (raw instanceof String s && !s.isBlank()) {
+            try { year = Integer.parseInt(s.trim()); }
+            catch (NumberFormatException e) { return null; }
+        } else {
+            return null;
+        }
+        if (year < currentYear - 5 || year > currentYear + 1) return null;  // 합리적 범위만
+        return year;
     }
 
     private List<Map<String, Object>> toContentArray(List<AnthropicClient.ContentBlock> blocks) {
@@ -538,6 +611,9 @@ public class CopilotService {
         }
         if ("prefill_approval_form".equals(name)) {
             return executePrefillApprovalForm(input, companyId, empId, role, toolCalls, actions);
+        }
+        if ("get_my_today_digest".equals(name)) {
+            return executeTodayDigest(input, companyId, empId, toolCalls);
         }
         if (!"search_documents".equals(name)) {
             return Map.of("content", "[{\"error\":\"unknown tool: " + escape(name) + "\"}]");
@@ -792,6 +868,48 @@ public class CopilotService {
         };
     }
 
+    /**
+     * 오늘 다이제스트 — 결재 대기(top 5, 긴급 우선) + 오늘 일정 묶음.
+     * BE composite 패턴: LLM 입장에선 1 도구 호출, BE 안에서 2 endpoint 묶음 처리.
+     * pendingApprovals 가 있으면 docId 들로 citation 도 누적해 사용자가 즉시 진입 가능.
+     */
+    private Map<String, Object> executeTodayDigest(Map<String, Object> input,
+                                                    String companyId, Long empId,
+                                                    List<CopilotResponse.ToolCall> toolCalls) {
+        UUID companyUuid;
+        try {
+            companyUuid = UUID.fromString(companyId);
+        } catch (Exception e) {
+            toolCalls.add(CopilotResponse.ToolCall.builder()
+                    .name("get_my_today_digest").input(input == null ? Map.of() : input).resultCount(0).build());
+            return Map.of("content", "{\"ok\":false,\"error\":\"invalid companyId\"}");
+        }
+
+        // 결재 대기 top 5 (긴급 우선)
+        Map<String, Object> approvals = approvalClient.getMyPendingApprovals(companyUuid, empId, 5);
+        // 오늘 일정 (date 미지정 시 LocalDate.now())
+        Map<String, Object> events = calendarClient.getMyEventsForDate(companyUuid, empId, null);
+
+        Map<String, Object> digest = new LinkedHashMap<>();
+        digest.put("ok", true);
+        digest.put("date", LocalDate.now().toString());
+        digest.put("pendingApprovals", approvals);
+        digest.put("todaySchedules", events);
+
+        toolCalls.add(CopilotResponse.ToolCall.builder()
+                .name("get_my_today_digest")
+                .input(input == null ? Map.of() : input)
+                .resultCount(1)
+                .build());
+
+        try {
+            return Map.of("content", objectMapper.writeValueAsString(digest));
+        } catch (Exception e) {
+            log.error("today digest serialize failed", e);
+            return Map.of("content", "{\"ok\":false,\"error\":\"serialize failed\"}");
+        }
+    }
+
     private String mapToJson(Map<String, Object> m) {
         StringBuilder sb = new StringBuilder("{");
         boolean first = true;
@@ -929,6 +1047,27 @@ public class CopilotService {
                 "사용자가 '휴가 신청해줘', '초과근무 올려줘' 처럼 명시적으로 결재 기안을 요청한 경우에만 호출. " +
                 "단순 조회('결재 양식 알려줘')에는 사용 금지. 날짜·잔여휴가·근태 같은 검증 필요 필드는 " +
                 "사용자가 모달에서 직접 입력하므로 이 도구로 채우지 말 것.");
+        tool.put("input_schema", schema);
+        return tool;
+    }
+
+    /**
+     * get_my_today_digest tool spec. 결재 대기 + 오늘 일정 BE composite.
+     * input 인자 없음 (args:{}) — 본인 인증 컨텍스트만으로 동작. 추가 인자 받지 않음 단순화.
+     */
+    private Map<String, Object> buildTodayDigestTool() {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        schema.put("type", "object");
+        schema.put("properties", new LinkedHashMap<>());
+
+        Map<String, Object> tool = new LinkedHashMap<>();
+        tool.put("name", "get_my_today_digest");
+        tool.put("description", "오늘 사용자가 처리해야 할 핵심 업무를 한 번에 요약해 반환한다 — " +
+                "(1) 본인이 결재해야 할 PENDING 결재 문서 top 5(긴급 우선), (2) 오늘 일정(회의·약속 등). " +
+                "사용자가 '오늘 할 일', '오늘 다이제스트', '출근하면 뭐부터', '내 오늘 일정', " +
+                "'결재 대기 + 오늘 회의', '오늘 뭐 봐야' 같은 종합 요약을 요청할 때만 호출. " +
+                "단일 영역(결재만, 일정만) 조회는 search_documents 또는 다른 도구를 쓸 것. " +
+                "회사·사번은 서버가 자동 적용하므로 input 에 넣지 말 것.");
         tool.put("input_schema", schema);
         return tool;
     }

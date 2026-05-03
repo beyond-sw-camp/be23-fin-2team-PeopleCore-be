@@ -6,6 +6,7 @@ import com.peoplecore.evaluation.domain.*;
 import com.peoplecore.evaluation.dto.GoalDeleteResultDto;
 import com.peoplecore.evaluation.dto.GoalRequest;
 import com.peoplecore.evaluation.dto.GoalResponse;
+import com.peoplecore.evaluation.dto.GoalWeightsRequest;
 import com.peoplecore.evaluation.dto.TeamMemberGoalResponse;
 import com.peoplecore.evaluation.repository.GoalRepository;
 import com.peoplecore.evaluation.repository.KpiTemplateRepository;
@@ -14,8 +15,6 @@ import com.peoplecore.evaluation.repository.StageRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -34,18 +33,16 @@ public class GoalService {
     private final StageRepository stageRepository;
     private final EmployeeRepository employeeRepository;
     private final KpiTemplateRepository kpiTemplateRepository;
-    private final EvaluationRulesService rulesService;
 
     public GoalService(GoalRepository goalRepository,
                        SeasonRepository seasonRepository, StageRepository stageRepository,
                        EmployeeRepository employeeRepository,
-                       KpiTemplateRepository kpiTemplateRepository, EvaluationRulesService rulesService) {
+                       KpiTemplateRepository kpiTemplateRepository) {
         this.goalRepository = goalRepository;
         this.seasonRepository = seasonRepository;
         this.stageRepository = stageRepository;
         this.employeeRepository = employeeRepository;
         this.kpiTemplateRepository = kpiTemplateRepository;
-        this.rulesService = rulesService;
     }
 
     // GOAL_ENTRY 단계가 IN_PROGRESS 인지 검증 — 박제 시점 보호 (template 변경 전후 박제값 일관성)
@@ -70,16 +67,10 @@ public class GoalService {
         // 본인 + 해당 시즌 목표 조회
         List<Goal> goals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(empId, openSeason.getSeasonId());
 
-        // 회사 규칙 로드 -> 승인된 목표 비율 계산
-        EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
-        Map<Long, BigDecimal> ratios = computeRatios(goals, rules);
-
-        // Entity -> DTO 변환 (비율 주입)
+        // Entity -> DTO (weight 는 엔티티에 박제된 값 그대로 노출)
         List<GoalResponse> result = new ArrayList<>();
         for (Goal g : goals) {
-            GoalResponse dto = GoalResponse.from(g);
-            dto.setRatio(ratios.get(g.getGoalId()));
-            result.add(dto);
+            result.add(GoalResponse.from(g));
         }
         return result;
     }
@@ -107,7 +98,7 @@ public class GoalService {
                 .season(openSeason)
                 .approvalStatus(GoalApprovalStatus.DRAFT)
                 .build();
-        applyRequestToGoal(goal, companyId, request, request.getGrade());
+        applyRequestToGoal(goal, companyId, request);
 
         Goal saved = goalRepository.save(goal);
         return GoalResponse.from(saved);
@@ -136,7 +127,7 @@ public class GoalService {
         // 목표 등록 단계가 IN_PROGRESS 일 때만 허용 — 박제 시점 보호
         requireGoalEntryInProgress(goal.getSeason().getSeasonId());
 
-        applyRequestToGoal(goal, companyId, request, request.getGrade());
+        applyRequestToGoal(goal, companyId, request);
 
 //        반려 상태 유지 - rejectReason 도 그대로 남겨서 사원이 재작성 근거로 참조
 //        제출(submit) 호출 시에만 PENDING 전환 + rejectReason 초기화
@@ -263,6 +254,7 @@ public class GoalService {
 
     //    6번 일괄 제출 - 본인의 작성중 목표 전체를 제출완료로 전환
     //    (프론트 "작성중 전체 제출" 버튼 대응)
+    //    - 본인 KPI 목표들의 weight 합 = 100 검증 (OKR 은 합산 제외)
     public List<GoalResponse> submitAllDrafts(UUID companyId, Long empId) {
 
 //        현재 OPEN 시즌
@@ -274,9 +266,16 @@ public class GoalService {
 //        본인 + 해당 시즌 목표 전체 로드
         List<Goal> goals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(empId, openSeason.getSeasonId());
 
-//        회사 규칙 로드 -> 승인된 목표 비율 계산
-        EvaluationRules rules = rulesService.getEntityByCompanyId(companyId);
-        Map<Long, BigDecimal> ratios = computeRatios(goals, rules);
+//        가중치 합계 검증 (KPI 만, OKR 제외)
+        int kpiWeightSum = 0;
+        for (Goal g : goals) {
+            if (g.getGoalType() == GoalType.KPI && g.getWeight() != null) {
+                kpiWeightSum += g.getWeight();
+            }
+        }
+        if (kpiWeightSum != 100) {
+            throw new IllegalStateException("KPI 가중치 합계가 " + kpiWeightSum + "% 입니다. 100%로 맞춰주세요.");
+        }
 
 //        작성중/반려 상태만 submit (대기/승인은 스킵)
         List<GoalResponse> result = new ArrayList<>();
@@ -289,10 +288,40 @@ public class GoalService {
             if (st == GoalApprovalStatus.DRAFT || st == GoalApprovalStatus.REJECTED) {
                 g.submit();
             }
-            GoalResponse dto = GoalResponse.from(g);
-            dto.setRatio(ratios.get(g.getGoalId()));
-            result.add(dto);
+            result.add(GoalResponse.from(g));
         }
+        return result;
+    }
+
+    //  6-1번 가중치 일괄 저장 (제출 화면에서 호출 - 임시저장)
+    //    - 본인 KPI 목표만 대상. OKR / 타인 목표는 거절
+    //    - 합계 검증 안 함 (제출 시점에만 100 강제)
+    public List<GoalResponse> updateWeights(UUID companyId, Long empId, GoalWeightsRequest request) {
+
+        Season openSeason = seasonRepository.findByCompany_CompanyIdAndStatus(companyId, EvalSeasonStatus.OPEN).orElse(null);
+        if (openSeason == null) {
+            throw new IllegalStateException("현재 진행 중인 시즌이 없습니다");
+        }
+        requireGoalEntryInProgress(openSeason.getSeasonId());
+
+        List<Goal> myGoals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(empId, openSeason.getSeasonId());
+        Map<Long, Goal> byId = new HashMap<>();
+        for (Goal g : myGoals) byId.put(g.getGoalId(), g);
+
+        for (GoalWeightsRequest.Item it : request.getItems()) {
+            Goal g = byId.get(it.getGoalId());
+            if (g == null) {
+                throw new IllegalArgumentException("본인 목표가 아닙니다: goalId=" + it.getGoalId());
+            }
+            if (g.getGoalType() != GoalType.KPI) {
+                throw new IllegalArgumentException("OKR 목표는 가중치를 설정할 수 없습니다: goalId=" + it.getGoalId());
+            }
+            g.changeWeight(it.getWeight());
+        }
+        // dirty checking 으로 자동 UPDATE
+
+        List<GoalResponse> result = new ArrayList<>();
+        for (Goal g : myGoals) result.add(GoalResponse.from(g));
         return result;
     }
 
@@ -460,49 +489,10 @@ public class GoalService {
     }
 
 
-    // 승인된 KPI 목표 중 taskWeight 합 기준 백분율 계산
-    //   OKR 및 미승인 목표는 결과 Map 에 키 없음 -> DTO 에서 null
-    private Map<Long, BigDecimal> computeRatios(List<Goal> goals, EvaluationRules rules) {
-        // 승인된 KPI 목표만 수집 (OKR 은 비율 산정 대상 아님)
-        List<Goal> approved = new ArrayList<>();
-        for (Goal g : goals) {
-            if (g.getApprovalStatus() == GoalApprovalStatus.APPROVED
-                    && g.getGoalType() == GoalType.KPI) {
-                approved.add(g);
-            }
-        }
-
-        // 전체 가중치 합계
-        int total = 0;
-        for (Goal g : approved) {
-            total += weightOf(g.getTaskGrade(), rules);
-        }
-
-        Map<Long, BigDecimal> result = new HashMap<>();
-        if (total == 0) return result;
-
-        // 각 목표별 비율
-        for (Goal g : approved) {
-            int w = weightOf(g.getTaskGrade(), rules);
-            BigDecimal ratio = BigDecimal.valueOf(w)
-                    .multiply(BigDecimal.valueOf(100))
-                    .divide(BigDecimal.valueOf(total), 1, RoundingMode.HALF_UP);
-            result.put(g.getGoalId(), ratio);
-        }
-        return result;
-    }
-
-    // 업무등급별 가중치 조회 (회사 규칙 기반)
-    private int weightOf(TaskGrade grade, EvaluationRules rules) {
-        if (grade == TaskGrade.HIGH) return rules.getTaskWeightSang();
-        if (grade == TaskGrade.MID)  return rules.getTaskWeightJung();
-        if (grade == TaskGrade.LOW)  return rules.getTaskWeightHa();
-        return 0;
-    }
-
-
     // 타입별 검증 + Goal 엔티티에 필드 주입 (create/update 공용)
-    private void applyRequestToGoal(Goal goal, UUID companyId, GoalRequest request, TaskGrade grade) {
+    //   가중치는 등록/수정에서 건드리지 않음 — KPI 신규는 updateAsKpi 안에서 디폴트 10 박힘,
+    //   변경은 updateWeights 로만
+    private void applyRequestToGoal(Goal goal, UUID companyId, GoalRequest request) {
 
         if (request.getGoalType() == GoalType.KPI) {
             if (request.getKpiTemplateId() == null || request.getTargetValue() == null) {
@@ -515,7 +505,7 @@ public class GoalService {
             if (!t.getDepartment().getCompany().getCompanyId().equals(companyId)) {
                 throw new IllegalArgumentException("다른 회사 지표는 사용할 수 없습니다");
             }
-            goal.updateAsKpi(t, request.getTargetValue(), grade);
+            goal.updateAsKpi(t, request.getTargetValue());
 
         } else if (request.getGoalType() == GoalType.OKR) {
             if (request.getCategory() == null || request.getCategory().isBlank()
@@ -539,7 +529,7 @@ public class GoalService {
                 throw new IllegalStateException("OKR 목표는 KPI 목표를 먼저 등록한 뒤 추가할 수 있습니다");
             }
 
-            goal.updateAsOkr(request.getCategory(), request.getTitle(), request.getDescription(), grade);
+            goal.updateAsOkr(request.getCategory(), request.getTitle(), request.getDescription());
 
         } else {
             throw new IllegalArgumentException("알 수 없는 목표 유형입니다");

@@ -6,7 +6,6 @@ import com.peoplecore.evaluation.domain.GoalType;
 import com.peoplecore.evaluation.domain.SelfEvalApprovalStatus;
 import com.peoplecore.evaluation.domain.SelfEvaluation;
 import com.peoplecore.evaluation.domain.SelfEvaluationFile;
-import com.peoplecore.evaluation.domain.TaskGrade;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -30,7 +29,7 @@ public class SelfEvaluationResponse {
     private String category;
     private String title;
     private String description;
-    private TaskGrade grade;                   // HIGH / MID / LOW
+    private Integer weight;                    // 가중치(%) - KPI 만 값, OKR 은 null
     private Long kpiTemplateId;
     private BigDecimal targetValue;
     private String targetUnit;
@@ -63,7 +62,7 @@ public class SelfEvaluationResponse {
                 .category(g.getCategory())
                 .title(g.getTitle())
                 .description(g.getDescription())
-                .grade(g.getTaskGrade())
+                .weight(g.getWeight())
                 .kpiTemplateId(g.getKpiTemplate() != null ? g.getKpiTemplate().getKpiId() : null)
                 .targetValue(g.getTargetValue())
                 .targetUnit(g.getTargetUnit())

@@ -14,5 +14,5 @@ public class TitleCreateRequest {
     @NotBlank
     private String titleName;
 
-    private Long deptId;
+    private String titleCode;
 }

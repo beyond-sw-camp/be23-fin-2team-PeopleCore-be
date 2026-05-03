@@ -16,6 +16,8 @@ import com.peoplecore.hrorder.domain.*;
 import com.peoplecore.hrorder.dto.*;
 import com.peoplecore.hrorder.repository.HrOrderDetailRepository;
 import com.peoplecore.hrorder.repository.HrOrderRepository;
+import com.peoplecore.resign.domain.Resign;
+import com.peoplecore.resign.repository.ResignRepository;
 import com.peoplecore.title.domain.Title;
 import com.peoplecore.title.repository.TitleRepository;
 
@@ -42,9 +44,10 @@ public class HrOrderService {
     private final DepartmentRepository departmentRepository;
     private final GradeRepository gradeRepository;
     private final TitleRepository titleRepository;
+    private final ResignRepository resignRepository;
     private final ObjectMapper objectMapper;
 
-    public HrOrderService(HrOrderRepository hrOrderRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, HrOrderDetailRepository hrOrderDetailRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, ObjectMapper objectMapper) {
+    public HrOrderService(HrOrderRepository hrOrderRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, HrOrderDetailRepository hrOrderDetailRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, ResignRepository resignRepository, ObjectMapper objectMapper) {
         this.hrOrderRepository = hrOrderRepository;
         this.employeeRepository = employeeRepository;
         this.formFieldSetupService = formFieldSetupService;
@@ -52,6 +55,7 @@ public class HrOrderService {
         this.departmentRepository = departmentRepository;
         this.gradeRepository = gradeRepository;
         this.titleRepository = titleRepository;
+        this.resignRepository = resignRepository;
         this.objectMapper = objectMapper;
     }
 
@@ -258,12 +262,13 @@ public class HrOrderService {
     }
 
 
-    //    사원별 발령 이력 조회
+    //    사원별 발령 이력 조회 (HIRE / 발령(PROMOTION/TRANSFER/TITLE_CHANGE) / RESIGN 통합)
     @Transactional(readOnly = true)
     public List<HrOrderHistoryResDto> history(UUID companyId, Long empId) {
-        List<HrOrder> orders = hrOrderRepository.findHistoryByEmpId(companyId, empId);
         List<HrOrderHistoryResDto> result = new ArrayList<>();
 
+        // 1) hr_order 발령 이력 (PROMOTION / TRANSFER / TITLE_CHANGE)
+        List<HrOrder> orders = hrOrderRepository.findHistoryByEmpId(companyId, empId);
         for (HrOrder order : orders) {
             List<HrOrderDetail> detailEntities = hrOrderDetailRepository.findByHrOrder_OrderId(order.getOrderId());
             List<HrOrderHistoryResDto.DetailChange> detailChange = new ArrayList<>();
@@ -284,6 +289,39 @@ public class HrOrderService {
                     .detailChange(detailChange)
                     .build());
         }
+
+        // 2) HIRE 합성: Employee.empHireDate 기준
+        Employee emp = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElse(null);
+        if (emp != null && emp.getEmpHireDate() != null) {
+            result.add(HrOrderHistoryResDto.builder()
+                    .orderId(null)
+                    .orderType("HIRE")
+                    .effectiveDate(emp.getEmpHireDate().toString())
+                    .status("APPLIED")
+                    .createAt(emp.getEmpHireDate().toString())
+                    .detailChange(new ArrayList<>())
+                    .build());
+        }
+
+        // 3) RESIGN 합성: Resign 테이블에서 RESIGNED 상태만
+        List<Resign> resigns = resignRepository.findHistoryByEmpId(companyId, empId);
+        for (Resign r : resigns) {
+            if (r.getResignDate() == null) continue;
+            String createAt = r.getProcessedAt() != null
+                    ? r.getProcessedAt().toLocalDate().toString()
+                    : r.getResignDate().toString();
+            result.add(HrOrderHistoryResDto.builder()
+                    .orderId(null)
+                    .orderType("RESIGN")
+                    .effectiveDate(r.getResignDate().toString())
+                    .status("APPLIED")
+                    .createAt(createAt)
+                    .detailChange(new ArrayList<>())
+                    .build());
+        }
+
+        // 4) effectiveDate 내림차순 정렬 (최신 이벤트가 위에)
+        result.sort((a, b) -> b.getEffectiveDate().compareTo(a.getEffectiveDate()));
         return result;
     }
 

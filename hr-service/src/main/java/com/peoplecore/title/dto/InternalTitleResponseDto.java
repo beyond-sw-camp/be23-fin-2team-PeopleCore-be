@@ -15,7 +15,6 @@ import java.util.UUID;
 public class InternalTitleResponseDto {
     private Long titleId;
     private UUID companyId;
-    private Long deptId;
     private String titleName;
     private String titleCode;
 
@@ -23,7 +22,6 @@ public class InternalTitleResponseDto {
         return InternalTitleResponseDto.builder()
                 .titleId(title.getTitleId())
                 .companyId(title.getCompanyId())
-                .deptId(title.getDeptId())
                 .titleName(title.getTitleName())
                 .titleCode(title.getTitleCode())
                 .build();

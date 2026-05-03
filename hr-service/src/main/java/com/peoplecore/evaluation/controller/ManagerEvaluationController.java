@@ -117,7 +117,7 @@ public class ManagerEvaluationController {
 
     // 각 엔드포인트 앞에서 호출되는 평가자 가드. empId 가 부서별 배정에 있는지만 확인.
     private void requireEvaluator(UUID companyId, Long empId) {
-        if (!evaluatorRoleService.isEvaluator(companyId, empId)) {
+        if (!evaluatorRoleService.me(companyId, empId).isEvaluator()) {
             throw new BusinessException("평가자 권한이 없습니다.", HttpStatus.FORBIDDEN);
         }
     }

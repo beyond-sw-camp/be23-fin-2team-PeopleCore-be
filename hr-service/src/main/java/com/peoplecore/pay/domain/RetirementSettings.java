@@ -32,11 +32,11 @@ public class RetirementSettings {
     @Column(nullable = false)
     private PensionType pensionType;
 
-//    퇴직연금 운용사(DB형)
+//    퇴직연금 운용사(DB/DC/DB_DC 공통)
     @Column(length = 100)
     private String pensionProvider;
 
-//    퇴직연금계좌번호(DB형)
+//    퇴직연금계좌번호(DB/DB_DC만)
     @Column(length = 100)
     private String pensionAccount;
 
@@ -44,11 +44,17 @@ public class RetirementSettings {
     public void update(PensionType pensionType, String pensionProvider, String pensionAccount){
         this.pensionType = pensionType;
 
-        if(pensionType == PensionType.DB || pensionType == PensionType.DB_DC){
+        // 운용사: severance 외 모두 필요 (DC도 사원 개인 계좌가 개설될 금융기관)
+        if(pensionType != PensionType.severance){
             this.pensionProvider = pensionProvider;
-            this.pensionAccount = pensionAccount;
         } else {
             this.pensionProvider = null;
+        }
+
+        // 운용계좌: DB/DB_DC만 (회사가 보유한 적립금 계좌). DC는 사원이 개별 보유
+        if(pensionType == PensionType.DB || pensionType == PensionType.DB_DC){
+            this.pensionAccount = pensionAccount;
+        } else {
             this.pensionAccount = null;
         }
 

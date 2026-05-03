@@ -79,9 +79,17 @@ public enum ErrorCode {
 
     // 사원 계좌
     EMP_ACCOUNT_NOT_FOUND(404, "사원 계좌 정보를 찾을 수 없습니다."),
+    EMP_ACCOUNT_NOT_REGISTERED(400, "계좌 정보가 등록되지 않은 사원이 포함되어 있습니다."),
     RETIREMENT_ACCOUNT_NOT_FOUND(404, "퇴직연금 계좌 정보를 찾을 수 없습니다."),
 
-    //    사원 퇴직연금 계좌
+    // 사원 계좌 검증 (오픈뱅킹)
+    ACCOUNT_VERIFY_FAILED(400, "계좌 실명조회에 실패했습니다. 입력값을 다시 확인해주세요."),
+    ACCOUNT_HOLDER_MISMATCH(400, "예금주명이 계좌 정보와 일치하지 않습니다."),
+    ACCOUNT_VERIFY_TOKEN_INVALID(400, "계좌 검증 정보가 없습니다. 인증을 먼저 진행해주세요."),
+    ACCOUNT_VERIFY_TOKEN_EXPIRED(400, "계좌 검증이 만료되었습니다. 다시 인증해주세요."),
+    ACCOUNT_VERIFY_TOKEN_MISMATCH(400, "검증한 계좌 정보와 다른 정보가 전송되었습니다. 다시 인증해주세요."),
+
+    // 사원 퇴직연금 계좌
     RETIREMENT_SETTINGS_NOT_FOUND(404, "회사 퇴직연금 설정 정보를 찾을 수 없습니다."),
     RETIREMENT_TYPE_NOT_CHANGEABLE(400, "회사 퇴직연금 설정이 DB_DC가 아니므로 변경할 수 없습니다."),
     INVALID_RETIREMENT_TYPE(400, "유효하지 않은 퇴직연금 유형입니다. DB 또는 DC만 선택 가능합니다."),
@@ -101,7 +109,8 @@ public enum ErrorCode {
     NO_PAYABLE_EMPLOYEES(404, "지급가능한 사원이 없습니다. (결재 승인된 사원만 지급 가능)"),
     NO_TRANSFER_TARGETS(404,"이체 대상 사원이 비어 있습니다"),
     PAYROLL_EMP_NOT_APPROVED(400, "결재 승인되지 않은 사원이 포함되어 있습니다"),
-
+    TRANSFER_FILE_GENERATION_FAILED(500, "이체파일 생성 중 오류가 발생했습니다."),
+    PAYROLL_EMP_NOT_CONFIRMABLE(400, "이미 확정/결재중/승인/지급 상태인 사원은 다시 확정할 수 없습니다."),
 
 
     // ── 정산보험료 ──
@@ -188,12 +197,16 @@ public enum ErrorCode {
     GRADE_NOT_FOUND(404, "직급을 찾을 수 없습니다."),
     TITLE_NOT_FOUND(404, "직책을 찾을 수 없습니다."),
 
+    // 퇴직연금 계좌 (사원 신규등록)
+    RETIREMENT_TYPE_NOT_ALLOWED(400, "회사 퇴직연금 정책으로 인해 해당 유형은 선택할 수 없습니다."),
+    RETIREMENT_ACCOUNT_REQUIRED(400, "DC형 퇴직연금은 사원 본인 계좌번호가 필요합니다."),
 
     //    연봉
     SALARY_CONTRACT_NOT_FOUND(404, "계약서를 찾을 수 없습니다."),
     SALARY_CONTRACT_ALREADY_DELETED(400, "이미 삭제된 계약서입니다."),
     EMPLOYEE_NOT_RESIGNED(400, "퇴직 상태인 사원의 계약서만 삭제할 수 있습니다."),
     ANNUAL_SALARY_BELOW_MINIMUM(400, "연봉이 고정수당 합계(월) × 12 미만입니다."),
+    ANNUAL_SALARY_MISMATCH(400, "연봉이 자동 산출값(고정수당 합 × 12 + 비고정수당 합)과 일치하지 않습니다."),
     FILE_UPLOAD_FAILED(500, "파일 업로드에 실패했습니다."),
     FILE_NOT_FOUND(404, "첨부 파일이 없습니다."),
     FILE_DOWNLOAD_FAILED(500, "파일 다운로드에 실패했습니다."),

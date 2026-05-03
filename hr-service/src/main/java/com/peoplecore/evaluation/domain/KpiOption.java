@@ -5,7 +5,7 @@ import com.peoplecore.entity.BaseTimeEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
-// KPI 옵션 - 카테고리/단위/부서depth 드롭다운 선택지 (회사별, type 으로 구분)
+// KPI 옵션 - 카테고리/단위 드롭다운 선택지 (회사별, type 으로 구분)
 @Entity
 @Table(name = "kpi_option")
 @Getter
@@ -27,9 +27,7 @@ public class KpiOption extends BaseTimeEntity {
     @Column(name = "type", nullable = false, length = 20)
     private KpiOptionType type;
 
-    // 옵션 값
-    //   - CATEGORY/UNIT : 표시명이자 저장값 ("업무성과", "%")
-    //   - DEPARTMENT    : depth 설정값 ("1".."N" 또는 "leaf")
+    // 옵션 값 — 표시명이자 저장값 ("업무성과", "%")
     @Column(name = "option_value", nullable = false, length = 50)
     private String optionValue;
 
@@ -51,7 +49,7 @@ public class KpiOption extends BaseTimeEntity {
         this.sortOrder = sortOrder;
     }
 
-    // 값 갱신 — rename(CATEGORY/UNIT) / depth 변경(DEPARTMENT) 공용
+    // 값 갱신 — rename(CATEGORY/UNIT)
     public void updateValue(String newValue) {
         this.optionValue = newValue;
     }

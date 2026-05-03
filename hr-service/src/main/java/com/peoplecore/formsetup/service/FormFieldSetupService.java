@@ -253,6 +253,11 @@ public class FormFieldSetupService {
         // 메뉴 / 기능 권한 설정
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "authTemplate", "권한", "메뉴 / 기능 권한 설정", FieldType.SELECT, true, true, 1, "[\"일반 사원\",\"HR 담당자\",\"인사 최고 관리자\"]", null));
 
+        // 급여 정보
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "salaryAccount",     "급여 계좌",     "급여 정보", FieldType.TEXT,   true, false,  1, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "retirementAccount", "퇴직급여 계좌",  "급여 정보", FieldType.TEXT,   true, false, 2, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "dependentsCount",   "부양가족수",    "급여 정보", FieldType.NUMBER, true, true,  3, null, null));
+
         // 인사 서류 등록
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "documents", "서류 첨부", "인사 서류 등록", FieldType.FILE, true, false, 1, null, null));
 
@@ -271,10 +276,9 @@ public class FormFieldSetupService {
         list.add(field(companyId, FormType.SALARY_CONTRACT, "employType", "근로형태", "인적사항", FieldType.TEXT, true, true, 5, null, "employType"));
 
         // 계약기간
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "contractYear", "계약 연도", "계약기간", FieldType.SELECT, true, true, 1, "[\"2026\",\"2025\",\"2024\"]", null));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "contractStart", "계약 시작일", "계약기간", FieldType.DATE, true, true, 2, null, null));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "contractEnd", "계약 종료일", "계약기간", FieldType.DATE, true, false, 3, null, null));
-        list.add(field(companyId, FormType.SALARY_CONTRACT, "weeklyHours", "주당 근로시간", "계약기간", FieldType.SELECT, true, true, 4, "[\"40시간 (주 5일)\",\"35시간\",\"30시간\",\"20시간 (시간제)\",\"15시간 (단시간)\"]", null));
+        list.add(field(companyId, FormType.SALARY_CONTRACT, "contractStart", "계약 시작일", "계약기간", FieldType.DATE, true, true, 1, null, null));
+        list.add(field(companyId, FormType.SALARY_CONTRACT, "contractEnd", "계약 종료일", "계약기간", FieldType.DATE, true, false, 2, null, null));
+        list.add(field(companyId, FormType.SALARY_CONTRACT, "weeklyHours", "주당 근로시간", "계약기간", FieldType.SELECT, true, true, 3, "[\"40시간 (주 5일)\",\"35시간\",\"30시간\",\"20시간 (시간제)\",\"15시간 (단시간)\"]", null));
 
         // 급여 (고정 필드 — 동적 PayItems 보다 항상 앞)
         list.add(field(companyId, FormType.SALARY_CONTRACT, "annualSalary", "연봉", "급여", FieldType.NUMBER, true, false, 0, null, null));

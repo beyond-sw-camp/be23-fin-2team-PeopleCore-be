@@ -26,8 +26,9 @@ import java.util.UUID;
 @Transactional
 public class EvaluationRulesService {
 
+    // 가감점 기능 제거 — 2026-04
     // 시스템 고정 가감항목 id — 이름/점수/삭제 불가, 저장 시 DB 기준값 강제 유지
-    private static final Set<String> LOCKED_ADJUST_IDS = Set.of("late", "absent");
+    // private static final Set<String> LOCKED_ADJUST_IDS = Set.of("late", "absent");
 
     private final EvaluationRulesRepository rulesRepository;
     private final ObjectMapper objectMapper;
@@ -53,13 +54,9 @@ public class EvaluationRulesService {
                 .orElseThrow(() -> new IllegalStateException("회사 규칙이 초기화되지 않았습니다"));
 
         String formValuesJson = serializeFormValues(req, rules.getFormValues());
-        EvaluationRulesDto.TaskGradeWeight tgw = req.getTaskGradeWeight();
 
         // null 오면 기존값 유지
         rules.updateRules(
-                tgw != null ? tgw.get상() : rules.getTaskWeightSang(),
-                tgw != null ? tgw.get중() : rules.getTaskWeightJung(),
-                tgw != null ? tgw.get하() : rules.getTaskWeightHa(),
                 req.getUseBiasAdjustment() != null ? req.getUseBiasAdjustment() : rules.getUseBiasAdjustment(),
                 req.getBiasWeight() != null ? req.getBiasWeight() : rules.getBiasWeight(),
                 req.getMinTeamSize() != null ? req.getMinTeamSize() : rules.getMinTeamSize(),
@@ -102,10 +99,7 @@ public class EvaluationRulesService {
             }
         }
 
-        // 하드 컬럼 6개 박제
-        merged.put("taskWeightSang", rules.getTaskWeightSang());
-        merged.put("taskWeightJung", rules.getTaskWeightJung());
-        merged.put("taskWeightHa", rules.getTaskWeightHa());
+        // 하드 컬럼 박제
         merged.put("useBiasAdjustment", rules.getUseBiasAdjustment());
         merged.put("biasWeight", rules.getBiasWeight());
         merged.put("minTeamSize", rules.getMinTeamSize());
@@ -129,8 +123,9 @@ public class EvaluationRulesService {
 
         // 나머지 섹션: 요청 null이면 기존값 유지
         form.put("gradeRules",    req.getGrades() != null           ? req.getGrades()           : existing.get("gradeRules"));
+        // 가감점 기능 제거 — 2026-04
         // adjustments: DB 의 locked 항목(지각/무단결근) 이름·점수 보호 + 요청의 non-locked 만 반영
-        form.put("adjustments",   req.getAdjustItems() != null      ? mergeAdjustments(req.getAdjustItems(), existing) : existing.get("adjustments"));
+        // form.put("adjustments",   req.getAdjustItems() != null      ? mergeAdjustments(req.getAdjustItems(), existing) : existing.get("adjustments"));
         form.put("rawScoreTable", req.getGradeItems() != null       ? req.getGradeItems()       : existing.get("rawScoreTable"));
         form.put("kpiScoring",    req.getKpiScoringConfig() != null ? req.getKpiScoringConfig() : existing.get("kpiScoring"));
 
@@ -183,68 +178,69 @@ public class EvaluationRulesService {
         return result;
     }
 
+    // 가감점 기능 제거 — 2026-04
     // adjustments 병합 - 지각/무단결근(LOCKED_ADJUST_IDS)은 DB 기준값 강제 유지
     //   · 이름/점수는 요청값 무시하고 DB 값으로 고정 (요청이 변조해도 서버에서 원복)
     //   · enabled 는 요청값이 있으면 반영 (사용자가 감점제 자체를 끌 순 있게)
     //   · threshold 면제 횟수도 요청값 반영 (잠금 항목이라도 회사 정책상 조정 가능해야 함)
     //   · 레거시 잔재(예: "absence") 등 LOCKED 이외 항목은 요청대로 통과
-    private List<Map<String, Object>> mergeAdjustments(List<EvaluationRulesDto.AdjustItem> reqItems,
-                                                       Map<String, Object> existingForm) {
-        List<Map<String, Object>> result = new ArrayList<>();
-        Set<String> seenLocked = new HashSet<>();
-
-        List<EvaluationRulesDto.AdjustItem> existingItems = objectMapper.convertValue(
-                existingForm.get("adjustments"),
-                new TypeReference<List<EvaluationRulesDto.AdjustItem>>() {}
-        );
-        Map<String, EvaluationRulesDto.AdjustItem> existingById = new LinkedHashMap<>();
-        if (existingItems != null) {
-            for (EvaluationRulesDto.AdjustItem it : existingItems) {
-                if (it != null && it.getId() != null) existingById.put(it.getId(), it);
-            }
-        }
-
-        // locked 항목 먼저 - DB 기준값 유지, 요청은 enabled / threshold 만 반영
-        for (String lockedId : LOCKED_ADJUST_IDS) {
-            EvaluationRulesDto.AdjustItem base = existingById.get(lockedId);
-            if (base == null) continue;  // 시드 누락된 회사면 skip (createDefaultRules 재호출 필요)
-            Boolean enabled = base.getEnabled() != null ? base.getEnabled() : Boolean.TRUE;
-            Integer threshold = base.getThreshold() != null ? base.getThreshold() : 0;
-            if (reqItems != null) {
-                for (EvaluationRulesDto.AdjustItem r : reqItems) {
-                    if (r == null || !lockedId.equals(r.getId())) continue;
-                    if (r.getEnabled() != null) enabled = r.getEnabled();
-                    if (r.getThreshold() != null) threshold = Math.max(0, r.getThreshold());
-                    break;
-                }
-            }
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", lockedId);
-            m.put("name", base.getName());
-            m.put("points", base.getPoints());
-            m.put("threshold", threshold);
-            m.put("enabled", enabled);
-            m.put("locked", true);
-            result.add(m);
-            seenLocked.add(lockedId);
-        }
-
-        // non-locked 요청 항목 - locked id 로 위장한 것은 버림
-        if (reqItems != null) {
-            for (EvaluationRulesDto.AdjustItem r : reqItems) {
-                if (r == null || r.getId() == null) continue;
-                if (seenLocked.contains(r.getId())) continue;
-                Map<String, Object> m = new LinkedHashMap<>();
-                m.put("id", r.getId());
-                m.put("name", r.getName());
-                m.put("points", r.getPoints());
-                m.put("threshold", r.getThreshold() != null ? Math.max(0, r.getThreshold()) : 0);
-                m.put("enabled", r.getEnabled() != null ? r.getEnabled() : Boolean.TRUE);
-                result.add(m);
-            }
-        }
-        return result;
-    }
+//    private List<Map<String, Object>> mergeAdjustments(List<EvaluationRulesDto.AdjustItem> reqItems,
+//                                                       Map<String, Object> existingForm) {
+//        List<Map<String, Object>> result = new ArrayList<>();
+//        Set<String> seenLocked = new HashSet<>();
+//
+//        List<EvaluationRulesDto.AdjustItem> existingItems = objectMapper.convertValue(
+//                existingForm.get("adjustments"),
+//                new TypeReference<List<EvaluationRulesDto.AdjustItem>>() {}
+//        );
+//        Map<String, EvaluationRulesDto.AdjustItem> existingById = new LinkedHashMap<>();
+//        if (existingItems != null) {
+//            for (EvaluationRulesDto.AdjustItem it : existingItems) {
+//                if (it != null && it.getId() != null) existingById.put(it.getId(), it);
+//            }
+//        }
+//
+//        // locked 항목 먼저 - DB 기준값 유지, 요청은 enabled / threshold 만 반영
+//        for (String lockedId : LOCKED_ADJUST_IDS) {
+//            EvaluationRulesDto.AdjustItem base = existingById.get(lockedId);
+//            if (base == null) continue;  // 시드 누락된 회사면 skip (createDefaultRules 재호출 필요)
+//            Boolean enabled = base.getEnabled() != null ? base.getEnabled() : Boolean.TRUE;
+//            Integer threshold = base.getThreshold() != null ? base.getThreshold() : 0;
+//            if (reqItems != null) {
+//                for (EvaluationRulesDto.AdjustItem r : reqItems) {
+//                    if (r == null || !lockedId.equals(r.getId())) continue;
+//                    if (r.getEnabled() != null) enabled = r.getEnabled();
+//                    if (r.getThreshold() != null) threshold = Math.max(0, r.getThreshold());
+//                    break;
+//                }
+//            }
+//            Map<String, Object> m = new LinkedHashMap<>();
+//            m.put("id", lockedId);
+//            m.put("name", base.getName());
+//            m.put("points", base.getPoints());
+//            m.put("threshold", threshold);
+//            m.put("enabled", enabled);
+//            m.put("locked", true);
+//            result.add(m);
+//            seenLocked.add(lockedId);
+//        }
+//
+//        // non-locked 요청 항목 - locked id 로 위장한 것은 버림
+//        if (reqItems != null) {
+//            for (EvaluationRulesDto.AdjustItem r : reqItems) {
+//                if (r == null || r.getId() == null) continue;
+//                if (seenLocked.contains(r.getId())) continue;
+//                Map<String, Object> m = new LinkedHashMap<>();
+//                m.put("id", r.getId());
+//                m.put("name", r.getName());
+//                m.put("points", r.getPoints());
+//                m.put("threshold", r.getThreshold() != null ? Math.max(0, r.getThreshold()) : 0);
+//                m.put("enabled", r.getEnabled() != null ? r.getEnabled() : Boolean.TRUE);
+//                result.add(m);
+//            }
+//        }
+//        return result;
+//    }
 
     // 기존 form_values JSON 파싱 (null/파싱에러 방어 -> 빈 Map)
     private Map<String, Object> parseFormValuesSafely(String json) {
@@ -277,12 +273,13 @@ public class EvaluationRulesService {
                 Map.of("id", "D", "label", "D", "ratio", 10, "color", "#ef4444")
         ));
 
+        // 가감점 기능 제거 — 2026-04
         // 가감점 - 지각 / 무단결근 (근태 이벤트 기반, FE LOCKED_ADJUST_IDS 와 id 일치 필수)
         // threshold 면제 횟수 0 = 면제 없음 (1건 발생부터 감점)
-        form.put("adjustments", List.of(
-                Map.of("id", "late",   "name", "지각",     "points", -2, "threshold", 0, "enabled", true, "locked", true),
-                Map.of("id", "absent", "name", "무단결근", "points", -5, "threshold", 0, "enabled", true, "locked", true)
-        ));
+        // form.put("adjustments", List.of(
+        //         Map.of("id", "late",   "name", "지각",     "points", -2, "threshold", 0, "enabled", true, "locked", true),
+        //         Map.of("id", "absent", "name", "무단결근", "points", -5, "threshold", 0, "enabled", true, "locked", true)
+        // ));
 
         // 등급 원점수 변환표 — 팀장 등급 → managerScore
         form.put("rawScoreTable", List.of(

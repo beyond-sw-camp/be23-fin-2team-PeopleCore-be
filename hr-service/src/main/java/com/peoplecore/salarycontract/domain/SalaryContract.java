@@ -52,9 +52,6 @@ public class SalaryContract {
     @Column(name = "create_by", nullable = false)
     private Long createBy; //작성자명
 
-    @Column(name = "contract_year", nullable = false)
-    private Integer contractYear; //계약 연도(목록 필터)
-
     @Column(name = "total_amount", nullable = false, precision = 15, scale = 2)
     private BigDecimal totalAmount;
 

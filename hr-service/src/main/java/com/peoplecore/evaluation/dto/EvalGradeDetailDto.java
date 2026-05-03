@@ -2,7 +2,6 @@ package com.peoplecore.evaluation.dto;
 
 import com.peoplecore.evaluation.domain.AchievementLevel;
 import com.peoplecore.evaluation.domain.GoalType;
-import com.peoplecore.evaluation.domain.TaskGrade;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -38,8 +37,8 @@ public class EvalGradeDetailDto {
     private ManagerEvalEntry managerEvalEntry;         // 상위자평가 상세 (모달)
 
     // ─── Section 3 - 종합점수 ───
-    // TODO: 근태 발생건수 집계 구현 후 채우기. 현재는 빈 배열
-    private List<AdjustmentItem> adjustments;
+    // 가감점 기능 제거 — 2026-04
+    // private List<AdjustmentItem> adjustments;
     private BigDecimal rawScore;
 
     // ─── Section 4 - Z-score (미실행 시 null) ───
@@ -69,8 +68,7 @@ public class EvalGradeDetailDto {
         private GoalType goalType;        // KPI / OKR
         private String category;
         private String title;
-        private TaskGrade grade;          // HIGH / MID / LOW
-        private BigDecimal ratio;         // 승인 목표 중 비율(%)
+        private Integer weight;           // 가중치(%) - KPI 만 값, OKR 은 null
         private BigDecimal targetValue;
         private String targetUnit;
     }
@@ -95,7 +93,7 @@ public class EvalGradeDetailDto {
     public static class SelfEvalEntry {
         private GoalType goalType;
         private String title;
-        private TaskGrade grade;
+        private Integer weight;           // 가중치(%) - KPI 만 값, OKR 은 null
         private BigDecimal targetValue;
         private String targetUnit;
         private BigDecimal actualValue;
@@ -116,14 +114,15 @@ public class EvalGradeDetailDto {
     }
 
 
-    @Getter
-    @Builder
-    @AllArgsConstructor
-    @NoArgsConstructor
-    public static class AdjustmentItem {
-        private String name;
-        private BigDecimal points;
-    }
+    // 가감점 기능 제거 — 2026-04
+//    @Getter
+//    @Builder
+//    @AllArgsConstructor
+//    @NoArgsConstructor
+//    public static class AdjustmentItem {
+//        private String name;
+//        private BigDecimal points;
+//    }
 
 
     @Getter

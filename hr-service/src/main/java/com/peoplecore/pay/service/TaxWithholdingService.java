@@ -19,6 +19,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Transactional(readOnly = true)
@@ -54,7 +55,25 @@ public class TaxWithholdingService {
         // 원 → 천원 변환 (1000 미만은 버림)
         int salaryInThousand = (int) (monthlySalary / 1000);
 
-        return taxWithholdingRepository.findByTaxYearAndSalaryMinLessThanEqualAndSalaryMaxGreaterThan(taxYear, salaryInThousand, salaryInThousand)
+        // 정상 범위 매칭
+        Optional<TaxWithholdingTable> match = taxWithholdingRepository
+                .findByTaxYearAndSalaryMinLessThanEqualAndSalaryMaxGreaterThan(
+                        taxYear, salaryInThousand, salaryInThousand);
+
+        // 매칭 없으면 표의 최대 행으로 클램프 (월급여가 최대치 초과 케이스)
+        //   최저치 미만 케이스(salary < 첫 행 salaryMin)는 보통 비과세 구간 → 0원이 정상이라
+        //   "salary > 최대 salaryMax" 조건일 때만 클램프(해당 범위로 고정)
+        if (match.isEmpty()) {
+            Optional<TaxWithholdingTable> top = taxWithholdingRepository
+                    .findTopByTaxYearOrderBySalaryMaxDesc(taxYear);
+            if (top.isPresent() && salaryInThousand >= top.get().getSalaryMax()) {
+                match = top;
+                log.warn("[간이세액표] 월급여 {}원이 {}년 표 최대치({}천원) 초과 → 최대 행 세액으로 클램프",
+                        monthlySalary, taxYear, top.get().getSalaryMax());
+            }
+        }
+
+        return match
                 .map(t -> {
                     long incomeTax = t.getTaxByDependents(dependents);
                     long localIncomeTax = Math.round(incomeTax * 0.1);

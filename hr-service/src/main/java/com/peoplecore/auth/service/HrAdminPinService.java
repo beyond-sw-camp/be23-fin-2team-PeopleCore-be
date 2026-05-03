@@ -19,6 +19,7 @@ import java.util.regex.Pattern;
 public class HrAdminPinService {
 
     private static final long HR_ADMIN_SCOPE_TTL_SECONDS = 30 * 60L;
+    private static final long HR_ADMIN_EXTEND_TTL_SECONDS = 15 * 60L;
     private static final Pattern PIN_PATTERN = Pattern.compile("^\\d{4,6}$");
 
     private final EmployeeRepository employeeRepository;
@@ -78,8 +79,21 @@ public class HrAdminPinService {
         if (!passwordEncoder.matches(req.getPin(), emp.getHrAdminPinHash())) {
             throw new CustomException(ErrorCode.HR_ADMIN_PIN_MISMATCH);
         }
-        String token = jwtProvider.createHrAdminScopeToken(empId);
+        String token = jwtProvider.createHrAdminScopeToken(empId, HR_ADMIN_SCOPE_TTL_SECONDS);
         return new HrAdminPinDtos.VerifyResponse(token, HR_ADMIN_SCOPE_TTL_SECONDS);
+    }
+
+    /**
+     * 인사통합 PIN 세션 연장 — 기존 토큰의 잔여 시간에 15분을 더한 새 토큰을 발급한다.
+     * 컨트롤러 단에서 X-HR-Admin-Scope 헤더로 사전 검증한다.
+     */
+    @Transactional(readOnly = true)
+    public HrAdminPinDtos.VerifyResponse extendSession(Long empId, long currentRemainingSeconds) {
+        requireSuperAdmin(empId);
+        long base = Math.max(0L, currentRemainingSeconds);
+        long newTtl = base + HR_ADMIN_EXTEND_TTL_SECONDS;
+        String token = jwtProvider.createHrAdminScopeToken(empId, newTtl);
+        return new HrAdminPinDtos.VerifyResponse(token, newTtl);
     }
 
     private Employee requireSuperAdmin(Long empId) {
