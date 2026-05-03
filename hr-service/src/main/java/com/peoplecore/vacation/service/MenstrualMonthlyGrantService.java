@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.TemporalAdjusters;
 import java.util.UUID;
 
@@ -40,6 +41,8 @@ public class MenstrualMonthlyGrantService {
 
     /* 사원 1명 생리휴가 월 부여 처리 */
     /* 호출 선조건: 사원이 FEMALE + ACTIVE + not deleted 상태 (스케줄러가 필터 완료) */
+    /* 멱등 가드: 동월 ACCRUAL 이력 있으면 전체 skip — cron(매월 1일) + 관리자 수동 트리거 다회 호출 방지 */
+    /*           (mid-month 재실행 시 만료+적립 페어가 ledger 에 무한 누적되고 expired_days 부풀던 버그 차단) */
     /* 예외: accrue 내부 cap 초과 시 VACATION_BALANCE_CAP_EXCEEDED (생리는 cap=null 이므로 미발생) */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void grantForEmployee(UUID companyId, Employee emp, VacationType menstrualType, LocalDate today) {
@@ -51,19 +54,38 @@ public class MenstrualMonthlyGrantService {
         int prevMonth = today.getMonthValue() - 1;
         int prevYear = (prevMonth == 0) ? currentYear - 1 : currentYear;
 
+        // 당해 row 선조회 — 멱등 가드 판정 + 본 로직 재사용 (조회 1회로 절약)
+        VacationBalance balance = vacationBalanceRepository
+                .findOne(companyId, empId, typeId, currentYear)
+                .orElse(null);
+
+        // 멱등 가드: 당해 row 가 이미 있고 이번달 ACCRUAL 이력 존재 → 전체 skip
+        // 첫 호출(row 없음)이면 가드 패스 — 정상 처리 후 ACCRUAL 기록 → 다음 호출부터 가드 작동
+        if (balance != null) {
+            LocalDate firstDayOfMonth = today.withDayOfMonth(1);
+            LocalDateTime monthStart = firstDayOfMonth.atStartOfDay();
+            LocalDateTime nextMonthStart = firstDayOfMonth.plusMonths(1).atStartOfDay();
+            if (vacationLedgerRepository.existsAccrualInMonth(
+                    companyId, balance.getBalanceId(), monthStart, nextMonthStart)) {
+                log.info("[MenstrualGrant] 동월 적립 이력 존재 - skip empId={}, year={}, month={}",
+                        empId, currentYear, today.getMonthValue());
+                return;
+            }
+        }
+
         // 연 경계 만료: 전년 row 가 존재하면 Dec 잔여를 만료 처리 (당해 row 와 분리된 식별자)
         if (prevYear < currentYear) {
             vacationBalanceRepository.findOne(companyId, empId, typeId, prevYear)
                     .ifPresent(prevBal -> expireAndLog(prevBal, "생리휴가 전년 Dec 미사용 만료"));
         }
 
-        // 당해 연도 row 조회 또는 신규 생성 (첫 실행 / 신규 입사자 대비)
-        VacationBalance balance = vacationBalanceRepository
-                .findOne(companyId, empId, typeId, currentYear)
-                .orElseGet(() -> createAndLogInitial(companyId, emp, menstrualType, currentYear, today));
+        // 당해 row 없으면 신규 생성 (첫 실행 / 신규 입사자 대비)
+        if (balance == null) {
+            balance = createAndLogInitial(companyId, emp, menstrualType, currentYear, today);
+        }
 
         // 동일 연도 전월 만료: 이미 accrue 된 Balance 의 가용 잔여를 expired 로 이동
-        // (첫 생성 직후 available=0 이라 안전 - 아무 일도 일어나지 않음)
+        // 가드 통과 = 이번달 ACCRUAL 없음 = 직전 ACCRUAL 은 전월 이전 → 만료 대상이 맞음
         if (prevYear == currentYear) {
             expireAndLog(balance, "생리휴가 전월 미사용 만료");
         }

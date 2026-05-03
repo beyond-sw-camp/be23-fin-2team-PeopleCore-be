@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.TimeZone;
 
 /* 생리휴가 적립 잡의 Quartz 등록 전담 (SRP — 등록만) */
-/* 매월 1일 00:05 KST fire, misfire = DO_NOTHING (Service 직접 호출이라 보수적) */
+/* 매월 1일 00:05 KST fire, misfire = FIRE_NOW (JobLauncher 위임 + JobInstance(companyId, targetDate) UNIQUE 제약 + Service 내부 동월 멱등 가드로 중복 적립 자동 차단) */
 @Slf4j
 @Configuration
 public class MenstrualMonthlyGrantSchedulerConfig {
@@ -73,7 +73,7 @@ public class MenstrualMonthlyGrantSchedulerConfig {
                 .forJob(jobKey)
                 .withSchedule(CronScheduleBuilder.cronSchedule(CRON)
                         .inTimeZone(TZ_SEOUL)
-                        .withMisfireHandlingInstructionDoNothing())
+                        .withMisfireHandlingInstructionFireAndProceed())
                 .build();
     }
 }

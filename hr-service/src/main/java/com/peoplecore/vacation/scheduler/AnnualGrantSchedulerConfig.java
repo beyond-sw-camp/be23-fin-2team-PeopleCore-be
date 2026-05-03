@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.TimeZone;
 
 /* 연차 발생 잡의 Quartz 등록 전담 (SRP — 등록만) */
-/* 매일 00:10 KST fire, misfire = DO_NOTHING (HIRE 분기가 Service 직접 호출이라 보수적) */
+/* 매일 00:10 KST fire, misfire = FIRE_NOW (HIRE/FISCAL 모두 JobLauncher 위임 + JobInstance(companyId, targetDate) UNIQUE 제약으로 중복 발생 자동 차단) */
 @Slf4j
 @Configuration
 public class AnnualGrantSchedulerConfig {
@@ -73,7 +73,7 @@ public class AnnualGrantSchedulerConfig {
                 .forJob(jobKey)
                 .withSchedule(CronScheduleBuilder.cronSchedule(CRON)
                         .inTimeZone(TZ_SEOUL)
-                        .withMisfireHandlingInstructionDoNothing())
+                        .withMisfireHandlingInstructionFireAndProceed())
                 .build();
     }
 }

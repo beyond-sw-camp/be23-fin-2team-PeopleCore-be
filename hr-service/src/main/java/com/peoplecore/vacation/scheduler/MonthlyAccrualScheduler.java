@@ -3,115 +3,93 @@ package com.peoplecore.vacation.scheduler;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.domain.CompanyStatus;
 import com.peoplecore.company.repository.CompanyRepository;
-import com.peoplecore.employee.domain.EmpStatus;
-import com.peoplecore.employee.domain.Employee;
-import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.vacation.batch.MonthlyAccrualJobConfig;
 import com.peoplecore.vacation.entity.VacationType;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
-import com.peoplecore.vacation.service.MonthlyAccrualService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
-/* 월차 자동 적립 본체 — 회사 순회 + 사원 단위 적립 위임 */
+/* 월차 자동 적립 본체 — 회사 순회 + 회사별 Spring Batch JobLauncher 위임 */
 /* 정기 fire = MonthlyAccrualJob (Quartz) → run() 호출 */
 /* 수동 트리거 = 관리 API → run() 호출 (장애 복구 시 운영자 직접 실행) */
-/* 사원 단위 처리는 MonthlyAccrualService 로 위임 (REQUIRES_NEW 격리) */
-/* 멀티 노드 한 대만 fire = QRTZ_LOCKS row lock 보장 (Redis 분산락 불필요) */
+/* JobInstance(companyId, targetDate) UNIQUE — 같은 회사/같은 날 재실행 자동 차단 */
+/* 사원 단위 적립 로직은 MonthlyAccrualJobConfig (Step + Reader/Writer) 가 담당 */
 @Component
 @Slf4j
 public class MonthlyAccrualScheduler {
-
-    /* 월차 적립 대상 개월차 - 입사 1~11개월차. 12개월(1년)은 AnnualTransitionScheduler 담당 */
-    private static final int MAX_ACCRUAL_MONTH = 11;
 
     /* KST 고정 - 서버 로컬 타임존과 무관하게 정책 시각 준수 */
     private static final ZoneId ZONE_SEOUL = ZoneId.of("Asia/Seoul");
 
     private final CompanyRepository companyRepository;
     private final VacationTypeRepository vacationTypeRepository;
-    private final EmployeeRepository employeeRepository;
-    private final MonthlyAccrualService monthlyAccrualService;
+    private final JobLauncher jobLauncher;
+    private final Job monthlyAccrualJob;
 
     @Autowired
     public MonthlyAccrualScheduler(CompanyRepository companyRepository,
                                    VacationTypeRepository vacationTypeRepository,
-                                   EmployeeRepository employeeRepository,
-                                   MonthlyAccrualService monthlyAccrualService) {
+                                   JobLauncher jobLauncher,
+                                   @Qualifier(MonthlyAccrualJobConfig.JOB_NAME) Job monthlyAccrualJob) {
         this.companyRepository = companyRepository;
         this.vacationTypeRepository = vacationTypeRepository;
-        this.employeeRepository = employeeRepository;
-        this.monthlyAccrualService = monthlyAccrualService;
+        this.jobLauncher = jobLauncher;
+        this.monthlyAccrualJob = monthlyAccrualJob;
     }
 
-    /* 정기/수동 공용 진입점. 두 경로 모두 같은 메서드 통과 → 동작 일관성 보장 */
+    /* 정기/수동 공용 진입점 */
     public void run() {
         LocalDate today = LocalDate.now(ZONE_SEOUL);
         log.info("[MonthlyAccrual] 시작 - date={}", today);
 
         List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
-        int processedCompanies = 0;
+        int launched = 0;
         for (Company company : activeCompanies) {
-            try {
-                processCompany(company, today);
-                processedCompanies++;
-            } catch (Exception e) {
-                log.error("[MonthlyAccrual] 회사 처리 실패 - companyId={}, err={}",
-                        company.getCompanyId(), e.getMessage(), e);
+            if (launchForCompany(company.getCompanyId(), today)) {
+                launched++;
             }
         }
-        log.info("[MonthlyAccrual] 완료 - date={}, companies={}/{}",
-                today, processedCompanies, activeCompanies.size());
+        log.info("[MonthlyAccrual] 완료 - date={}, launched={}/{}",
+                today, launched, activeCompanies.size());
     }
 
-    /* 회사 단위 처리 - MONTHLY 유형 조회 + 1~11개월차 대상 IN 쿼리 1회로 벌크 조회 */
-    private void processCompany(Company company, LocalDate today) {
-        UUID companyId = company.getCompanyId();
+    /* 회사 단위 JobLauncher 호출 - MONTHLY 유형 누락 시 JobInstance 생성도 skip */
+    private boolean launchForCompany(UUID companyId, LocalDate today) {
         VacationType monthlyType = vacationTypeRepository
                 .findByCompanyIdAndTypeCode(companyId, VacationType.CODE_MONTHLY)
                 .orElse(null);
         if (monthlyType == null) {
             log.warn("[MonthlyAccrual] MONTHLY 유형 없음 - companyId={} (initDefault 누락?)", companyId);
-            return;
+            return false;
         }
 
-        /* 1~11개월차 대상 입사일 11개 사전 계산 */
-        List<LocalDate> targetHireDates = new ArrayList<>(MAX_ACCRUAL_MONTH);
-        for (int n = 1; n <= MAX_ACCRUAL_MONTH; n++) {
-            targetHireDates.add(today.minusMonths(n));
-        }
-
-        /* IN 쿼리 1회로 전체 대상 사원 벌크 조회 */
-        List<Employee> allTargets = employeeRepository
-                .findByCompany_CompanyIdAndEmpHireDateInAndEmpStatusInAndDeleteAtIsNull(
-                        companyId, targetHireDates,
-                        List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE));
-        if (allTargets.isEmpty()) return;
-
-        /* hireDate 기준 그룹핑 - 같은 날짜에 여러 사원이 입사한 경우 대비 */
-        Map<LocalDate, List<Employee>> byHireDate = allTargets.stream()
-                .collect(Collectors.groupingBy(Employee::getEmpHireDate));
-
-        /* n별 처리 - 기존 호출 시그니처(accrueIfEligible 에 n 전달) 유지 */
-        for (int n = 1; n <= MAX_ACCRUAL_MONTH; n++) {
-            LocalDate targetHireDate = today.minusMonths(n);
-            List<Employee> targets = byHireDate.getOrDefault(targetHireDate, List.of());
-            for (Employee emp : targets) {
-                try {
-                    monthlyAccrualService.accrueIfEligible(companyId, emp, monthlyType, n, today);
-                } catch (Exception e) {
-                    log.error("[MonthlyAccrual] 사원 처리 실패 - companyId={}, empId={}, n={}, err={}",
-                            companyId, emp.getEmpId(), n, e.getMessage(), e);
-                }
-            }
+        try {
+            JobParameters params = new JobParametersBuilder()
+                    .addString("companyId", companyId.toString())
+                    .addString("targetDate", today.toString())
+                    .toJobParameters();
+            jobLauncher.run(monthlyAccrualJob, params);
+            return true;
+        } catch (JobInstanceAlreadyCompleteException e) {
+            // 같은 회사/같은 날 이미 완료 — 운영자 수동 재실행 시 정상 흐름
+            log.info("[MonthlyAccrual] 이미 완료 - companyId={}, date={}", companyId, today);
+            return false;
+        } catch (Exception e) {
+            log.error("[MonthlyAccrual] Batch 실행 실패 - companyId={}, err={}",
+                    companyId, e.getMessage(), e);
+            return false;
         }
     }
 }

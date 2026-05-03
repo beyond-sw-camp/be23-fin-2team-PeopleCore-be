@@ -103,8 +103,12 @@ public class AttendanceMySummaryService {
         /*주간 블록 조립 */
         long workedMin = agg.workedMinutes();
         long attendanceDays = agg.attendedDays();
-        int remainingDays = Math.max(0, weeklyWorkDays - (int) attendanceDays);
         long remainingMin = Math.max(0L, (long) weeklyWorkMinutes - workedMin - vacationMinutes);
+        // 휴가분을 일수로 환산해 잔여에서 차감 (분 잔여 계산과 동일한 근거)
+        int vacationDays = (dailyWorkMinutes > 0)
+                ? (int) Math.round((double) vacationMinutes / dailyWorkMinutes)
+                : 0;
+        int remainingDays = Math.max(0, weeklyWorkDays - (int) attendanceDays - vacationDays);
 
         MyWeeklyStatsDto weekly = MyWeeklyStatsDto.builder()
                 .weekStart(weekStart)

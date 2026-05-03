@@ -3,16 +3,18 @@ package com.peoplecore.vacation.scheduler;
 import com.peoplecore.company.domain.Company;
 import com.peoplecore.company.domain.CompanyStatus;
 import com.peoplecore.company.repository.CompanyRepository;
-import com.peoplecore.employee.domain.EmpStatus;
-import com.peoplecore.employee.domain.Employee;
-import com.peoplecore.employee.repository.EmployeeRepository;
-import com.peoplecore.vacation.entity.VacationPolicy;
+import com.peoplecore.vacation.batch.AnnualTransitionJobConfig;
 import com.peoplecore.vacation.entity.VacationType;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import com.peoplecore.vacation.repository.VacationTypeRepository;
-import com.peoplecore.vacation.service.AnnualTransitionService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.batch.core.Job;
+import org.springframework.batch.core.JobParameters;
+import org.springframework.batch.core.JobParametersBuilder;
+import org.springframework.batch.core.launch.JobLauncher;
+import org.springframework.batch.core.repository.JobInstanceAlreadyCompleteException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -20,11 +22,11 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.UUID;
 
-/* 월차→연차 전환 본체 — 1주년 도달 사원 처리 */
+/* 월차→연차 전환 본체 — 회사 순회 + 회사별 Spring Batch JobLauncher 위임 */
 /* 정기 fire = AnnualTransitionJob (Quartz) → run() 호출 */
 /* 수동 트리거 = 관리 API → run() 호출 */
-/* HIRE: 월차 소멸 + 1년차 연차 발생 / FISCAL: 월차 소멸만 */
-/* 멀티 노드 한 대만 fire = QRTZ_LOCKS row lock 보장 (Redis 분산락 불필요) */
+/* JobInstance(companyId, targetDate) UNIQUE — 같은 회사/같은 날 재실행 자동 차단 */
+/* 사원 단위 전환 로직은 AnnualTransitionJobConfig (Step + Reader/Writer) 가 담당 */
 @Component
 @Slf4j
 public class AnnualTransitionScheduler {
@@ -34,20 +36,20 @@ public class AnnualTransitionScheduler {
     private final CompanyRepository companyRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
     private final VacationTypeRepository vacationTypeRepository;
-    private final EmployeeRepository employeeRepository;
-    private final AnnualTransitionService annualTransitionService;
+    private final JobLauncher jobLauncher;
+    private final Job annualTransitionJob;
 
     @Autowired
     public AnnualTransitionScheduler(CompanyRepository companyRepository,
                                      VacationPolicyRepository vacationPolicyRepository,
                                      VacationTypeRepository vacationTypeRepository,
-                                     EmployeeRepository employeeRepository,
-                                     AnnualTransitionService annualTransitionService) {
+                                     JobLauncher jobLauncher,
+                                     @Qualifier(AnnualTransitionJobConfig.JOB_NAME) Job annualTransitionJob) {
         this.companyRepository = companyRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
         this.vacationTypeRepository = vacationTypeRepository;
-        this.employeeRepository = employeeRepository;
-        this.annualTransitionService = annualTransitionService;
+        this.jobLauncher = jobLauncher;
+        this.annualTransitionJob = annualTransitionJob;
     }
 
     /* 정기/수동 공용 진입점 */
@@ -56,56 +58,47 @@ public class AnnualTransitionScheduler {
         log.info("[AnnualTransition] 시작 - date={}", today);
 
         List<Company> activeCompanies = companyRepository.findByCompanyStatus(CompanyStatus.ACTIVE);
-        int processed = 0;
+        int launched = 0;
         for (Company company : activeCompanies) {
-            try {
-                processCompany(company, today);
-                processed++;
-            } catch (Exception e) {
-                log.error("[AnnualTransition] 회사 처리 실패 - companyId={}, err={}",
-                        company.getCompanyId(), e.getMessage(), e);
+            if (launchForCompany(company.getCompanyId(), today)) {
+                launched++;
             }
         }
-        log.info("[AnnualTransition] 완료 - date={}, companies={}/{}", today, processed, activeCompanies.size());
+        log.info("[AnnualTransition] 완료 - date={}, launched={}/{}",
+                today, launched, activeCompanies.size());
     }
 
-    /* 회사 단위 - 정책/유형 조회 후 1주년 도달 사원 처리 */
-    private void processCompany(Company company, LocalDate today) {
-        UUID companyId = company.getCompanyId();
-
-        VacationPolicy policy = vacationPolicyRepository.findByCompanyIdFetchRules(companyId).orElse(null);
-        if (policy == null) {
+    /* 회사 단위 JobLauncher 호출 - 정책/유형 누락 시 JobInstance 생성도 skip */
+    private boolean launchForCompany(UUID companyId, LocalDate today) {
+        boolean hasPolicy = vacationPolicyRepository.findByCompanyIdFetchRules(companyId).isPresent();
+        if (!hasPolicy) {
             log.warn("[AnnualTransition] 정책 없음 - companyId={}", companyId);
-            return;
+            return false;
         }
-
-        VacationType monthlyType = vacationTypeRepository
-                .findByCompanyIdAndTypeCode(companyId, VacationType.CODE_MONTHLY).orElse(null);
-        VacationType annualType = vacationTypeRepository
-                .findByCompanyIdAndTypeCode(companyId, VacationType.CODE_ANNUAL).orElse(null);
-        if (monthlyType == null || annualType == null) {
+        boolean hasMonthly = vacationTypeRepository
+                .findByCompanyIdAndTypeCode(companyId, VacationType.CODE_MONTHLY).isPresent();
+        boolean hasAnnual = vacationTypeRepository
+                .findByCompanyIdAndTypeCode(companyId, VacationType.CODE_ANNUAL).isPresent();
+        if (!hasMonthly || !hasAnnual) {
             log.warn("[AnnualTransition] 시스템 유형 누락 - companyId={}, monthly={}, annual={}",
-                    companyId, monthlyType != null, annualType != null);
-            return;
+                    companyId, hasMonthly, hasAnnual);
+            return false;
         }
 
-        /* 1주년 도달 = today.minusYears(1) == empHireDate */
-        LocalDate oneYearAgoHireDate = today.minusYears(1);
-        List<Employee> emps = employeeRepository
-                .findByCompany_CompanyIdAndEmpHireDateAndEmpStatusInAndDeleteAtIsNull(
-                        companyId, oneYearAgoHireDate,
-                        List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE));
-
-        if (emps.isEmpty()) return;
-        log.info("[AnnualTransition] companyId={}, 대상={}명", companyId, emps.size());
-
-        for (Employee emp : emps) {
-            try {
-                annualTransitionService.transition(companyId, emp, policy, monthlyType, annualType, today);
-            } catch (Exception e) {
-                log.error("[AnnualTransition] 사원 처리 실패 - empId={}, err={}",
-                        emp.getEmpId(), e.getMessage(), e);
-            }
+        try {
+            JobParameters params = new JobParametersBuilder()
+                    .addString("companyId", companyId.toString())
+                    .addString("targetDate", today.toString())
+                    .toJobParameters();
+            jobLauncher.run(annualTransitionJob, params);
+            return true;
+        } catch (JobInstanceAlreadyCompleteException e) {
+            log.info("[AnnualTransition] 이미 완료 - companyId={}, date={}", companyId, today);
+            return false;
+        } catch (Exception e) {
+            log.error("[AnnualTransition] Batch 실행 실패 - companyId={}, err={}",
+                    companyId, e.getMessage(), e);
+            return false;
         }
     }
 }

@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.TimeZone;
 
 /* 월차→연차 전환 잡의 Quartz 등록 전담 (SRP — 등록만) */
-/* 매일 00:05 KST fire, misfire = DO_NOTHING (이월은 두 번 돌면 잔여 망가짐) */
+/* 매일 00:05 KST fire, misfire = FIRE_NOW (JobLauncher 위임 + JobInstance(companyId, targetDate) UNIQUE 제약으로 중복 전환 자동 차단) */
 @Slf4j
 @Configuration
 public class AnnualTransitionSchedulerConfig {
@@ -73,7 +73,7 @@ public class AnnualTransitionSchedulerConfig {
                 .forJob(jobKey)
                 .withSchedule(CronScheduleBuilder.cronSchedule(CRON)
                         .inTimeZone(TZ_SEOUL)
-                        .withMisfireHandlingInstructionDoNothing())
+                        .withMisfireHandlingInstructionFireAndProceed())
                 .build();
     }
 }

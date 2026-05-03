@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Configuration;
 import java.util.TimeZone;
 
 /* 월차 적립 잡의 Quartz 등록 전담 (SRP — 등록만) */
-/* 매일 00:00 KST fire, misfire = DO_NOTHING (Service 직접 호출이라 보수적, Phase 2 후 FIRE_NOW 상향 가능) */
+/* 매일 00:00 KST fire, misfire = FIRE_NOW (JobLauncher 위임 + JobInstance(companyId, targetDate) UNIQUE 제약으로 중복 실행 자동 차단) */
 @Slf4j
 @Configuration
 public class MonthlyAccrualSchedulerConfig {
@@ -74,7 +74,7 @@ public class MonthlyAccrualSchedulerConfig {
                 .forJob(jobKey)
                 .withSchedule(CronScheduleBuilder.cronSchedule(CRON)
                         .inTimeZone(TZ_SEOUL)
-                        .withMisfireHandlingInstructionDoNothing())
+                        .withMisfireHandlingInstructionFireAndProceed())
                 .build();
     }
 }
