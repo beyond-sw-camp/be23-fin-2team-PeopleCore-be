@@ -253,6 +253,11 @@ public class FormFieldSetupService {
         // 메뉴 / 기능 권한 설정
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "authTemplate", "권한", "메뉴 / 기능 권한 설정", FieldType.SELECT, true, true, 1, "[\"일반 사원\",\"HR 담당자\",\"인사 최고 관리자\"]", null));
 
+        // 급여 정보
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "salaryAccount",     "급여 계좌",     "급여 정보", FieldType.TEXT,   true, false,  1, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "retirementAccount", "퇴직급여 계좌",  "급여 정보", FieldType.TEXT,   true, false, 2, null, null));
+        list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "dependentsCount",   "부양가족수",    "급여 정보", FieldType.NUMBER, true, true,  3, null, null));
+
         // 인사 서류 등록
         list.add(field(companyId, FormType.EMPLOYEE_REGISTER, "documents", "서류 첨부", "인사 서류 등록", FieldType.FILE, true, false, 1, null, null));
 

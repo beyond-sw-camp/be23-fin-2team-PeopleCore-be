@@ -114,6 +114,7 @@ public class Employee extends BaseTimeEntity {
 
     @Column(nullable = false)
     @Builder.Default
+    @Enumerated(EnumType.STRING)
     private RetirementType retirementType = RetirementType.DC;
 
 

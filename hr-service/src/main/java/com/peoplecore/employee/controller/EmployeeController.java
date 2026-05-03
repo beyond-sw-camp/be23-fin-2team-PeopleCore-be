@@ -58,7 +58,7 @@ public class EmployeeController {
 //
 ////    3. 신규등록
     @PostMapping
-    public ResponseEntity<Long>createEmployee(@RequestHeader("X-User-Company")UUID companyId,
+    public ResponseEntity<Long> createEmployee(@RequestHeader("X-User-Company")UUID companyId,
                                               @Valid @ModelAttribute EmployeeCreateRequestDto responseDto,
                                               @RequestPart(required = false) List<MultipartFile> files){
         return ResponseEntity.ok(employeeService.createEmployee(companyId, responseDto,files));

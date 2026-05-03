@@ -53,6 +53,18 @@ public class PayrollEmpStatus {
 
 //  확정
     public void confirm(Long byEmpId) {
+
+        // 결재 진행/완료/지급 상태에선 다시 확정 못 함 (상태 되돌림 방지)
+        if (this.status == PayrollEmpStatusType.APPROVED
+                || this.status == PayrollEmpStatusType.PAID) {
+            throw new IllegalStateException(
+                    "이미 결재 승인/지급 처리된 사원은 재확정 할 수 없습니다. (status=" + this.status + ")");
+        }
+        if (this.approvalDocId != null) {
+            throw new IllegalStateException(
+                    "결재 진행 중인 사원은 재확정 할 수 없습니다. (docId=" + this.approvalDocId + ")");
+        }
+
         this.status = PayrollEmpStatusType.CONFIRMED;
         this.confirmedAt = LocalDateTime.now();
         this.confirmedBy = byEmpId;

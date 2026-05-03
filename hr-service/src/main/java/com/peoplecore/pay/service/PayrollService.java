@@ -39,8 +39,9 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static reactor.netty.http.HttpConnectionLiveness.log;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 public class PayrollService {
@@ -525,6 +526,13 @@ public class PayrollService {
                 .findByPayrollRuns_PayrollRunIdAndEmployee_EmpId(payrollRunId, empId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_EMP_NOT_FOUND));
         pes.confirm(actorEmpId);
+        try {
+            pes.confirm(actorEmpId);
+        } catch (IllegalStateException e) {
+            log.warn("[confirmEmployee] 확정 차단 - empId={}, status={}, docId={}",
+                    empId, pes.getStatus(), pes.getApprovalDocId());
+            throw new CustomException(ErrorCode.PAYROLL_EMP_NOT_CONFIRMABLE);
+        }
     }
 
 ///     확정 되돌리기(사원별)
@@ -708,6 +716,7 @@ public class PayrollService {
                 throw new CustomException(ErrorCode.PAYROLL_EMP_NOT_APPROVED);
             }
         }
+
 //    CompanyPaySettings 조회, PayrollDetails 조회, 이체파일 생성
         CompanyPaySettings settings = paySettingsRepository.findByCompany_CompanyId(companyId)
                 .orElseThrow(() -> new CustomException(ErrorCode.PAY_SETTINGS_NOT_FOUND));
@@ -731,29 +740,75 @@ public class PayrollService {
                 .stream()
                 .collect(Collectors.toMap(a -> a.getEmployee().getEmpId(), a -> a));
 
+        // 사원명 lookup (스킵 로그용)
+        Map<Long, String> empNameMap = empStatusMap.values().stream()
+                .collect(Collectors.toMap(
+                        p -> p.getEmployee().getEmpId(),
+                        p -> p.getEmployee().getEmpName()));
+
+        // 스킵 명단 누적
+        List<String> skippedEmployees = new ArrayList<>();
+
+        // 사원별로 검사하면서 (a) netPay ≤ 0 / (b) 계좌 미등록 / (c) 은행코드 누락 케이스는 스킵
+        // 스킵 사유는 log.warn 으로 운영자 추적 가능하게 남김
         List<PayrollTransferDto> transfer = empNetPayMap.entrySet().stream()
                 .map(entry -> {
-                    if (entry.getValue() <= 0) return null;
-                    EmpAccounts account = empAccountMap.get(entry.getKey());
+                    Long empId  = entry.getKey();
+                    Long netPay = entry.getValue();
+                    String name = empNameMap.getOrDefault(empId, "사번 " + empId);
+
+                    if (netPay == null || netPay <= 0) {
+                        log.warn("[generateTransferFile] netPay ≤ 0 스킵 - runId={}, empId={}, name={}, netPay={}",
+                                payrollRunId, empId, name, netPay);
+                        skippedEmployees.add(name + "(미지급)");
+                        return null;
+                    }
+
+                    EmpAccounts account = empAccountMap.get(empId);
+                    if (account == null) {
+                        log.warn("[generateTransferFile] 계좌 미등록 스킵 - runId={}, empId={}, name={}",
+                                payrollRunId, empId, name);
+                        skippedEmployees.add(name + "(계좌 미등록)");
+                        return null;
+                    }
+                    if (account.getBankCode() == null || account.getBankCode().isBlank()) {
+                        log.warn("[generateTransferFile] 은행코드 누락 스킵 - runId={}, empId={}, name={}",
+                                payrollRunId, empId, name);
+                        skippedEmployees.add(name + "(은행코드 누락)");
+                        return null;
+                    }
+
                     return PayrollTransferDto.builder()
                             .empName(account.getAccountHolder())
                             .bankCode(account.getBankCode())
                             .bankName(account.getBankName())
                             .accountNumber(account.getAccountNumber().replace("-", ""))
-                            .netPay(entry.getValue())
+                            .netPay(netPay)
                             .memo(run.getPayYearMonth() + " 급여")
                             .build();
                 })
                 .filter(Objects::nonNull)
                 .toList();
 
+        // 전부 스킵되어 결과가 비면 그때만 예외
+        if (transfer.isEmpty()) {
+            throw new CustomException(ErrorCode.NO_TRANSFER_TARGETS);
+        }
+
         BankTransferFileGenerator generator = bankTransferFileFactory.getGenerator(mainBankCode);
-        byte[] fileBytes = generator.generate(transfer);
+        byte[] fileBytes;
+        try {
+            fileBytes = generator.generate(transfer, run.getPayYearMonth());
+        } catch (java.io.IOException e) {
+            log.error("[generateTransferFile] 엑셀 생성 실패 - bank={}, runId={}", mainBankCode, payrollRunId, e);
+            throw new CustomException(ErrorCode.TRANSFER_FILE_GENERATION_FAILED);
+        }
         String fileName = generator.getFileName(run.getPayYearMonth());
 
         return TransferFileResDto.builder()
                 .fileName(fileName)
                 .fileBytes(fileBytes)
+                .skippedEmployees(skippedEmployees)
                 .build();
     }
 
