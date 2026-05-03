@@ -216,8 +216,9 @@ AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
     List<Employee>findActiveByCompanyAndDept(@Param("companyId")UUID companyId,@Param("deptId") Long deptId);
 
 
-//    성과평가 대상자 - 재직중(ACTIVE) + 일반 사원(EMPLOYEE)
+//    성과평가 대상자 - 재직중(ACTIVE) + 일반 사원(EMPLOYEE) + 최하단(leaf) 부서 소속만
 //    (HR_ADMIN/HR_SUPER_ADMIN, 휴직자는 평가 대상에서 제외)
+//    leaf 부서: 자신을 parent 로 갖는 하위 부서가 없는 부서 (사업본부 같은 상위 조직은 평가 단위가 아님)
 //    평가자/피평가자 구분은 EmpEvaluatorGlobal 매핑으로 결정됨 — 평가자도 다른 사람의 피평가자가 될 수 있음.
     @Query("""
             SELECT e FROM Employee e
@@ -226,6 +227,11 @@ AND e.empStatus != com.peoplecore.employee.domain.EmpStatus.RESIGNED
             WHERE e.company.companyId = :companyId
               AND e.empStatus = com.peoplecore.employee.domain.EmpStatus.ACTIVE
               AND e.empRole = com.peoplecore.employee.domain.EmpRole.EMPLOYEE
+              AND e.dept.deptId NOT IN (
+                  SELECT d.parentDeptId FROM com.peoplecore.department.domain.Department d
+                  WHERE d.parentDeptId IS NOT NULL
+                    AND d.company.companyId = :companyId
+              )
 """)
     List<Employee> findEvalTargetsByCompany(@Param("companyId") UUID companyId);
 

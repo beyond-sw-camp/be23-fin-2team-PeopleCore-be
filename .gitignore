@@ -126,6 +126,8 @@ package.json
 .claude/
 **/.claude/
 /be23-fin-PeopleCore/
+/analysis-service/
+**/FileVaultInternalController.java
 캘린더_요구사항명세서_수정본.xlsx
 **/캘린더_요구사항명세서_수정본.xlsx
 

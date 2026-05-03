@@ -297,7 +297,12 @@ public class EvalGradeService {
         int totalWeight = 0;
         for (Goal g : kpiGoals) {
             SelfEvaluation se = selfByGoal.get(g.getGoalId());
+            // 미제출(row 없음) / actualValue 미입력 → 점수 산정 제외 (전체 missing 처리)
             if (se == null || se.getActualValue() == null) return null;
+            // 자기평가 상태 가드 — APPROVED 만 점수 인정
+            //   DRAFT(임시저장) / PENDING(상위자 미응답) / REJECTED(상위자 반려) → 산정 제외
+            //   기록은 그대로 보존, 자동산정에서만 빼는 정책
+            if (se.getApprovalStatus() != SelfEvalApprovalStatus.APPROVED) return null;
 
             BigDecimal rate = computeAchievementRate(g.getKpiDirection(), g.getTargetValue(), se.getActualValue(), cap, tolerance);
             if (rate == null) return null;
