@@ -39,7 +39,7 @@ use peoplecore;
 -- =====================================================================
 
 -- ▼ 회사 + 비밀번호 ▼
-SET @company_name := 'testcompany';
+SET @company_name := 'peoplecore';
 SET @cid := (SELECT company_id FROM company WHERE company_name = @company_name);
 SET @pwd := '$2a$10$EblZqNptyYvcLm/VwDCVAuBjzZOI7khzdyGPBr08PpIi0na624b8.';
 
