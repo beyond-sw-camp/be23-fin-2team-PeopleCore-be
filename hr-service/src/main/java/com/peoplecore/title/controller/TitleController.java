@@ -1,7 +1,7 @@
 package com.peoplecore.title.controller;
 
-import com.peoplecore.title.dto.DepartmentSimpleResponse;
 import com.peoplecore.title.dto.TitleCreateRequest;
+import com.peoplecore.title.dto.TitleOrderRequest;
 import com.peoplecore.title.dto.TitleResponse;
 import com.peoplecore.title.dto.TitleUpdateRequest;
 import com.peoplecore.title.service.TitleService;
@@ -28,12 +28,6 @@ public class TitleController {
         return ResponseEntity.ok(titleService.getTitles(UUID.fromString(companyId)));
     }
 
-    @GetMapping("/departments")
-    public ResponseEntity<List<DepartmentSimpleResponse>> getDepartments(
-            @RequestHeader("X-User-Company") String companyId) {
-        return ResponseEntity.ok(titleService.getDepartments(UUID.fromString(companyId)));
-    }
-
     @PostMapping
     public ResponseEntity<TitleResponse> createTitle(
             @RequestHeader("X-User-Company") String companyId,
@@ -56,5 +50,13 @@ public class TitleController {
             @PathVariable Long titleId) {
         titleService.deleteTitle(UUID.fromString(companyId), titleId);
         return ResponseEntity.noContent().build();
+    }
+
+    @PatchMapping("/order")
+    public ResponseEntity<Void> updateOrder(
+            @RequestHeader("X-User-Company") String companyId,
+            @RequestBody TitleOrderRequest request) {
+        titleService.updateOrder(UUID.fromString(companyId), request);
+        return ResponseEntity.ok().build();
     }
 }

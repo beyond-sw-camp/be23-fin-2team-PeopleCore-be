@@ -35,6 +35,10 @@ public class Department {
     @Column(name = "dept_code", nullable = false)
     private String deptCode;
 
+    @Column(name = "sort_order", nullable = false)
+    @Builder.Default
+    private Integer sortOrder = 0;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -54,6 +58,15 @@ public class Department {
 
     public void updateParent(Long parentDeptId) {
         this.parentDeptId = parentDeptId;
+    }
+
+    public void updateSortOrder(Integer sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+
+    public void updatePositionAndOrder(Long parentDeptId, Integer sortOrder) {
+        this.parentDeptId = parentDeptId;
+        this.sortOrder = sortOrder;
     }
 
     public void deactivate() {

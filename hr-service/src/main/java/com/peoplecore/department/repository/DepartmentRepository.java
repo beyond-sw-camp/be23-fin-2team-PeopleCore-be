@@ -12,6 +12,8 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
 
     List<Department> findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(UUID companyId, UseStatus isUse);
 
+    List<Department> findByCompany_CompanyIdAndIsUseOrderBySortOrderAscDeptIdAsc(UUID companyId, UseStatus isUse);
+
     List<Department> findByCompany_CompanyIdAndParentDeptIdAndIsUse(UUID companyId, Long parentDeptId, UseStatus isUse);
 
     Optional<Department> findByDeptIdAndCompany_CompanyId(Long deptId, UUID companyId);

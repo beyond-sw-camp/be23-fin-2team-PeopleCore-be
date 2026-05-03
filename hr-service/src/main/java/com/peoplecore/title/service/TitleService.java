@@ -3,13 +3,10 @@ package com.peoplecore.title.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.company.domain.Company;
-import com.peoplecore.department.domain.Department;
-import com.peoplecore.department.domain.UseStatus;
-import com.peoplecore.department.repository.DepartmentRepository;
 import com.peoplecore.event.TitleUpdatedEvent;
 import com.peoplecore.title.domain.Title;
-import com.peoplecore.title.dto.DepartmentSimpleResponse;
 import com.peoplecore.title.dto.TitleCreateRequest;
+import com.peoplecore.title.dto.TitleOrderRequest;
 import com.peoplecore.title.dto.TitleResponse;
 import com.peoplecore.title.dto.TitleUpdateRequest;
 import com.peoplecore.title.repository.TitleRepository;
@@ -21,85 +18,58 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 @Transactional
 public class TitleService {
     private final TitleRepository titleRepository;
-    private final DepartmentRepository departmentRepository;
     private final EmployeeRepository employeeRepository;
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
     private static final String TOPIC_TITLE_UPDATED = "hr-title-updated";
 
-    public TitleService(TitleRepository titleRepository, DepartmentRepository departmentRepository,
+    public TitleService(TitleRepository titleRepository,
                         EmployeeRepository employeeRepository,
                         KafkaTemplate<String, String> kafkaTemplate, ObjectMapper objectMapper) {
         this.titleRepository = titleRepository;
-        this.departmentRepository = departmentRepository;
         this.employeeRepository = employeeRepository;
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
     }
 
     public List<TitleResponse> getTitles(UUID companyId) {
-        Map<Long, String> deptMap = departmentRepository
-                .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y)
-                .stream()
-                .collect(Collectors.toMap(Department::getDeptId, Department::getDeptName));
-
         return titleRepository.findAllByCompanyId(companyId)
                 .stream()
-                .map(title -> {
-                    String deptName = title.getDeptId() == null
-                            ? "전사 공통"
-                            : deptMap.getOrDefault(title.getDeptId(), "전사 공통");
-                    return TitleResponse.from(title, deptName);
-                })
-                .toList();
-    }
-
-    public List<DepartmentSimpleResponse> getDepartments(UUID companyId) {
-        return departmentRepository
-                .findByCompany_CompanyIdAndIsUseOrderByDeptNameAsc(companyId, UseStatus.Y)
-                .stream()
-                .map(dept -> new DepartmentSimpleResponse(dept.getDeptId(), dept.getDeptName()))
+                .sorted(Comparator
+                        .comparingInt((Title t) -> t.getTitleOrder() != null ? t.getTitleOrder() : 0)
+                        .thenComparingLong(Title::getTitleId))
+                .map(TitleResponse::from)
                 .toList();
     }
 
     public TitleResponse createTitle(UUID companyId, TitleCreateRequest request) {
-        if (titleRepository.existsByTitleNameAndCompanyIdAndDeptId(
-                request.getTitleName(), companyId, request.getDeptId())) {
+        if (titleRepository.existsByTitleNameAndCompanyId(request.getTitleName(), companyId)) {
             throw new IllegalArgumentException("이미 존재하는 직책명입니다.");
         }
 
-        String titleCode = titleRepository.findAllByCompanyId(companyId).stream()
-                .map(Title::getTitleCode)
-                .filter(code -> code.matches("\\d+"))
-                .max(Comparator.naturalOrder())
-                .map(code -> String.format("%03d", Integer.parseInt(code) + 1))
-                .orElse("001");
+        String titleCode = (request.getTitleCode() != null && !request.getTitleCode().isBlank())
+                ? request.getTitleCode().trim()
+                : nextTitleCode(companyId);
+
+        int nextOrder = nextTitleOrder(companyId);
 
         Title title = Title.builder()
                 .companyId(companyId)
-                .deptId(request.getDeptId())
                 .titleName(request.getTitleName())
                 .titleCode(titleCode)
+                .titleOrder(nextOrder)
                 .build();
 
         Title saved = titleRepository.save(title);
 
-        String deptName = saved.getDeptId() == null
-                ? "전사 공통"
-                : departmentRepository.findById(saved.getDeptId())
-                .map(Department::getDeptName)
-                .orElse("전사 공통");
-
-        return TitleResponse.from(saved, deptName);
+        return TitleResponse.from(saved);
     }
 
     public TitleResponse updateTitle(UUID companyId, Long titleId, TitleUpdateRequest request) {
@@ -110,23 +80,16 @@ public class TitleService {
             throw new IllegalArgumentException("접근 권한이 없습니다.");
         }
 
-
-        if (titleRepository.existsByTitleNameAndCompanyIdAndDeptIdAndTitleIdNot(
-                request.getTitleName(), companyId, request.getDeptId(), titleId)) {
+        if (titleRepository.existsByTitleNameAndCompanyIdAndTitleIdNot(
+                request.getTitleName(), companyId, titleId)) {
             throw new IllegalArgumentException("이미 존재하는 직책명입니다.");
         }
 
-        title.update(request.getTitleName(), request.getDeptId());
+        title.update(request.getTitleName());
 
         publishTitleUpdatedEvent(titleId);
 
-        String deptName = title.getDeptId() == null
-                ? "전사 공통"
-                : departmentRepository.findById(title.getDeptId())
-                .map(Department::getDeptName)
-                .orElse("전사 공통");
-
-        return TitleResponse.from(title, deptName);
+        return TitleResponse.from(title);
     }
 
     public void deleteTitle(UUID companyId, Long titleId) {
@@ -144,6 +107,40 @@ public class TitleService {
         titleRepository.delete(title);
 
         publishTitleUpdatedEvent(titleId);
+    }
+
+    private String nextTitleCode(UUID companyId) {
+        return titleRepository.findAllByCompanyId(companyId).stream()
+                .map(Title::getTitleCode)
+                .filter(code -> code != null && code.matches("\\d+"))
+                .max(Comparator.naturalOrder())
+                .map(code -> String.format("%03d", Integer.parseInt(code) + 1))
+                .orElse("001");
+    }
+
+    private int nextTitleOrder(UUID companyId) {
+        return titleRepository.findAllByCompanyId(companyId).stream()
+                .map(Title::getTitleOrder)
+                .filter(java.util.Objects::nonNull)
+                .max(Integer::compareTo)
+                .map(max -> max + 1)
+                .orElse(1);
+    }
+
+    public void updateOrder(UUID companyId, TitleOrderRequest request) {
+        List<Long> titleIds = request.getTitleIds();
+        if (titleIds == null || titleIds.isEmpty()) return;
+
+        for (int i = 0; i < titleIds.size(); i++) {
+            Title title = titleRepository.findById(titleIds.get(i))
+                    .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 직책입니다."));
+
+            if (!title.getCompanyId().equals(companyId)) {
+                throw new IllegalArgumentException("접근 권한이 없습니다.");
+            }
+
+            title.updateOrder(i + 1);
+        }
     }
 
     /* 직책 변경 이벤트 kafka로 발행 (실패해도 메인 로직에 영향 없음) */
