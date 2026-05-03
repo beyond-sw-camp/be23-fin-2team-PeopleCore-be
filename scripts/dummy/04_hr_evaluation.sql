@@ -17,7 +17,7 @@
 --   - EvalGrade (CLOSED는 locked, OPEN은 snapshot only)
 --
 -- [실행 방법]
---   $ mysql -u <user> -p peoplecore < 03_hr_evaluation.sql
+--   $ mysql -u <user> -p peoplecore < 04_hr_evaluation.sql
 --
 -- [재실행 가능]
 --   상단 cleanup 블록이 회사별 평가 데이터 모두 삭제 후 재INSERT

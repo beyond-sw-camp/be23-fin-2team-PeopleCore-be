@@ -5,7 +5,7 @@
 --   1) 회사 'peoplecore' 생성 완료
 --   2) 01_hr_master_data.sql 실행 완료 (Department/Grade/Title)
 --   3) 02_hr_employees.sql 실행 완료 (사원 100명)
---   4) (선택) 03_hr_evaluation.sql — admin 부서 이동만 의존, 03 안 돌려도 04 단독 실행 가능
+--   4) (선택) 04_hr_evaluation.sql — admin 부서 이동만 의존, 03 안 돌려도 04 단독 실행 가능
 --
 -- 본 스크립트가 추가하는 것:
 --   - hr_order (PROMOTION) — 패턴별 분기 INSERT 4회
