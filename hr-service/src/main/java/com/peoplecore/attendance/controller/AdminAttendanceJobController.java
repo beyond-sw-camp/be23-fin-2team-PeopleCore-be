@@ -7,6 +7,7 @@ import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,6 +22,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/admin/attendance")
 public class AdminAttendanceJobController {
 
+    /* JOB_GROUP — AutoCloseSchedulerManager.JOB_GROUP 상수와 일치해야 함 */
+    private static final String AUTO_CLOSE_GROUP = "auto-close";
+
     private final Scheduler quartzScheduler;
 
     @Autowired
@@ -33,6 +37,25 @@ public class AdminAttendanceJobController {
     @PostMapping("/partition/ensure")
     public ResponseEntity<Void> ensurePartition(@RequestHeader("X-User-Id") String userId) {
         return triggerOrFail(JobKey.jobKey("partition-ensure", "partition"), userId);
+    }
+
+    /*
+     * 자동마감 + 결근 처리 즉시 실행 (WorkGroup 단위).
+     *
+     * 호출 경로:
+     *  - quartzScheduler.triggerJob(jobKey) → AutoCloseJob.execute()
+     *    → JobLauncher.run(autoCloseJob, params(companyId, workGroupId, targetDate))
+     *    → autoCloseStep → absentStep
+     *  - JobInstance(companyId, workGroupId, targetDate) UNIQUE — 같은 WorkGroup 같은 날 중복 차단
+     *
+     * jobKey 형식: AutoCloseSchedulerManager.jobKeyOf 와 동일 ("wg-{workGroupId}", "auto-close")
+     * → 미등록 WorkGroup 호출 시 SchedulerException → 500 반환
+     */
+    @RoleRequired({"HR_SUPER_ADMIN"})
+    @PostMapping("/auto-close/{workGroupId}/run")
+    public ResponseEntity<Void> runAutoClose(@PathVariable Long workGroupId,
+                                             @RequestHeader("X-User-Id") String userId) {
+        return triggerOrFail(JobKey.jobKey("wg-" + workGroupId, AUTO_CLOSE_GROUP), userId);
     }
 
     /* Quartz Job 즉시 트리거 — 응답은 즉시(202), 실행은 워커 스레드에서 */
