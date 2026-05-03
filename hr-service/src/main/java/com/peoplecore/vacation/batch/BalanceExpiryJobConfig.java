@@ -16,6 +16,7 @@ import org.springframework.batch.item.database.builder.JpaCursorItemReaderBuilde
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
@@ -37,6 +38,13 @@ public class BalanceExpiryJobConfig {
     /* 잡 이름 - 스케줄러에서 @Qualifier 로 주입 */
     public static final String JOB_NAME = "balanceExpiryJob";
 
+    /*
+     * TODO 고도화 예정 — Multi-thread Step (taskExecutor + throttleLimit) 도입 검토
+     *  - 청크 병렬 처리로 처리 속도 향상
+     *  - 전제 1: ItemReader thread-safety (JpaCursor 는 안전 X → SynchronizedItemStreamReader 래핑 필요)
+     *  - 전제 2: ItemWriter → Service REQUIRES_NEW 격리 (이미 적용)
+     *  - 대안: Partitioned Step (회사별 파티션 병렬)
+     */
     @Bean(JOB_NAME)
     public Job balanceExpiryJob(JobRepository jobRepository, Step balanceExpiryStep,
                                 BatchFailureListener batchFailureListener) {
@@ -56,6 +64,8 @@ public class BalanceExpiryJobConfig {
                 .reader(balanceExpiryReader)
                 .writer(balanceExpiryWriter)
                 .faultTolerant()
+                .retry(TransientDataAccessException.class)   // DB 락/데드락/타임아웃 등 일시 장애 자동 복구
+                .retryLimit(3)
                 .skip(Exception.class)   // writer 에서 튀는 예외는 item 단위 skip
                 .skipLimit(SKIP_LIMIT)   // 초과 시 SkipLimitExceededException → Step FAILED
                 .build();

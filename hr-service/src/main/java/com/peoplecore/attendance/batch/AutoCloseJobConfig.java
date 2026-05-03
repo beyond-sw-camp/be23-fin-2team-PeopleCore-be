@@ -23,6 +23,7 @@ import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
@@ -48,6 +49,13 @@ public class AutoCloseJobConfig {
 
     public static final String JOB_NAME = "autoCloseJob";
 
+    /*
+     * TODO 고도화 예정 — Multi-thread Step (taskExecutor + throttleLimit) 도입 검토
+     *  - autoCloseStep / absentStep 두 청크 모두 병렬 처리 후보
+     *  - 전제 1: ListItemReader 는 안전. JdbcCursor 마이그 시 SynchronizedItemStreamReader 검토
+     *  - 전제 2: ItemWriter → Service REQUIRES_NEW 격리 (이미 적용)
+     *  - 대안: Partitioned Step (WorkGroup 별 파티션 병렬)
+     */
     @Bean(JOB_NAME)
     public Job autoCloseJob(JobRepository jobRepository,
                             Step autoCloseStep, Step absentStep,
@@ -71,6 +79,8 @@ public class AutoCloseJobConfig {
                 .reader(autoCloseReader)
                 .writer(autoCloseWriter)
                 .faultTolerant()
+                .retry(TransientDataAccessException.class)   // DB 락/데드락/타임아웃 등 일시 장애 자동 복구
+                .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
                 .build();
@@ -134,6 +144,8 @@ public class AutoCloseJobConfig {
                 .reader(absentReader)
                 .writer(absentWriter)
                 .faultTolerant()
+                .retry(TransientDataAccessException.class)   // DB 락/데드락/타임아웃 등 일시 장애 자동 복구
+                .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
                 .build();

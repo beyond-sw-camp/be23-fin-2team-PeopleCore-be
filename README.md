@@ -853,31 +853,121 @@ curl -X POST "http://localhost:<port>/internal/search/backfill/embeddings?type=A
 <summary><h3>배치 / 스케줄러</h3></summary>
 
 <details>
-<summary>1. 멀티 파드 중복 실행 - Redis 분산 락</summary>
+<summary>1. @Scheduled + Redis 분산 락 → Quartz JDBC 클러스터링</summary>
 
-**문제**
+**문제사항**
+- EKS 다중 파드에서 `@Scheduled` 가 파드마다 동시 fire
+- WorkGroup 동적 스케줄이 CRUD 받은 1대에만 반영 → 나머지 파드는 옛 cron / 삭제 그룹에 계속 fire
+- 같은 잡 N번 실행 → 데이터 중복 처리 / DDL 메타락 충돌
 
-EKS 환경에서 hr-service 파드가 N개 떠 있으면 `@Scheduled` 가 파드마다 실행되어 연차 부여/만료 배치가 중복 실행됩니다. 같은 사원에게 연차가 이중 부여되거나 이중 소멸될 수 있습니다.
+**원인분석**
+- `@Scheduled` = JVM 단위 스케줄러 → 파드별 독립 fire
+- 동적 스케줄 핸들이 JVM 인메모리 → 파드 간 공유 불가
+- Redis 분산락은 "두번째 파드 skip" 만 보장 (N번 fire 자체는 못 막음) + Redis 가 SPOF 로 격상
 
-**해결 - `SETNX` 기반 일일 멱등성 락**
+**시도방법**
+- (1차) Redis 분산락 핫픽스 → Quartz 마이그레이션 시 폐기 대상 → 보류
+- (2차) ShedLock → 새 의존성 + 기존 락 패턴과 갈림 → 보류
+- (3차) Quartz JDBC 클러스터링 단일 마이그레이션 채택
 
-`setIfAbsent("{batchName}:{yyyy-MM-dd}", podId, Duration.ofMinutes(10))` 로 당일 최초 진입 파드만 배치를 수행하고, 나머지 파드는 즉시 종료합니다.
-
-- 키에 날짜를 포함해 **일일 멱등성** 보장 (재시작되어도 같은 날엔 재실행 안 됨)
-- TTL 10분으로 락 홀더가 OOM 등으로 죽어도 자동 해제
+**해결방법**
+- Quartz JDBC 클러스터링(`isClustered: true`) + 동적 스케줄 DB 영속 + Redis 락 코드 일괄 제거를 해서, 효과는 한 노드만 fire / 모든 파드 자동 동기화 / SPOF 1 제거(Redis 디커플링) / 노드 장애 시 자동 인계로 회차 누락 0
 
 </details>
 
 <details>
-<summary>2. Chunk 기반 대용량 처리 - 메모리 · 롤백 범위 제한</summary>
+<summary>2. Service 직접 호출 → Spring Batch JobLauncher 전환</summary>
 
-**문제**
+**문제사항**
+- vacation 4잡: `Quartz Job → Scheduler.run() → Service` 직접 호출 구조
+- 처리 결과 INFO 로그만 → "어느 회사 몇 명 처리/실패" grep 으로만 확인
+- 멱등 가드 = Service 마다 `existsByXxx` SELECT 중복 구현
 
-전 사원 대상 배치를 단일 트랜잭션으로 처리하면 수천 건 단위에서 메모리 사용량이 급증하고, 중간 실패 시 모든 작업이 롤백됩니다.
+**원인분석**
+- Service 직접 호출 → BATCH_JOB_INSTANCE / EXECUTION 메타 영속성 0
+- read / write / skip / rollback 카운트 자동 집계 X
 
-**해결 - Spring Batch Chunk(500) + Skip/Retry 정책**
+**시도방법**
+- Service 별 멱등 가드 추가 → 4잡 × 코드 중복 → 보류
+- JobParameters 키: `(targetDate)` 전사 통합 vs `(companyId, targetDate)` 회사별 → 후자 채택
 
-`ItemReader → ItemProcessor → ItemWriter` 를 Chunk 500 건 단위로 커밋하여 메모리 사용량을 일정하게 유지합니다. `JobRepository` 에 실행 이력을 기록해 재시작 시 실패 지점부터 재개할 수 있도록 구성했습니다.
+**해결방법**
+- 4잡에 `XxxJobConfig` 추가, `Scheduler.run()` = "회사 순회 + `jobLauncher.run()`" 슬림화 (Service 시그니처 변경 0)
+- JobParameters = `(companyId, targetDate)` → BATCH_JOB_INSTANCE UNIQUE 가 같은 회사·같은 날 두번째 호출 자체 차단
+- BatchFailureListener → FAILED / skipCount > 0 자동 감지 → Discord (4잡 코드 변경 0)
+- **효과**: 회사 1 처리 = 1 row + read/write 카운트로 즉시 파악, 4잡 + 기존 4잡 = 8잡 단일 매트릭스
+
+</details>
+
+<details>
+<summary>3. JobExecutionException throw 여부 — JobListener 알림 vs misfire 일관</summary>
+
+**문제사항**
+- AutoCloseJob 예외 발생 시 처리 방향 결정 필요
+- catch + 로깅만 → 알림 누락
+- 단순 throw → 즉시 refire → 비멱등 잡 중복 처리
+
+**원인분석**
+- catch + 로깅 → JobListener 입장에서 잡 정상 종료 → `getException()` 감지 X → Discord 알림 누락
+- 단순 throw → Quartz 즉시 refire → 자동마감 같은 비멱등 잡은 데이터 중복 처리
+
+**시도방법**
+- 1차 catch + `log.error` → 알림 누락 발견
+- Quartz API 검토 → `JobExecutionException(Throwable, boolean refireImmediately)` 발견. `false` 면 refire 차단
+
+**해결방법**
+- `throw new JobExecutionException(e, false)` 채택 → 알림 발사 + refire 차단 동시 달성
+- misfire `DO_NOTHING` 정책과 일관 (refire X)
+- **효과**: 실패 즉시 Discord 알림 + 자동마감 중복 처리 위험 0. vacation 6 스케줄러 동일 패턴
+
+</details>
+
+<details>
+<summary>4. AutoClose 도메인 이중성 — 2-Step + Reader 가드</summary>
+
+**문제사항**
+- vacation 4잡 = 단일 도메인 (Reader → Writer → Service 위임)
+- AutoClose 는 한 잡에 두 도메인 (`CommuteRecord` 미체크아웃 + `Employee` 결근) → ItemReader 단일 타입 제약으로 한 Step 처리 X
+- 기존 `autoCloseForWorkGroup` 전체 `@Transactional` → 사원 1건 실패 시 WorkGroup 전체 롤백
+
+**원인분석**
+- ItemReader 다형성 우회 (`Object` + instanceof, JobStep, Flow Split) 모두 타입 안전성 / 청크 commit 의미 / race 문제로 부적합
+- AutoCloseBatchService 만 회사 단위 트랜잭션 → vacation 사원 1건당 + REQUIRES_NEW 패턴과 갈림
+
+**시도방법**
+- Tasklet 1개로 Service 통째 호출 → vacation 패턴과 갈림, 가시성 0
+- 2-Step + Reader 가드 → vacation PromotionNotice stage 분기와 동일 → 채택
+
+**해결방법**
+- 2-Step 분리:
+  - Step 1 `autoCloseStep`: `Reader<CommuteRecord>` → `closeOne` 위임
+  - Step 2 `absentStep`: `Reader<Employee>` → `markAbsentOne` 위임
+- Step 2 가드 (소정근무요일 / 공휴일 / 휴가자) 는 Reader 안 처리. 미충족 시 `ListItemReader<>(List.of())` → 자연 종료 (Decider 빈 X)
+- Service 회사 단위 → 사원 1건당 `@Transactional(REQUIRES_NEW)` 분해. 의존성 7개 → 2개
+- **운영 효율**: 8잡 동일 매트릭스 (Reader / Writer / REQUIRES_NEW / JobParameters)
+- **데이터 정합성**: 사원 1건 실패가 전체 안 막음. `skip + skipLimit` item 단위 집계
+
+</details>
+
+<details>
+<summary>5. misfire 정책 매트릭스 — 잡별 멱등성 분기</summary>
+
+**문제사항**
+- 노드 다운 / 스레드풀 포화로 fire 시각 놓침 시 정책 결정 필요
+- `FIRE_NOW` / `DO_NOTHING` 중 잘못 선택 시 중복 처리 / 누락
+
+**원인분석**
+- 멱등성 보장 여부 (자동마감·결근·휴가 이월·만료 X / 파티션·Spring Batch O) + 알림 UX 영향 (vacation 만회 안전 / AutoClose cron 외 fire 시 사원·HR 알림 깨짐) 으로 정책 갈림
+
+**시도방법**
+- Phase 1: 멱등화 비용 vs 정책 회피 비용 → 정책 회피 채택
+- Phase 2: 4잡 JobInstance UNIQUE 확보 → `DO_NOTHING` → `FIRE_NOW` 안전 상향
+- Phase 3 (AutoClose): UNIQUE 있어도 알림 UX 측면 → `DO_NOTHING` 유지
+
+**해결방법**
+- 8잡 = 6 × `FIRE_NOW` (멱등 + 만회 안전) / 2 × `DO_NOTHING` (BalanceExpiry 만료 두 번 위험, AutoClose 알림 UX)
+- `JobExecutionException(e, false)` 로 throw 흐름과 일관 (3번)
+- 누락 시 `AdminAttendanceJobController` 수동 트리거 복구
 
 </details>
 

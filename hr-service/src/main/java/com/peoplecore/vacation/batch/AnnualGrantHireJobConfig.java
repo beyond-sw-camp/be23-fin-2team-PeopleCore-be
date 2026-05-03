@@ -22,6 +22,7 @@ import org.springframework.batch.item.support.ListItemReader;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.dao.TransientDataAccessException;
 import org.springframework.transaction.PlatformTransactionManager;
 
 import java.time.LocalDate;
@@ -50,6 +51,13 @@ public class AnnualGrantHireJobConfig {
 
     public static final String JOB_NAME = "annualGrantHireJob";
 
+    /*
+     * TODO 고도화 예정 — Multi-thread Step (taskExecutor + throttleLimit) 도입 검토
+     *  - 청크 병렬 처리로 처리 속도 향상
+     *  - 전제 1: ItemReader thread-safety (ListItemReader 는 안전. JdbcCursor 마이그 시 SynchronizedItemStreamReader 검토)
+     *  - 전제 2: ItemWriter → Service REQUIRES_NEW 격리 (이미 적용)
+     *  - 대안: Partitioned Step (회사별 파티션 병렬)
+     */
     @Bean(JOB_NAME)
     public Job annualGrantHireJob(JobRepository jobRepository, Step annualGrantHireStep,
                                   BatchFailureListener batchFailureListener) {
@@ -69,6 +77,8 @@ public class AnnualGrantHireJobConfig {
                 .reader(annualGrantHireReader)
                 .writer(annualGrantHireWriter)
                 .faultTolerant()
+                .retry(TransientDataAccessException.class)   // DB 락/데드락/타임아웃 등 일시 장애 자동 복구
+                .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
                 .build();
@@ -76,6 +86,13 @@ public class AnnualGrantHireJobConfig {
 
     /* 회사 + 오늘 입사기념일 매치 사원 조회 (+ 비윤년 3/1 → 2/29 보정 병합) */
     /* JpaCursorItemReader 가 아닌 ListItemReader - hireMonth/Day 쿼리는 native, 매치자 적어 인메모리 안전 */
+    /*
+     * TODO 고도화 예정 — 매치자 수 폭증 시 JdbcCursorItemReader 마이그레이션
+     *  - 현재 회사당 입사기념일 매치자 0~수십 명 → 인메모리 안전
+     *  - 사원 폭증 시 OOM 위험 (한 회사에 수만 명 같은 날 입사한 케이스 등)
+     *  - 마이그레이션 시 native 쿼리 (MONTH/DAY 함수) + 2/29 보정 UNION 처리 필요
+     *  - 마이그레이션 트리거 기준: 회사당 매치자 100명 초과 또는 SKIP_LIMIT(20) 이상 빈도 발생 시
+     */
     @Bean
     @StepScope
     public ListItemReader<Employee> annualGrantHireReader(
