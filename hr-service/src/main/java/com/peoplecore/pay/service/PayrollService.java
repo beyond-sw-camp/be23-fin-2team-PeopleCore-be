@@ -69,10 +69,11 @@ public class PayrollService {
     private final LeaveAllowanceService leaveAllowanceService;
     private final LeaveAllowanceRepository leaveAllowanceRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final EmpSalaryCacheService empSalaryCacheService;
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository,  OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceService leaveAllowanceService, LeaveAllowanceRepository leaveAllowanceRepository, ApplicationEventPublisher eventPublisher) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceService leaveAllowanceService, LeaveAllowanceRepository leaveAllowanceRepository, ApplicationEventPublisher eventPublisher, EmpSalaryCacheService empSalaryCacheService) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -94,6 +95,7 @@ public class PayrollService {
         this.leaveAllowanceService = leaveAllowanceService;
         this.leaveAllowanceRepository = leaveAllowanceRepository;
         this.eventPublisher = eventPublisher;
+        this.empSalaryCacheService = empSalaryCacheService;
     }
 
 ///       급여대장 조회(특정 월)
@@ -503,10 +505,10 @@ public class PayrollService {
         }
 
         int year = Integer.parseInt(run.getPayYearMonth().substring(0, 4));
-        // 기존 메서드 재사용 (3.2 버전 시그니처)
+        // 4대보험/소득세 재계산
         insertCalculatedDeductions(run, emp, company, monthlyTotal, taxableMonthly, year, rates, deductionMap);
 
-        // 4. run 합계 재집계 — DB flush 후 다시 SELECT 해야 갱신된 공제 amount 가 반영됨
+        // run 합계 재집계 — DB flush 후 다시 SELECT 해야 갱신된 공제 amount 가 반영됨
         payrollDetailsRepository.flush();
         List<PayrollDetails> all = payrollDetailsRepository.findByPayrollRuns(run);
         long totalPay = all.stream()
@@ -516,6 +518,16 @@ public class PayrollService {
                 .filter(d -> d.getPayItemType() == PayItemType.DEDUCTION)
                 .mapToLong(PayrollDetails::getAmount).sum();
         run.updateTotals(run.getTotalEmployees(), totalPay, totalDeduction, totalPay - totalDeduction);
+
+        // ── 사원 본인 화면 캐시 무효화 ──
+        mySalaryCacheService.evictSalaryInfoCache(companyId, empId);
+        mySalaryCacheService.evictStubListCache(companyId, empId);
+        mySalaryCacheService.evictAllStubDetailCache(companyId, empId);
+        mySalaryCacheService.evictSeveranceEstimateCache(companyId, empId);
+        // 어드민용 캐시도 같이
+        empSalaryCacheService.evictByEmpId(companyId, empId);
+        empSalaryCacheService.evictExpected(companyId);
+
     }
 
 
@@ -586,6 +598,7 @@ public class PayrollService {
             for (Long empId : empIds) {
                 mySalaryCacheService.evictSalaryInfoCache(event.getCompanyId(), empId);
                 mySalaryCacheService.evictStubListCache(event.getCompanyId(), empId);
+                mySalaryCacheService.evictAllStubDetailCache(event.getCompanyId(), empId);
                 mySalaryCacheService.evictSeveranceEstimateCache(event.getCompanyId(), empId);
             }
         } else if ("REJECTED".equals(status) || "CANCELED".equals(status)) {
@@ -605,6 +618,15 @@ public class PayrollService {
                 else run.cancelApproval();
             }
 
+            // ── 거절/취소 시에도 사원 캐시 무효화 ↓ ──
+            List<Long> rejectedEmpIds = bound.stream()
+                    .map(p -> p.getEmployee().getEmpId()).toList();
+            for (Long empId : rejectedEmpIds) {
+                mySalaryCacheService.evictSalaryInfoCache(event.getCompanyId(), empId);
+                mySalaryCacheService.evictStubListCache(event.getCompanyId(), empId);
+                mySalaryCacheService.evictAllStubDetailCache(event.getCompanyId(), empId);
+                mySalaryCacheService.evictSeveranceEstimateCache(event.getCompanyId(), empId);
+            }
             log.info("[PayrollService] 결재 {} - runId={}, docId={}, unbound 사원={}명, runRollback={}",
                     status, event.getPayrollRunId(), docId, bound.size(), !anyStillInApproval);
         }
@@ -654,7 +676,15 @@ public class PayrollService {
             eventPublisher.publishEvent(new PayrollPaidEvent(
                     companyId, run.getPayYearMonth(), run.getPayrollRunId()));
         }
-
+        // 지급처리된 사원들의 사원 본인 화면 캐시 무효화
+        //  PayStubs 가 이 시점에 신규 INSERT 되므로, 그 이전에 사원이 본 stub 목록·정보 캐시를 비워야
+        //  새 명세서가 즉시 보임. stub-detail 은 stubId 기준이라 신규 stub 엔 영향 없지만 일관성을 위해 같이 처리.
+        for (Long empId : targetEmpIds) {
+            mySalaryCacheService.evictSalaryInfoCache(companyId, empId);
+            mySalaryCacheService.evictStubListCache(companyId, empId);
+            mySalaryCacheService.evictAllStubDetailCache(companyId, empId);
+            mySalaryCacheService.evictSeveranceEstimateCache(companyId, empId);
+        }
         log.info("[PayrollService] 지급처리 - runId={}, paid={}명, runMarkedPaid={}",
                 payrollRunId, targets.size(), allPaid);
     }
@@ -989,6 +1019,14 @@ public class PayrollService {
         }
 //        합계 갱신
         recalculateTotals(run);
+
+        mySalaryCacheService.evictSalaryInfoCache(companyId, empId);
+        mySalaryCacheService.evictStubListCache(companyId, empId);
+        mySalaryCacheService.evictAllStubDetailCache(companyId, empId);
+        mySalaryCacheService.evictSeveranceEstimateCache(companyId, empId);
+        empSalaryCacheService.evictByEmpId(companyId, empId);
+        empSalaryCacheService.evictExpected(companyId);
+
     }
 
 

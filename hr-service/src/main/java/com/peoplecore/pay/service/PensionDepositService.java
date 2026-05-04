@@ -29,10 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -47,11 +44,10 @@ public class PensionDepositService {
     private final PayrollDetailsRepository payrollDetailsRepository;
     private final PayrollRunsRepository payrollRunsRepository;
     private final EmpRetirementAccountRepository empRetirementAccountRepository;
-
-
+    private final MySalaryCacheService mySalaryCacheService;
 
     @Autowired
-    public PensionDepositService(RetirementPensionDepositsRepository retirementPensionDepositsRepository, EmployeeRepository employeeRepository, SeverancePaysRepository severancePaysRepository, CompanyRepository companyRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, EmpRetirementAccountRepository empRetirementAccountRepository) {
+    public PensionDepositService(RetirementPensionDepositsRepository retirementPensionDepositsRepository, EmployeeRepository employeeRepository, SeverancePaysRepository severancePaysRepository, CompanyRepository companyRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, MySalaryCacheService mySalaryCacheService) {
         this.retirementPensionDepositsRepository = retirementPensionDepositsRepository;
         this.employeeRepository = employeeRepository;
         this.severancePaysRepository = severancePaysRepository;
@@ -59,6 +55,7 @@ public class PensionDepositService {
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.payrollRunsRepository = payrollRunsRepository;
         this.empRetirementAccountRepository = empRetirementAccountRepository;
+        this.mySalaryCacheService = mySalaryCacheService;
     }
 
 
@@ -138,6 +135,9 @@ public class PensionDepositService {
 
         RetirementPensionDeposits saved = retirementPensionDepositsRepository.save(deposit);
 
+        // 사원 본인 화면용 캐시 무효화 (퇴직연금 적립내역 / 예상퇴직금)
+        mySalaryCacheService.evictPensionCache(companyId, req.getEmpId());
+        mySalaryCacheService.evictSeveranceEstimateCache(companyId, req.getEmpId());
 
         log.info("[PensionDeposit 수동등록] depId={}, empId={}, payYearMonth={}, amount={}, by={}",
                 saved.getDepId(), req.getEmpId(), req.getPayYearMonth(), req.getDepositAmount(), adminEmpId);
@@ -157,6 +157,10 @@ public class PensionDepositService {
         }
 
         deposit.cancel(adminEmpId, reason);
+
+        Long empIdForEvict = deposit.getEmployee().getEmpId();
+        mySalaryCacheService.evictPensionCache(companyId, empIdForEvict);
+        mySalaryCacheService.evictSeveranceEstimateCache(companyId, empIdForEvict);
 
         log.warn("[PensionDeposit 취소] depId={}, empId={}, by={}, reason={}",
                 depId, deposit.getEmployee().getEmpId(), adminEmpId, reason);
@@ -361,12 +365,15 @@ public class PensionDepositService {
             throw new CustomException(ErrorCode.PAYROLL_STATUS_INVALID);
         }
 
-        // 1. 이 run 의 기존 SCHEDULED 모두 COMPLETED 로 승격
+        Set<Long> affectedEmpIds = new java.util.HashSet<>();
+
+        // 1. run 의 기존 SCHEDULED -> COMPLETED 로 승격
         List<RetirementPensionDeposits> scheduled = retirementPensionDepositsRepository
                 .findByPayrollRun_PayrollRunIdAndDepStatus(run.getPayrollRunId(), DepStatus.SCHEDULED);
         int promoted = 0;
         for (RetirementPensionDeposits s : scheduled) {
             s.markCompleted(LocalDateTime.now());
+            affectedEmpIds.add(s.getEmployee().getEmpId());
             promoted++;
         }
 
@@ -399,15 +406,20 @@ public class PensionDepositService {
                     .payrollRun(run)
                     .build();
             retirementPensionDepositsRepository.save(dep);
+            affectedEmpIds.add(emp.getEmpId());
             created++;
         }
 
-        log.info("[PensionDeposit] 일괄 적립 처리 - runId={}, promoted={}, created={}",
-                run.getPayrollRunId(), promoted, created);
+        // 3. 캐시 일괄 무효화
+        for (Long empId : affectedEmpIds) {                               // ← 블록 추가
+            mySalaryCacheService.evictPensionCache(companyId, empId);
+            mySalaryCacheService.evictSeveranceEstimateCache(companyId, empId);
+        }
+
+        log.info("[PensionDeposit] 일괄 적립 처리 - runId={}, promoted={}, created={}, evicted={}",
+                run.getPayrollRunId(), promoted, created, affectedEmpIds.size());
         return promoted + created;
     }
-
-
 
 
     private long calcMonthsBetween(String fromYm, String toYm) {
