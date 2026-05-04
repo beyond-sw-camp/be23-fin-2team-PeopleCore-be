@@ -34,6 +34,7 @@ public class SeveranceResDto {
     private Long dcDiffAmount;              // DC 차액
     private String sevStatus;               //퇴직금 상태
     private LocalDate transferDate;         //실지급 일자
+    private Long approvalDocId;     //전자결재 상신시 다중 선택 을 위한 체크박스 ox 판단용
 
 
     public static SeveranceResDto fromEntity(SeverancePays s) {

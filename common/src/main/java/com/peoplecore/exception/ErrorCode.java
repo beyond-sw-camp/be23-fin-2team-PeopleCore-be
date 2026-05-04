@@ -154,6 +154,12 @@ public enum ErrorCode {
     TAX_CALCULATION_FAILED(500,"퇴직소득세 산출 중 오류가 발생했습니다."),
     SEVERANCE_NO_PAYROLL_DATA(400, "직전 3개월 급여 데이터가 없어 퇴직금을 산정할 수 없습니다. 급여대장이 확정·지급된 상태인지 확인해주세요."),
 
+//    퇴직급여 지출결의서
+
+    INVALID_REQUEST(400, "요청 파라미터가 유효하지 않습니다."),
+    SEVERANCE_ALREADY_IN_APPROVAL(409, "이미 결재가 진행 중인 퇴직금입니다."),
+    APPROVAL_FORM_INVALID(400, "결재 양식 템플릿이 유효하지 않습니다."),
+
 //    퇴직연금DC형 적립
     EMPLOYEE_NOT_DC(400, "DC형 사원만 수동 적립 등록이 가능합니다."),
     DEPOSIT_ALREADY_EXISTS(409, "동일 사원·동일 월에 이미 적립된 건이 있습니다."),

@@ -434,42 +434,27 @@ public class SeveranceService {
         sev.confirm(confirmedBy);
     }
 
-///    전자결재 상신
-    @Transactional
-    public void submitApproval(UUID companyId, Long sevId, Long  approvalDocId) {
-        SeverancePays sev = findSeverance(companyId, sevId);
-        sev.submitApproval(approvalDocId);
-    }
 
 
 ///    전자결재 결과 처리 (kafka consumer에서 호출)
     @Transactional
     public void applyApprovalResult(SeveranceApprovalResultEvent event){
-        SeverancePays sev = severancePaysRepository.findBySevIdAndCompany_CompanyId(event.getSevId(), event.getCompanyId()).orElseThrow(() -> new CustomException(ErrorCode.SEVERANCE_NOT_FOUND));
+        List<SeverancePays> sevs = severancePaysRepository
+                .findAllByCompany_CompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId());
 
-        if (sev.getApprovalDocId() == null && event.getApprovalDocId() != null) {
-            sev.bindApprovalDoc(event.getApprovalDocId());
-            sev.submitApproval(event.getApprovalDocId());
+        if (sevs.isEmpty()) {
+            log.warn("[Severance] result 이벤트 - 매칭 sev 없음, docId={}", event.getApprovalDocId());
+            return;
         }
 
-        String status = event.getStatus();
-        if ("APPROVED".equals(status)) {
-            sev.approve();
-            log.info("[SeveranceService] 전자결재 승인 처리 완료 - severanceId={}",
-                    event.getSevId());
-        } else if ("REJECTED".equals(status)) {
-            sev.rejectApproval();
-            log.info("[SeveranceService] 전자결재 반려 처리 - severanceId={}, reason={}",
-                    event.getSevId(), event.getRejectReason());
-        } else if ("CANCELED".equals(status)) {
-            sev.cancelApproval();
-            log.info("[SeveranceService] 전자결재 회수 - severanceId={}", event.getSevId());
-        } else {
-            log.warn("[SeveranceResult] 알 수 없는 status={} - severanceId={}",
-                    status, event.getSevId());
+        if ("APPROVED".equals(event.getStatus())) {
+            sevs.forEach(s -> s.approve());
+        } else if ("REJECTED".equals(event.getStatus())) {
+            sevs.forEach(s -> s.rejectApproval());
+        }
+        log.info("[Severance] applyApprovalResult - docId={}, status={}, count={}",
+                event.getApprovalDocId(), event.getStatus(), sevs.size());
         }
     }
-
-}
 
 

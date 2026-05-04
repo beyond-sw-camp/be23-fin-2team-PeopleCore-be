@@ -185,6 +185,7 @@ public class SeverancePays extends BaseTimeEntity {
             throw new IllegalStateException("전자결재 진행중 상태에서만 반려 가능합니다.");
         }
         this.sevStatus = SevStatus.CONFIRMED;
+        this.approvalDocId = null;
     }
 
 //    approvalDocId 보완
@@ -240,5 +241,6 @@ public class SeverancePays extends BaseTimeEntity {
         this.dcDepositedTotal = dcDepositedTotal;
         this.dcDiffAmount = dcDiffAmount;
     }
+
 
 }

@@ -65,16 +65,7 @@ public class SeveranceController {
         return ResponseEntity.ok().build();
     }
 
-    //    전자결재 상신
-    @PutMapping("/{sevId}/submit-approval")
-    public ResponseEntity<Void> submitApproval(
-            @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long sevId,
-            @RequestParam Long approvalDocId) {
-        severanceService.submitApproval(companyId, sevId, approvalDocId);
-        return ResponseEntity.ok().build();
-    }
-//
+
 ////    지급 처리
 //    @PutMapping("/{sevId}/pay")
 //    public ResponseEntity<Void> pay(

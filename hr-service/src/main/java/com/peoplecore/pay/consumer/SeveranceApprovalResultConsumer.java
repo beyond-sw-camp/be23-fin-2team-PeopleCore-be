@@ -1,7 +1,6 @@
 package com.peoplecore.pay.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.peoplecore.event.PayrollApprovalResultEvent;
 import com.peoplecore.event.SeveranceApprovalResultEvent;
 import com.peoplecore.pay.service.SeveranceService;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +32,7 @@ public class SeveranceApprovalResultConsumer {
         try {
             SeveranceApprovalResultEvent event = objectMapper.readValue(message, SeveranceApprovalResultEvent.class);
             severanceService.applyApprovalResult(event);
-            log.info("[kafka] 퇴직금대장 전자결재 결과 처리 완료: sevId={}, status={}",  event.getSevId(), event.getStatus());
+            log.info("[kafka] 퇴직금대장 전자결재 결과 처리 완료: docId={}, status={}",  event.getApprovalDocId(), event.getStatus());
         } catch (Exception e ){
             log.error("[kafka] 퇴직금대장 전자결재 결과 처리 실패: - message={}, error={}", message, e.getMessage());
             throw new RuntimeException(e);
