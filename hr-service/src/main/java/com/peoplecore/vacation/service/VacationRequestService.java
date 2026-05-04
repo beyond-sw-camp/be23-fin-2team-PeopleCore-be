@@ -1,12 +1,17 @@
 package com.peoplecore.vacation.service;
 
+import com.peoplecore.attendance.repository.HolidayLookupRepository;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.entity.HolidayType;
+import com.peoplecore.entity.Holidays;
 import com.peoplecore.event.VacationApprovalDocCreatedEvent;
 import com.peoplecore.event.VacationApprovalResultEvent;
 import com.peoplecore.event.VacationSlotItem;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.vacation.dto.CalendarHolidayDto;
+import com.peoplecore.vacation.dto.MyCalendarResponse;
 import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
 import com.peoplecore.vacation.dto.VacationAdminPeriodPageResponse;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
@@ -32,9 +37,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.YearMonth;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -54,6 +66,7 @@ public class VacationRequestService {
     private final VacationLedgerRepository vacationLedgerRepository;
     private final VacationPolicyRepository vacationPolicyRepository;
     private final VacationBalanceQueryRepository vacationBalanceQueryRepository;
+    private final HolidayLookupRepository holidayLookupRepository;
 
     @Autowired
     public VacationRequestService(VacationRequestRepository vacationRequestRepository,
@@ -63,7 +76,8 @@ public class VacationRequestService {
                                   VacationBalanceRepository vacationBalanceRepository,
                                   VacationLedgerRepository vacationLedgerRepository,
                                   VacationPolicyRepository vacationPolicyRepository,
-                                  VacationBalanceQueryRepository vacationBalanceQueryRepository) {
+                                  VacationBalanceQueryRepository vacationBalanceQueryRepository,
+                                  HolidayLookupRepository holidayLookupRepository) {
         this.vacationRequestRepository = vacationRequestRepository;
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
         this.vacationTypeRepository = vacationTypeRepository;
@@ -72,6 +86,7 @@ public class VacationRequestService {
         this.vacationLedgerRepository = vacationLedgerRepository;
         this.vacationPolicyRepository = vacationPolicyRepository;
         this.vacationBalanceQueryRepository = vacationBalanceQueryRepository;
+        this.holidayLookupRepository = holidayLookupRepository;
     }
 
     /* Kafka(vacation-approval-doc-created) 진입 - PENDING row N건 INSERT + Balance markPending 합계 */
@@ -241,6 +256,69 @@ public class VacationRequestService {
     public Page<VacationRequestResponse> listMine(UUID companyId, Long empId, Pageable pageable) {
         return vacationRequestQueryRepository.findEmployeeHistory(companyId, empId, pageable)
                 .map(VacationRequestResponse::from);
+    }
+
+    /* 내 캘린더(월) - 공휴일 + 내 휴가(PENDING/APPROVED) 단일 응답 */
+    @Transactional(readOnly = true)
+    public MyCalendarResponse getMyCalendar(UUID companyId, Long empId, YearMonth yearMonth) {
+        LocalDate start = yearMonth.atDay(1);
+        LocalDate end = yearMonth.atEndOfMonth();
+
+        // 비반복: 인덱스 좁힘 / 반복: 전체 후 month 필터 (FUNCTION 인덱스 회피)
+        List<Holidays> oneTime = holidayLookupRepository.findOneTimeInRange(companyId, start, end);
+        List<Holidays> repeating = holidayLookupRepository.findAllRepeating(companyId);
+        List<CalendarHolidayDto> holidays = mergeHolidays(oneTime, repeating, yearMonth);
+
+        // 월 경계 교집합 [start 00:00, end 23:59:59.999...]
+        LocalDateTime periodStart = start.atStartOfDay();
+        LocalDateTime periodEnd = end.atTime(LocalTime.MAX);
+        List<VacationRequestResponse> myVacations = vacationRequestQueryRepository
+                .findMyCalendarVacations(companyId, empId, periodStart, periodEnd)
+                .stream().map(VacationRequestResponse::from).toList();
+
+        return MyCalendarResponse.builder()
+                .yearMonth(yearMonth)
+                .holidays(holidays)
+                .myVacations(myVacations)
+                .build();
+    }
+
+    /* 비반복+반복 합치고 같은 날 NATIONAL 우선 dedup, 날짜 ASC 정렬 */
+    private List<CalendarHolidayDto> mergeHolidays(List<Holidays> oneTime,
+                                                    List<Holidays> repeating,
+                                                    YearMonth ym) {
+        Map<LocalDate, CalendarHolidayDto> dedup = new HashMap<>();
+        oneTime.forEach(h -> putWithPriority(dedup, h.getDate(), h));
+        repeating.stream()
+                .filter(h -> h.getDate().getMonthValue() == ym.getMonthValue())
+                .forEach(h -> {
+                    LocalDate mapped = safeDate(ym.getYear(), ym.getMonthValue(),
+                                                h.getDate().getDayOfMonth());
+                    if (mapped != null) putWithPriority(dedup, mapped, h);
+                });
+        List<CalendarHolidayDto> result = new ArrayList<>(dedup.values());
+        result.sort(Comparator.comparing(CalendarHolidayDto::getDate));
+        return result;
+    }
+
+    /* 같은 날 NATIONAL/COMPANY 동시 매치 시 NATIONAL 우선 */
+    private void putWithPriority(Map<LocalDate, CalendarHolidayDto> map, LocalDate d, Holidays h) {
+        CalendarHolidayDto cur = map.get(d);
+        boolean replace = cur == null
+                || (cur.getType() != HolidayType.NATIONAL && h.getHolidayType() == HolidayType.NATIONAL);
+        if (!replace) return;
+        map.put(d, CalendarHolidayDto.builder()
+                .date(d)
+                .name(h.getHolidayName())
+                .type(h.getHolidayType())
+                .isRepeating(Boolean.TRUE.equals(h.getIsRepeating()))
+                .build());
+    }
+
+    /* 윤년 2/29 → 평년 매핑 가드 */
+    private LocalDate safeDate(int year, int month, int day) {
+        try { return LocalDate.of(year, month, day); }
+        catch (DateTimeException e) { return null; }
     }
 
     /* allowAdvanceUse 정책 + 연차/월차 유형 동시 만족 시 true (available 검증 스킵 대상) */

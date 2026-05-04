@@ -71,4 +71,27 @@ public interface HolidayLookupRepository extends JpaRepository<Holidays, Long> {
                                         @Param("month") int month,
                                         @Param("rangeStart") LocalDate rangeStart,
                                         @Param("rangeEnd") LocalDate rangeEnd);
+
+    /* 비반복 공휴일 기간 조회 - date 인덱스 활용 */
+    @Query("""
+            SELECT h FROM Holidays h
+             WHERE h.isRepeating = false
+               AND h.date BETWEEN :rangeStart AND :rangeEnd
+               AND ( h.holidayType = com.peoplecore.entity.HolidayType.NATIONAL
+                  OR (h.holidayType = com.peoplecore.entity.HolidayType.COMPANY
+                      AND h.companyId = :companyId) )
+            """)
+    List<Holidays> findOneTimeInRange(@Param("companyId") UUID companyId,
+                                      @Param("rangeStart") LocalDate rangeStart,
+                                      @Param("rangeEnd") LocalDate rangeEnd);
+
+    /* 반복 공휴일 전체 - 양이 적어 in-memory month 필터 (FUNCTION 인덱스 회피) */
+    @Query("""
+            SELECT h FROM Holidays h
+             WHERE h.isRepeating = true
+               AND ( h.holidayType = com.peoplecore.entity.HolidayType.NATIONAL
+                  OR (h.holidayType = com.peoplecore.entity.HolidayType.COMPANY
+                      AND h.companyId = :companyId) )
+            """)
+    List<Holidays> findAllRepeating(@Param("companyId") UUID companyId);
 }
