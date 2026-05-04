@@ -48,14 +48,14 @@ SELECT
 --   인프라팀 (INF) / 영업팀 (SALES) / 마케팅팀 (MKT)
 -- =====================================================================
 
-INSERT INTO department (company_id, parent_dept_id, dept_name, dept_code, created_at, is_use) VALUES
-(@cid, NULL, '임원실',   'EXEC',  NOW(), 'Y'),
-(@cid, NULL, '인사팀',   'HR',    NOW(), 'Y'),
-(@cid, NULL, '재무팀',   'FIN',   NOW(), 'Y'),
-(@cid, NULL, '개발팀',   'DEV',   NOW(), 'Y'),
-(@cid, NULL, '인프라팀', 'INF',   NOW(), 'Y'),
-(@cid, NULL, '영업팀',   'SALES', NOW(), 'Y'),
-(@cid, NULL, '마케팅팀', 'MKT',   NOW(), 'Y');
+INSERT INTO department (company_id, parent_dept_id, dept_name, dept_code, sort_order, created_at, is_use) VALUES
+(@cid, NULL, '임원실',   'EXEC',  1, NOW(), 'Y'),
+(@cid, NULL, '인사팀',   'HR',    2, NOW(), 'Y'),
+(@cid, NULL, '재무팀',   'FIN',   3, NOW(), 'Y'),
+(@cid, NULL, '개발팀',   'DEV',   4, NOW(), 'Y'),
+(@cid, NULL, '인프라팀', 'INF',   5, NOW(), 'Y'),
+(@cid, NULL, '영업팀',   'SALES', 6, NOW(), 'Y'),
+(@cid, NULL, '마케팅팀', 'MKT',   7, NOW(), 'Y');
 
 
 -- =====================================================================
@@ -77,11 +77,11 @@ INSERT INTO grade (company_id, grade_name, grade_code, grade_order) VALUES
 --   팀원 / 팀장 / 본부장 / 대표
 -- =====================================================================
 
-INSERT INTO title (company_id, dept_id, title_name, title_code) VALUES
-(@cid, NULL, '팀원',   'T-MEMBER'),
-(@cid, NULL, '팀장',   'T-LEAD'),
-(@cid, NULL, '본부장', 'T-HEAD'),
-(@cid, NULL, '대표',   'T-CEO');
+INSERT INTO title (company_id, title_name, title_code, title_order) VALUES
+(@cid, '팀원',   'T-MEMBER', 1),
+(@cid, '팀장',   'T-LEAD',   2),
+(@cid, '본부장', 'T-HEAD',   3),
+(@cid, '대표',   'T-CEO',    4);
 
 
 -- =====================================================================

@@ -268,6 +268,11 @@ public class HrOrderService {
         List<HrOrderHistoryResDto> result = new ArrayList<>();
 
         // 1) hr_order 발령 이력 (PROMOTION / TRANSFER / TITLE_CHANGE)
+        // 입사 당시 값 역산용 — 각 type별 가장 빠른(effectiveDate 최소) 발령의 detail 추적
+        HrOrder earliestDeptOrder = null;  HrOrderDetail earliestDeptDetail = null;
+        HrOrder earliestGradeOrder = null; HrOrderDetail earliestGradeDetail = null;
+        HrOrder earliestTitleOrder = null; HrOrderDetail earliestTitleDetail = null;
+
         List<HrOrder> orders = hrOrderRepository.findHistoryByEmpId(companyId, empId);
         for (HrOrder order : orders) {
             List<HrOrderDetail> detailEntities = hrOrderDetailRepository.findByHrOrder_OrderId(order.getOrderId());
@@ -279,6 +284,24 @@ public class HrOrderService {
                         .beforeName(resolveTargetName(d.getTargetType(), d.getBeforeId()))
                         .afterName(resolveTargetName(d.getTargetType(), d.getAfterId()))
                         .build());
+
+                // 입사 시점 역산용 — 같은 type 중 effectiveDate 최소인 것 갱신
+                if (d.getTargetType() == OrderDetailTargetType.DEPARTMENT) {
+                    if (earliestDeptOrder == null || order.getEffectiveDate().isBefore(earliestDeptOrder.getEffectiveDate())) {
+                        earliestDeptOrder = order;
+                        earliestDeptDetail = d;
+                    }
+                } else if (d.getTargetType() == OrderDetailTargetType.GRADE) {
+                    if (earliestGradeOrder == null || order.getEffectiveDate().isBefore(earliestGradeOrder.getEffectiveDate())) {
+                        earliestGradeOrder = order;
+                        earliestGradeDetail = d;
+                    }
+                } else if (d.getTargetType() == OrderDetailTargetType.TITLE) {
+                    if (earliestTitleOrder == null || order.getEffectiveDate().isBefore(earliestTitleOrder.getEffectiveDate())) {
+                        earliestTitleOrder = order;
+                        earliestTitleDetail = d;
+                    }
+                }
             }
             result.add(HrOrderHistoryResDto.builder()
                     .orderId(order.getOrderId())
@@ -290,16 +313,62 @@ public class HrOrderService {
                     .build());
         }
 
-        // 2) HIRE 합성: Employee.empHireDate 기준
+        // 2) HIRE 합성: Employee.empHireDate 기준 + 입사 당시 부서/직급/직책 채우기
+        //    - 첫 번째 전보의 beforeName = 입사 당시 부서 (그 사이 다른 전보가 없었으므로)
+        //    - 발령 이력이 없으면 현재값 사용 (입사 후 한 번도 안 바뀌었다는 뜻)
         Employee emp = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElse(null);
         if (emp != null && emp.getEmpHireDate() != null) {
+            String initialDept;
+            if (earliestDeptDetail != null) {
+                initialDept = resolveTargetName(OrderDetailTargetType.DEPARTMENT, earliestDeptDetail.getBeforeId());
+            } else {
+                initialDept = emp.getDept() != null ? emp.getDept().getDeptName() : null;
+            }
+
+            String initialGrade;
+            if (earliestGradeDetail != null) {
+                initialGrade = resolveTargetName(OrderDetailTargetType.GRADE, earliestGradeDetail.getBeforeId());
+            } else {
+                initialGrade = emp.getGrade() != null ? emp.getGrade().getGradeName() : null;
+            }
+
+            String initialTitle;
+            if (earliestTitleDetail != null) {
+                initialTitle = resolveTargetName(OrderDetailTargetType.TITLE, earliestTitleDetail.getBeforeId());
+            } else {
+                initialTitle = emp.getTitle() != null ? emp.getTitle().getTitleName() : null;
+            }
+
+            List<HrOrderHistoryResDto.DetailChange> hireDetail = new ArrayList<>();
+            if (initialDept != null) {
+                hireDetail.add(HrOrderHistoryResDto.DetailChange.builder()
+                        .targetType("DEPARTMENT")
+                        .beforeName("")
+                        .afterName(initialDept)
+                        .build());
+            }
+            if (initialGrade != null) {
+                hireDetail.add(HrOrderHistoryResDto.DetailChange.builder()
+                        .targetType("GRADE")
+                        .beforeName("")
+                        .afterName(initialGrade)
+                        .build());
+            }
+            if (initialTitle != null) {
+                hireDetail.add(HrOrderHistoryResDto.DetailChange.builder()
+                        .targetType("TITLE")
+                        .beforeName("")
+                        .afterName(initialTitle)
+                        .build());
+            }
+
             result.add(HrOrderHistoryResDto.builder()
                     .orderId(null)
                     .orderType("HIRE")
                     .effectiveDate(emp.getEmpHireDate().toString())
                     .status("APPLIED")
                     .createAt(emp.getEmpHireDate().toString())
-                    .detailChange(new ArrayList<>())
+                    .detailChange(hireDetail)
                     .build());
         }
 
