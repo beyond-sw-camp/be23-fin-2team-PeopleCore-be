@@ -153,9 +153,9 @@ public enum ErrorCode {
     TAX_YEAR_NOT_SUPPORTED(404,"해당 연도의 퇴직소득세 계산 설정이 없습니다. TaxYearlyConfig 업데이트가 필요합니다."),
     TAX_CALCULATION_FAILED(500,"퇴직소득세 산출 중 오류가 발생했습니다."),
     SEVERANCE_NO_PAYROLL_DATA(400, "직전 3개월 급여 데이터가 없어 퇴직금을 산정할 수 없습니다. 급여대장이 확정·지급된 상태인지 확인해주세요."),
+    SEVERANCE_LOCKED(409, "이미 확정/결재/지급 단계에 있어 재산정할 수 없습니다."),
 
 //    퇴직급여 지출결의서
-
     INVALID_REQUEST(400, "요청 파라미터가 유효하지 않습니다."),
     SEVERANCE_ALREADY_IN_APPROVAL(409, "이미 결재가 진행 중인 퇴직금입니다."),
     APPROVAL_FORM_INVALID(400, "결재 양식 템플릿이 유효하지 않습니다."),

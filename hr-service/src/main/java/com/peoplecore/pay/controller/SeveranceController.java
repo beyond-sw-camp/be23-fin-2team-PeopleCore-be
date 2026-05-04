@@ -66,17 +66,16 @@ public class SeveranceController {
     }
 
 
-////    지급 처리
-//    @PutMapping("/{sevId}/pay")
-//    public ResponseEntity<Void> pay(
-//            @RequestHeader("X-User-Company") UUID companyId,
-//            @RequestHeader("X-User-EmpId") Long empId,
-//            @PathVariable Long sevId,
-//            @RequestBody @Valid SeverancePayReqDto reqDto){
-//        severanceService.processPayment(companyId, sevId, empId, reqDto.getTransferDate());
-//        return ResponseEntity.ok().build();
-//    }
-//
+//    퇴직금 지급 처리
+    @PutMapping("/pay")
+    public ResponseEntity<Void> processPayment(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestBody @Valid SeverancePayReqDto reqDto){
+        severanceService.processPayment(companyId, empId, reqDto);
+        return ResponseEntity.ok().build();
+    }
+
 
     /// /    이체파일 생성 (선택 건)
 //    @PostMapping("/transfer-file")

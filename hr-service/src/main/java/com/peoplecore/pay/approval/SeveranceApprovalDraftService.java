@@ -128,10 +128,10 @@ public class SeveranceApprovalDraftService {
             tr.appendElement("td").text(s.getHireDate().format(YMD));
             tr.appendElement("td").text(s.getResignDate().format(YMD));
             tr.appendElement("td").text(formatServicePeriod(s.getServiceDays()));
-            tr.appendElement("td").addClass("right").text(currency(s.getSeveranceAmount()));
-            tr.appendElement("td").addClass("right")
+            tr.appendElement("td").addClass("currency").text(currency(s.getSeveranceAmount()));
+            tr.appendElement("td").addClass("currency")
                     .text(currency(s.getTaxAmount() + s.getLocalIncomeTax()));
-            tr.appendElement("td").addClass("right").text(currency(s.getNetAmount()));
+            tr.appendElement("td").addClass("currency").text(currency(s.getNetAmount()));
         }
 
         return doc.outerHtml();

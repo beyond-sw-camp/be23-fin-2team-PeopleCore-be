@@ -334,7 +334,6 @@ public class PensionDepositService {
                     .payYearMonth(payYearMonth)
                     .baseAmount(baseAmount)
                     .depositAmount(depositAmount)
-                    .depositDate(LocalDateTime.now())
                     .depStatus(DepStatus.SCHEDULED)
                     .company(run.getCompany())
                     .payrollRun(run)

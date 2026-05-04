@@ -93,12 +93,19 @@ public class SeveranceService {
 
         Employee emp = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-//        이미 산정된 것이 있으면 재산정 (CALCULATING 상태일때만)
-        Optional<SeverancePays> existing = severancePaysRepository
-                .findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId)
-                .stream()
-                .filter(s-> s.getSevStatus() == SevStatus.CALCULATING)
-                .findFirst();
+//        기존 sev 조회 + 상태별 분기
+//        - CONFIRMED 이상 (확정/결재/지급) → 재산정 차단 (immutable 데이터 보호)
+//        - CALCULATING → UPDATE (덮어쓰기 허용)
+//        - 없음 → INSERT (아래 else 분기)
+        Optional<SeverancePays> existingOpt = severancePaysRepository
+                .findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
+
+        if (existingOpt.isPresent() && existingOpt.get().getSevStatus() != SevStatus.CALCULATING) {
+            throw new CustomException(ErrorCode.SEVERANCE_LOCKED);
+        }
+
+// CALCULATING 만 UPDATE 후보로 통과 (없으면 빈 Optional)
+        Optional<SeverancePays> existing = existingOpt;
 
         LocalDate hireDate = emp.getEmpHireDate();
         LocalDate resignDate = emp.getEmpResignDate();
@@ -455,6 +462,29 @@ public class SeveranceService {
         log.info("[Severance] applyApprovalResult - docId={}, status={}, count={}",
                 event.getApprovalDocId(), event.getStatus(), sevs.size());
         }
+
+
+//    퇴직금 지급처리 (다인 일괄)
+//    APPROVED 상태 sev[]에 대해 transferDate 적용 + PAID 전이
+    @Transactional
+    public void processPayment(UUID companyId, Long adminEmpId, SeverancePayReqDto req) {
+        java.util.List<SeverancePays> sevs = severancePaysRepository
+                .findAllBySevIdInAndCompany_CompanyId(req.getSevIds(), companyId);
+
+        if (sevs.size() != req.getSevIds().size()) {
+            throw new CustomException(ErrorCode.SEVERANCE_NOT_FOUND);
+        }
+        for (SeverancePays s : sevs) {
+            if (s.getSevStatus() != SevStatus.APPROVED) {
+                throw new CustomException(ErrorCode.SEVERANCE_STATUS_INVALID);
+            }
+            s.markPaid(adminEmpId, req.getTransferDate());     // 기존 엔티티 메서드 그대로
+        }
+        log.info("[Severance Pay] 지급처리 완료 - count={}, transferDate={}, by={}",
+                sevs.size(), req.getTransferDate(), adminEmpId);
+    }
+
+
     }
 
 
