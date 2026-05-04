@@ -112,6 +112,18 @@ public class PensionDepositQueryRepositoryImpl implements PensionDepositQueryRep
         return result != null ? result : 0L;
     }
 
+    //4-2. 적립예정(SCHEDULED) distinct payYearMonth 목록
+    @Override
+    public List<String> distinctScheduledMonths(UUID companyId, String fromYm, String toYm) {
+        return queryFactory
+                .select(rpd.payYearMonth)
+                .distinct()
+                .from(rpd)
+                .where(buildWhere(companyId, fromYm, toYm, null, DepStatus.SCHEDULED))
+                .orderBy(rpd.payYearMonth.asc())
+                .fetch();
+    }
+
     // ── 5. 사원별 월별 이력 ──
     @Override
     public List<PensionDepositResDto> findByEmpId(UUID companyId, Long empId, String fromYm, String toYm) {

@@ -189,6 +189,8 @@ public class PensionDepositService {
                 .countDistinctEmployees(companyId, fromYm, toYm, DepStatus.SCHEDULED);
         Long scheduledAmount = retirementPensionDepositsRepository
                 .sumDepositAmount(companyId, fromYm, toYm, DepStatus.SCHEDULED);
+        List<String> scheduledMonths = retirementPensionDepositsRepository      // 추가
+                .distinctScheduledMonths(companyId, fromYm, toYm);
 
         return PensionDepositByEmployeeSummaryResDto.builder()
                 .totalEmployees(totalEmployees)
@@ -197,6 +199,7 @@ public class PensionDepositService {
                 .grandTotalDeposited(grandTotalDeposited)
                 .scheduledCount(scheduledCount != null ? scheduledCount : 0)
                 .scheduledAmount(scheduledAmount != null ? scheduledAmount : 0L)
+                .scheduledMonths(scheduledMonths != null ? scheduledMonths : List.of())
                 .employees(rows)
                 .build();
     }
