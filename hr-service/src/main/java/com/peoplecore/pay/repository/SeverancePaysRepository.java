@@ -39,8 +39,16 @@ public interface SeverancePaysRepository extends JpaRepository<SeverancePays, Lo
             "GROUP BY s.sevStatus")
     List<Object[]> countBySevStatus(@Param("companyId") UUID companyId);
 
-//    approvalDocId 로 조회 (kafka consumer용)
+//    approvalDocId 로 단건 조회 (kafka consumer용)  - 단건 없애고 다건으로 변경.
     Optional<SeverancePays> findByApprovalDocIdAndCompany_CompanyId(Long approvalDocId, UUID companyId);
 
 
+    // 다인 묶음 결재용
+    //  sevIds 배열로 일괄 조회 + 회사 격리 (결재 상신 시 다인 묶음 검증/빌드)
+    List<SeverancePays> findAllBySevIdInAndCompany_CompanyId(List<Long> sevIds, UUID companyId);
+
+    //  한 결재문서에 묶인 모든 sev 역조회 (결재 결과 처리용)
+    List<SeverancePays> findAllByCompany_CompanyIdAndApprovalDocId(UUID companyId, Long approvalDocId);
+
 }
+

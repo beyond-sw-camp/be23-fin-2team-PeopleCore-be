@@ -16,6 +16,7 @@ public class ExpectedDeductionResDto {
 
     private Long empId;
     private String empStatus;
+    private String empNum;
     private String empName;
     private String deptName;
     private String titleName;

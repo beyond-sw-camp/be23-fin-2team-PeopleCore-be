@@ -1,5 +1,7 @@
 package com.peoplecore.pay.repository;
 
+import com.peoplecore.pay.domain.SeverancePays;
+
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;

@@ -59,33 +59,23 @@ public class SeveranceController {
     @PutMapping("/{sevId}/confirm")
     public ResponseEntity<Void> confirm(
             @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-EmpId") Long empId,
+            @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long sevId) {
         severanceService.confirmSeverance(companyId, sevId, empId);
         return ResponseEntity.ok().build();
     }
 
-    //    전자결재 상신
-    @PutMapping("/{sevId}/submit-approval")
-    public ResponseEntity<Void> submitApproval(
+
+//    퇴직금 지급 처리
+    @PutMapping("/pay")
+    public ResponseEntity<Void> processPayment(
             @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long sevId,
-            @RequestParam Long approvalDocId) {
-        severanceService.submitApproval(companyId, sevId, approvalDocId);
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestBody @Valid SeverancePayReqDto reqDto){
+        severanceService.processPayment(companyId, empId, reqDto);
         return ResponseEntity.ok().build();
     }
-//
-////    지급 처리
-//    @PutMapping("/{sevId}/pay")
-//    public ResponseEntity<Void> pay(
-//            @RequestHeader("X-User-Company") UUID companyId,
-//            @RequestHeader("X-User-EmpId") Long empId,
-//            @PathVariable Long sevId,
-//            @RequestBody @Valid SeverancePayReqDto reqDto){
-//        severanceService.processPayment(companyId, sevId, empId, reqDto.getTransferDate());
-//        return ResponseEntity.ok().build();
-//    }
-//
+
 
     /// /    이체파일 생성 (선택 건)
 //    @PostMapping("/transfer-file")

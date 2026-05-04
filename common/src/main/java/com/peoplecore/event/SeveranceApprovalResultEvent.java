@@ -15,8 +15,6 @@ public class SeveranceApprovalResultEvent { //퇴직금 전자결재 결과
 
     private UUID companyId;
 
-    private Long sevId;
-
     private Long approvalDocId;
 
 //    결재 결과 : DRAFT / PENDING / APPROVED / REJECTED / CANCELED

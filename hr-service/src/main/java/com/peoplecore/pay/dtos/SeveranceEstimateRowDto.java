@@ -15,6 +15,7 @@ import java.time.LocalDate;
 public class SeveranceEstimateRowDto {
 //    사원별 행
     private Long empId;
+    private String empNum;
     private String empName;
 
     private String deptName;

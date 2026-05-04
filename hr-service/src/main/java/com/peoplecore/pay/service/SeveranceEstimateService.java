@@ -144,6 +144,7 @@ public class SeveranceEstimateService {
 
         return SeveranceEstimateRowDto.builder()
                 .empId(emp.getEmpId())
+                .empNum(emp.getEmpNum())
                 .empName(emp.getEmpName())
                 .deptName(emp.getDept() != null ? emp.getDept().getDeptName() : null)
                 .gradeName(emp.getGrade() != null ? emp.getGrade().getGradeName() : null)

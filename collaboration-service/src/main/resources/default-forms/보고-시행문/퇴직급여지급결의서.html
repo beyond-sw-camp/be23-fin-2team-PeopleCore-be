@@ -146,168 +146,50 @@ body {
   </tbody>
 </table>
 
-<!-- ====== 1. 퇴사자 인적사항 ====== -->
-<table class="tb_chit" style="margin-top:0;">
-  <tbody>
-    <tr><td class="sub-title" colspan="6">1. 퇴사자 인적사항</td></tr>
-  </tbody>
-</table>
-<table class="tb_chit" style="margin-top:0;">
-  <colgroup>
-    <col width="100px"><col width="133px">
-    <col width="80px"><col width="133px">
-    <col width="80px"><col width="274px">
-  </colgroup>
-  <tbody>
-    <tr>
-      <td class="tit">부서</td>
-      <td data-key="deptName" contenteditable="true"></td>
-      <td class="tit">사번</td>
-      <td data-key="empNo" contenteditable="true"></td>
-      <td class="tit">이름</td>
-      <td data-key="empName" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit">직위</td>
-      <td data-key="position" contenteditable="true"></td>
-      <td class="tit">직책</td>
-      <td data-key="jobTitle" contenteditable="true"></td>
-      <td class="tit">퇴직유형</td>
-      <td data-key="retirementType" contenteditable="true">퇴직</td>
-    </tr>
-    <tr>
-      <td class="tit">입사일</td>
-      <td data-key="joinDate" contenteditable="true"></td>
-      <td class="tit">퇴사일<br><span style="font-weight:normal; font-size:10px;">(중간정산일)</span></td>
-      <td data-key="retireDate" contenteditable="true"></td>
-      <td class="tit">퇴직금<br>지급(예정)일</td>
-      <td data-key="retirementPayDate" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit">퇴직정산기간</td>
-      <td data-key="settlementPeriod" contenteditable="true"></td>
-      <td class="tit">근속기간</td>
-      <td data-key="servicePeriod" contenteditable="true"></td>
-      <td class="tit">퇴직정산일수</td>
-      <td data-key="settlementDays" contenteditable="true"></td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- ====== 2. 퇴직급여 산정내역 ====== -->
+<!-- ====== 사원별 퇴직금 내역 ====== -->
 <table class="tb_chit" style="margin-top:10px;">
   <tbody>
-    <tr><td class="sub-title" colspan="6">2. 퇴직급여 산정내역</td></tr>
+  <tr><td class="sub-title" colspan="10">사원별 퇴직금 내역</td></tr>
   </tbody>
 </table>
-<table class="tb_chit" style="margin-top:0;">
-  <tbody>
-    <tr><td class="tit" colspan="6">최근 3개월 급여</td></tr>
-  </tbody>
-</table>
-<table class="tb_chit" style="margin-top:0;">
+<table class="tb_chit" style="margin-top:0; width:1000px; table-layout:fixed;">
   <colgroup>
-    <col width="120px">
-    <col width="136px"><col width="136px"><col width="136px"><col width="136px">
-    <col width="136px">
+    <col width="40px">
+    <col width="90px">
+    <col width="80px">
+    <col width="60px">
+    <col width="100px">
+    <col width="100px">
+    <col width="115px">
+    <col width="135px">
+    <col width="115px">
+    <col width="135px">
   </colgroup>
-  <tbody>
-    <tr>
-      <td class="tit">퇴직정산기간</td>
-      <td class="tit" data-key="period1Label" contenteditable="true" style="font-size:10px;"></td>
-      <td class="tit" data-key="period2Label" contenteditable="true" style="font-size:10px;"></td>
-      <td class="tit" data-key="period3Label" contenteditable="true" style="font-size:10px;"></td>
-      <td class="tit" data-key="period4Label" contenteditable="true" style="font-size:10px;"></td>
-      <td class="tit">합계</td>
-    </tr>
-    <tr>
-      <td class="tit">근무일수</td>
-      <td class="currency" data-key="workDays1" contenteditable="true"></td>
-      <td class="currency" data-key="workDays2" contenteditable="true"></td>
-      <td class="currency" data-key="workDays3" contenteditable="true"></td>
-      <td class="currency" data-key="workDays4" contenteditable="true"></td>
-      <td class="currency" data-key="workDaysTotal" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit">A. 급여총액</td>
-      <td class="currency" data-key="salaryTotal1" contenteditable="true"></td>
-      <td class="currency" data-key="salaryTotal2" contenteditable="true"></td>
-      <td class="currency" data-key="salaryTotal3" contenteditable="true"></td>
-      <td class="currency" data-key="salaryTotal4" contenteditable="true"></td>
-      <td class="currency" data-key="salaryGrandTotal" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit">B. 직전1년간<br>상여금 총액</td>
-      <td class="currency" data-key="bonusTotal" contenteditable="true"></td>
-      <td colspan="3" style="font-size:10px; padding:3px 5px;" contenteditable="true">상여금 가산액: 상여금 총액 × (3개월 / 12개월)</td>
-      <td class="currency" data-key="bonusAdded" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit">C. 연차수당</td>
-      <td class="currency" data-key="annualLeaveTotal" contenteditable="true"></td>
-      <td colspan="3" style="font-size:10px; padding:3px 5px;" contenteditable="true">연차수당 가산액: 연차수당 총액 × (3개월 / 12개월)</td>
-      <td class="currency" data-key="annualLeaveAdded" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit" colspan="2">1일 평균임금</td>
-      <td class="currency" data-key="dailyAveragePay" contenteditable="true"></td>
-      <td colspan="3" style="font-size:10px; padding:3px 5px;">1일 평균임금: A + ((B + C) × 3 / 12) × 3개월 근무일수</td>
-    </tr>
+  <thead>
+  <tr>
+    <td class="tit">No</td>
+    <td class="tit">부서</td>
+    <td class="tit">성명</td>
+    <td class="tit">유형</td>
+    <td class="tit">입사일</td>
+    <td class="tit">퇴사일</td>
+    <td class="tit">근속</td>
+    <td class="tit">퇴직금</td>
+    <td class="tit">세액</td>
+    <td class="tit">실지급</td>
+  </tr>
+  </thead>
+  <tbody data-key="employeesRows">
+  <!-- 백엔드 buildBatchHtml 이 사원별 <tr> 직접 주입 -->
   </tbody>
-</table>
-
-<!-- ====== 3. 퇴직금 산정내역 ====== -->
-<table class="tb_chit" style="margin-top:10px;">
-  <tbody>
-    <tr><td class="sub-title" colspan="4">3. 퇴직금 산정내역</td></tr>
-    <tr>
-      <td colspan="4" style="font-size:10px; border-left:0; border-right:0; border-top:0; padding:3px 5px;">
-        퇴직금: 1일 평균임금 × 근속일수 × 30 / 365
-      </td>
-    </tr>
-  </tbody>
-</table>
-<table class="tb_chit" style="margin-top:0;">
-  <colgroup>
-    <col width="150px"><col width="250px">
-    <col width="150px"><col width="250px">
-  </colgroup>
-  <tbody>
-    <tr>
-      <td class="tit">지급내역</td>
-      <td class="tit">금액</td>
-      <td class="tit">공제내역</td>
-      <td class="tit">금액</td>
-    </tr>
-    <tr>
-      <td class="tit">퇴직금</td>
-      <td class="currency" data-key="retirementPayAmount" contenteditable="true"></td>
-      <td class="tit">소득세</td>
-      <td class="currency" data-key="incomeTax" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit"></td>
-      <td class="currency" contenteditable="true"></td>
-      <td class="tit">지방소득세</td>
-      <td class="currency" data-key="localIncomeTax" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit"></td>
-      <td class="currency" contenteditable="true"></td>
-      <td class="tit"></td>
-      <td class="currency" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit" style="background:#f9fafb;">지급합계</td>
-      <td class="currency" style="font-weight:bold;" data-key="paymentTotal" contenteditable="true"></td>
-      <td class="tit" style="background:#f9fafb;">공제합계</td>
-      <td class="currency" style="font-weight:bold;" data-key="deductionTotal" contenteditable="true"></td>
-    </tr>
-    <tr>
-      <td class="tit" colspan="3" style="background:#f9fafb; text-align:right; padding-right:10px;">실지급액</td>
-      <td class="currency" style="font-weight:bold;" data-key="netPayAmount" contenteditable="true"></td>
-    </tr>
-  </tbody>
+  <tfoot>
+  <tr>
+    <td class="tit" colspan="7" style="text-align:right;">합계</td>
+    <td class="currency" style="font-weight:bold;" data-key="totalSeverance"></td>
+    <td class="currency" style="font-weight:bold;" data-key="totalTaxAmount"></td>
+    <td class="currency" style="font-weight:bold;" data-key="totalNetAmount"></td>
+  </tr>
+  </tfoot>
 </table>
 
 </body>
