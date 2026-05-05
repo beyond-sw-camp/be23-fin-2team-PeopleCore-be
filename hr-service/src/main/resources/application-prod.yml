@@ -80,7 +80,7 @@ spring:
       port2: 6379
 
   kafka:
-    kafka-server: kafka-service:9092
+    bootstrap-servers: kafka-service:9092
 
     consumer:
       auto-offset-reset: earliest
