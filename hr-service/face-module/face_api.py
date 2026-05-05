@@ -12,7 +12,6 @@ from pydantic import BaseModel
 
 app = FastAPI(title="PeopleCore Face Recognition API")
 
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
