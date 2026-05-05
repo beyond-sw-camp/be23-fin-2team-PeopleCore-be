@@ -72,11 +72,12 @@ spring:
     defer-datasource-initialization: false
     open-in-view: false
 
-  redis:
-    host1: redis-1
-    port1: 6379
-    host2: redis-2
-    port2: 6379
+  data:
+    redis:
+      host1: redis-1
+      port1: 6379
+      host2: redis-2
+      port2: 6379
 
   kafka:
     kafka-server: kafka-service:9092
