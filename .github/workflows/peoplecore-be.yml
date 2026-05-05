@@ -9,6 +9,9 @@ jobs:
 
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - name: checkout github
         uses: actions/checkout@v2
@@ -44,6 +47,17 @@ jobs:
       - name: Login to ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
+
+      # ============== common publish to GitHub Packages ==============
+      - name: common publish (SNAPSHOT)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        working-directory: ./common
+        run: |
+          chmod +x ../gradlew
+          ../gradlew :publish --no-daemon
+
       #      build && push
       # ============== apigateway ==============
 
@@ -52,10 +66,14 @@ jobs:
           REGISTRY: 346720668840.dkr.ecr.ap-northeast-2.amazonaws.com
           REPOSITORY: peoplecore/apigateway
           IMAGE_TAG: latest
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
         run: |
           docker build \
+          --secret id=gpr_user,env=GITHUB_ACTOR \
+          --secret id=gpr_token,env=GITHUB_TOKEN \
           -t $REGISTRY/$REPOSITORY:$IMAGE_TAG \
-            -f ./api-gateway/Dockerfile .
+          -f ./api-gateway/Dockerfile .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
       - name: apigateway kubectl apply
@@ -70,8 +88,12 @@ jobs:
           REGISTRY: 346720668840.dkr.ecr.ap-northeast-2.amazonaws.com
           REPOSITORY: peoplecore/hr-service
           IMAGE_TAG: latest
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
         run: |
           docker build \
+          --secret id=gpr_user,env=GITHUB_ACTOR \
+          --secret id=gpr_token,env=GITHUB_TOKEN \
           -t $REGISTRY/$REPOSITORY:$IMAGE_TAG \
           -f ./hr-service/Dockerfile .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
@@ -87,8 +109,12 @@ jobs:
           REGISTRY: 346720668840.dkr.ecr.ap-northeast-2.amazonaws.com
           REPOSITORY: peoplecore/collaboration-service
           IMAGE_TAG: latest
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
         run: |
           docker build \
+          --secret id=gpr_user,env=GITHUB_ACTOR \
+          --secret id=gpr_token,env=GITHUB_TOKEN \
           -t $REGISTRY/$REPOSITORY:$IMAGE_TAG \
           -f ./collaboration-service/Dockerfile .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
@@ -104,8 +130,12 @@ jobs:
           REGISTRY: 346720668840.dkr.ecr.ap-northeast-2.amazonaws.com
           REPOSITORY: peoplecore/search-service
           IMAGE_TAG: latest
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
         run: |
           docker build \
+          --secret id=gpr_user,env=GITHUB_ACTOR \
+          --secret id=gpr_token,env=GITHUB_TOKEN \
           -t $REGISTRY/$REPOSITORY:$IMAGE_TAG \
           -f ./search-service/Dockerfile .
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG

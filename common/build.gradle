@@ -1,42 +1,40 @@
-// ============================================================
-// common 모듈은 다른 서비스들이 가져다 쓰는 "공통 라이브러리".
-// 일반 Spring Boot 앱과 달리 실행 jar(bootJar) 가 아니라
-// 다른 모듈/외부에 배포할 jar 를 만드는 역할이다.
-// ============================================================
-
 plugins {
-	// maven-publish: jar 를 GitHub Packages(또는 Maven 저장소) 에 업로드할 수 있게 해주는 Gradle 공식 플러그인.
-	// 이걸 추가해야 'publish', 'publishToMavenLocal' 같은 task 들이 생긴다.
-	id 'maven-publish'
+    id 'maven-publish'
+    id 'java-library'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.peoplecore'
+version = '1.0.2-SNAPSHOT'
+
+java {
+    toolchain { languageVersion = JavaLanguageVersion.of(17) }
+    withSourcesJar()
+}
+
+// 의존성 다운로드 저장소 — mavenCentral 만 있으면 됨
+// GitHub Packages 는 여기가 아니라 publishing.repositories 에 들어간다
+repositories { mavenCentral() }
+
+dependencyManagement {
+    imports {
+        mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.13'
+    }
 }
 
 dependencies {
-	// --- 기존 의존성 (그대로 유지) ---
-	implementation 'org.springframework.boot:spring-boot-starter-web'           // RestController, HandlerInterceptor 등
-	implementation 'org.springframework.boot:spring-boot-starter-validation'    // @Valid, @NotNull 등
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'      // BaseTimeEntity 등
-	implementation 'org.springframework.boot:spring-boot-starter-data-redis'    // RedisConfig
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
-	compileOnly 'org.projectlombok:lombok'
-	annotationProcessor 'org.projectlombok:lombok'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
 
-	// QueryDSL (QBaseTimeEntity 생성용)
-	implementation 'com.querydsl:querydsl-jpa:5.1.0:jakarta'
-	annotationProcessor 'com.querydsl:querydsl-apt:5.1.0:jakarta'
-	annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
-	annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
-}
-
-// ============================================================
-// 소스 jar 자동 생성 설정
-// ------------------------------------------------------------
-// withSourcesJar() 를 켜두면 빌드할 때 .java 원본을 묶은
-// 'common-1.0.0-sources.jar' 가 함께 만들어진다.
-// → IntelliJ 등에서 라이브러리 코드를 "Go to Definition" 으로 들여다볼 수 있게 해줌.
-// (필수는 아니지만 협업/디버깅 편의를 위해 켜두는 게 표준)
-// ============================================================
-java {
-	withSourcesJar()
+    implementation 'com.querydsl:querydsl-jpa:5.1.0:jakarta'
+    annotationProcessor 'com.querydsl:querydsl-apt:5.1.0:jakarta'
+    annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
+    annotationProcessor 'jakarta.persistence:jakarta.persistence-api'
 }
 
 // ============================================================
@@ -48,49 +46,50 @@ java {
 // ============================================================
 publishing {
 
-	// ----- (1) 무엇을 publish 할 것인가 -----
-	publications {
-		// 'mavenJava' 는 publication 의 별명. 이름은 자유.
-		// MavenPublication 은 Maven 표준 형식(.jar + .pom) 으로 묶겠다는 뜻.
-		mavenJava(MavenPublication) {
-			// from components.java
-			//   → java 플러그인이 만든 jar(+sourcesJar) 를 publication 에 포함.
-			//   → 의존성 정보도 자동으로 .pom 에 들어간다.
-			from components.java
+    // ----- (1) 무엇을 publish 할 것인가 -----
+    publications {
+        // 'mavenJava' 는 publication 의 별명. 이름은 자유.
+        // MavenPublication 은 Maven 표준 형식(.jar + .pom) 으로 묶겠다는 뜻.
+        mavenJava(MavenPublication) {
+            // from components.java
+            //   → java 플러그인이 만든 jar(+sourcesJar) 를 publication 에 포함.
+            //   → 의존성 정보도 자동으로 .pom 에 들어간다.
+            from components.java
 
-			// Maven 좌표 (groupId:artifactId:version) — 다른 프로젝트가 이 라이브러리를 끌어쓸 때 쓰는 주소
-			groupId = 'com.peoplecore'
-			artifactId = 'common'
-			// version 은 루트 build.gradle 의 subprojects { version = '1.0.0' } 값을 자동 상속.
-			// 즉 최종 좌표는 com.peoplecore:common:1.0.0
+            // Maven 좌표 (groupId:artifactId:version) — 다른 프로젝트가 이 라이브러리를 끌어쓸 때 쓰는 주소
+            groupId    = 'com.peoplecore'
+            artifactId = 'common'
+            // version 은 이 파일 상단의 version = '1.0.2-SNAPSHOT' 값을 사용.
+            // 최종 좌표: com.peoplecore:common:1.0.2-SNAPSHOT
 
-			// .pom 파일 메타데이터 (저장소 페이지에 노출되는 설명)
-			pom {
-				name        = 'PeopleCore Common'
-				description = 'PeopleCore 공통 모듈 (auth, exception, event, entity, dtos, configs)'
-				url         = 'https://github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-be'
-			}
-		}
-	}
+            // .pom 파일 메타데이터 (저장소 페이지에 노출되는 설명)
+            pom {
+                name        = 'PeopleCore Common'
+                description = 'PeopleCore 공통 모듈 (auth, exception, event, entity, dtos, configs)'
+                url         = 'https://github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-be'
+            }
+        }
+    }
 
-	// ----- (2) 어디에 publish 할 것인가 -----
-	repositories {
-		maven {
-			// name 은 task 이름에 쓰임 → publishMavenJavaPublicationToGitHubPackagesRepository
-			name = 'GitHubPackages'
+    // ----- (2) 어디에 publish 할 것인가 -----
+    repositories {
+        maven {
+            // name 은 task 이름에 쓰임 → publishMavenJavaPublicationToGitHubPackagesRepository
+            name = 'GitHubPackages'
 
-			// GitHub Packages 의 Maven 저장소 URL (organization/repo 경로 그대로)
-			url  = uri('https://maven.pkg.github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-be')
+            // GitHub Packages 의 Maven 저장소 URL
+            url  = uri('https://maven.pkg.github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-be')
 
-			// 인증 정보 — GitHub Packages 는 PAT(Personal Access Token) 필요.
-			// 우선순위:
-			//   1) gradle.properties 의 gpr.user / gpr.token (로컬 개발용)
-			//   2) 환경변수 GITHUB_ACTOR / GITHUB_TOKEN (CI 자동 주입)
-			// 둘 다 없으면 publish 시점에만 에러. build/실행에는 영향 없음.
-			credentials {
-				username = project.findProperty('gpr.user')  ?: System.getenv('GITHUB_ACTOR')
-				password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
-			}
-		}
-	}
+            // 인증 정보 — GitHub Packages 는 PAT(Personal Access Token) 필요.
+            // 우선순위:
+            //   1) ~/.gradle/gradle.properties 의 gpr.user / gpr.token (로컬 개발용)
+            //   2) 환경변수 GITHUB_ACTOR / GITHUB_TOKEN (CI 자동 주입)
+            // 둘 다 없으면 publish 시점에만 에러. build/실행에는 영향 없음.
+            credentials {
+                username = project.findProperty('gpr.user')  ?: System.getenv('GITHUB_ACTOR')
+                password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
+                //                               ↑ gpr.key → gpr.token 으로 통일 (기존 오타 수정)
+            }
+        }
+    }
 }
