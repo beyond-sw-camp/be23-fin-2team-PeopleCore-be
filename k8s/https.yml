@@ -22,7 +22,6 @@ apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
   name: server-peoplecore-tls
-  namespace: jmj
 spec:
   # cert-manager가 아래 secretName에서 지정한 이름으로 Secret을 생성
   secretName: server-peoplecore-tls

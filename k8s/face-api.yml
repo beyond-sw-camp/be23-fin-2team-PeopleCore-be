@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: face-chroma-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: gp3
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: face-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: face-api
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: face-api
+    spec:
+      containers:
+        - name: face-api
+          image: 346720668840.dkr.ecr.ap-northeast-2.amazonaws.com/peoplecore/face-api:latest
+          ports:
+            - containerPort: 8001
+          volumeMounts:
+            - name: face-chroma-data
+              mountPath: /app/chroma_data
+      volumes:
+        - name: face-chroma-data
+          persistentVolumeClaim:
+            claimName: face-chroma-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: face-api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8001
+      targetPort: 8001
+  selector:
+    app: face-api

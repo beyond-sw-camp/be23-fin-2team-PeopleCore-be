@@ -1,0 +1,134 @@
+server:
+  port: 8080
+
+spring:
+  config:
+    activate:
+      on-profile: prod
+  task:
+    scheduling:
+      pool:
+        size: 4
+
+  batch:
+    # 부팅 시 Job 자동 실행 차단 - 스케줄러가 JobLauncher 로 명시 호출
+    job:
+      enabled: false
+    jdbc:
+      # prod 에서는 never + 수동 DDL (schema-mysql.sql 적용 권장)
+      initialize-schema: never
+
+  quartz:
+    job-store-type: jdbc
+    jdbc:
+      # prod: quartz_tables_mysql_innodb.sql 수동 적용 후 never
+      initialize-schema: never
+    properties:
+      org.quartz.scheduler.instanceName: PeopleCoreClusteredScheduler
+      org.quartz.scheduler.instanceId: AUTO
+      org.quartz.jobStore.tablePrefix: QRTZ_
+      org.quartz.jobStore.isClustered: true
+      org.quartz.jobStore.clusterCheckinInterval: 10000
+      org.quartz.threadPool.threadCount: 5
+      org.quartz.threadPool.threadPriority: 5
+
+  mail:
+    host: smtp.naver.com
+    port: 465
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+            trust: smtp.naver.com
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST}:3306/peoplecore?useSSL=true&requireSSL=true&serverTimezone=Asia/Seoul
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+  jpa:
+    database: mysql
+    database-platform: org.hibernate.dialect.MySQLDialect
+    generate-ddl: false
+    hibernate:
+      ddl-auto: update
+    show_sql: false
+    defer-datasource-initialization: false
+    open-in-view: false
+
+  redis:
+    host1: redis-1
+    port1: 6379
+    host2: redis-2
+    port2: 6379
+
+  kafka:
+    kafka-server: kafka-service:9092
+
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      max-poll-records: 100
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      compression-type: gzip  #html파일을 zip으로 압축
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+eureka:
+  client:
+    enabled: false
+
+jwt:
+  expirationAt: 3600000
+  secretKey: ${JWT_SECRET}
+  expirationRt: 3600000
+  secretKeyRt: ${JWT_SECRET_RT}
+
+coolsms:
+  api-key: ${COOLSMS_API_KEY}
+  api-secret: ${COOLSMS_API_SECRET}
+  from-number: "01041707056"
+
+logging:
+  level:
+    root: info
+
+admin:
+  temp-password: ${INIT_ADMIN_PASSWORD}
+
+minio:
+  endpoint: http://minio:9000
+  access-key:  ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
+  bucket-name: peoplecore
+
+discord:
+  batch-webhook: ${DISCORD_WEBHOOK}
+
+face-api:
+  base-url: http://face-api:8001

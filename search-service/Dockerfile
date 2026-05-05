@@ -8,6 +8,7 @@ RUN chmod +x gradlew
 COPY src src
 RUN ./gradlew bootJar
 
+
 FROM amazoncorretto:17-alpine
 WORKDIR /app
 COPY --from=stage1 /app/build/libs/*.jar peoplecore.jar

@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-connect
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-connect
+  template:
+    metadata:
+      labels:
+        app: kafka-connect
+    spec:
+      containers:
+        - name: kafka-connect
+          image: debezium/connect:3.0.0.Final
+          ports:
+            - containerPort: 8083
+          env:
+            # 브로커 주소 (K8s Service 이름)
+            - name: BOOTSTRAP_SERVERS
+              value: "kafka-service:9092"
+            - name: GROUP_ID
+              value: "connect-cluster"
+            # 내부 메타데이터 토픽
+            - name: CONFIG_STORAGE_TOPIC
+              value: "connect_configs"
+            - name: OFFSET_STORAGE_TOPIC
+              value: "connect_offsets"
+            - name: STATUS_STORAGE_TOPIC
+              value: "connect_statuses"
+            # 단일 브로커이므로 RF=1 필수 (기본 3 이면 토픽 생성 실패)
+            - name: CONFIG_STORAGE_REPLICATION_FACTOR
+              value: "1"
+            - name: OFFSET_STORAGE_REPLICATION_FACTOR
+              value: "1"
+            - name: STATUS_STORAGE_REPLICATION_FACTOR
+              value: "1"
+            # 컨버터 설정 (docker-compose 동일)
+            - name: KEY_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            - name: VALUE_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            - name: KEY_CONVERTER_SCHEMAS_ENABLE
+              value: "false"
+            - name: VALUE_CONVERTER_SCHEMAS_ENABLE
+              value: "false"
+            # JVM 메모리 (Debezium 권장 최소)
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xms512m -Xmx768m"
+          resources:
+            requests:
+              memory: "768Mi"
+              cpu: "300m"
+            limits:
+              memory: "1Gi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-connect
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8083
+      targetPort: 8083
+  selector:
+    app: kafka-connect

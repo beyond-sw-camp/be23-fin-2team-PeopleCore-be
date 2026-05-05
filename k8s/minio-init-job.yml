@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-init
+spec:
+  ttlSecondsAfterFinished: 300
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: minio/mc
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              until mc alias set myminio http://minio:9000 minioadmin minioadmin; do
+                echo 'Waiting for MinIO...' && sleep 2
+              done
+              mc mb --ignore-existing myminio/approval-form
+              mc anonymous set download myminio/approval-form
