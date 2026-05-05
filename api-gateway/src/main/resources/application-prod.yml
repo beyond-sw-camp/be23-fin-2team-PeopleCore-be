@@ -19,7 +19,7 @@ spring:
               '[/**]':
                 allowedOrigins:
                   - 'http://localhost:3000'
-                  - 'https://peoplecore.cloud'
+                  - 'https://www.peoplecore.cloud'
                 allowedMethods: '*'
                 allowedHeaders: '*'
                 allowCredentials: true
@@ -50,7 +50,7 @@ spring:
           trusted-proxies: .*
 
 internal:
-  api-key: peoplecore-internal-secret-2026  # 서버운영팀 전용 API Key
+  api-key: ${INTERNAL_API_KEY}  # 서버운영팀 전용 API Key
 
 jwt:
   expirationAt: 3600000
