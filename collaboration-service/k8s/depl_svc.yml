@@ -28,6 +28,11 @@ spec:
               cpu: "0.5"
               memory: "250Mi"
           env:
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: DB_HOST
             # 아래의 name과 yml의 ${}의 변수명과 일치해야함
             - name: DB_USERNAME
               valueFrom:
@@ -39,6 +44,26 @@ spec:
                 secretKeyRef:
                   name: peoplecore-secrets
                   key: DB_PASSWORD
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MINIO_SECRET_KEY
+            - name: COOLSMS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: COOLSMS_API_KEY
+            - name: COOLSMS_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: COOLSMS_API_SECRET
             # 컨테이너 상태 확인을 통해 롤링업데이트 최적화
           readinessProbe:
             httpGet:
