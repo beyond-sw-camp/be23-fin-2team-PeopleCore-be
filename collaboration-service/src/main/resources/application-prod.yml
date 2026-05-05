@@ -1,0 +1,74 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST}:3306/peoplecore?useSSL=false&allowPublicKeyRetrieval=true
+    username: admin
+    password: ${DB_PW}
+    hikari:
+      maximum-pool-size: 30
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+
+  jpa:
+    database: mysql
+    database-platform: org.hibernate.dialect.MySQLDialect
+    generate-ddl: true
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    defer-datasource-initialization: true
+    open-in-view: false
+
+  data:
+    redis:
+      host1: redis-1
+      port1: 6379
+      host2: redis-2
+      port2: 6379
+
+  kafka:
+    bootstrap-servers: kafka-service:9092
+
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+      compression-type: gzip  #html파일을 zip으로 압축
+
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+server:
+  port: 8080
+
+
+logging:
+  level:
+    root: info
+
+minio:
+  endpoint: http://localhost:9000
+  #  public-url: https://minio.yourdomain.com   # 프론트 → MinIO (이미지 조회용)
+  public-url: http://localhost:9000   # 프론트 → MinIO (이미지 조회용)
+  access-key: {MINIO-ACCESS-KEY}
+  secret-key: {MINIO-SECRET-KEY}
+  bucket: approval-form
+
+coolsms:
+  api-key: {API-KEY}
+  api-secret: {API-SECRET}
+  from-number: "01000000000"

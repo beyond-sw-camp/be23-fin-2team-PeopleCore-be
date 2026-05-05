@@ -128,6 +128,7 @@ package.json
 **/.claude/
 /be23-fin-PeopleCore/
 /analysis-service/
+/infra/
 **/FileVaultInternalController.java
 캘린더_요구사항명세서_수정본.xlsx
 **/캘린더_요구사항명세서_수정본.xlsx
@@ -141,3 +142,18 @@ package.json
 **/venv/
 **/__pycache__/
 **/chroma_data/
+
+# ============================
+# Terraform
+# ============================
+# 자동 생성/런타임 파일만 무시. tf 코드 + tfvars는 git에 commit.
+# 비밀값은 tfvars에 박지 말고 GitHub Actions Secrets에서 TF_VAR_* 환경변수로 주입.
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/.terraform.tfstate.lock.info
+**/crash.log
+**/crash.*.log
+**/ssh-key
+**/ssh-key.pem
+**/ssh-key.pub
