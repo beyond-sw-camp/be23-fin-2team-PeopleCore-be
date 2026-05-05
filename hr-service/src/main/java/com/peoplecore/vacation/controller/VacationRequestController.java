@@ -1,6 +1,7 @@
 package com.peoplecore.vacation.controller;
 
 import com.peoplecore.auth.RoleRequired;
+import com.peoplecore.vacation.dto.MyCalendarResponse;
 import com.peoplecore.vacation.dto.MyVacationTypeResponseDto;
 import com.peoplecore.vacation.dto.VacationAdminPeriodPageResponse;
 import com.peoplecore.vacation.dto.VacationRequestResponse;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.YearMonth;
 import java.util.List;
 import java.util.UUID;
 
@@ -73,5 +75,14 @@ public class VacationRequestController {
             @RequestHeader("X-User-Id") Long empId,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(vacationRequestService.listMine(companyId, empId, pageable));
+    }
+
+    /* 내 캘린더(월) - 공휴일 + 내 휴가(PENDING/APPROVED) / GET ?yearMonth=2026-05 */
+    @GetMapping("/calendar/me")
+    public ResponseEntity<MyCalendarResponse> myCalendar(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM") YearMonth yearMonth) {
+        return ResponseEntity.ok(vacationRequestService.getMyCalendar(companyId, empId, yearMonth));
     }
 }
