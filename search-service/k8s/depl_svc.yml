@@ -29,16 +29,16 @@ spec:
               memory: "250Mi"
           env:
             # 아래의 name과 yml의 ${}의 변수명과 일치해야함
-            - name: DB_HOST
+            - name: DB_USERNAME
               valueFrom:
                 secretKeyRef:
                   name: peoplecore-secrets
-                  key: DB_HOST
-            - name: DB_PW
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: peoplecore-secrets
-                  key: DB_PW
+                  key: DB_PASSWORD
             # 컨테이너 상태 확인을 통해 롤링업데이트 최적화
           readinessProbe:
             httpGet:
