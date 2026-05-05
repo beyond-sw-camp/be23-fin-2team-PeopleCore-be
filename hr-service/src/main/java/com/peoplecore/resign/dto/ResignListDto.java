@@ -16,6 +16,7 @@ import java.time.LocalDate;
 public class ResignListDto {
 
     private Long id;
+    private Long empId;
     private String empNum;
     private String empName;
     private String deptName;
@@ -27,6 +28,7 @@ public class ResignListDto {
     public static ResignListDto fromEntity(Resign resign){
         return ResignListDto.builder()
                 .id(resign.getResignId())
+                .empId(resign.getEmployee().getEmpId())
                 .empNum(resign.getEmployee().getEmpNum())
                 .empName(resign.getEmployee().getEmpName())
                 .deptName(resign.getDepartment().getDeptName())

@@ -361,4 +361,25 @@ public class VacationRequestQueryRepository {
                 .distinct()
                 .fetch());
     }
+
+    /* 내 캘린더용 휴가 - PENDING+APPROVED 기간 교집합, VacationType JOIN FETCH */
+    public List<VacationRequest> findMyCalendarVacations(UUID companyId, Long empId,
+                                                          LocalDateTime periodStart,
+                                                          LocalDateTime periodEnd) {
+        QVacationRequest r = QVacationRequest.vacationRequest;
+        QVacationType t = QVacationType.vacationType;
+
+        return queryFactory
+                .selectFrom(r)
+                .join(r.vacationType, t).fetchJoin()
+                .where(
+                        r.companyId.eq(companyId),
+                        r.employee.empId.eq(empId),
+                        r.requestStatus.in(RequestStatus.PENDING, RequestStatus.APPROVED),
+                        r.requestStartAt.loe(periodEnd),
+                        r.requestEndAt.goe(periodStart)
+                )
+                .orderBy(r.requestStartAt.asc())
+                .fetch();
+    }
 }

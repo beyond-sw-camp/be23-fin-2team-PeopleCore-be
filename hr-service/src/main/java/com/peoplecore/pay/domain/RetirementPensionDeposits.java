@@ -85,4 +85,11 @@ public class RetirementPensionDeposits {
         this.reason = cancelReason;
     }
 
+    public void markCompleted(LocalDateTime depositDate) {
+        if (this.depStatus != DepStatus.SCHEDULED) {
+            throw new IllegalStateException("적립예정(SCHEDULED) 상태에서만 완료 처리할 수 있습니다.");
+        }
+        this.depStatus = DepStatus.COMPLETED;
+        this.depositDate = depositDate;
+    }
 }

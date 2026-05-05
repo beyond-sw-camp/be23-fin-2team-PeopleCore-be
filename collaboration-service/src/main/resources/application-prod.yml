@@ -1,13 +1,13 @@
 spring:
   config:
     activate:
-      on-profile: local
+      on-profile: prod
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://${DB_HOST}:3306/peoplecore?useSSL=false&allowPublicKeyRetrieval=true
-    username: admin
-    password: ${DB_PW}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
     hikari:
       maximum-pool-size: 30
       minimum-idle: 5
@@ -39,6 +39,7 @@ spring:
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      max-poll-records: 100
 
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
@@ -61,14 +62,14 @@ logging:
     root: info
 
 minio:
-  endpoint: http://localhost:9000
+  endpoint: http://minio:9000
   #  public-url: https://minio.yourdomain.com   # 프론트 → MinIO (이미지 조회용)
   public-url: http://localhost:9000   # 프론트 → MinIO (이미지 조회용)
-  access-key: {MINIO-ACCESS-KEY}
-  secret-key: {MINIO-SECRET-KEY}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
   bucket: approval-form
 
 coolsms:
-  api-key: {API-KEY}
-  api-secret: {API-SECRET}
+  api-key: ${COOLSMS_API_KEY}
+  api-secret: ${COOLSMS_API_SECRET}
   from-number: "01000000000"

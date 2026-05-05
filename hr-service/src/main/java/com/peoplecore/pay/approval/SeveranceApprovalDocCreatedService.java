@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Slf4j
 @Service
@@ -31,23 +32,40 @@ public class SeveranceApprovalDocCreatedService {
 
     @Transactional
     public void applyDocCreated(SeveranceApprovalDocCreatedEvent event) {
-        if (event.getSevId() == null) {
-            log.warn("[SeveranceDocCreated] sevId 누락 - docId={}", event.getApprovalDocId());
+        List<Long> sevIds = event.getSevIds();
+        if (sevIds == null || sevIds.isEmpty()) {
+            log.warn("[SeveranceDocCreated] 이벤트 sevIds 비어있음 - docId={}",
+                    event.getApprovalDocId());
             return;
         }
-        SeverancePays sev = severancePaysRepository.findById(event.getSevId())
-                .orElseThrow(() -> new CustomException(ErrorCode.SEVERANCE_NOT_FOUND));
-        sev.submitApproval(event.getApprovalDocId());
-        log.info("[SeveranceDocCreated] sevId={}, status={}, docId={}",
-                sev.getSevId(), sev.getSevStatus(), event.getApprovalDocId());
+
+        // 1. sev 일괄 조회 + 회사 격리
+        List<SeverancePays> sevs = severancePaysRepository
+                .findAllBySevIdInAndCompany_CompanyId(sevIds, event.getCompanyId());
+        if (sevs.isEmpty()) {
+            log.warn("[SeveranceDocCreated] 매칭 sev 없음 - docId={}, sevIds={}",
+                    event.getApprovalDocId(), sevIds);
+            return;
+        }
+        if (sevs.size() != sevIds.size()) {
+            log.warn("[SeveranceDocCreated] 일부 sev 누락 - 요청 {} / 조회 {}, docId={}",
+                    sevIds.size(), sevs.size(), event.getApprovalDocId());
+        }
+
+        // 2. 묶인 sev 모두 approvalDocId 바인딩 + IN_APPROVAL 전이
+        for (SeverancePays s : sevs) {
+            s.submitApproval(event.getApprovalDocId());
+        }
+        log.info("[Severance] docCreated 적용 - docId={}, count={}",
+                event.getApprovalDocId(), sevs.size());
 
 //  스냅샷 저장
         if (event.getHtmlContent() != null && !event.getHtmlContent().isBlank()) {
             snapshotRepository.save(PayrollApprovalSnapshot.builder()
                     .approvalDocId(event.getApprovalDocId())
                     .approvalType(ApprovalFormType.RETIREMENT)
-                    .sevId(sev.getSevId())
-                    .companyId(sev.getCompany().getCompanyId())   // SeverancePays에 company 관계가 있다고 가정
+                    .sevId(sevs.size() == 1 ? sevs.get(0).getSevId() : null)  // 다인이면 null
+                    .companyId(event.getCompanyId())
                     .htmlSnapshot(event.getHtmlContent())
                     .createdAt(LocalDateTime.now())
                     .build());
@@ -56,6 +74,6 @@ public class SeveranceApprovalDocCreatedService {
         } else {
             log.warn("[SeveranceDocCreated] htmlContent 없음 — 스냅샷 미저장. docId={}",
                     event.getApprovalDocId());
-        }
+}
     }
 }

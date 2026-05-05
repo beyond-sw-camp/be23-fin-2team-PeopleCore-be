@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -38,20 +39,20 @@ public class SeveranceFormHandler implements ApprovalFormHandler {
     @Override
     public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {
         try {
-            Long sevId = extractSevId(document);
+            List<Long> sevIds = extractSevIds(document);
             SeveranceApprovalDocCreatedEvent event = SeveranceApprovalDocCreatedEvent.builder()
                     .companyId(document.getCompanyId())
                     .approvalDocId(document.getDocId())
-                    .sevId(sevId)
+                    .sevIds(sevIds)
                     .drafterId(document.getEmpId())
                     .finalApproverEmpId(ApprovalFormHandler.findFinalApproverEmpId(lines))
+                    .htmlContent(htmlContent)
                     .build();
             kafkaTemplate.send(TOPIC_DOC_CREATED, objectMapper.writeValueAsString(event));
-            log.info("[Kafka] Severance docCreated 발행 - docId={}, sevId={}",
-                    document.getDocId(), sevId);
+            log.info("[Kafka] Severance docCreated 발행 - docId={}, sevIds={}",
+                    document.getDocId(), sevIds);
         } catch (Exception e) {
-            log.error("[Kafka] Severance docCreated 발행 실패 - docId={}, err={}",
-                    document.getDocId(), e.getMessage());
+            log.error("[Kafka] Severance docCreated 발행 실패 - docId={}", document.getDocId(), e);
         }
     }
 
@@ -60,7 +61,6 @@ public class SeveranceFormHandler implements ApprovalFormHandler {
         try {
             SeveranceApprovalResultEvent event = SeveranceApprovalResultEvent.builder()
                     .companyId(document.getCompanyId())
-                    .sevId(extractSevId(document))
                     .approvalDocId(document.getDocId())
                     .status(status)
                     .managerId(managerId)
@@ -75,13 +75,17 @@ public class SeveranceFormHandler implements ApprovalFormHandler {
         }
     }
 
-    private Long extractSevId(ApprovalDocument document) {
+    private List<Long> extractSevIds(ApprovalDocument document) {
         try {
             JsonNode tree = objectMapper.readTree(document.getDocData());
-            JsonNode n = tree.get("sevId");
-            return (n != null && n.isNumber()) ? n.asLong() : null;
+            JsonNode arr = tree.get("sevIds");
+            if (arr == null || !arr.isArray()) return List.of();
+            List<Long> ids = new ArrayList<>(arr.size());
+            for (JsonNode n : arr) ids.add(n.asLong());
+            return ids;
         } catch (Exception e) {
-            return null;
+            log.error("[Severance] docData sevIds 파싱 실패: {}", document.getDocData(), e);
+            return List.of();
         }
     }
 }

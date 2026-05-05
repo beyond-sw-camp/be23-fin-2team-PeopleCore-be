@@ -19,6 +19,7 @@ import java.time.LocalDate;
 public class EmpSalaryResDto {
 
     private Long empId;
+    private String empNum;
     private String empStatus;   //재직상태 ACTIVE, ON_LEAVE, RESIGNED
     private String empName;
     private String deptName;
@@ -45,6 +46,7 @@ public class EmpSalaryResDto {
 
         return EmpSalaryResDto.builder()
                 .empId(emp.getEmpId())
+                .empNum(emp.getEmpNum())
                 .empStatus(emp.getEmpStatus().name())
                 .empName(emp.getEmpName())
                 .deptName(emp.getDept().getDeptName())

@@ -32,7 +32,10 @@ public class PayrollRunResDto {
 
 
     public static PayrollRunResDto fromEntity(PayrollRuns run, List<PayrollEmpResDto> employees){
-        Long unpaid = run.getPayrollStatus().name().equals("PAID") ? 0L : (run.getTotalNetPay() != null ? run.getTotalNetPay() : 0L);
+        Long unpaid = employees == null ? 0L
+                : employees.stream()
+                  .mapToLong(e -> e.getUnpaid() != null ? e.getUnpaid() : 0L)
+                  .sum();
 
         return PayrollRunResDto.builder()
                 .payrollRunId(run.getPayrollRunId())

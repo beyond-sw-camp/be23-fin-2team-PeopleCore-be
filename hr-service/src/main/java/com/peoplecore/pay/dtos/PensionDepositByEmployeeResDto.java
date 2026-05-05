@@ -16,6 +16,7 @@ public class PensionDepositByEmployeeResDto {
 //    사원당 연금적립 집계
 
     private Long empId;
+    private String empNum;
     private String empName;
     private String deptName;
 

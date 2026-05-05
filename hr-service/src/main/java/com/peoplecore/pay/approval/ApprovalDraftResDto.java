@@ -5,15 +5,14 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
 import java.util.Map;
 
-@Data
 @Builder
-@AllArgsConstructor
-@NoArgsConstructor
-public class ApprovalDraftResDto {
-    private ApprovalFormType type;
-    private Long ledgerId;      //(급여/퇴직급여) 대장
-    private String htmlTemplate;          // 결의서 양식 원문
-    private Map<String, String> dataMap;  // data-key 매칭용
-}
+public record ApprovalDraftResDto (
+    ApprovalFormType type,
+    Long ledgerId,     //(급여/퇴직급여) 대장,  SALARY 만 채워짐
+    List<Long> sevIds,              //  RETIREMENT 만 채워짐
+    String htmlTemplate,            // 결의서 양식 원문
+    Map<String, String> dataMap     // data-key 매칭용
+){}

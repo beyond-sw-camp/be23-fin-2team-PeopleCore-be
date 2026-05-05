@@ -317,10 +317,12 @@ public PayStubDetailResDto getPayStubDetail(UUID companyId, Long empId, Long stu
                 : "severance";
 
         // 최신 연봉 기반 월 적립금 (DC 형만 의미 있음)
+        // DC 법정 기준: 연 적립액 = 연봉/12 (한 달치 월급)
+//        매월 적립하므로 월 적립액 = 연봉 / 144
         long annual = salaryContractRepository.findByCompanyIdAndEmployee_EmpIdAndDeletedAtIsNullOrderByApplyFromDesc(companyId, empId)
                 .stream().findFirst()
                 .map(c -> c.getTotalAmount() != null ? c.getTotalAmount().longValue() : 0L).orElse(0L);
-        long monthlyDeposit = "DC".equals(retirementType) ? annual / 12 : 0L;
+        long monthlyDeposit = "DC".equals(retirementType) ? annual / 144 : 0L;
 
         // 누적 적립금 (COMPLETED 합산)
         long totalDeposited = pensionDepositsRepository

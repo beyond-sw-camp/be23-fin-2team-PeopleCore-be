@@ -94,6 +94,16 @@ public class MySalaryCacheService {
         set(stubDetailKey(companyId, empId, stubId), value, TTL_STUB_DETAIL);
     }
 
+    /** 특정 급여 명세서 상세 1건만 무효화 (stubId 가 명확할 때) */
+    public void evictStubDetailCache(UUID companyId, Long empId, Long stubId) {
+        delete(stubDetailKey(companyId, empId, stubId));
+    }
+
+    /** 사원의 모든 급여 명세서 상세 캐시 일괄 무효화 (월/연도 범위 모름·다건일 때) */
+    public void evictAllStubDetailCache(UUID companyId, Long empId) {
+        deleteByPattern(PREFIX_STUB_DETAIL + ":" + companyId + ":" + empId + ":*");
+    }
+
     private String stubDetailKey(UUID companyId, Long empId, Long stubId) {
         return String.format("%s:%s:%d:%d", PREFIX_STUB_DETAIL, companyId, empId, stubId);
     }

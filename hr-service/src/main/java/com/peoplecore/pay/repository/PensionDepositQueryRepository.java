@@ -29,4 +29,7 @@ public interface PensionDepositQueryRepository {
     List<PensionDepositByEmployeeResDto> searchByEmployee(
             UUID companyId, String fromYm, String toYm,
             String search, Long deptId, DepStatus status);
+
+    //    적립예정(SCHEDULED) 상태인 distinct payYearMonth 목록 (오름차순)
+    List<String> distinctScheduledMonths(UUID companyId, String fromYm, String toYm);
 }

@@ -8,6 +8,9 @@ import com.peoplecore.pay.domain.SeverancePays;
 import com.peoplecore.pay.enums.SevStatus;
 import com.peoplecore.pay.repository.SeverancePaysRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,103 +45,104 @@ public class SeveranceApprovalDraftService {
 
 
 //    퇴직금 지급결의서 데이터 조회(미리보기)
-    public ApprovalDraftResDto draft(UUID companyId, Long userId, Long sevId){
+    public ApprovalDraftResDto draft(UUID companyId, Long userId, List<Long> sevIds) {
 
-        SeverancePays sev = severancePaysRepository.findBySevIdAndCompany_CompanyId(sevId, companyId).orElseThrow(()-> new CustomException(ErrorCode.SEVERANCE_NOT_FOUND));
 
-//        결재 가능 상태 검증(Confirmed만 상신 가능)
-        if (sev.getSevStatus() != SevStatus.CONFIRMED){
-            throw new CustomException(ErrorCode.SEVERANCE_STATUS_INVALID);
+    // 1. sevIds 일괄 조회 + 검증
+    List<SeverancePays> sevs = severancePaysRepository
+            .findAllBySevIdInAndCompany_CompanyId(sevIds, companyId);
+
+        if (sevs.size() != sevIds.size()) {
+            throw new CustomException(ErrorCode.SEVERANCE_NOT_FOUND);
+        }
+        for (SeverancePays s : sevs) {
+            //        결재 가능 상태 검증(Confirmed만 상신 가능)
+            if (s.getSevStatus() != SevStatus.CONFIRMED) {
+                throw new CustomException(ErrorCode.SEVERANCE_STATUS_INVALID);
+            }
+            if (s.getApprovalDocId() != null) {
+                throw new CustomException(ErrorCode.SEVERANCE_ALREADY_IN_APPROVAL);
+            }
         }
 
+        // 2. 기안자 조회
         Employee drafter = employeeRepository.findById(userId).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
-        Employee target = sev.getEmployee();
 
+        // 3. 양식 HTML 가져오기 + in-memory 빌드 (헤더 치환 + 행 주입)
         ApprovalFormCache.CachedForm form = approvalFormCache.get(companyId, ApprovalFormType.RETIREMENT);
-        String htmlTemplate = form.formHtml();
-        Map<String, String> dataMap = buildDataMap(sev, drafter, target);
+        String renderedHtml = buildBatchHtml(form.formHtml(), drafter, sevs);
 
+        // 4. dataMap 빈 맵 — 빌드 단계에서 모든 치환 완료. 프론트는 customHtmlTemplate 그대로 사용
         return ApprovalDraftResDto.builder()
                 .type(ApprovalFormType.RETIREMENT)
-                .ledgerId(sevId)
-                .htmlTemplate(htmlTemplate)
-                .dataMap(dataMap)
+                .ledgerId(null)
+                .sevIds(sevIds)
+                .htmlTemplate(renderedHtml)
+                .dataMap(Map.of())
                 .build();
     }
 
-    private Map<String, String> buildDataMap(SeverancePays sev, Employee drafter, Employee target) {
-        Map<String, String> m = new HashMap<>();
 
-        // ── 헤더 ──
+    // 다인 결의서 HTML 빌드 (헤더 텍스트 치환 + 사원별 <tr> 주입 + 합계).
+    // 1명이든 N명이든 동일 경로.
+    private String buildBatchHtml(String templateHtml, Employee drafter, List<SeverancePays> sevs) {
+        Document doc = Jsoup.parse(templateHtml);
+        doc.outputSettings().prettyPrint(false);   // fragment HTML 보존
+
+        // 합계 계산
+        long totalSev = sevs.stream().mapToLong(SeverancePays::getSeveranceAmount).sum();
+        long totalTax = sevs.stream().mapToLong(s -> s.getTaxAmount() + s.getLocalIncomeTax()).sum();
+        long totalNet = sevs.stream().mapToLong(SeverancePays::getNetAmount).sum();
+
+        // 헤더/합계 텍스트 치환
+        Map<String, String> m = new HashMap<>();
         m.put("drafterName", drafter.getEmpName());
         m.put("drafterDept", drafter.getDept() != null ? drafter.getDept().getDeptName() : "");
         m.put("draftDate",   LocalDate.now().format(YMD));
-        m.put("docNo",       generateDocNo(sev));
-        m.put("approvalLineHtml", "");  // 결재선 선택 후 프론트가 채움
-
-        // ── 지급 기본 정보 ──
+        m.put("docNo",       generateBatchDocNo(sevs));
         m.put("payRequestDate", LocalDate.now().format(YMD));
-        m.put("totalPayAmount", currency(sev.getNetAmount()));
-        m.put("payHeadcount",   "1명");
-        m.put("payDescription", String.format("%s님 %s 퇴직금 지급",
-                sev.getEmpName(), sev.getRetirementType().name()));
+        m.put("totalPayAmount", currency(totalNet));
+        m.put("payHeadcount",   sevs.size() + "명");
+        m.put("payDescription", String.format("%d명 퇴직금 일괄 지급", sevs.size()));
+        m.put("totalSeverance", currency(totalSev));
+        m.put("totalTaxAmount", currency(totalTax));
+        m.put("totalNetAmount", currency(totalNet));
+        m.forEach((key, value) -> {
+            Element el = doc.selectFirst("[data-key=" + key + "]");
+            if (el != null) el.text(value);
+        });
 
-        // ── 1. 퇴사자 인적사항 ──
-        m.put("deptName",  sev.getDeptName() != null ? sev.getDeptName() : "");
-        m.put("empNo",     target.getEmpNum() != null ? target.getEmpNum() : "");
-        m.put("empName",   sev.getEmpName());
-        m.put("jobTitle",  target.getTitle() != null ? target.getTitle().getTitleName() : "");
-        m.put("grade",  sev.getGradeName() != null ? sev.getGradeName() : "");
-        m.put("retirementType", sev.getRetirementType().name());
-        m.put("joinDate",  sev.getHireDate().format(YMD));
-        m.put("retireDate", sev.getResignDate().format(YMD));
-        m.put("retirementPayDate", LocalDate.now().plusDays(14).format(YMD));  // 기본값
-        m.put("settlementPeriod", sev.getHireDate().format(YMD) + " ~ " + sev.getResignDate().format(YMD));
-        m.put("servicePeriod", formatServicePeriod(sev.getServiceDays()));
-        m.put("settlementDays", String.valueOf(sev.getServiceDays()));
+        // 사원별 <tr> 주입 (PayrollApprovalHtmlBuilder.injectPaymentRows 와 동일 패턴)
+        Element tbody = doc.selectFirst("tbody[data-key=employeesRows]");
+        if (tbody == null) {
+            throw new CustomException(ErrorCode.APPROVAL_FORM_INVALID);
+        }
+        tbody.empty();
+        int idx = 1;
+        for (SeverancePays s : sevs) {
+            Element tr = tbody.appendElement("tr");
+            tr.appendElement("td").text(String.valueOf(idx++));
+            tr.appendElement("td").text(nullSafe(s.getDeptName()));
+            tr.appendElement("td").text(s.getEmpName());
+            tr.appendElement("td").text(s.getRetirementType().name());
+            tr.appendElement("td").text(s.getHireDate().format(YMD));
+            tr.appendElement("td").text(s.getResignDate().format(YMD));
+            tr.appendElement("td").text(formatServicePeriod(s.getServiceDays()));
+            tr.appendElement("td").addClass("currency").text(currency(s.getSeveranceAmount()));
+            tr.appendElement("td").addClass("currency")
+                    .text(currency(s.getTaxAmount() + s.getLocalIncomeTax()));
+            tr.appendElement("td").addClass("currency").text(currency(s.getNetAmount()));
+        }
 
-        // ── 2. 퇴직급여 산정내역 — 최근 3개월 급여 ──
-        // 라벨/월별 데이터는 PayrollService에서 보조 조회 메서드 추가 필요 (TODO 1번)
-        // 현재는 합계 위주로만 채움
-        m.put("period1Label", "");
-        m.put("period2Label", "");
-        m.put("period3Label", "");
-        m.put("period4Label", "합계");
-        m.put("workDays1", "");
-        m.put("workDays2", "");
-        m.put("workDays3", "");
-        m.put("workDays4", "");
-        m.put("workDaysTotal", String.valueOf(sev.getLast3MonthDays()));
-        m.put("salaryTotal1", "");
-        m.put("salaryTotal2", "");
-        m.put("salaryTotal3", "");
-        m.put("salaryTotal4", "");
-        m.put("salaryGrandTotal", currency(sev.getLast3MonthPay()));
-
-        m.put("bonusTotal",       currency(sev.getLastYearBonus()));
-        m.put("bonusAdded",       currency(calc3of12(sev.getLastYearBonus())));
-        m.put("annualLeaveTotal", currency(sev.getAnnualLeaveForAvgWage()));
-        m.put("annualLeaveAdded", currency(calc3of12(sev.getAnnualLeaveForAvgWage())));
-        m.put("dailyAveragePay",  currency(sev.getAvgDailyWage().longValue()));
-
-        // ── 3. 퇴직금 산정내역 ──
-        m.put("retirementPayAmount", currency(sev.getSeveranceAmount()));
-        m.put("incomeTax",      currency(sev.getTaxAmount()));
-        m.put("localIncomeTax", currency(sev.getLocalIncomeTax()));
-        m.put("paymentTotal",   currency(sev.getSeveranceAmount() + sev.getAnnualLeaveOnRetirement()));
-        m.put("deductionTotal", currency(sev.getTaxAmount() + sev.getLocalIncomeTax()));
-        m.put("netPayAmount",   currency(sev.getNetAmount()));
-
-        return m;
+        return doc.outerHtml();
     }
 
-
-
-    // ── 헬퍼 ──
-
-    private static String generateDocNo(SeverancePays sev) {
-        return String.format("SEV-%s-%d",
-                sev.getResignDate().format(DateTimeFormatter.ofPattern("yyyyMM")),
-                sev.getSevId());
+    private String generateBatchDocNo(List<SeverancePays> sevs) {
+        String yyyymm = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"));
+        return sevs.size() == 1
+                ? String.format("SEV-%s-%d", yyyymm, sevs.get(0).getSevId())
+                : String.format("SEV-%s-BATCH%d", yyyymm, sevs.get(0).getSevId());
     }
+
+    private static String nullSafe(String s) { return s == null ? "" : s; }
 }
