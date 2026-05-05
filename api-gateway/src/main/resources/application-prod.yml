@@ -7,7 +7,7 @@ eureka:
 spring:
   config:
     activate:
-      on-profile: local
+      on-profile: prod
   application:
     name: api-gateway
   cloud:

@@ -1,0 +1,53 @@
+spring:
+  config:
+    activate:
+      on-profile: prod
+  elasticsearch:
+    uris: http://elastic-search:9200
+
+  kafka:
+    bootstrap-servers: kafka-service:9092
+
+    consumer:
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+      max-poll-records: 100
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+
+server:
+  port: 0
+  domain: http://localhost:8083
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+openai:
+  api-key: ${OPENAI_API_KEY}
+  embedding:
+    model: text-embedding-3-small
+    dimensions: 1536
+    base-url: https://api.openai.com/v1
+    batch-size: 64
+
+anthropic:
+  api-key: ${ANTROPIC_API_KEY}   # 환경변수에서 주입 — 비어있으면 /copilot/chat이 503 반환
+  base-url: https://api.anthropic.com/v1
+  model: claude-haiku-4-5-20251001
+  max-tokens: 1024
+  max-tool-iterations: 4              # Claude가 도구를 너무 자주 호출하는 폭주 방지
+
+logging:
+  level:
+    root: info
+    org.springframework.data.elasticsearch: DEBUG    # ES 쿼리 로그 확인용
