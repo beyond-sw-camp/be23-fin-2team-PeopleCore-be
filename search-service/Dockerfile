@@ -12,7 +12,7 @@ RUN --mount=type=secret,id=gpr_user \
     --mount=type=secret,id=gpr_token \
     GITHUB_ACTOR="$(cat /run/secrets/gpr_user)" \
     GITHUB_TOKEN="$(cat /run/secrets/gpr_token)" \
-    ./gradlew :hr-service:bootJar -x test --no-daemon
+    ./gradlew :search-service:bootJar -x test --no-daemon
 
 FROM amazoncorretto:17-alpine
 WORKDIR /app
