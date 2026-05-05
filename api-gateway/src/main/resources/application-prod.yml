@@ -1,0 +1,63 @@
+server:
+  port: 8080
+
+eureka:
+  client:
+    enabled: false
+spring:
+  config:
+    activate:
+      on-profile: local
+  application:
+    name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          globalcors:
+            cors-configurations:
+              '[/**]':
+                allowedOrigins:
+                  - 'http://localhost:3000'
+                  - 'https://peoplecore.cloud'
+                allowedMethods: '*'
+                allowedHeaders: '*'
+                allowCredentials: true
+          routes:
+            - id: hr-service
+              predicates:
+                - Path=/hr-service/**
+              filters:
+                - StripPrefix=1
+              uri: lb://hr-service
+
+            - id: collaboration-service
+              predicates:
+                - Path=/collaboration-service/**
+              filters:
+                - StripPrefix=1
+              uri: lb://collaboration-service
+
+            - id: search-service
+              predicates:
+                - Path=/search-service/**
+              filters:
+                - StripPrefix=1
+              uri: lb://search-service
+
+          #              X-Forwarded 헤더 설정 배포 후 gateway앞에 nginx나 k8s ingress 둘 때 추가
+          #          현재 설정은 모든 프록시 신뢰 -> 보안 강화 하고 싶을 시 나중에  ingress pod ip추가
+          trusted-proxies: .*
+
+internal:
+  api-key: peoplecore-internal-secret-2026  # 서버운영팀 전용 API Key
+
+jwt:
+  expirationAt: 3600000
+  secretKey: ${JWT_SECRET}
+  expirationRt: 3600000
+  secretKeyRt: ${JWT_SECRET_RT}
+
+logging:
+  level:
+    root: info
