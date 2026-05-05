@@ -15,6 +15,8 @@ import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.enums.*;
 import com.peoplecore.pay.repository.*;
 import com.peoplecore.pay.tax.RetirementIncomeTaxCalculator;
+import com.peoplecore.resign.domain.Resign;
+import com.peoplecore.resign.repository.ResignRepository;
 import com.peoplecore.vacation.entity.VacationPolicy;
 import com.peoplecore.vacation.repository.VacationPolicyRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -47,9 +49,10 @@ public class SeveranceService {
     private final VacationPolicyRepository vacationPolicyRepository;
     private final LeaveAllowanceRepository leaveAllowanceRepository;
     private final RetirementIncomeTaxCalculator retirementIncomeTaxCalculator;
+    private final ResignRepository resignRepository;
 
     @Autowired
-    public SeveranceService(SeverancePaysRepository severanceRepository, CompanyRepository companyRepository, EmployeeRepository employeeRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, SeverancePaysRepositoryImpl severanceRepositoryImpl, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceRepository leaveAllowanceRepository, RetirementIncomeTaxCalculator retirementIncomeTaxCalculator, SeverancePaysRepository severancePaysRepository) {
+    public SeveranceService(SeverancePaysRepository severanceRepository, CompanyRepository companyRepository, EmployeeRepository employeeRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, SeverancePaysRepositoryImpl severanceRepositoryImpl, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceRepository leaveAllowanceRepository, RetirementIncomeTaxCalculator retirementIncomeTaxCalculator, SeverancePaysRepository severancePaysRepository, ResignRepository resignRepository) {
         this.companyRepository = companyRepository;
         this.employeeRepository = employeeRepository;
         this.empRetirementAccountRepository = empRetirementAccountRepository;
@@ -59,6 +62,7 @@ public class SeveranceService {
         this.leaveAllowanceRepository = leaveAllowanceRepository;
         this.retirementIncomeTaxCalculator = retirementIncomeTaxCalculator;
         this.severancePaysRepository = severancePaysRepository;
+        this.resignRepository = resignRepository;
     }
 
 //    사원 퇴직 이벤트 발생시 퇴직금 자동산정용 메서드
@@ -89,18 +93,30 @@ public class SeveranceService {
 
         Employee emp = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-//        이미 산정된 것이 있으면 재산정 (CALCULATING 상태일때만)
-        Optional<SeverancePays> existing = severancePaysRepository
-                .findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId)
-                .stream()
-                .filter(s-> s.getSevStatus() == SevStatus.CALCULATING)
-                .findFirst();
+//        기존 sev 조회 + 상태별 분기
+//        - CONFIRMED 이상 (확정/결재/지급) → 재산정 차단 (immutable 데이터 보호)
+//        - CALCULATING → UPDATE (덮어쓰기 허용)
+//        - 없음 → INSERT (아래 else 분기)
+        Optional<SeverancePays> existingOpt = severancePaysRepository
+                .findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
+
+        if (existingOpt.isPresent() && existingOpt.get().getSevStatus() != SevStatus.CALCULATING) {
+            throw new CustomException(ErrorCode.SEVERANCE_LOCKED);
+        }
+
+// CALCULATING 만 UPDATE 후보로 통과 (없으면 빈 Optional)
+        Optional<SeverancePays> existing = existingOpt;
 
         LocalDate hireDate = emp.getEmpHireDate();
         LocalDate resignDate = emp.getEmpResignDate();
 
-        if (resignDate == null){
-            throw new CustomException(ErrorCode.RESIGN_DATE_NOT_SET);
+// Employee.empResignDate 미설정(아직 RESIGNED 상태가 아님) → 활성 Resign 의 퇴직예정일 fallback
+// 운영 시나리오: CONFIRMED 상태에서 퇴직금 사전 산정 (직원 사전 통보 + 대장작성 사전 시작)
+        if (resignDate == null) {
+            resignDate = resignRepository
+                    .findActiveOrConfirmedByEmpId(companyId, empId)
+                    .map(Resign::getResignDate)
+                    .orElseThrow(() -> new CustomException(ErrorCode.RESIGN_DATE_NOT_SET));
         }
 
 //        근속일수 / 근속연수
@@ -120,14 +136,17 @@ public class SeveranceService {
 //        직전 3개월 총 일수
         int last3MonthDays = calcTotalDays(resignDate.minusMonths(3), resignDate);
 
-//        급여 데이터 조회(QueryDSL)
-        Long last3MonthPay = severancePaysRepository.sumLast3MonthPay(empId,companyId,last3Months);
-
+//        급여 데이터 조회(QueryDSL) — 사전 산정 시 데이터 부재 가능 → null 방지
+        Long last3MonthPay = severancePaysRepository.sumLast3MonthPay(empId, companyId, last3Months);
+        if (last3MonthPay == null || last3MonthPay == 0L) {
+            throw new CustomException(ErrorCode.SEVERANCE_NO_PAYROLL_DATA);
+        }
 //        직전 1년 상여금
         List<String> last12Months = buildMonthRange(
                 resignYm.minusMonths(12),
                 resignYm.minusMonths(1));
         Long lastYearBonus = severancePaysRepository.sumLastYearBonus(empId, companyId, last12Months);
+        if (lastYearBonus == null) lastYearBonus = 0L;     // 상여금은 실제로 0 가능 → fallback OK
 
 //        상여금 가산액 = 직전 1년 상여금 * (3/12)
          BigDecimal bonusAdded = BigDecimal.valueOf(lastYearBonus)
@@ -186,6 +205,8 @@ public class SeveranceService {
         // 직전 3개월 비과세 누계 → 퇴직소득세 계산에 반영
         Long nonTaxableSum = severanceRepositoryImpl
                 .sumNonTaxableLast3Months(empId, companyId, last3Months);
+        if (nonTaxableSum == null) nonTaxableSum = 0L;
+
 
 //        퇴직소득세/지방소득세 자동산출
 //        퇴직소득세는 분류과세라서 인적공제(부양가족공제) 없음
@@ -228,7 +249,7 @@ public class SeveranceService {
                     .annualLeaveOnRetirement(annualLeaveOnRetirement)
                     .avgDailyWage(avgDailyWage)
                     .severanceAmount(severanceAmount)
-                    .last3MonthDays(last3MonthDays)
+                    .last3MonthPay(last3MonthPay)
                     .taxAmount(retirementIncomeTax)
                     .localIncomeTax(localIncomeTax)
                     .taxYear(taxYear)
@@ -420,42 +441,50 @@ public class SeveranceService {
         sev.confirm(confirmedBy);
     }
 
-///    전자결재 상신
-    @Transactional
-    public void submitApproval(UUID companyId, Long sevId, Long  approvalDocId) {
-        SeverancePays sev = findSeverance(companyId, sevId);
-        sev.submitApproval(approvalDocId);
-    }
 
 
 ///    전자결재 결과 처리 (kafka consumer에서 호출)
     @Transactional
     public void applyApprovalResult(SeveranceApprovalResultEvent event){
-        SeverancePays sev = severancePaysRepository.findBySevIdAndCompany_CompanyId(event.getSevId(), event.getCompanyId()).orElseThrow(() -> new CustomException(ErrorCode.SEVERANCE_NOT_FOUND));
+        List<SeverancePays> sevs = severancePaysRepository
+                .findAllByCompany_CompanyIdAndApprovalDocId(event.getCompanyId(), event.getApprovalDocId());
 
-        if (sev.getApprovalDocId() == null && event.getApprovalDocId() != null) {
-            sev.bindApprovalDoc(event.getApprovalDocId());
-            sev.submitApproval(event.getApprovalDocId());
+        if (sevs.isEmpty()) {
+            log.warn("[Severance] result 이벤트 - 매칭 sev 없음, docId={}", event.getApprovalDocId());
+            return;
         }
 
-        String status = event.getStatus();
-        if ("APPROVED".equals(status)) {
-            sev.approve();
-            log.info("[SeveranceService] 전자결재 승인 처리 완료 - severanceId={}",
-                    event.getSevId());
-        } else if ("REJECTED".equals(status)) {
-            sev.rejectApproval();
-            log.info("[SeveranceService] 전자결재 반려 처리 - severanceId={}, reason={}",
-                    event.getSevId(), event.getRejectReason());
-        } else if ("CANCELED".equals(status)) {
-            sev.cancelApproval();
-            log.info("[SeveranceService] 전자결재 회수 - severanceId={}", event.getSevId());
-        } else {
-            log.warn("[SeveranceResult] 알 수 없는 status={} - severanceId={}",
-                    status, event.getSevId());
+        if ("APPROVED".equals(event.getStatus())) {
+            sevs.forEach(s -> s.approve());
+        } else if ("REJECTED".equals(event.getStatus())) {
+            sevs.forEach(s -> s.rejectApproval());
         }
+        log.info("[Severance] applyApprovalResult - docId={}, status={}, count={}",
+                event.getApprovalDocId(), event.getStatus(), sevs.size());
+        }
+
+
+//    퇴직금 지급처리 (다인 일괄)
+//    APPROVED 상태 sev[]에 대해 transferDate 적용 + PAID 전이
+    @Transactional
+    public void processPayment(UUID companyId, Long adminEmpId, SeverancePayReqDto req) {
+        java.util.List<SeverancePays> sevs = severancePaysRepository
+                .findAllBySevIdInAndCompany_CompanyId(req.getSevIds(), companyId);
+
+        if (sevs.size() != req.getSevIds().size()) {
+            throw new CustomException(ErrorCode.SEVERANCE_NOT_FOUND);
+        }
+        for (SeverancePays s : sevs) {
+            if (s.getSevStatus() != SevStatus.APPROVED) {
+                throw new CustomException(ErrorCode.SEVERANCE_STATUS_INVALID);
+            }
+            s.markPaid(adminEmpId, req.getTransferDate());     // 기존 엔티티 메서드 그대로
+        }
+        log.info("[Severance Pay] 지급처리 완료 - count={}, transferDate={}, by={}",
+                sevs.size(), req.getTransferDate(), adminEmpId);
     }
 
-}
+
+    }
 
 

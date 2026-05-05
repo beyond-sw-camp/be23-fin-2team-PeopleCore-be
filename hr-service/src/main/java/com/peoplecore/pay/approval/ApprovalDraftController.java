@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -31,8 +32,9 @@ public class ApprovalDraftController {
             @RequestHeader("X-User-Company")UUID companyId,
             @RequestHeader("X-User-Id") Long userID,
             @RequestParam ApprovalFormType type,
-            @RequestParam Long ledgerId){
-        return ResponseEntity.ok(facade.draft(companyId, userID, type, ledgerId));
+            @RequestParam(required = false) Long ledgerId,
+            @RequestParam(required = false) List<Long> sevIds){
+        return ResponseEntity.ok(facade.draft(companyId, userID, type, ledgerId, sevIds));
     }
 
 

@@ -29,7 +29,7 @@ use peoplecore;
 -- =====================================================================
 
 -- ▼ 회사 생성 시 입력한 회사명. 디폴트 그대로 사용 시 수정 불필요 ▼
-SET @company_name := 'testcompany';
+SET @company_name := 'peoplecore';
 
 -- 회사명으로 UUID 자동 조회 (BINARY(16) 그대로 반환)
 SET @cid := (SELECT company_id FROM company WHERE company_name = @company_name);
@@ -48,16 +48,14 @@ SELECT
 --   인프라팀 (INF) / 영업팀 (SALES) / 마케팅팀 (MKT)
 -- =====================================================================
 
-INSERT INTO department (company_id, parent_dept_id, dept_name, dept_code, created_at, is_use) VALUES
-(@cid, NULL, '임원실',   'EXEC',  NOW(), 'Y'),
-(@cid, NULL, '인사팀',   'HR',    NOW(), 'Y'),
-(@cid, NULL, '재무팀',   'FIN',   NOW(), 'Y'),
-(@cid, NULL, '개발팀',   'DEV',   NOW(), 'Y'),
-(@cid, NULL, '인프라팀', 'INF',   NOW(), 'Y'),
-(@cid, NULL, '영업팀',   'SALES', NOW(), 'Y'),
-(@cid, NULL, '마케팅팀', 'MKT',   NOW(), 'Y');
-
-
+INSERT INTO department (company_id, parent_dept_id, dept_name, dept_code, created_at, is_use, sort_order) VALUES
+(@cid, NULL, '임원실',   'EXEC',  NOW(), 'Y', 1),
+(@cid, NULL, '인사팀',   'HR',    NOW(), 'Y', 2),
+(@cid, NULL, '재무팀',   'FIN',   NOW(), 'Y', 3),
+(@cid, NULL, '개발팀',   'DEV',   NOW(), 'Y', 4),
+(@cid, NULL, '인프라팀', 'INF',   NOW(), 'Y', 5),
+(@cid, NULL, '영업팀',   'SALES', NOW(), 'Y', 6),
+(@cid, NULL, '마케팅팀', 'MKT',   NOW(), 'Y', 7);
 -- =====================================================================
 -- 2) Grade  (한국 일반 직급 6단계 추가)
 --   사원(G1) → 대리(G2) → 과장(G3) → 차장(G4) → 부장(G5) → 이사(G6)
@@ -77,11 +75,11 @@ INSERT INTO grade (company_id, grade_name, grade_code, grade_order) VALUES
 --   팀원 / 팀장 / 본부장 / 대표
 -- =====================================================================
 
-INSERT INTO title (company_id, dept_id, title_name, title_code) VALUES
-(@cid, NULL, '팀원',   'T-MEMBER'),
-(@cid, NULL, '팀장',   'T-LEAD'),
-(@cid, NULL, '본부장', 'T-HEAD'),
-(@cid, NULL, '대표',   'T-CEO');
+INSERT INTO title (company_id, title_name, title_code, title_order) VALUES
+(@cid, '팀원',   'T-MEMBER', 1),
+(@cid, '팀장',   'T-LEAD',   2),
+(@cid, '본부장', 'T-HEAD',   3),
+(@cid, '대표',   'T-CEO',    4);
 
 
 -- =====================================================================

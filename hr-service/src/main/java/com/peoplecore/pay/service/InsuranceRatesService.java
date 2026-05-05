@@ -65,23 +65,59 @@ public class InsuranceRatesService {
 
 
     @Transactional
-    //회사 생성시 초기값
+    //회사 생성시 초기값 (24~26년)
     public void initDefault(Company company) {
-        InsuranceRates defaultRates = InsuranceRates.builder()
-                .company(company)
-                .year(LocalDate.now().getYear())
-                .nationalPension(new BigDecimal("0.0450"))          // 4.5%
-                .healthInsurance(new BigDecimal("0.03545"))         // 3.545%
-                .longTermCare(new BigDecimal("0.1295"))             // 건강보험의 12.95%
-                .employmentInsurance(new BigDecimal("0.0090"))      // 근로자 0.9%
-                .employmentInsuranceEmployer(new BigDecimal("0.0090"))  // 사업주 0.9% (기본)
-                .validFrom(LocalDate.of(LocalDate.now().getYear(), 1, 1))
-                .pensionUpperLimit(6_170_000L)
-                .pensionLowerLimit(390_000L)
-                .build();
+        // 2024년 — 7월 이후 적용된 상/하한액으로 시드 (1~6월은 안내로 처리)
+        saveYearlyDefault(company, 2024,
+                "0.0450",     // 국민연금
+                "0.03545",    // 건강보험
+                "0.1295",     // 장기요양 (건강보험의 12.95%)
+                "0.0090",     // 고용보험 근로자
+                "0.0090",     // 고용보험 사업주 (회사 기본값)
+                6_170_000L, 390_000L);   // 2024-07~ 적용
 
-        insuranceRatesRepository.save(defaultRates);
+        // 2025년 — 요율 동결, 7월 이후 상/하한액으로 시드
+        saveYearlyDefault(company, 2025,
+                "0.0450",
+                "0.03545",
+                "0.1295",
+                "0.0090",
+                "0.0090",
+                6_370_000L, 400_000L);   // 2025-07~ 적용
+
+        // 2026년 — 요율 인상 확정, 상/하한액은 1~6월 기준
+        saveYearlyDefault(company, 2026,
+                "0.0475",     // 국민연금 4.5% → 4.75% (0.5%p 인상)
+                "0.03595",    // 건강보험 3.545% → 3.595% (0.1%p 인상)
+                "0.1314",     // 장기요양 12.95% → 13.14%
+                "0.0090",     // 고용보험 근로자
+                "0.0090",     // 고용보험 사업주
+                6_370_000L, 400_000L);
     }
 
+    private void saveYearlyDefault(Company company,
+                                   int year,
+                                   String nationalPension,
+                                   String healthInsurance,
+                                   String longTermCare,
+                                   String employmentInsurance,
+                                   String employmentInsuranceEmployer,
+                                   long pensionUpperLimit,
+                                   long pensionLowerLimit) {
+        InsuranceRates rates = InsuranceRates.builder()
+                .company(company)
+                .year(year)
+                .nationalPension(new BigDecimal(nationalPension))
+                .healthInsurance(new BigDecimal(healthInsurance))
+                .longTermCare(new BigDecimal(longTermCare))
+                .employmentInsurance(new BigDecimal(employmentInsurance))
+                .employmentInsuranceEmployer(new BigDecimal(employmentInsuranceEmployer))
+                .validFrom(LocalDate.of(year, 1, 1))
+                .validTo(LocalDate.of(year, 12, 31))
+                .pensionUpperLimit(pensionUpperLimit)
+                .pensionLowerLimit(pensionLowerLimit)
+                .build();
+        insuranceRatesRepository.save(rates);
+    }
 
 }

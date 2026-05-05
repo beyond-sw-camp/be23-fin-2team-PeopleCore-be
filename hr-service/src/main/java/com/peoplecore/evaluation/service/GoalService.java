@@ -393,35 +393,7 @@ public class GoalService {
         return result;
     }
 
-    // 8번 단건 승인 - 대기 상태만 가능 (PENDING 이 곧 "제출완료+대기")
-    public GoalResponse approveGoal(UUID companyId, Long managerId, Long goalId) {
-        Goal goal = loadGoalForManager(companyId, managerId, goalId);
-
-        if (goal.getApprovalStatus() != GoalApprovalStatus.PENDING) {
-            throw new IllegalStateException("대기 상태가 아닌 목표는 승인할 수 없습니다");
-        }
-
-        goal.approve();
-        return GoalResponse.from(goal);
-    }
-
-    // 9번 단건 반려 - 대기 상태만 가능, 사유 필수
-    public GoalResponse rejectGoal(UUID companyId, Long managerId, Long goalId, String rejectReason) {
-        if (rejectReason == null || rejectReason.isBlank()) {
-            throw new IllegalArgumentException("반려 사유는 필수입니다");
-        }
-
-        Goal goal = loadGoalForManager(companyId, managerId, goalId);
-
-        if (goal.getApprovalStatus() != GoalApprovalStatus.PENDING) {
-            throw new IllegalStateException("대기 상태가 아닌 목표는 반려할 수 없습니다");
-        }
-
-        goal.reject(rejectReason);
-        return GoalResponse.from(goal);
-    }
-
-    // 10번 팀원 단위 일괄 승인 - 해당 팀원의 대기+제출완료 목표 전부 승인
+    // 팀원 단위 대기 건 일괄 승인 — 피평가자가 전체 단위로 제출하므로 평가자도 전체 단위로 처리
     public List<GoalResponse> approveAllPending(UUID companyId, Long managerId, Long targetEmpId) {
 
         // 팀장 권한 체크
@@ -436,7 +408,7 @@ public class GoalService {
         // 해당 팀원의 시즌 목표 전체 로드
         List<Goal> goals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(targetEmpId, openSeason.getSeasonId());
 
-        // 대기 + 제출완료 상태만 골라 승인
+        // 대기 상태만 골라 승인
         List<GoalResponse> result = new ArrayList<>();
         for (Goal g : goals) {
             if (g.getApprovalStatus() == GoalApprovalStatus.PENDING) {
@@ -447,16 +419,29 @@ public class GoalService {
         return result;
     }
 
-    // ── 팀장 단건 처리 공통 헬퍼 ──────────────────────
-
-    // Goal 로드 + 팀장 권한 검증 (승인/반려 공통)
-    private Goal loadGoalForManager(UUID companyId, Long managerId, Long goalId) {
-        Goal goal = goalRepository.findById(goalId).orElse(null);
-        if (goal == null) {
-            throw new IllegalArgumentException("목표를 찾을 수 없습니다");
+    // 팀원 단위 대기 건 일괄 반려 — 동일 사유를 모든 PENDING 목표에 적용
+    public List<GoalResponse> rejectAllPending(UUID companyId, Long managerId, Long targetEmpId, String rejectReason) {
+        if (rejectReason == null || rejectReason.isBlank()) {
+            throw new IllegalArgumentException("반려 사유는 필수입니다");
         }
-        validateManagerAccess(companyId, managerId, goal.getEmp().getEmpId());
-        return goal;
+
+        validateManagerAccess(companyId, managerId, targetEmpId);
+
+        Season openSeason = seasonRepository.findByCompany_CompanyIdAndStatus(companyId, EvalSeasonStatus.OPEN).orElse(null);
+        if (openSeason == null) {
+            throw new IllegalStateException("현재 진행 중인 시즌이 없습니다");
+        }
+
+        List<Goal> goals = goalRepository.findByEmp_EmpIdAndSeason_SeasonIdOrderByGoalIdDesc(targetEmpId, openSeason.getSeasonId());
+
+        List<GoalResponse> result = new ArrayList<>();
+        for (Goal g : goals) {
+            if (g.getApprovalStatus() == GoalApprovalStatus.PENDING) {
+                g.reject(rejectReason);
+                result.add(GoalResponse.from(g));
+            }
+        }
+        return result;
     }
 
     //  단일 사원 접근 권한 체크 (findTeamMembers 기반)

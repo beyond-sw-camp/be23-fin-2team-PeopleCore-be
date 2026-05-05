@@ -47,6 +47,19 @@ public interface ResignRepository extends JpaRepository<Resign, Long>,ResignRepo
     List<Resign> findAllByRetireStatusAndIsDeletedFalseAndResignDateLessThanEqual(
             @Param("status") RetireStatus status, @Param("date") LocalDate date);
 
+    // 사원의 활성 Resign (ACTIVE 또는 CONFIRMED, 퇴직 처리 전) 한 건  - 퇴직금대장 작성을 퇴직완료 전 미리하기위해 조회
+    @Query("""
+    SELECT r FROM Resign r
+    WHERE r.employee.empId = :empId
+      AND r.employee.company.companyId = :companyId
+      AND r.isDeleted = false
+      AND r.retireStatus IN (com.peoplecore.resign.domain.RetireStatus.ACTIVE,
+                             com.peoplecore.resign.domain.RetireStatus.CONFIRMED)
+    ORDER BY r.resignDate DESC
+""")
+    Optional<Resign> findActiveOrConfirmedByEmpId(@Param("companyId") UUID companyId,
+                                                  @Param("empId") Long empId);
+
 //    발령이력용 - 회사+사원의 RESIGNED 퇴직건 조회 (확정/예정 제외, 완료된 퇴직만)
     @Query("""
             SELECT r FROM Resign r

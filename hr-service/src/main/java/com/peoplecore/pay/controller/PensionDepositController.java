@@ -8,10 +8,15 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.IOException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -104,5 +109,28 @@ public class PensionDepositController {
                 pensionDepositService.getDepositByEmployee(companyId, fromYm, toYm, search, deptId, status));
     }
 
+//    7. 명세 엑셀 다운로드
+
+    @GetMapping("/excel")
+    public ResponseEntity<byte[]> downloadMonthlyExcel(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam String fromYm,
+            @RequestParam String toYm) throws IOException {
+
+        PensionDepositService.PensionDepositExcelResult result = pensionDepositService.buildPeriodExcel(companyId, fromYm, toYm);
+
+        String periodLabel = fromYm.equals(toYm) ? fromYm : (fromYm + "_" + toYm);
+        String fileName = URLEncoder.encode(
+                "퇴직연금_" + periodLabel + "_적립명세.xlsx",
+                StandardCharsets.UTF_8);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.set(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename*=UTF-8''" + fileName);
+
+        return new ResponseEntity<>(result.bytes(), headers, HttpStatus.OK);
+    }
 }
 

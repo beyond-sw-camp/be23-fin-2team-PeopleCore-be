@@ -381,6 +381,7 @@ public class EmpSalaryService {
             result.add(ExpectedDeductionResDto.builder()
                             .empId(emp.getEmpId())
                             .empStatus(emp.getEmpStatus().name())
+                            .empNum(emp.getEmpNum())
                             .empName(emp.getEmpName())
                             .deptName(emp.getDept().getDeptName())
                             .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)

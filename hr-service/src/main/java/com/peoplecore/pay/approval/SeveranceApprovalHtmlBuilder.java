@@ -1,19 +1,14 @@
 package com.peoplecore.pay.approval;
 
 import com.peoplecore.employee.domain.Employee;
-import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.pay.domain.SeverancePays;
-import com.peoplecore.pay.enums.SevStatus;
-import com.peoplecore.pay.repository.SeverancePaysRepository;
-import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -22,102 +17,95 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import static com.peoplecore.pay.approval.ApprovalFormatter.*;
+import static com.peoplecore.pay.approval.ApprovalFormatter.currency;
+import static com.peoplecore.pay.approval.ApprovalFormatter.formatServicePeriod;
 
-@Service
-@Slf4j
-@Transactional(readOnly = true)
-public class SeveranceApprovalDraftService {
+//퇴직급여지급결의서 HTML 빌드 — 기존 양식 + 다인 행 마커 영역 in-memory 교체.
+// Jsoup.parse() 로 양식 HTML 을 DOM 트리로 파싱
+// selectFirst("tbody[data-key=employeesRows]") 마커 영역에 사원별 <tr> 직접 주입
+// 결과는 doc.outerHtml() 로 직렬화 (1명이든 N명이든 동일 코드 경로)
+@Component
+public class SeveranceApprovalHtmlBuilder {
 
-    private final SeverancePaysRepository severancePaysRepository;
-    private final EmployeeRepository employeeRepository;
     private final ApprovalFormCache approvalFormCache;
 
     private static final DateTimeFormatter YMD = DateTimeFormatter.ISO_LOCAL_DATE;
-    private static final DateTimeFormatter YM =DateTimeFormatter.ofPattern("yyyy-MM");
 
     @Autowired
-    public SeveranceApprovalDraftService(SeverancePaysRepository severancePaysRepository, EmployeeRepository employeeRepository, ApprovalFormCache approvalFormCache) {
-        this.severancePaysRepository = severancePaysRepository;
-        this.employeeRepository = employeeRepository;
+    public SeveranceApprovalHtmlBuilder(ApprovalFormCache approvalFormCache) {
         this.approvalFormCache = approvalFormCache;
     }
 
-
-//    퇴직금 지급결의서 데이터 조회(미리보기)
-    public ApprovalDraftResDto draft(UUID companyId, Long userId, List<Long> sevIds) {
-
-
-    // 1. sevIds 일괄 조회 + 검증
-    List<SeverancePays> sevs = severancePaysRepository
-            .findAllBySevIdInAndCompany_CompanyId(sevIds, companyId);
-
-        if (sevs.size() != sevIds.size()) {
-            throw new CustomException(ErrorCode.SEVERANCE_NOT_FOUND);
-        }
-        for (SeverancePays s : sevs) {
-            //        결재 가능 상태 검증(Confirmed만 상신 가능)
-            if (s.getSevStatus() != SevStatus.CONFIRMED) {
-                throw new CustomException(ErrorCode.SEVERANCE_STATUS_INVALID);
-            }
-            if (s.getApprovalDocId() != null) {
-                throw new CustomException(ErrorCode.SEVERANCE_ALREADY_IN_APPROVAL);
-            }
-        }
-
-        // 2. 기안자 조회
-        Employee drafter = employeeRepository.findById(userId).orElseThrow(()-> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
-
-        // 3. 양식 HTML 가져오기 + in-memory 빌드 (헤더 치환 + 행 주입)
+    /**
+     * 다인 퇴직금 결의서 HTML 빌드.
+     * @param companyId 회사 ID
+     * @param drafter   기안자
+     * @param sevs      결재 대상 SeverancePays 리스트 (1개 이상)
+     * @return 헤더/행/합계 모두 채워진 완성 HTML
+     */
+    public String buildBatchHtml(UUID companyId, Employee drafter, List<SeverancePays> sevs) {
+        // 1. 양식 HTML 가져오기
         ApprovalFormCache.CachedForm form = approvalFormCache.get(companyId, ApprovalFormType.RETIREMENT);
-        String renderedHtml = buildBatchHtml(form.formHtml(), drafter, sevs);
-
-        // 4. dataMap 빈 맵 — 빌드 단계에서 모든 치환 완료. 프론트는 customHtmlTemplate 그대로 사용
-        return ApprovalDraftResDto.builder()
-                .type(ApprovalFormType.RETIREMENT)
-                .ledgerId(null)
-                .sevIds(sevIds)
-                .htmlTemplate(renderedHtml)
-                .dataMap(Map.of())
-                .build();
-    }
-
-
-    // 다인 결의서 HTML 빌드 (헤더 텍스트 치환 + 사원별 <tr> 주입 + 합계).
-    // 1명이든 N명이든 동일 경로.
-    private String buildBatchHtml(String templateHtml, Employee drafter, List<SeverancePays> sevs) {
-        Document doc = Jsoup.parse(templateHtml);
+        Document doc = Jsoup.parse(form.formHtml());
         doc.outputSettings().prettyPrint(false);   // fragment HTML 보존
 
-        // 합계 계산
+        // 2. 합계 계산
         long totalSev = sevs.stream().mapToLong(SeverancePays::getSeveranceAmount).sum();
         long totalTax = sevs.stream().mapToLong(s -> s.getTaxAmount() + s.getLocalIncomeTax()).sum();
         long totalNet = sevs.stream().mapToLong(SeverancePays::getNetAmount).sum();
 
-        // 헤더/합계 텍스트 치환
+        // 3. 헤더 영역 data-key 치환
+        injectHeaderData(doc, drafter, sevs, totalSev, totalTax, totalNet);
+
+        // 4. 사원별 행 마커 교체
+        injectEmployeeRows(doc, sevs);
+
+        return doc.outerHtml();
+    }
+
+    /**
+     * 헤더 + 합계 영역의 data-key 텍스트 치환.
+     * (PayrollApprovalHtmlBuilder.injectHeaderData 와 동일 패턴)
+     */
+    private void injectHeaderData(Document doc, Employee drafter, List<SeverancePays> sevs,
+                                  long totalSev, long totalTax, long totalNet) {
         Map<String, String> m = new HashMap<>();
+
+        // 헤더
         m.put("drafterName", drafter.getEmpName());
         m.put("drafterDept", drafter.getDept() != null ? drafter.getDept().getDeptName() : "");
         m.put("draftDate",   LocalDate.now().format(YMD));
         m.put("docNo",       generateBatchDocNo(sevs));
+
+        // 지급 합계
         m.put("payRequestDate", LocalDate.now().format(YMD));
         m.put("totalPayAmount", currency(totalNet));
         m.put("payHeadcount",   sevs.size() + "명");
         m.put("payDescription", String.format("%d명 퇴직금 일괄 지급", sevs.size()));
+
+        // 합계행 (tfoot)
         m.put("totalSeverance", currency(totalSev));
         m.put("totalTaxAmount", currency(totalTax));
         m.put("totalNetAmount", currency(totalNet));
+
+        // data-key 치환
         m.forEach((key, value) -> {
             Element el = doc.selectFirst("[data-key=" + key + "]");
             if (el != null) el.text(value);
         });
+    }
 
-        // 사원별 <tr> 주입 (PayrollApprovalHtmlBuilder.injectPaymentRows 와 동일 패턴)
+    /**
+     * <tbody data-key="employeesRows"> 영역에 사원별 <tr> 직접 주입.
+     * 기존 자식이 있으면 비우고 새로 채움.
+     */
+    private void injectEmployeeRows(Document doc, List<SeverancePays> sevs) {
         Element tbody = doc.selectFirst("tbody[data-key=employeesRows]");
         if (tbody == null) {
             throw new CustomException(ErrorCode.APPROVAL_FORM_INVALID);
         }
-        tbody.empty();
+        tbody.empty();   // PayrollApprovalHtmlBuilder.injectPaymentRows 와 동일 패턴
+
         int idx = 1;
         for (SeverancePays s : sevs) {
             Element tr = tbody.appendElement("tr");
@@ -128,13 +116,11 @@ public class SeveranceApprovalDraftService {
             tr.appendElement("td").text(s.getHireDate().format(YMD));
             tr.appendElement("td").text(s.getResignDate().format(YMD));
             tr.appendElement("td").text(formatServicePeriod(s.getServiceDays()));
-            tr.appendElement("td").addClass("currency").text(currency(s.getSeveranceAmount()));
-            tr.appendElement("td").addClass("currency")
+            tr.appendElement("td").addClass("right").text(currency(s.getSeveranceAmount()));
+            tr.appendElement("td").addClass("right")
                     .text(currency(s.getTaxAmount() + s.getLocalIncomeTax()));
-            tr.appendElement("td").addClass("currency").text(currency(s.getNetAmount()));
+            tr.appendElement("td").addClass("right").text(currency(s.getNetAmount()));
         }
-
-        return doc.outerHtml();
     }
 
     private String generateBatchDocNo(List<SeverancePays> sevs) {
@@ -145,4 +131,5 @@ public class SeveranceApprovalDraftService {
     }
 
     private static String nullSafe(String s) { return s == null ? "" : s; }
+
 }

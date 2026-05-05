@@ -31,8 +31,8 @@ public class SeveranceApprovalDocCreatedConsumer {
             SeveranceApprovalDocCreatedEvent event = objectMapper.readValue(
                     message, SeveranceApprovalDocCreatedEvent.class);
             severanceApprovalDocCreatedService.applyDocCreated(event);
-            log.info("[Kafka] SeveranceDocCreated 처리 완료 - sevId={}, docId={}",
-                    event.getSevId(), event.getApprovalDocId());
+            log.info("[Kafka] SeveranceDocCreated 처리 완료 - docId={}, docId={}",
+                    event.getApprovalDocId(), event.getApprovalDocId());
         } catch (Exception e) {
             log.error("[Kafka] SeveranceDocCreated 처리 실패 - message={}, error={}",
                     message, e.getMessage());

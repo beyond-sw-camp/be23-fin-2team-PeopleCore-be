@@ -13,7 +13,10 @@ import org.springframework.data.elasticsearch.annotations.FieldType;
 
 import java.util.Map;
 
-@Document(indexName = "unified_search")
+// 인덱스 자동 생성 끔 — analyzer 정의(nori, korean, korean_ngram)는
+// scripts/search/es-index-mapping.json + search-init 컨테이너가 책임지고,
+// 여기서는 이미 만들어진 인덱스에 read/write만 한다
+@Document(indexName = "unified_search", createIndex = false)
 @Getter
 @Setter
 @Builder

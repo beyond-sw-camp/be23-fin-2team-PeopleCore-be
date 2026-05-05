@@ -28,7 +28,7 @@ use peoplecore;
 -- =====================================================================
 
 -- ▼ 회사 ▼
-SET @company_name := 'testcompany';
+SET @company_name := 'peoplecore';
 SET @cid := (SELECT company_id FROM company WHERE company_name = @company_name);
 
 SELECT
