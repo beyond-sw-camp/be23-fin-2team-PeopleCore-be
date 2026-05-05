@@ -7,7 +7,7 @@ spec:
   resources:
     requests:
       storage: 10Gi
-  storageClassName: gp3   # 환경에 맞게 (gp2/gp3)
+  storageClassName: gp2   # 환경에 맞게 (gp2/gp3)
 ---
 apiVersion: apps/v1
 kind: Deployment
