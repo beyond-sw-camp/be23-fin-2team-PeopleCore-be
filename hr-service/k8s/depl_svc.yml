@@ -39,6 +39,61 @@ spec:
                 secretKeyRef:
                   name: peoplecore-secrets
                   key: DB_PASSWORD
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                   name: peoplecore-secrets
+                   key: DB_HOST
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: JWT_SECRET
+            - name: JWT_SECRET_RT
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: JWT_SECRET_RT
+            - name: MAIL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MAIL_USERNAME
+            - name: MAIL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MAIL_PASSWORD
+            - name: COOLSMS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: COOLSMS_API_KEY
+            - name: COOLSMS_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: COOLSMS_API_SECRET
+            - name: INIT_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: INIT_ADMIN_PASSWORD
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MINIO_SECRET_KEY
+            - name: DISCORD_WEBHOOK
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: DISCORD_WEBHOOK
             # 컨테이너 상태 확인을 통해 롤링업데이트 최적화
           readinessProbe:
             httpGet:

@@ -39,6 +39,16 @@ spec:
                 secretKeyRef:
                   name: peoplecore-secrets
                   key: DB_PASSWORD
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: OPENAI_API_KEY
+            - name: ANTROPIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: ANTROPIC_API_KEY
             # 컨테이너 상태 확인을 통해 롤링업데이트 최적화
           readinessProbe:
             httpGet:

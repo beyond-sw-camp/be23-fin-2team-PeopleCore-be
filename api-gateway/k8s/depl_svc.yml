@@ -19,6 +19,22 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: JWT_SECRET
+            - name: JWT_SECRET_RT
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: JWT_SECRET_RT
+            - name: INTERNAL_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: INTERNAL_API_KEY
 #           컨테이너의 자원 할당치
           resources:
             # 컨테이너가 사용할수 있는 리소스의 최대치
