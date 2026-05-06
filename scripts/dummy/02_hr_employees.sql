@@ -214,6 +214,55 @@ INSERT INTO employee (
 
 
 -- =====================================================================
+-- [추가 시드] 사직원/퇴직 시나리오용 사원 × 20명 (EMP-2025-101 ~ 120)
+-- ---------------------------------------------------------------------
+-- 4가지 케이스 × 각 5명. 모두 "충분한 근속(1년 이상)" 으로 퇴직금/연차수당
+-- 산정 가능하도록 emp_hire_date 를 과거로 박음.
+--
+-- (a) 사직원 결재 상신만   : emp_status=ACTIVE,   resign.retire_status=ACTIVE,    doc_id=1001~1005
+-- (b) 결재 승인 + 퇴직처리X: emp_status=ACTIVE,   resign.retire_status=ACTIVE,    doc_id=2001~2005
+--                            (DB row 는 (a) 와 동일. 외부 결재시스템 doc 상태가 APPROVED 인지만 다름)
+-- (c) 퇴직처리 + 미래일    : emp_status=ACTIVE,   resign.retire_status=CONFIRMED, doc_id=3001~3005
+--                            ※ ResignService.processResign() 호출시 emp_status 는 변경 안 됨.
+--                              실제 RESIGNED 전환은 스케줄러(processScheduledResigns)가 resign_date <= TODAY 에 수행.
+-- (d) 완전 퇴직 처리 완료  : emp_status=RESIGNED, resign.retire_status=RESIGNED,  doc_id=4001~4005
+-- =====================================================================
+
+INSERT INTO employee (
+  company_id, dept_id, grade_id, title_id, insurance_job_types,
+  emp_name, emp_email, emp_phone, emp_num,
+  emp_hire_date, emp_type, emp_status, emp_password, emp_role,
+  emp_birth_date, emp_gender,
+  emp_resign, contract_end_date,
+  dependents_count, tax_rate_option, retirement_type, must_change_password
+) VALUES
+-- ───── (a) 사직원 결재 상신만 (5명) — emp_status=ACTIVE ─────
+(@cid, @d_dev,   @g_gwa, @t_mem,  @j_it,  '편하준', 'emp101@peoplecore.kr', '010-2101-4101', 'EMP-2025-101', '2017-08-22', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1985-04-12', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_sales, @g_dae, @t_mem,  @j_dist,'경수아', 'emp102@peoplecore.kr', '010-2102-4102', 'EMP-2025-102', '2020-11-14', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1991-09-25', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_mkt,   @g_emp, @t_mem,  @j_etc, '나도진', 'emp103@peoplecore.kr', '010-2103-4103', 'EMP-2025-103', '2019-04-30', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1996-06-08', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_fin,   @g_dae, @t_mem,  @j_fin, '진가람', 'emp104@peoplecore.kr', '010-2104-4104', 'EMP-2025-104', '2018-09-08', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1989-12-19', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_hr,    @g_emp, @t_mem,  @j_fin, '맹지호', 'emp105@peoplecore.kr', '010-2105-4105', 'EMP-2025-105', '2021-07-25', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1995-02-04', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+-- ───── (b) 결재 승인 + 퇴직처리 미클릭 (5명) — emp_status=ACTIVE ─────
+(@cid, @d_dev,   @g_gwa, @t_mem,  @j_it,  '구재희', 'emp106@peoplecore.kr', '010-2106-4106', 'EMP-2025-106', '2019-06-15', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1986-10-30', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_inf,   @g_dae, @t_mem,  @j_it,  '국승원', 'emp107@peoplecore.kr', '010-2107-4107', 'EMP-2025-107', '2021-03-22', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1990-05-18', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_sales, @g_dae, @t_mem,  @j_dist,'궁아라', 'emp108@peoplecore.kr', '010-2108-4108', 'EMP-2025-108', '2020-08-10', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1991-11-25', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_mkt,   @g_gwa, @t_mem,  @j_etc, '극서윤', 'emp109@peoplecore.kr', '010-2109-4109', 'EMP-2025-109', '2018-12-05', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1985-08-22', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_hr,    @g_dae, @t_mem,  @j_fin, '근지온', 'emp110@peoplecore.kr', '010-2110-4110', 'EMP-2025-110', '2022-05-18', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1992-04-09', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+-- ───── (c) 퇴직처리 + 퇴직일 미래 (5명) — emp_status=ACTIVE, retire_status=CONFIRMED ─────
+(@cid, @d_dev,   @g_cha, @t_mem,  @j_it,  '근태진', 'emp111@peoplecore.kr', '010-2111-4111', 'EMP-2025-111', '2018-09-10', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1982-07-14', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_sales, @g_gwa, @t_mem,  @j_dist,'금영빈', 'emp112@peoplecore.kr', '010-2112-4112', 'EMP-2025-112', '2020-02-14', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1988-03-26', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_mkt,   @g_gwa, @t_mem,  @j_etc, '기소은', 'emp113@peoplecore.kr', '010-2113-4113', 'EMP-2025-113', '2019-11-25', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1986-12-19', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_fin,   @g_gwa, @t_mem,  @j_fin, '길도훈', 'emp114@peoplecore.kr', '010-2114-4114', 'EMP-2025-114', '2017-04-08', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1980-10-05', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_inf,   @g_dae, @t_mem,  @j_it,  '나윤재', 'emp115@peoplecore.kr', '010-2115-4115', 'EMP-2025-115', '2022-12-19', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1993-06-15', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+-- ───── (d) 완전 퇴직 처리 완료 (5명) — emp_status=RESIGNED ─────
+(@cid, @d_dev,   @g_dae, @t_mem,  @j_it,  '남보경', 'emp116@peoplecore.kr', '010-2116-4116', 'EMP-2025-116', '2019-03-15', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1989-08-22', 'FEMALE', '2026-02-15', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_sales, @g_gwa, @t_mem,  @j_dist,'노시혁', 'emp117@peoplecore.kr', '010-2117-4117', 'EMP-2025-117', '2020-08-22', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1991-04-30', 'MALE',   '2025-09-30', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_mkt,   @g_dae, @t_mem,  @j_etc, '도해린', 'emp118@peoplecore.kr', '010-2118-4118', 'EMP-2025-118', '2018-11-05', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1986-12-13', 'FEMALE', '2025-12-31', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_hr,    @g_dae, @t_mem,  @j_fin, '류은성', 'emp119@peoplecore.kr', '010-2119-4119', 'EMP-2025-119', '2021-04-13', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1990-09-08', 'MALE',   '2026-03-15', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_fin,   @g_gwa, @t_mem,  @j_fin, '문가온', 'emp120@peoplecore.kr', '010-2120-4120', 'EMP-2025-120', '2017-06-20', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1984-11-25', 'FEMALE', '2026-01-31', NULL, 1, 100, 'DC', FALSE);
+
+
+-- =====================================================================
 -- 기본 워크그룹 일괄 매핑
 -- ---------------------------------------------------------------------
 -- 회사 생성 시 자동 시드되는 'DEFAULT' 그룹(9-18)에 work_group_id NULL 인 사원 전원 매핑.
@@ -320,6 +369,110 @@ UPDATE employee SET dependents_count = 5
  WHERE company_id = @cid
    AND emp_num IN ('EMP-2025-018', 'EMP-2025-025', 'EMP-2025-074', 'EMP-2025-078',
                    'EMP-2025-090');
+
+
+-- =====================================================================
+-- resign  (사직원/퇴직처리 row)
+-- ---------------------------------------------------------------------
+--   추가 사원 20명 (EMP-2025-101~120) + 기존 RESIGNED 2명 (035, 076) = 22건.
+--
+--   컬럼: emp_id, grade_id, title_id, dept_id (모두 NOT NULL — employee 에서 SELECT 로 조달),
+--         doc_id (외부 결재 문서 ID, nullable),
+--         retire_status (ACTIVE / CONFIRMED / RESIGNED),
+--         resign_date (DATE), registered_date (DATE),
+--         processed_at (DATETIME, RESIGNED 만 NOW()),
+--         is_deleted (FALSE)
+--   ※ Resign 엔티티는 BaseTimeEntity 미상속 → created_at/updated_at 컬럼 없음.
+--
+--   doc_id 매핑 (외부 결재시스템 doc 상태 구분용):
+--     1001~1005 : (a) PENDING — 결재 진행중
+--     2001~2005 : (b) APPROVED — 결재 승인 났으나 인사담당자 퇴직처리 미클릭
+--     3001~3005 : (c) APPROVED — 퇴직처리 클릭됨 (CONFIRMED, 퇴직일 미래)
+--     4001~4005 : (d) APPROVED — 완전 퇴직 처리 완료 (RESIGNED, 스케줄러 처리됨)
+--     4101~4102 : 기존 RESIGNED 2명 (소급 등록)
+-- =====================================================================
+
+INSERT INTO resign (
+  emp_id, grade_id, title_id, dept_id,
+  doc_id, retire_status, resign_date, registered_date, processed_at,
+  is_deleted
+)
+SELECT
+  e.emp_id, e.grade_id, e.title_id, e.dept_id,
+  -- doc_id: 케이스별 식별 ID
+  CASE e.emp_num
+    WHEN 'EMP-2025-101' THEN 1001  WHEN 'EMP-2025-102' THEN 1002
+    WHEN 'EMP-2025-103' THEN 1003  WHEN 'EMP-2025-104' THEN 1004  WHEN 'EMP-2025-105' THEN 1005
+    WHEN 'EMP-2025-106' THEN 2001  WHEN 'EMP-2025-107' THEN 2002
+    WHEN 'EMP-2025-108' THEN 2003  WHEN 'EMP-2025-109' THEN 2004  WHEN 'EMP-2025-110' THEN 2005
+    WHEN 'EMP-2025-111' THEN 3001  WHEN 'EMP-2025-112' THEN 3002
+    WHEN 'EMP-2025-113' THEN 3003  WHEN 'EMP-2025-114' THEN 3004  WHEN 'EMP-2025-115' THEN 3005
+    WHEN 'EMP-2025-116' THEN 4001  WHEN 'EMP-2025-117' THEN 4002
+    WHEN 'EMP-2025-118' THEN 4003  WHEN 'EMP-2025-119' THEN 4004  WHEN 'EMP-2025-120' THEN 4005
+    WHEN 'EMP-2025-035' THEN 4101  WHEN 'EMP-2025-076' THEN 4102
+  END,
+  -- retire_status
+  CASE
+    WHEN e.emp_num BETWEEN 'EMP-2025-101' AND 'EMP-2025-110' THEN 'ACTIVE'
+    WHEN e.emp_num BETWEEN 'EMP-2025-111' AND 'EMP-2025-115' THEN 'CONFIRMED'
+    WHEN e.emp_num BETWEEN 'EMP-2025-116' AND 'EMP-2025-120' THEN 'RESIGNED'
+    WHEN e.emp_num IN ('EMP-2025-035', 'EMP-2025-076')         THEN 'RESIGNED'
+  END,
+  -- resign_date (퇴직(예정)일)
+  CASE e.emp_num
+    WHEN 'EMP-2025-101' THEN '2026-09-30'  WHEN 'EMP-2025-102' THEN '2026-10-15'
+    WHEN 'EMP-2025-103' THEN '2026-11-30'  WHEN 'EMP-2025-104' THEN '2026-12-31'
+    WHEN 'EMP-2025-105' THEN '2027-01-31'
+    WHEN 'EMP-2025-106' THEN '2026-07-31'  WHEN 'EMP-2025-107' THEN '2026-08-31'
+    WHEN 'EMP-2025-108' THEN '2026-09-15'  WHEN 'EMP-2025-109' THEN '2026-10-31'
+    WHEN 'EMP-2025-110' THEN '2026-11-30'
+    WHEN 'EMP-2025-111' THEN '2026-06-30'  WHEN 'EMP-2025-112' THEN '2026-07-31'
+    WHEN 'EMP-2025-113' THEN '2026-08-15'  WHEN 'EMP-2025-114' THEN '2026-09-30'
+    WHEN 'EMP-2025-115' THEN '2026-12-31'
+    -- (d) 완전퇴직: emp_resign 과 동일
+    WHEN 'EMP-2025-116' THEN '2026-02-15'  WHEN 'EMP-2025-117' THEN '2025-09-30'
+    WHEN 'EMP-2025-118' THEN '2025-12-31'  WHEN 'EMP-2025-119' THEN '2026-03-15'
+    WHEN 'EMP-2025-120' THEN '2026-01-31'
+    -- 기존 RESIGNED 2명
+    WHEN 'EMP-2025-035' THEN '2024-12-31'  WHEN 'EMP-2025-076' THEN '2025-03-15'
+  END,
+  -- registered_date (사직원 신청일 = resign_date 한참 전)
+  CASE e.emp_num
+    WHEN 'EMP-2025-101' THEN '2026-05-02'  WHEN 'EMP-2025-102' THEN '2026-05-04'
+    WHEN 'EMP-2025-103' THEN '2026-05-03'  WHEN 'EMP-2025-104' THEN '2026-05-05'
+    WHEN 'EMP-2025-105' THEN '2026-05-06'
+    WHEN 'EMP-2025-106' THEN '2026-04-20'  WHEN 'EMP-2025-107' THEN '2026-05-01'
+    WHEN 'EMP-2025-108' THEN '2026-04-30'  WHEN 'EMP-2025-109' THEN '2026-04-25'
+    WHEN 'EMP-2025-110' THEN '2026-04-15'
+    WHEN 'EMP-2025-111' THEN '2026-04-10'  WHEN 'EMP-2025-112' THEN '2026-04-22'
+    WHEN 'EMP-2025-113' THEN '2026-04-18'  WHEN 'EMP-2025-114' THEN '2026-03-25'
+    WHEN 'EMP-2025-115' THEN '2026-04-08'
+    WHEN 'EMP-2025-116' THEN '2025-12-15'  WHEN 'EMP-2025-117' THEN '2025-08-05'
+    WHEN 'EMP-2025-118' THEN '2025-11-10'  WHEN 'EMP-2025-119' THEN '2026-02-01'
+    WHEN 'EMP-2025-120' THEN '2025-12-20'
+    WHEN 'EMP-2025-035' THEN '2024-11-15'  WHEN 'EMP-2025-076' THEN '2025-02-10'
+  END,
+  -- processed_at: RESIGNED 만 (스케줄러가 resign_date 시점에 처리)
+  CASE
+    WHEN e.emp_num = 'EMP-2025-116' THEN '2026-02-15 09:00:00'
+    WHEN e.emp_num = 'EMP-2025-117' THEN '2025-09-30 09:00:00'
+    WHEN e.emp_num = 'EMP-2025-118' THEN '2025-12-31 09:00:00'
+    WHEN e.emp_num = 'EMP-2025-119' THEN '2026-03-15 09:00:00'
+    WHEN e.emp_num = 'EMP-2025-120' THEN '2026-01-31 09:00:00'
+    WHEN e.emp_num = 'EMP-2025-035' THEN '2024-12-31 09:00:00'
+    WHEN e.emp_num = 'EMP-2025-076' THEN '2025-03-15 09:00:00'
+    ELSE NULL
+  END,
+  FALSE
+FROM employee e
+WHERE e.company_id = @cid
+  AND e.emp_num IN (
+    'EMP-2025-101','EMP-2025-102','EMP-2025-103','EMP-2025-104','EMP-2025-105',
+    'EMP-2025-106','EMP-2025-107','EMP-2025-108','EMP-2025-109','EMP-2025-110',
+    'EMP-2025-111','EMP-2025-112','EMP-2025-113','EMP-2025-114','EMP-2025-115',
+    'EMP-2025-116','EMP-2025-117','EMP-2025-118','EMP-2025-119','EMP-2025-120',
+    'EMP-2025-035','EMP-2025-076'
+  );
 
 
 -- =====================================================================

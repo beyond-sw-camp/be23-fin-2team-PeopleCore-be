@@ -47,6 +47,15 @@ public class LeaveAllowanceController {
             leaveAllowanceService.getResignedList(companyId, year));
     }
 
+    //    입사기념일 도래 사원 연차수당 목록 (해당 월 yearMonth='YYYY-MM')
+    @GetMapping("/anniversary")
+    public ResponseEntity<LeaveAllowanceSummaryResDto> getAnniversaryList(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam String yearMonth){
+        return ResponseEntity.ok(
+                leaveAllowanceService.getAnniversaryList(companyId, yearMonth));
+    }
+
 //        수당 산정(선택한 사원)
     @PostMapping("/calculate")
     public ResponseEntity<Void> calculate(

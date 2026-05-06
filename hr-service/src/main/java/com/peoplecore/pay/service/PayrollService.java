@@ -777,7 +777,7 @@ public class PayrollService {
                     .totalDeduction(totalDeduction)
                     .netPay(netPay)
                     .sendStatus(SendStatus.PENDING)
-                    .issuedAT(LocalDateTime.now())
+                    .issuedAt(LocalDateTime.now())
                     .company(company)
                     .build();
             payStubsRepository.save(stub);
@@ -1352,7 +1352,7 @@ public class PayrollService {
 //                    .totalDeduction(totalDeduction)
 //                    .netPay(netPay)
 //                    .sendStatus(SendStatus.PENDING)   // 초기 상태 (전송 대기)
-//                    .issuedAT(LocalDateTime.now())
+//                    .issuedAt(LocalDateTime.now())
 //                    .company(company)
 //                    .build();
 //            payStubsRepository.save(stub);
