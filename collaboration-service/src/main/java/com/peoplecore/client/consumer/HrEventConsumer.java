@@ -1,7 +1,6 @@
 package com.peoplecore.client.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.netflix.discovery.converters.Auto;
 import com.peoplecore.client.component.HrCacheService;
 import com.peoplecore.event.DeptUpdatedEvent;
 import com.peoplecore.event.TitleUpdatedEvent;
