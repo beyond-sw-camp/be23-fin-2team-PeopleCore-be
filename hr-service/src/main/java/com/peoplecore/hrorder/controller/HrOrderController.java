@@ -66,15 +66,8 @@ public class HrOrderController {
         return ResponseEntity.noContent().build();
     }
 
-    // 6. 통보
-    @PutMapping("/{orderId}/notify")
-    public ResponseEntity<Void> notifyOrder(@RequestHeader("X-User-Company") UUID companyId,
-                                            @PathVariable Long orderId) {
-        hrOrderService.notifyOrder(companyId, orderId);
-        return ResponseEntity.ok().build();
-    }
-
-    // 7. 발령일 도래 건 일괄 반영 (스케줄러 호출용, SCHEDULED + effectiveDate <= 오늘 -> employee 반영 + APPLIED)
+    // 6. 발령일 도래 건 일괄 반영 (스케줄러 호출용, SCHEDULED + effectiveDate <= 오늘 -> employee 반영 + APPLIED)
+    //    employee 반영 시 본인에게 자동 알림이 발송됨 (HrOrderService.applyOrder 내부)
     @PostMapping("/apply-scheduled")
     public ResponseEntity<Integer> applyScheduled() {
         return ResponseEntity.ok(hrOrderService.applyAllScheduledOrders());

@@ -2,6 +2,7 @@ package com.peoplecore.hrorder.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.alarm.publisher.HrAlarmPublisher;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.department.repository.DepartmentRepository;
 import com.peoplecore.employee.domain.Employee;
@@ -46,8 +47,9 @@ public class HrOrderService {
     private final TitleRepository titleRepository;
     private final ResignRepository resignRepository;
     private final ObjectMapper objectMapper;
+    private final HrAlarmPublisher hrAlarmPublisher;
 
-    public HrOrderService(HrOrderRepository hrOrderRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, HrOrderDetailRepository hrOrderDetailRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, ResignRepository resignRepository, ObjectMapper objectMapper) {
+    public HrOrderService(HrOrderRepository hrOrderRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, HrOrderDetailRepository hrOrderDetailRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, ResignRepository resignRepository, ObjectMapper objectMapper, HrAlarmPublisher hrAlarmPublisher) {
         this.hrOrderRepository = hrOrderRepository;
         this.employeeRepository = employeeRepository;
         this.formFieldSetupService = formFieldSetupService;
@@ -57,6 +59,7 @@ public class HrOrderService {
         this.titleRepository = titleRepository;
         this.resignRepository = resignRepository;
         this.objectMapper = objectMapper;
+        this.hrAlarmPublisher = hrAlarmPublisher;
     }
 
 //    1. 목록조회
@@ -191,46 +194,6 @@ public class HrOrderService {
         order.softDelete();
     }
 
-    //    6.통보 //TODO: 알림서비스 호출
-    public void notifyOrder(UUID companyId, Long orderId) {
-        HrOrder order = hrOrderRepository.findByOrderIdAndCompanyId(orderId, companyId).orElseThrow(() -> new IllegalArgumentException("발령 정보를 찾을 수 없습니다"));
-
-        Employee employee = order.getEmployee();
-
-//        변경 상세에서 내용 조립
-        List<HrOrderDetail> details = hrOrderDetailRepository.findByHrOrder_OrderId(orderId);
-        StringBuilder content = new StringBuilder();
-        content.append(employee.getEmpName()).append("님, ");
-        for (HrOrderDetail d : details) {
-            String before = resolveTargetName(d.getTargetType(), d.getBeforeId());
-            String after = resolveTargetName(d.getTargetType(), d.getAfterId());
-            content.append(before).append("->").append(after).append(" ");
-        }
-        content.append("발령이 확정되었습니다. (발령일: ").append(order.getEffectiveDate()).append(")");
-
-        AlarmEvent event = AlarmEvent.builder()
-                .companyId(companyId)
-                .alarmType("Hr")
-                .alarmTitle("인사발령 통보")
-                .alarmContent(employee.getEmpName() + "님" + order.getOrderType().name() + "이(가) 확정되었습니다")
-                .alarmLink("/hr/appointment/" + orderId) //프론트발령 상세페이지
-                .alarmRefType("HR_ORDER")
-                .alarmRefId(orderId)
-                .empIds(List.of(employee.getEmpId())) //대상사원 1명
-                .build();
-
-//        kafka알림 이벤트 발행
-
-        try {
-            String message = objectMapper.writeValueAsString(event);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("알림 발송에 실패했습니다");
-        }
-//        통보상태 업데이트
-        order.markNotified();
-
-    }
-
     //    7. 발령일 도래 시 일괄 반영 (SCHEDULED + 발령일이 오늘 이전인 건 -> employee 반영 + APPLIED)
     public int applyAllScheduledOrders() {
         List<HrOrder> orders = hrOrderRepository.findByStatusAndEffectiveDateLessThanEqual(
@@ -259,6 +222,27 @@ public class HrOrderService {
             }
         }
         order.updateStatus(OrderStatus.APPLIED);
+
+        //  발령 적용 시 본인에게 자동 알림 (alarm-event 토픽 publish)
+        StringBuilder content = new StringBuilder();
+        content.append(employee.getEmpName()).append("님, ");
+        for (HrOrderDetail d : details) {
+            String before = resolveTargetName(d.getTargetType(), d.getBeforeId());
+            String after  = resolveTargetName(d.getTargetType(), d.getAfterId());
+            content.append(before).append("→").append(after).append(" ");
+        }
+        content.append("발령이 적용되었습니다. (발령일: ").append(order.getEffectiveDate()).append(")");
+
+        hrAlarmPublisher.publisher(AlarmEvent.builder()
+                .companyId(employee.getCompany().getCompanyId())
+                .alarmType("HR")
+                .alarmTitle("인사발령 적용")
+                .alarmContent(content.toString())
+                .alarmLink("/hr/appointment/" + order.getOrderId())
+                .alarmRefType("HR_ORDER")
+                .alarmRefId(order.getOrderId())
+                .empIds(List.of(employee.getEmpId()))
+                .build());
     }
 
 
