@@ -3,7 +3,6 @@ kind: Deployment
 metadata:
   name: hr-service-depl
 spec:
-  replicas: 1
   selector:
     matchLabels:
       app: hr-service

@@ -43,7 +43,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/face/login",
             "/hr-service/auth/face/health",
             "/hr-service/ws",
-            "/hr-service/chat/files"
+            "/hr-service/chat/files",
+            "/hr-service/*"
     );
 
     //  hr담당자만 추가 접근 가능 경로
@@ -53,13 +54,16 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/face/register",
             "/hr-service/auth/face/unregister",
             "/hr-service/auth/face/employees",
-            "/collaboration-service/filevault/admin-capability/config"
+            "/collaboration-service/filevault/admin-capability/config",
+            "/hr-service/*"
     );
 
     //  서버운영팀·서비스간 호출 전용 경로 (API Key 인증)
     private static final List<String> INTERNAL_PATH_PREFIXES = List.of(
             "/hr-service/internal/",
-            "/collaboration-service/internal/"
+            "/collaboration-service/internal/",
+            "/hr-service/*"
+
     );
 
 
