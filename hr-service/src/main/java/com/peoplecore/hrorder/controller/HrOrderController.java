@@ -6,7 +6,6 @@ import com.peoplecore.hrorder.dto.HrOrderCreateReqDto;
 import com.peoplecore.hrorder.dto.HrOrderUpdateReqDto;
 import com.peoplecore.hrorder.service.HrOrderService;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.Path;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
