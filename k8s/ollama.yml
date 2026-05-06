@@ -39,17 +39,27 @@ spec:
           command: ["/bin/sh","-c"]
           args:
             - |
+              set -e
               ollama serve &
               SERVER_PID=$!
-              until curl -s http://localhost:11434/ > /dev/null; do sleep 2; done
-              if ollama list | grep -q "exaone3.5:7.8b"; then
-                echo "model already exists"
+              # ollama CLI 자체로 server 기동 대기 (curl 미설치 회피)
+              for i in $(seq 1 60); do
+                if ollama list >/dev/null 2>&1; then
+                  echo "ollama server is up (after ${i}x2s)"
+                  break
+                fi
+                echo "waiting for ollama serve... ($i/60)"
+                sleep 2
+              done
+              if ollama list 2>/dev/null | grep -q "exaone3.5:7.8b"; then
+                echo "model already exists, skipping pull"
               else
                 echo "pulling exaone3.5:7.8b..."
                 ollama pull exaone3.5:7.8b
               fi
-              kill $SERVER_PID
-              wait $SERVER_PID 2>/dev/null
+              kill $SERVER_PID 2>/dev/null || true
+              wait $SERVER_PID 2>/dev/null || true
+              echo "init done"
           env:
             - { name: OLLAMA_HOST,   value: "0.0.0.0:11434" }
             - { name: OLLAMA_MODELS, value: "/root/.ollama/models" }
@@ -81,13 +91,13 @@ spec:
             - name: models
               mountPath: /root/.ollama
           readinessProbe:
-            httpGet: { path: /, port: 11434 }
-            initialDelaySeconds: 30
+            tcpSocket: { port: 11434 }    # curl 의존 회피, 포트 LISTEN 여부만 확인
+            initialDelaySeconds: 15
             periodSeconds: 10
             failureThreshold: 6
           livenessProbe:
-            httpGet: { path: /, port: 11434 }
-            initialDelaySeconds: 120
+            tcpSocket: { port: 11434 }
+            initialDelaySeconds: 60
             periodSeconds: 30
             failureThreshold: 5
 
