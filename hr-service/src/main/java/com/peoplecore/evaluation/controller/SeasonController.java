@@ -38,6 +38,14 @@ public class SeasonController {
         return ResponseEntity.ok(seasonService.getActiveSeasons(companyId));
     }
 
+    // 2-1. 현재 진행 시즌 상세 (회사당 1개) — 단계 게이트(목표등록/자기평가 등) 화면용
+    //  OPEN 시즌이 없으면 200 + null
+    @GetMapping("/current")
+    public ResponseEntity<SeasonDetailDto> getCurrentSeason(
+            @RequestHeader("X-User-Company") UUID companyId) {
+        return ResponseEntity.ok(seasonService.getCurrentSeasonDetail(companyId));
+    }
+
     // 3. 시즌 상세 조회 //rule에서 시즌 규칙 조회 getBySeasonId매서드 재사용
     @GetMapping("/{seasonId}")
     public ResponseEntity<SeasonDetailDto> getSeason(

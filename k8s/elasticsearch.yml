@@ -6,7 +6,7 @@ spec:
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:
-      storage: 10Gi
+      storage: 10Giz
   storageClassName: gp3   # 환경에 맞게 (gp2/gp3)
 ---
 apiVersion: apps/v1
