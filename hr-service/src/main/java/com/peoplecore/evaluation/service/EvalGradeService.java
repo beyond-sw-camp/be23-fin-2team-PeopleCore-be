@@ -1165,15 +1165,18 @@ public class EvalGradeService {
 //            편차 = 시뮬레이션 - 목표 인원
             int diff = actualCount - targetCount;
 //            상태 판정(enum)
+//            - MATCH: 정확히 일치
+//            - OVER: 초과 (상위 등급은 차단, 마지막 등급은 잔여 흡수 역할이라 허용)
+//            - UNDER: 부족 — 자동 산정 시 동점자 상위 흡수로 자연 발생, 정책상 허용
             DiffStatus status;
+            boolean isLast = (gi == gradeRules.size() - 1);
             if (diff == 0) {
                 status = DiffStatus.MATCH;
             } else if (diff > 0) {
                 status = DiffStatus.OVER;
-                mismatchCount++;
+                if (!isLast) mismatchCount++;   // 마지막 등급 OVER는 허용
             } else {
-                status = DiffStatus.UNDER;
-                mismatchCount++;
+                status = DiffStatus.UNDER;      // 전체 허용
             }
 //            diff항목 1건 조립
             diffList.add(DistributionDiffDto.GradeDiff.builder()

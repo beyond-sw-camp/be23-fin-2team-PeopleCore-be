@@ -54,7 +54,21 @@ SET @g6 := (SELECT grade_id FROM grade WHERE company_id=@cid AND grade_code='G6'
 SET @e_ceo := (SELECT emp_id FROM employee WHERE company_id=@cid AND emp_num='EMP-2025-001');
 
 -- ▼ 본부장 직책 (T-HEAD = 임원 = emp002~004) — 평가 데이터에서 제외 ▼
+-- ▼ 대표 직책 (T-CEO = emp001) — 평가 데이터에서 제외 ▼
 SET @t_head := (SELECT title_id FROM title WHERE company_id=@cid AND title_code='T-HEAD');
+SET @t_ceo  := (SELECT title_id FROM title WHERE company_id=@cid AND title_code='T-CEO');
+
+-- ▼ 감사실(AUDIT) — 소규모 팀 시연용 (편향보정 스킵 케이스) ▼
+--   3명만 배치 → minTeamSize=5 미만이라 BE 가 z-score 보정 스킵
+--   기존 부서에서 emp090/091/092 (마케팅팀 팀원) 을 이동시켜 만든다
+INSERT IGNORE INTO department (company_id, dept_name, dept_code, parent_dept_id)
+  VALUES (@cid, '감사실', 'AUDIT', NULL);
+SET @d_audit := (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='AUDIT');
+
+UPDATE employee
+   SET dept_id = @d_audit
+ WHERE company_id = @cid
+   AND emp_num IN ('EMP-2025-090', 'EMP-2025-091', 'EMP-2025-092');
 
 -- ▼ admin(emp001) 부서를 HR 로 이동 — admin 이 HR 부서장으로 평가 활동 ▼
 --   원본 02_hr_employees.sql 은 admin 을 EXEC 에 박지만, 03 시드에서는 HR 로 옮김
@@ -219,6 +233,16 @@ INSERT INTO kpi_template (department_id, grade_id, category_option_id, unit_opti
   (@d_mkt, NULL, @cat_work, @unit_pct,  '캠페인 일정 준수율',      '캠페인 런칭 일정 준수',                 95.00,   'MAINTAIN', true),
   (@d_mkt, NULL, @cat_qual, @unit_cnt,  '고객 컴플레인 건수',      '월간 고객 컴플레인',                    3.00,    'DOWN',     true);
 
+-- ── 감사실 (AUDIT) — 소규모 팀, emp090(G4) / emp091(G3) / emp092(G3) 매칭용 ──
+INSERT INTO kpi_template (department_id, grade_id, category_option_id, unit_option_id, name, description, baseline, direction, is_active) VALUES
+  (@d_audit, @g4,  @cat_qual, @unit_cnt,  '감사 보고서 발행 건수',   '분기 내부감사 보고서',           4.00,   'UP',       true),
+  (@d_audit, @g4,  @cat_qual, @unit_pct,  '감사 일정 준수율',        '감사 계획 일정 준수',            95.00,  'MAINTAIN', true),
+  (@d_audit, @g3,  @cat_qual, @unit_cnt,  '내부통제 점검 건수',      '월간 통제활동 점검',             8.00,   'UP',       true),
+  (@d_audit, @g3,  @cat_eff,  @unit_hour, '감사 응답 시간',          '감사 의뢰 응답까지',             24.00,  'DOWN',     true),
+  (@d_audit, @g3,  @cat_qual, @unit_cnt,  '리스크 식별 건수',        '신규 리스크 등록',               3.00,   'UP',       true),
+  (@d_audit, NULL, @cat_qual, @unit_pct,  '컴플라이언스 준수율',     '규정 준수율',                    100.00, 'MAINTAIN', true),
+  (@d_audit, NULL, @cat_qual, @unit_cnt,  '시정 권고 이행 건수',     '권고사항 이행',                  5.00,   'UP',       true);
+
 -- =====================================================================
 -- STEP 3. emp_evaluator_global (부서별 최고 직급 사원이 부서원의 평가자)
 --   ▷ 일반 사원 → 본인 부서 최고 직급 사원이 evaluator
@@ -244,7 +268,7 @@ FROM employee e
 JOIN grade g ON g.grade_id = e.grade_id
 WHERE e.company_id = @cid
   AND e.emp_status = 'ACTIVE'
-  AND e.title_id != @t_head;
+  AND e.title_id NOT IN (@t_head, @t_ceo);
 
 -- MySQL 은 한 쿼리에서 같은 temp 테이블을 두 번 참조 못 하므로 복제본 생성
 DROP TEMPORARY TABLE IF EXISTS tmp_dept_ranked_2;
@@ -277,7 +301,7 @@ FROM employee e
 LEFT JOIN tmp_dept_evaluator de ON de.dept_id = e.dept_id
 WHERE e.company_id = @cid
   AND e.emp_status = 'ACTIVE'
-  AND e.title_id != @t_head;
+  AND e.title_id NOT IN (@t_head, @t_ceo);
 
 -- =====================================================================
 -- STEP 4. Season 6개 + Stage 30개
@@ -401,7 +425,7 @@ FROM (
     AND kt.is_active = true
   WHERE e.company_id = @cid
     AND e.emp_status = 'ACTIVE'
-    AND e.title_id != @t_head                                  -- 본부장(임원) 제외
+    AND e.title_id NOT IN (@t_head, @t_ceo)                                  -- 본부장(임원) 제외
 ) k
 JOIN kpi_option k_cat  ON k_cat.option_id  = k.category_option_id
 JOIN kpi_option k_unit ON k_unit.option_id = k.unit_option_id
@@ -411,15 +435,38 @@ WHERE k.rn <= k.target_kpi_count
   AND s.season_id IN (@s_2024h1, @s_2024h2, @s_2025h1, @s_2025h2, @s_2026h1)
   AND k.emp_hire_date < s.start_date;
 
--- 5-1c. KPI weight 균등 분배 — FLOOR(100 / N) + 잔여는 마지막 KPI 한 건에 더해서 합 100 보장
+-- 5-1c. KPI weight 다이나믹 분배 — emp_id % 5 패턴 × KPI 순번(rn) 으로 차등 부여
+--   N=4: 5가지 패턴 (40/30/20/10, 35/30/20/15, 45/25/20/10, 30/30/25/15, 50/20/20/10)
+--   N=5: 5가지 패턴 (30/25/20/15/10, 35/25/20/10/10, 25/25/20/15/15, 40/20/20/10/10, 30/30/15/15/10)
+--   각 사원 시즌 내 합계는 100 보장, 최소 가중치 10 보장
+--   N≠4,5 (3개 이하 — 매트릭스 부족 케이스) 는 fallback 으로 균등 분배
 UPDATE goal g
 JOIN (
-  SELECT emp_id, season_id, COUNT(*) AS cnt
-  FROM goal WHERE goal_type = 'KPI' GROUP BY emp_id, season_id
-) c ON c.emp_id = g.emp_id AND c.season_id = g.season_id
-SET g.weight = FLOOR(100 / c.cnt)
+  SELECT
+    goal_id, emp_id, season_id,
+    ROW_NUMBER() OVER (PARTITION BY emp_id, season_id ORDER BY goal_id) AS rn,
+    COUNT(*) OVER (PARTITION BY emp_id, season_id) AS cnt
+  FROM goal WHERE goal_type = 'KPI'
+) ranked ON ranked.goal_id = g.goal_id
+SET g.weight = CASE
+  -- N=4 패턴
+  WHEN ranked.cnt = 4 AND g.emp_id % 5 = 0 THEN ELT(ranked.rn, 40, 30, 20, 10)
+  WHEN ranked.cnt = 4 AND g.emp_id % 5 = 1 THEN ELT(ranked.rn, 35, 30, 20, 15)
+  WHEN ranked.cnt = 4 AND g.emp_id % 5 = 2 THEN ELT(ranked.rn, 45, 25, 20, 10)
+  WHEN ranked.cnt = 4 AND g.emp_id % 5 = 3 THEN ELT(ranked.rn, 30, 30, 25, 15)
+  WHEN ranked.cnt = 4 AND g.emp_id % 5 = 4 THEN ELT(ranked.rn, 50, 20, 20, 10)
+  -- N=5 패턴
+  WHEN ranked.cnt = 5 AND g.emp_id % 5 = 0 THEN ELT(ranked.rn, 30, 25, 20, 15, 10)
+  WHEN ranked.cnt = 5 AND g.emp_id % 5 = 1 THEN ELT(ranked.rn, 35, 25, 20, 10, 10)
+  WHEN ranked.cnt = 5 AND g.emp_id % 5 = 2 THEN ELT(ranked.rn, 25, 25, 20, 15, 15)
+  WHEN ranked.cnt = 5 AND g.emp_id % 5 = 3 THEN ELT(ranked.rn, 40, 20, 20, 10, 10)
+  WHEN ranked.cnt = 5 AND g.emp_id % 5 = 4 THEN ELT(ranked.rn, 30, 30, 15, 15, 10)
+  -- fallback (cnt 가 3 이하)
+  ELSE FLOOR(100 / ranked.cnt)
+END
 WHERE g.goal_type = 'KPI';
 
+-- fallback 잔여 분배 (cnt ≤ 3 인 경우만 해당 — 패턴은 이미 합 100 보장)
 UPDATE goal g
 JOIN (
   SELECT emp_id, season_id, MAX(goal_id) AS last_goal_id, 100 - SUM(weight) AS remainder
@@ -455,7 +502,7 @@ CROSS JOIN season s
 CROSS JOIN (SELECT 1 AS n UNION SELECT 2 UNION SELECT 3) okr_n
 WHERE e.company_id = @cid
   AND e.emp_status = 'ACTIVE'
-  AND e.title_id != @t_head                                    -- 본부장(임원) 제외
+  AND e.title_id NOT IN (@t_head, @t_ceo)                                    -- 본부장(임원) 제외
   AND s.company_id = @cid
   AND s.season_id IN (@s_2024h1, @s_2024h2, @s_2025h1, @s_2025h2, @s_2026h1)
   AND e.emp_hire_date < s.start_date
@@ -525,7 +572,7 @@ LEFT JOIN tmp_dept_evaluator de ON de.dept_id = e.dept_id
 CROSS JOIN season s
 WHERE e.company_id = @cid
   AND e.emp_status = 'ACTIVE'
-  AND e.title_id != @t_head                                  -- 본부장(임원) 제외
+  AND e.title_id NOT IN (@t_head, @t_ceo)                                  -- 본부장(임원) 제외
   AND e.emp_hire_date < s.start_date
   AND s.season_id IN (@s_2024h1, @s_2024h2, @s_2025h1, @s_2025h2, @s_2026h1);
 
@@ -558,30 +605,32 @@ SELECT
   CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
     WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
   END,
-  -- manager_score_adjusted: ±3 변동 (Z-score 모방)
+  -- manager_score_adjusted: 일반 케이스는 ±3 변동(Z-score 모방), 보정 스킵 케이스는 원점수 유지
+  --   ▷ 감사실(@d_audit): 소규모 팀 (3명 < minTeamSize=5) → 보정 스킵
+  --   ▷ emp_id % 11 = 0: 팀 평균과 일치 가정 (z=0 시연용) → 보정 결과 0
   CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
     WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
-  END + (((e.emp_id * 11 + s.season_id) % 7) - 3),
+  END + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END),
   -- total_score: self*0.3 + mgr_adj*0.7
   ROUND(
     (60 + ((e.emp_id * 7 + s.season_id * 3) % 40)) * 0.3 +
     (CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
        WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
-     END + (((e.emp_id * 11 + s.season_id) % 7) - 3)) * 0.7
+     END + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END)) * 0.7
   , 2),
   -- weighted_score: total_score 와 동일
   ROUND(
     (60 + ((e.emp_id * 7 + s.season_id * 3) % 40)) * 0.3 +
     (CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
        WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
-     END + (((e.emp_id * 11 + s.season_id) % 7) - 3)) * 0.7
+     END + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END)) * 0.7
   , 2),
   -- bias_adjusted_score: total + ±2
   ROUND(
     (60 + ((e.emp_id * 7 + s.season_id * 3) % 40)) * 0.3 +
     (CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
        WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
-     END + (((e.emp_id * 11 + s.season_id) % 7) - 3)) * 0.7
+     END + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END)) * 0.7
     + (((e.emp_id * 13) % 5) - 2)
   , 2),
   ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D'),
@@ -614,9 +663,51 @@ LEFT JOIN tmp_dept_evaluator de ON de.dept_id = e.dept_id
 CROSS JOIN season s
 WHERE e.company_id = @cid
   AND e.emp_status = 'ACTIVE'
-  AND e.title_id != @t_head
+  AND e.title_id NOT IN (@t_head, @t_ceo)
   AND e.emp_hire_date < s.start_date
   AND s.season_id IN (@s_2024h1, @s_2024h2, @s_2025h1, @s_2025h2);
+
+-- 8-1c. self_score 재계산 — KPI 가중치 × 달성률 가중평균 (cap 120, score 0~120)
+--   기존 8-1 의 self_score(60+hash) 는 임시값. 가중치가 다이나믹해진 만큼 결과도 가중치를 반영해야 함.
+--   per-goal 달성률:
+--     UP       → actual / target × 100  (높을수록 좋음)
+--     DOWN     → target / actual × 100  (낮을수록 좋음)
+--     MAINTAIN → 100 - |1 - actual/target| × 100  (목표값 근접할수록 100)
+--   상한 120 (kpiScoring.cap), 하한 0
+--   final self_score = SUM(score_per_goal × weight) / 100
+--   total/weighted/bias 도 self_score 를 기반으로 같이 갱신
+UPDATE eval_grade eg
+JOIN (
+  SELECT
+    g.emp_id, g.season_id,
+    ROUND(SUM(
+      LEAST(120, GREATEST(0,
+        CASE g.kpi_direction
+          WHEN 'UP'       THEN (se.actual_value / NULLIF(g.target_value, 0)) * 100
+          WHEN 'DOWN'     THEN (g.target_value / NULLIF(se.actual_value, 0.01)) * 100
+          WHEN 'MAINTAIN' THEN 100 - ABS(1 - se.actual_value / NULLIF(g.target_value, 0)) * 100
+          ELSE 75
+        END
+      )) * g.weight / 100
+    ), 2) AS computed_self_score
+  FROM goal g
+  JOIN self_evaluation se ON se.goal_id = g.goal_id
+  WHERE g.goal_type = 'KPI'
+    AND se.actual_value IS NOT NULL
+  GROUP BY g.emp_id, g.season_id
+) c ON c.emp_id = eg.emp_id AND c.season_id = eg.season_id
+SET
+  eg.self_score          = c.computed_self_score,
+  eg.raw_self_score      = c.computed_self_score,
+  eg.total_score         = ROUND(c.computed_self_score * 0.3 + eg.manager_score_adjusted * 0.7, 2),
+  eg.weighted_score      = ROUND(c.computed_self_score * 0.3 + eg.manager_score_adjusted * 0.7, 2),
+  -- bias_adjusted_score: 보정 스킵 케이스(감사실/z=0 demo)는 ±2 노이즈 없이 total 그대로
+  eg.bias_adjusted_score = ROUND(c.computed_self_score * 0.3 + eg.manager_score_adjusted * 0.7
+                                 + CASE
+                                     WHEN eg.dept_id_snapshot = @d_audit OR eg.emp_id % 11 = 0 THEN 0
+                                     ELSE ((eg.emp_id * 13) % 5) - 2
+                                   END, 2)
+WHERE eg.season_id IN (@s_2024h1, @s_2024h2, @s_2025h1, @s_2025h2);
 
 -- 8-2. OPEN 시즌 (snapshot only — 자동재산정 대기)
 INSERT INTO eval_grade
@@ -651,7 +742,7 @@ JOIN department d ON d.dept_id = e.dept_id
 LEFT JOIN tmp_dept_evaluator de ON de.dept_id = e.dept_id
 WHERE e.company_id = @cid
   AND e.emp_status = 'ACTIVE'
-  AND e.title_id != @t_head
+  AND e.title_id NOT IN (@t_head, @t_ceo)
   AND e.emp_hire_date < '2026-01-01';
 
 -- =====================================================================

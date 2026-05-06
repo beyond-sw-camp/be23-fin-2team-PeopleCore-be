@@ -44,7 +44,7 @@ public class Goal extends BaseTimeEntity {
     @Column(name = "title", length = 200)
     private String title; // 제목
 
-    @Column(name = "description", length = 500)
+    @Column(name = "description", length = 1000)
     private String description; // 설명
 
     // 가중치(%) — KPI 만 값을 가짐 (OKR 은 null)
@@ -70,7 +70,7 @@ public class Goal extends BaseTimeEntity {
     @Builder.Default
     private GoalApprovalStatus approvalStatus = GoalApprovalStatus.DRAFT; // 상태 (작성중/대기/승인/반려)
 
-    @Column(name = "reject_reason", length = 500)
+    @Column(name = "reject_reason", length = 1000)
     private String rejectReason; // 반려 사유
 
     @Column(name = "submitted_at")
