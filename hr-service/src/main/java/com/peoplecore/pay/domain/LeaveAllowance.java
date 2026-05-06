@@ -77,6 +77,7 @@ public class LeaveAllowance extends BaseTimeEntity {
         this.totalLeaveDays = totalDays;
         this.usedLeaveDays = usedDays;
         this.unusedLeaveDays = unusedDays;
+        this.allowanceAmount = amount;
         this.status = AllowanceStatus.CALCULATED;
     }
 

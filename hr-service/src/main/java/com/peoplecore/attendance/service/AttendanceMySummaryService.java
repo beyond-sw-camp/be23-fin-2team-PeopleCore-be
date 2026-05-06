@@ -14,6 +14,7 @@ import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.entity.RequestStatus;
 import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
+import com.peoplecore.vacation.service.BusinessDayCalculator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -46,15 +47,18 @@ public class AttendanceMySummaryService {
     private final VacationRequestQueryRepository vacationRequestQueryRepository;   /* QueryDSL 로 이동됨 */
     private final CommuteRecordRepository commuteRecordRepository;
     private final OvertimeRequestRepository overtimeRequestRepository;
+    private final BusinessDayCalculator businessDayCalculator;
+
 
     @Autowired
-    public AttendanceMySummaryService(EmployeeRepository employeeRepository, OverTimePolicyRepository overTimePolicyRepository, MyAttendanceQueryRepository myAttendanceQueryRepository, VacationRequestQueryRepository vacationRequestQueryRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository) {
+    public AttendanceMySummaryService(EmployeeRepository employeeRepository, OverTimePolicyRepository overTimePolicyRepository, MyAttendanceQueryRepository myAttendanceQueryRepository, VacationRequestQueryRepository vacationRequestQueryRepository, CommuteRecordRepository commuteRecordRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator) {
         this.employeeRepository = employeeRepository;
         this.overTimePolicyRepository = overTimePolicyRepository;
         this.myAttendanceQueryRepository = myAttendanceQueryRepository;
         this.vacationRequestQueryRepository = vacationRequestQueryRepository;
         this.commuteRecordRepository = commuteRecordRepository;
         this.overtimeRequestRepository = overtimeRequestRepository;
+        this.businessDayCalculator = businessDayCalculator;
     }
 
     /* 주간 요약 조회 */
@@ -83,7 +87,7 @@ public class AttendanceMySummaryService {
 
         /* 근무 그룹 블록에 넣을 것 + 1일 근무 분 . 주 적정분 계산 */
         int dailyWorkMinutes = calcDailyWorkMinutes(wg);
-        int weeklyWorkDays = countWorkDays(wg.getGroupWorkDay());
+        int weeklyWorkDays = businessDayCalculator.countBusinessDays(companyId, wg, weekStart, weekEnd);
         int weeklyWorkMinutes = dailyWorkMinutes * weeklyWorkDays;
 
         MyWorkGroupDto workGroupDto = MyWorkGroupDto.builder()
@@ -248,12 +252,6 @@ public class AttendanceMySummaryService {
         long span = Duration.between(wg.getGroupStartTime(), wg.getGroupEndTime()).toMinutes();
         long breakMin = (wg.getGroupBreakStart() != null && wg.getGroupBreakEnd() != null) ? Duration.between(wg.getGroupBreakStart(),wg.getGroupBreakEnd()).toMinutes() : 0L;
         return (int) Math.max(0L, span - breakMin);
-    }
-
-    /* 근무 요일 수 -> 비트 마스크 중 1로 셋된 비트 카운ㅌ
-     * 월 1 화 2 수 4 ...*/
-    private int countWorkDays(int groupWorkDay) {
-        return Integer.bitCount(groupWorkDay & WORK_DAY_BITMASK);
     }
 
     /* 주간 휴가 분 useDay  * (주 교집합 근무이ㅣㄹ수 / 휴가 전체 근무일 수 ) * dailyWorkMinutes

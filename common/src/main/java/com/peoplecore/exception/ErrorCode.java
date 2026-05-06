@@ -194,6 +194,12 @@ public enum ErrorCode {
     COMPANY_EVENT_NOT_FOUND(404, "전사 일정을 찾을 수 없습니다."),
     COMPANY_EVENT_NOT_COMPANY(400, "전사 일정이 아닙니다."),
 
+// 공휴일
+    HOLIDAY_NOT_FOUND(404, "휴일을 찾을 수 없습니다."),
+    HOLIDAY_NOT_COMPANY(403, "법정공휴일은 수정/삭제할 수 없습니다."),
+    HOLIDAY_ACCESS_DENIED(403, "다른 회사의 휴일은 변경할 수 없습니다."),
+    HOLIDAY_DUPLICATED(409, "이미 등록된 날짜의 휴일입니다."),
+
 
     // 공통
     NOT_FOUND(404, "리소스를 찾을 수 없습니다."),

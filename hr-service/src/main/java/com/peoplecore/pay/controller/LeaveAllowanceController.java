@@ -63,8 +63,7 @@ public class LeaveAllowanceController {
     public ResponseEntity<ApplyResultDto> applyToPayroll(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestBody List<Long> allowanceIds) {
-        leaveAllowanceService.applyToPayroll(companyId, allowanceIds);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(leaveAllowanceService.applyToPayroll(companyId, allowanceIds));
     }
 
 //    검토 대기 카운트 ("검토 대기 N명" 카드 표시용)

@@ -37,4 +37,10 @@ public class Holidays extends BaseTimeEntity{
 
     private Long empModifyId;
 
+    public void update(LocalDate date, String holidayName, Boolean isRepeating, Long empModifyId) {
+        this.date = date;
+        this.holidayName = holidayName;
+        this.isRepeating = isRepeating;
+        this.empModifyId = empModifyId;
+    }
 }

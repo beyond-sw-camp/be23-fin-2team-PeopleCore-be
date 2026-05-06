@@ -1,5 +1,6 @@
 package com.peoplecore.calendar.controller;
 
+import com.peoplecore.calendar.dtos.CalendarEventRangeResDto;
 import com.peoplecore.calendar.dtos.EventCreateReqDto;
 import com.peoplecore.calendar.dtos.EventResDto;
 import com.peoplecore.calendar.dtos.EventUpdateReqDto;
@@ -56,15 +57,17 @@ public class CalendarEventController {
 
 //    일정 상세 조회
     @GetMapping("/{eventsId}")
-    public ResponseEntity<EventResDto> getEvent(
+    public ResponseEntity<CalendarEventRangeResDto> getEvent(
             @RequestHeader("X-User-Company") UUID companyId,
-            @PathVariable Long eventsId){
-        return ResponseEntity.ok(calendarEventService.getEvent(companyId, eventsId));
+            @RequestHeader("X-User-Id") Long empId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end){
+        return ResponseEntity.ok(calendarEventService.getEventsForView(companyId, empId, start, end));
     }
 
 //    캘린더 뷰 일정 조회(기간별 조회)
     @GetMapping
-    public ResponseEntity<List<EventResDto>> getEvents(
+    public ResponseEntity<CalendarEventRangeResDto> getEvents(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME)LocalDateTime start,

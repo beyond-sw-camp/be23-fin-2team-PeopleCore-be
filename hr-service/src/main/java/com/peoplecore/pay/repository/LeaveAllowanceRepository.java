@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface LeaveAllowanceRepository extends JpaRepository<LeaveAllowance, Long> {
@@ -56,5 +57,9 @@ public interface LeaveAllowanceRepository extends JpaRepository<LeaveAllowance, 
 
     // 특정 월에 검토 대기(CALCULATED + 미반영) 건수
     long countByCompany_CompanyIdAndStatusAndAppliedMonthIsNull(UUID companyId, AllowanceStatus status);
+
+
+    Optional<LeaveAllowance> findFirstByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(
+            UUID companyId, Long empId, Integer year, AllowanceType type);
 
 }

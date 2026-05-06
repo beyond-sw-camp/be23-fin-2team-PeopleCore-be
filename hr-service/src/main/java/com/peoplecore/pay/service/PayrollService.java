@@ -21,6 +21,8 @@ import com.peoplecore.pay.repository.*;
 import com.peoplecore.pay.support.TaxableCalc;
 import com.peoplecore.pay.transfer.BankTransferFileFactory;
 import com.peoplecore.pay.transfer.BankTransferFileGenerator;
+import com.peoplecore.resign.domain.Resign;
+import com.peoplecore.resign.repository.ResignRepository;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.domain.SalaryContractDetail;
 import com.peoplecore.salarycontract.repository.SalaryContractDetailRepository;
@@ -37,6 +39,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -70,10 +73,12 @@ public class PayrollService {
     private final LeaveAllowanceRepository leaveAllowanceRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final EmpSalaryCacheService empSalaryCacheService;
+    private final ResignRepository resignRepository;
+
 
 
     @Autowired
-    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceService leaveAllowanceService, LeaveAllowanceRepository leaveAllowanceRepository, ApplicationEventPublisher eventPublisher, EmpSalaryCacheService empSalaryCacheService) {
+    public PayrollService(PayrollRunsRepository payrollRunsRepository, PayrollDetailsRepository payrollDetailsRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, SalaryContractRepository salaryContractRepository, SalaryContractDetailRepository salaryContractDetailRepository, PayItemsRepository payItemsRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory, EmpAccountsRepository empAccountsRepository, OvertimeRequestRepository overtimeRequestRepository, BusinessDayCalculator businessDayCalculator, InsuranceRatesRepository insuranceRatesRepository, TaxWithholdingService taxWithholdingService, MySalaryCacheService mySalaryCacheService, PayrollEmpStatusRepository payrollEmpStatusRepository, PayStubsRepository payStubsRepository, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceService leaveAllowanceService, LeaveAllowanceRepository leaveAllowanceRepository, ApplicationEventPublisher eventPublisher, EmpSalaryCacheService empSalaryCacheService, ResignRepository resignRepository) {
         this.payrollRunsRepository = payrollRunsRepository;
         this.payrollDetailsRepository = payrollDetailsRepository;
         this.employeeRepository = employeeRepository;
@@ -96,14 +101,15 @@ public class PayrollService {
         this.leaveAllowanceRepository = leaveAllowanceRepository;
         this.eventPublisher = eventPublisher;
         this.empSalaryCacheService = empSalaryCacheService;
+        this.resignRepository = resignRepository;
     }
 
 ///       급여대장 조회(특정 월)
     public PayrollRunResDto getPayroll(UUID companyId, String payYearMonth){
 
         PayrollRuns run = payrollRunsRepository.findByCompany_CompanyIdAndPayYearMonth(companyId, payYearMonth).orElseThrow(()-> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
-
         List<PayrollDetails> allDetails = payrollDetailsRepository.findByPayrollRuns(run);
+        YearMonth payMonth = YearMonth.parse(payYearMonth);
 
 //        사원별 그룹핑
         Map<Long, List<PayrollDetails>> detailsByEmp = allDetails.stream().collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()));
@@ -148,6 +154,8 @@ public class PayrollService {
             pendingOtValue = ot.getTotalAmount() > 0 ? ot.getTotalAmount() : null;
         }
 
+        ProrateInfo prorate = resolveProrate(companyId, emp, payMonth);
+
         return PayrollEmpResDto.builder()
                 .empId(emp.getEmpId())
                 .empNum(emp.getEmpNum())
@@ -164,6 +172,11 @@ public class PayrollService {
                 .netPay(pay-deduction)
                 .unpaid("PAID".equals(empStatusValue) ? 0L : pay - deduction)
                 .pendingOvertimeAmount(pendingOtValue)
+                .isProrated(prorate.isProrated())
+                .proratedDays(prorate.isProrated() ? prorate.proratedDays() : null)
+                .monthDays(prorate.isProrated() ? prorate.monthDays() : null)
+                .effectiveResignDate(prorate.effResign())
+                .effectiveHireDate(prorate.effHire())
                 .build();
         })
         .toList();
@@ -229,6 +242,44 @@ public class PayrollService {
             SalaryContract contract = contractMap.get(emp.getEmpId());
             if (contract == null) continue; // 이 달 적용 가능한 계약 없음 → skip
 
+            ProrateInfo prorate = resolveProrate(companyId, emp, payMonth);
+
+            // ───── 입사/퇴직(예정)이 그 달에 걸치면 일할계산 ─────
+            LocalDate effectiveFrom = monthStart;
+            LocalDate effectiveTo   = monthEnd;
+            boolean isPartial = false;
+
+            // 입사가 이 달인 경우
+            if (emp.getEmpHireDate() != null
+                    && !emp.getEmpHireDate().isBefore(monthStart)
+                    && !emp.getEmpHireDate().isAfter(monthEnd)) {
+                effectiveFrom = emp.getEmpHireDate();
+                isPartial = true;
+            }
+
+            // 퇴직(예정)이 이 달인 경우 - empResignDate 우선, 없으면 Resign.resignDate
+            LocalDate resignDate = emp.getEmpResignDate();
+            if (resignDate == null) {
+                resignDate = resignRepository
+                        .findActiveOrConfirmedByEmpId(companyId, emp.getEmpId())
+                        .map(Resign::getResignDate)
+                        .orElse(null);
+            }
+            if (resignDate != null
+                    && !resignDate.isBefore(monthStart)
+                    && !resignDate.isAfter(monthEnd)) {
+                effectiveTo = resignDate;
+                isPartial = true;
+            }
+
+            BigDecimal prorateRatio = BigDecimal.ONE;
+            if (isPartial) {
+                long actualDays = ChronoUnit.DAYS.between(effectiveFrom, effectiveTo) + 1;
+                long monthDays  = ChronoUnit.DAYS.between(monthStart, monthEnd) + 1;
+                prorateRatio = BigDecimal.valueOf(actualDays)
+                        .divide(BigDecimal.valueOf(monthDays), 4, RoundingMode.HALF_UP);
+            }
+
             // 사원별 산정 상태 (기본 CALCULATING)
             payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
                     .payrollRuns(run)
@@ -256,7 +307,16 @@ public class PayrollService {
                 PayItems payItem = payItemMap.get(detail.getPayItemId());
                 if (payItem == null) continue;
 
-                long amt = detail.getAmount().longValue();
+                long baseAmt = detail.getAmount().longValue();
+                long amt = baseAmt;
+
+                // 정액 항목(isFixed=true)만 일할계산 대상
+                if (isPartial && Boolean.TRUE.equals(payItem.getIsFixed())) {
+                    amt = BigDecimal.valueOf(baseAmt)
+                            .multiply(prorateRatio)
+                            .setScale(0, RoundingMode.HALF_UP)
+                            .longValue();
+                }
 
                 PayrollDetails payrollDetail = PayrollDetails.builder()
                         .payrollRuns(run)
@@ -1210,7 +1270,52 @@ public class PayrollService {
     }
 
 
+    /* 그 달 일부만 재직 시(퇴사시) 일할계산용 정보 계산 - createPayroll/getPayroll 공유 */
+    private ProrateInfo resolveProrate(UUID companyId, Employee emp, YearMonth payMonth) {
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd   = payMonth.atEndOfMonth();
 
+        // 신규 입사가 그 달인 경우
+        LocalDate effHire = null;
+        if (emp.getEmpHireDate() != null
+                && !emp.getEmpHireDate().isBefore(monthStart)
+                && !emp.getEmpHireDate().isAfter(monthEnd)) {
+            effHire = emp.getEmpHireDate();
+        }
+
+        // 퇴직(예정)이 그 달인 경우 - empResignDate 우선, 없으면 Resign.resignDate
+        LocalDate resignDate = emp.getEmpResignDate();
+        if (resignDate == null) {
+            resignDate = resignRepository
+                    .findActiveOrConfirmedByEmpId(companyId, emp.getEmpId())
+                    .map(Resign::getResignDate)
+                    .orElse(null);
+        }
+        LocalDate effResign = (resignDate != null
+                && !resignDate.isBefore(monthStart)
+                && !resignDate.isAfter(monthEnd)) ? resignDate : null;
+
+        boolean isProrated = effHire != null || effResign != null;
+        LocalDate from = effHire != null ? effHire : monthStart;
+        LocalDate to   = effResign != null ? effResign : monthEnd;
+        int proratedDays = (int) (ChronoUnit.DAYS.between(from, to) + 1);
+        int monthDays    = (int) (ChronoUnit.DAYS.between(monthStart, monthEnd) + 1);
+
+        BigDecimal ratio = isProrated
+                ? BigDecimal.valueOf(proratedDays)
+                  .divide(BigDecimal.valueOf(monthDays), 4, RoundingMode.HALF_UP)
+                : BigDecimal.ONE;
+
+        return new ProrateInfo(isProrated, proratedDays, monthDays, effHire, effResign, ratio);
+    }
+
+    private record ProrateInfo(
+            boolean isProrated,
+            int proratedDays,
+            int monthDays,
+            LocalDate effHire,
+            LocalDate effResign,
+            BigDecimal ratio) {}
 
 
     private PayrollRuns findPayrollRun(UUID companyId, Long payrollRunId){
@@ -1307,6 +1412,9 @@ public class PayrollService {
                 .orElse(null);
         if (contract == null) return new long[]{0L, 0L};
 
+        ProrateInfo prorate = resolveProrate(companyId, emp, payMonth);
+
+
         // 사원별 산정 상태 (기본 CALCULATING)
         payrollEmpStatusRepository.save(PayrollEmpStatus.builder()
                 .payrollRuns(run)
@@ -1335,7 +1443,16 @@ public class PayrollService {
             PayItems payItem = payItemMap.get(detail.getPayItemId());
             if (payItem == null) continue;
 
-            long amt = detail.getAmount().longValue();
+            long baseAmt = detail.getAmount().longValue();
+            long amt = baseAmt;
+
+            // 정액 항목(isFixed=true)만 일할계산 대상
+            if (prorate.isProrated() && Boolean.TRUE.equals(payItem.getIsFixed())) {
+                amt = BigDecimal.valueOf(baseAmt)
+                        .multiply(prorate.ratio())
+                        .setScale(0, RoundingMode.HALF_UP)
+                        .longValue();
+            }
 
             payrollDetailsRepository.save(PayrollDetails.builder()
                     .payrollRuns(run)
