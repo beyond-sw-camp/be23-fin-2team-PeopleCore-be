@@ -14,6 +14,11 @@ use peoplecore;
 -- ※ 결재 상신/승인 단계는 외부 collaboration-service 의존이라 SQL 로 점프.
 --   approval_doc_id 는 NULL 유지.
 --
+-- ※ 기간 = 2025-01 ~ 2026-03 (15개월) 만 PAID 처리.
+--   마지막 1개월 (2026-04) 은 CALCULATING 상태로 남겨둠 →
+--   시연 시 화면에서 [확정] → [전자결재 상신] → [결재 승인] → [지급처리]
+--   단계를 직접 클릭해서 시연 가능.
+--
 -- [실행 방법]
 --   $ mysql -u <user> -p peoplecore < 06b_set_paid.sql
 -- =====================================================================
@@ -21,7 +26,7 @@ use peoplecore;
 SET @cid          := (SELECT company_id FROM company WHERE company_name='peoplecore');
 SET @actor_emp_id := (SELECT emp_id FROM employee WHERE company_id=@cid AND emp_num='EMP-2025-005');
 SET @start_ym     := '2025-01';
-SET @end_ym       := '2026-04';
+SET @end_ym       := '2026-03';   -- 2026-04 는 CALCULATING 으로 남김 (시연용)
 
 SELECT
   IFNULL(BIN_TO_UUID(@cid), '❌ 회사 없음') AS company,
