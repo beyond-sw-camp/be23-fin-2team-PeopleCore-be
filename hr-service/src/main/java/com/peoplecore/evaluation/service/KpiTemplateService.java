@@ -22,6 +22,7 @@ import com.peoplecore.grade.domain.Grade;
 import com.peoplecore.grade.repository.GradeRepository;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -114,7 +115,8 @@ public class KpiTemplateService {
             }
 
             for (KpiTemplateResponse r : page.getContent()) {
-                r.setBaseline(avgMap.get(r.getKpiId()));
+                BigDecimal avg = avgMap.get(r.getKpiId());
+                r.setBaseline(avg != null ? avg.setScale(2, RoundingMode.DOWN) : null);
             }
         }
         return page;
