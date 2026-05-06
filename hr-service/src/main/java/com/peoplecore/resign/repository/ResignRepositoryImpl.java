@@ -61,12 +61,18 @@ public class ResignRepositoryImpl implements ResignRepositoryCustom{
                 total !=null ? total:0L);
     }
 
-//    정렬기준
+//    정렬기준 - enum 값에 방향까지 포함 (sortField null이면 신청일 최신순 기본)
     private OrderSpecifier<?> getOrderSpecifier(ResignSortField sortField){
         if(sortField == null) return qResign.registeredDate.desc(); //기본: 신청일 최신순
         return switch (sortField){
-            case EMP_NUM -> qResign.employee.empNum.asc();
-            case EMP_NAME -> qResign.employee.empName.asc();
+            case EMP_NUM_ASC -> qResign.employee.empNum.asc();
+            case EMP_NUM_DESC -> qResign.employee.empNum.desc();
+            case EMP_NAME_ASC -> qResign.employee.empName.asc();
+            case EMP_NAME_DESC -> qResign.employee.empName.desc();
+            case REGISTERED_DATE_ASC -> qResign.registeredDate.asc();
+            case REGISTERED_DATE_DESC -> qResign.registeredDate.desc();
+            case RESIGN_DATE_ASC -> qResign.resignDate.asc();
+            case RESIGN_DATE_DESC -> qResign.resignDate.desc();
         };
     }
 
