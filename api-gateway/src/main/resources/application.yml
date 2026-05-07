@@ -3,4 +3,5 @@ spring:
     name: api-gateway
   profiles:
     active: prod
-  
+  jackson:
+    time-zone: Asia/Seoul

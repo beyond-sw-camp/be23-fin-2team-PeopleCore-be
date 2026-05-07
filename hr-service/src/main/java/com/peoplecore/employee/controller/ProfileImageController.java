@@ -99,7 +99,7 @@ public class ProfileImageController{
             headers.setCacheControl("public, max-age=86400");
             return ResponseEntity.ok().headers(headers).body(new InputStreamResource(stream));
         } catch (Exception e) {
-            log.warn("[ProfileImage] 조회 실패: objectName={}, error={}", objectName, e.getMessage());
+            log.warn("[ProfileImage] 조회 실패: objectName={}, ex={}", objectName, e.toString(), e);
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         }
     }

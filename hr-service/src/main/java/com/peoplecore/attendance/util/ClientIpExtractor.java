@@ -7,19 +7,21 @@ import org.springframework.stereotype.Component;
  * 출퇴근 체크인/아웃 IP 정책 검증, 허용 IP 등록 모달의 "내 현재 IP" 표시에서 공통 사용
  * 두 호출처가 동일한 IP 를 보도록 단일 진입점 유지 → 등록한 IP 가 매칭에서 누락되는 사고 방지
  *
- * TODO: [배포 시 인프라 점검 필수 — 누락 시 전사 출퇴근 차단 사고 가능]
- *   NGINX Ingress + AWS NLB 환경에서 클라이언트 IP 보존 설정이 빠지면
- *   hr-service 가 받는 IP 는 사설 IP(10.x.x.x)만 보임 → 등록한 회사 외부 공인 IP CIDR 매칭 실패.
+ * 인프라 의존 (검증 완료: 2026-05-07)
+ *   적용 위치: ingress-nginx-controller ConfigMap
+ *     kubectl -n ingress-nginx edit configmap ingress-nginx-controller
+ *     - use-forwarded-headers: "true"        → XFF 헤더 신뢰
+ *     - compute-full-forwarded-for: "true"   → XFF 에 직전 remote_addr 누적
+ *     - proxy-real-ip-cidr: "0.0.0.0/0"      → 신뢰 대역 (NLB 외 외부 도달 경로 없어 운영상 안전)
  *
- *   필수 설정 1) ingress-nginx-controller Service spec.externalTrafficPolicy: Local
- *               + NLB target-type: instance (또는 target-type: ip + preserve_client_ip.enabled=true)
- *   필수 설정 2) ingress-nginx-controller ConfigMap
- *               - use-forwarded-headers: "true"
- *               - compute-full-forwarded-for: "true"
- *   권장 설정 3) api-gateway application.yml
- *               - spring.cloud.gateway.x-forwarded.enabled: true
+ *   추가 설정이 불필요했던 이유
+ *     - NLB 단계: 기존 ingress-nginx 설치 구성만으로 클라이언트 공인 IP 가 NGINX remote_addr 까지 보존됨
+ *       (externalTrafficPolicy / target-type 별도 작업 불필요)
+ *     - api-gateway 단계: Spring Cloud Gateway 의 x-forwarded.enabled 기본값이 true 라
+ *       명시적 설정 없이도 XFF 가 hr-service 까지 누적 전달됨 (검증 중 추가했던 설정은 롤백)
  *
- *   배포 직후 [checkIn-DEBUG] 로그의 clientIp 가 회사 외부 공인 IP 로 찍히는지 반드시 확인. */
+ *   검증 방법: GET /hr-service/company/allowed-ips/my-ip 응답 IP 가 사용자 공인 IP 와 일치
+ *            (whatismyipaddress.com 비교) */
 @Component
 public class ClientIpExtractor {
 

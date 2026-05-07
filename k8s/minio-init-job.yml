@@ -19,3 +19,9 @@ spec:
               done
               mc mb --ignore-existing myminio/approval-form
               mc anonymous set download myminio/approval-form
+              mc mb --ignore-existing myminio/peoplecore-profile
+              mc anonymous set download myminio/peoplecore-profile
+              mc mb --ignore-existing myminio/peoplecore-chat
+              mc anonymous set download myminio/peoplecore-chat
+
+              
