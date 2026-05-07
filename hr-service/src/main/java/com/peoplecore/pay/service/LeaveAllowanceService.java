@@ -373,15 +373,17 @@ public class LeaveAllowanceService {
      * - NEXT(익월): 5월 근로 → 6월 25일 지급
      */
     private String resolveTargetMonth(LeaveAllowance la) {
-        UUID companyId = la.getCompany().getCompanyId();
+        CompanyPaySettings settings = paySettingsRepository
+                .findByCompany_CompanyId(la.getCompany().getCompanyId())
+                .orElse(null);
+        return resolveTargetMonth(la, settings);
+    }
+
+    private String resolveTargetMonth(LeaveAllowance la, CompanyPaySettings settings) {
         LocalDate expiration = resolveExpirationDate(la);       // 만료일
         LocalDate dueDate = expiration.plusDays(1);   // 산정 가능 시점
 
         // 회사 급여 설정 (없으면 안전 기본값: 매월 25일, 당월 지급)
-        CompanyPaySettings settings = paySettingsRepository
-                .findByCompany_CompanyId(companyId)
-                .orElse(null);
-
         int payDay = (settings == null) ? 25
                 : Boolean.TRUE.equals(settings.getSalaryPayLastDay()) ? 31
                   : settings.getSalaryPayDay();
@@ -401,6 +403,30 @@ public class LeaveAllowanceService {
         YearMonth payTargetMonth = (payMonth == PayMonth.NEXT) ? workMonth.plusMonths(1) : workMonth;
 
         return payTargetMonth.toString();   // "2026-05" / "2027-01"
+    }
+
+//    "검토 대기 N명" — 지정한 yearMonth 급여대장에 반영될 CALCULATED 건의 distinct 사원수
+    public long countPendingReviewForMonth(UUID companyId, String yearMonth) {
+        List<LeaveAllowance> candidates = leaveAllowanceRepository
+                .findPendingReviewCandidates(companyId, AllowanceStatus.CALCULATED);
+        if (candidates.isEmpty()) return 0L;
+
+        CompanyPaySettings settings = paySettingsRepository
+                .findByCompany_CompanyId(companyId)
+                .orElse(null);
+
+        return candidates.stream()
+                .filter(la -> {
+                    try {
+                        return yearMonth.equals(resolveTargetMonth(la, settings));
+                    } catch (Exception e) {
+                        log.warn("[검토 대기 카운트 skip] allowanceId={}, msg={}", la.getAllowanceId(), e.getMessage());
+                        return false;
+                    }
+                })
+                .map(la -> la.getEmployee().getEmpId())
+                .distinct()
+                .count();
     }
 
 
