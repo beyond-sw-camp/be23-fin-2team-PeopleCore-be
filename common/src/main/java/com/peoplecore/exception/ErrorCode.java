@@ -38,6 +38,8 @@ public enum ErrorCode {
 
     // 비밀번호
     SAME_PASSWORD(400, "기존 비밀번호와 동일합니다."),
+    SIMPLE_PIN_MISMATCH(400, "간편 비밀번호가 일치하지 않습니다"),
+    INVALID_PIN_FORMAT(400, "간편 비밀번호는 4자리 숫자여야 합니다"),
 
     // 부서
     DEPARTMENT_NOT_FOUND(404, "부서를 찾을 수 없습니다."),

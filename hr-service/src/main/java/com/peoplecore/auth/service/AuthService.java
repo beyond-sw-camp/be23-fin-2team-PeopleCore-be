@@ -1,13 +1,17 @@
 package com.peoplecore.auth.service;
 
+import com.peoplecore.auth.domain.LoginHistory;
 import com.peoplecore.auth.dto.LoginRequest;
 import com.peoplecore.auth.dto.LoginResponse;
 import com.peoplecore.auth.dto.TokenRefreshRequest;
 import com.peoplecore.auth.jwt.JwtProvider;
+import com.peoplecore.auth.repository.LoginHistoryRepository;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.domain.EmpStatus;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,22 +27,25 @@ public class AuthService {
     private final JwtProvider jwtProvider;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate redisTemplate;
+    private final LoginHistoryRepository loginHistoryRepository;
 
+    @Autowired
     public AuthService(
             EmployeeRepository employeeRepository,
             JwtProvider jwtProvider,
             PasswordEncoder passwordEncoder,
-            @Qualifier("refreshTokenRedisTemplate") StringRedisTemplate redisTemplate) {
+            @Qualifier("refreshTokenRedisTemplate") StringRedisTemplate redisTemplate, LoginHistoryRepository loginHistoryRepository) {
         this.employeeRepository = employeeRepository;
         this.jwtProvider = jwtProvider;
         this.passwordEncoder = passwordEncoder;
         this.redisTemplate = redisTemplate;
+        this.loginHistoryRepository = loginHistoryRepository;
     }
 
     private static final String REFRESH_TOKEN_PREFIX = "RT:";
 
     @Transactional
-    public LoginResponse login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request, HttpServletRequest httpServletRequest) {
         Employee employee = employeeRepository
                 .findByCompany_CompanyIdAndEmpEmail(request.getCompanyId(), request.getEmail())
                 .orElseThrow(() -> new IllegalArgumentException("이메일 또는 비밀번호가 일치하지 않습니다."));
@@ -61,6 +68,13 @@ public class AuthService {
         );
 
         employee.updateLastLoginAt();
+
+        loginHistoryRepository.save(LoginHistory.builder()
+                .empId(employee.getEmpId())
+                .ip(extractClientIp(httpServletRequest))
+                .userAgent(httpServletRequest.getHeader("User-Agent"))
+                .loginMethod("PASSWORD")
+                .build());
 
         return LoginResponse.builder()
                 .accessToken(accessToken)
@@ -117,5 +131,14 @@ public class AuthService {
         Employee employee = employeeRepository.findById(empId)
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원입니다."));
         return passwordEncoder.matches(rawPassword, employee.getEmpPassword());
+    }
+
+
+    private String extractClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isEmpty()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }
