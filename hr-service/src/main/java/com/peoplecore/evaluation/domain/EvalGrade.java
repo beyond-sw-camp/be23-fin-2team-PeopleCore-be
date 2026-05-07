@@ -72,6 +72,11 @@ public class EvalGrade extends BaseTimeEntity {
     @Column(name = "locked_at")
     private LocalDateTime lockedAt; // 최종확정 시각
 
+    // 낙관적 락 - HR 다명이 같은 사원 등급을 동시 보정 시 Last-Write-Wins 차단
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
+
     // ─── 감사용 스냅샷 (결과 조회 상세 화면 근거) ───
 
     @Column(name = "team_avg", precision = 6, scale = 2)

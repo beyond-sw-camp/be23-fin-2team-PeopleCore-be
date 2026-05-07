@@ -40,6 +40,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long>, Emplo
     Optional<Employee> findByCompany_CompanyIdAndEmpNameAndEmpBirthDateAndEmpPhone(
             UUID companyId, String empName, LocalDate empBirthDate, String empPhone);
 
+    Optional<Employee> findByEmpPersonalEmail(String empPersonalEmail);
+
     /** 전화번호의 하이픈 유무와 관계없이 조회 (FE는 하이픈 제거해서 전송, DB에는 '010-1234-5678' 포맷 혼재) */
     @Query("SELECT e FROM Employee e WHERE e.company.companyId = :companyId " +
             "AND e.empName = :empName " +

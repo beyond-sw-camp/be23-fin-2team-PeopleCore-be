@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,6 +60,19 @@ public interface ResignRepository extends JpaRepository<Resign, Long>,ResignRepo
 """)
     Optional<Resign> findActiveOrConfirmedByEmpId(@Param("companyId") UUID companyId,
                                                   @Param("empId") Long empId);
+
+    // 다수 사원의 활성 Resign (ACTIVE/CONFIRMED) 일괄 조회 - 배치 (N+1 회피)
+    // 사원당 여러 건이 나올 수 있으므로 service 단에서 resignDate DESC 로 정렬해 첫 건 선택.
+    @Query("""
+    SELECT r FROM Resign r
+    WHERE r.employee.empId IN :empIds
+      AND r.employee.company.companyId = :companyId
+      AND r.isDeleted = false
+      AND r.retireStatus IN (com.peoplecore.resign.domain.RetireStatus.ACTIVE,
+                             com.peoplecore.resign.domain.RetireStatus.CONFIRMED)
+""")
+    List<Resign> findActiveOrConfirmedByEmpIds(@Param("companyId") UUID companyId,
+                                               @Param("empIds") Collection<Long> empIds);
 
 //    발령이력용 - 회사+사원의 RESIGNED 퇴직건 조회 (확정/예정 제외, 완료된 퇴직만)
     @Query("""

@@ -289,11 +289,6 @@ public class Employee extends BaseTimeEntity {
         this.dependentsCount = count;
     }
 
-//    프로필 이미지 세팅
-    public void updateProfileImageUrl(String url){
-        this.empProfileImageUrl=url;
-    }
-
 //    폼 설정에서 추가된 동적 fieldKey 들의 값 일괄 갱신
     public void updateCustomFields(Map<String, String> fields){
         this.customFields = fields != null ? fields : new HashMap<>();

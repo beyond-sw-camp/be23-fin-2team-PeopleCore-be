@@ -1,6 +1,7 @@
 package com.peoplecore.employee.dto;
 
 import com.peoplecore.employee.domain.Employee;
+import com.peoplecore.employee.domain.EmployeeFile;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -8,6 +9,7 @@ import lombok.NoArgsConstructor;
 import org.checkerframework.checker.units.qual.N;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Map;
 
 @AllArgsConstructor
@@ -52,6 +54,9 @@ public class EmpDetailResponseDto {
 
     // 폼 설정에서 추가된 동적 fieldKey 들의 값 (jsonb)
     private Map<String, String> customFields;
+
+    // 인사 서류 (employee_file 테이블)
+    private List<EmployeeFileResDto> files;
 
 
     public static EmpDetailResponseDto from(Employee emp){

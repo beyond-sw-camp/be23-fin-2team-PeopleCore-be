@@ -10,6 +10,7 @@ import com.peoplecore.employee.dto.EmployeeListDto;
 import com.peoplecore.employee.dto.EmployeeUpdateRequestDto;
 import com.peoplecore.employee.service.EmployeeService;
 import jakarta.validation.Valid;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -88,8 +89,19 @@ public class EmployeeController {
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long empId,
             @Valid @ModelAttribute EmployeeUpdateRequestDto requestDto,
-            @RequestPart(required = false) MultipartFile profileImage) {
-        return ResponseEntity.ok(employeeService.updateEmployee(companyId, empId, requestDto, profileImage));
+            @RequestPart(required = false) MultipartFile profileImage,
+            @RequestPart(required = false) List<MultipartFile> newFiles,
+            @RequestParam(required = false) List<Long> deleteFileIds) {
+        return ResponseEntity.ok(employeeService.updateEmployee(companyId, empId, requestDto, profileImage, newFiles, deleteFileIds));
+    }
+
+//    5-1. 인사 서류 다운로드
+    @GetMapping("/{empId}/files/{fileId}")
+    public ResponseEntity<Resource> downloadEmployeeFile(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long empId,
+            @PathVariable Long fileId) {
+        return employeeService.downloadEmployeeFile(companyId, empId, fileId);
     }
 
 //    6. 삭제

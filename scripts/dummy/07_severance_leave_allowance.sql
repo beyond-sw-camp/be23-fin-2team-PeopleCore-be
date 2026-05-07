@@ -23,9 +23,9 @@ use peoplecore;
 -- [퇴직금 계산식 (SeveranceService.java)]
 --   service_days     = DATEDIFF(resign_date, hire_date)
 --   service_years    = ROUND(service_days / 365.0, 2)
---   last_3_month_pay = (기본급+직책수당+식대+교통비) × 3 = total_amount / 4  (단순화)
---   last_3_month_days= DATEDIFF(resign_date, resign_date - 3 MONTH)
---   avg_daily_wage   = last_3_month_pay / last_3_month_days
+--   last3month_pay = (기본급+직책수당+식대+교통비) × 3 = total_amount / 4  (단순화)
+--   last3month_days= DATEDIFF(resign_date, resign_date - 3 MONTH)
+--   avg_daily_wage   = last3month_pay / last3month_days
 --   severance_amount = ROUND(avg_daily_wage × 30 × service_days / 365)
 --   tax_amount       = ROUND(severance_amount × 5%)        (퇴직소득세 단순화)
 --   local_income_tax = ROUND(tax_amount × 10%)             (지방소득세)
@@ -220,9 +220,9 @@ WHERE e.company_id = @cid
 INSERT INTO severance_pays (
   emp_id, company_id, hire_date, resign_date, retirement_type,
   service_years, service_days,
-  last_3_month_pay, last_year_bonus,
+  last3month_pay, last_year_bonus,
   annual_leave_for_avg_wage, annual_leave_on_retirement,
-  last_3_month_days, avg_daily_wage,
+  last3month_days, avg_daily_wage,
   severance_amount, tax_amount, local_income_tax,
   tax_year, irp_transfer, net_amount,
   dc_deposited_total, dc_diff_amount,
@@ -236,14 +236,14 @@ SELECT
   e.emp_hire_date, e.emp_resign, e.retirement_type,
   ROUND(DATEDIFF(e.emp_resign, e.emp_hire_date) / 365.0, 2) AS service_years,
   DATEDIFF(e.emp_resign, e.emp_hire_date) AS service_days,
-  -- last_3_month_pay = (월급여 = 연봉/12) × 3
-  FLOOR(sc.total_amount / 4) AS last_3_month_pay,
+  -- last3month_pay = (월급여 = 연봉/12) × 3
+  FLOOR(sc.total_amount / 4) AS last3month_pay,
   0,        -- last_year_bonus
   0,        -- annual_leave_for_avg_wage
   0,        -- annual_leave_on_retirement
-  -- last_3_month_days = 직전 3개월 일수
-  DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)) AS last_3_month_days,
-  -- avg_daily_wage = last_3_month_pay / last_3_month_days  (DECIMAL(15,2))
+  -- last3month_days = 직전 3개월 일수
+  DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)) AS last3month_days,
+  -- avg_daily_wage = last3month_pay / last3month_days  (DECIMAL(15,2))
   ROUND(FLOOR(sc.total_amount / 4)
         / DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)), 2) AS avg_daily_wage,
   -- severance_amount = avg_daily_wage × 30 × service_days / 365

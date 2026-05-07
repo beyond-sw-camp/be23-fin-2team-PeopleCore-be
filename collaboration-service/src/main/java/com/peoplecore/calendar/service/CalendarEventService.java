@@ -4,6 +4,8 @@ import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.alarm.service.AlarmService;
 import com.peoplecore.calendar.dtos.*;
 import com.peoplecore.calendar.entity.*;
+import com.peoplecore.calendar.enums.EventInstancesType;
+import com.peoplecore.calendar.enums.InviteStatus;
 import com.peoplecore.calendar.repository.*;
 import com.peoplecore.entity.Holidays;
 import com.peoplecore.event.AlarmEvent;
@@ -32,10 +34,12 @@ public class CalendarEventService {
      private final InterestCalendarsRepository interestCalendarsRepository;
      private final AlarmEventPublisher alarmEventPublisher;
      private final HolidayRepository holidayRepository;
+     private final EventInstancesRepository eventInstancesRepository;
+     private final EventAttendeesRepository eventAttendeesRepository;
 
 
     @Autowired
-    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, InterestCalendarsRepository interestCalendarsRepository, AlarmEventPublisher alarmEventPublisher, HolidayRepository holidayRepository) {
+    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, InterestCalendarsRepository interestCalendarsRepository, AlarmEventPublisher alarmEventPublisher, HolidayRepository holidayRepository, EventInstancesRepository eventInstancesRepository, EventAttendeesRepository eventAttendeesRepository) {
         this.myCalendarsRepository = myCalendarsRepository;
         this.eventsRepository = eventsRepository;
         this.repeatedRulesRepository = repeatedRulesRepository;
@@ -43,6 +47,8 @@ public class CalendarEventService {
         this.interestCalendarsRepository = interestCalendarsRepository;
         this.alarmEventPublisher = alarmEventPublisher;
         this.holidayRepository = holidayRepository;
+        this.eventInstancesRepository = eventInstancesRepository;
+        this.eventAttendeesRepository = eventAttendeesRepository;
     }
 
 //    일정 등록
@@ -72,13 +78,28 @@ public class CalendarEventService {
 
         eventsRepository.save(event);
 
+// 1) EventInstances 1건 생성 (단일 일정 또는 반복 마스터)
+        EventInstances instance = EventInstances.builder()
+                .events(event)
+                .companyId(companyId)
+                .originalStart(event.getStartAt())
+                .startAt(event.getStartAt())
+                .endAt(event.getEndAt())
+                .eventInstancesType(repeatedRules == null ? EventInstancesType.SINGLE : EventInstancesType.REPEATED)
+                .isCancelled(false)
+                .build();
+        eventInstancesRepository.save(instance);
+
+// 2) 참석자 저장
+        saveAttendees(companyId, instance, reqDto.getAttendeeEmpIds());
+
 //        알림설정 저장
         saveNotifications(event, reqDto.getNotifications());
 
 //        참석자에게 즉시알림발송
         sendAttendeeAlarm(companyId, event, reqDto.getAttendeeEmpIds());
 
-        return EventResDto.fromEntity(event);
+        return EventResDto.fromEntity(event, eventAttendeesRepository.findByEventInstances(instance));
     }
 
 
@@ -90,15 +111,32 @@ public class CalendarEventService {
 
         MyCalendars calendars = myCalendarsRepository.findById(reqDto.getMyCalendarsId()).orElseThrow(()-> new CustomException(ErrorCode.CALENDAR_NOT_FOUND));
 
+        // 반복 규칙 갱신: 신규 저장 → Events FK 교체 → 옛 규칙 삭제 (FK 위반 방지)
+        RepeatedRules oldRule = event.getRepeatedRules();
+        RepeatedRules newRule = saveRepeatedRule(companyId, reqDto.getRepeatedRule());
+
         event.update(
-                reqDto.getTitle(), reqDto.getDescription(), reqDto.getLocation(), reqDto.getStartAt(), reqDto.getEndAt(), reqDto.getIsAllDay(), reqDto.getIsPublic(), calendars
+                reqDto.getTitle(), reqDto.getDescription(), reqDto.getLocation(), reqDto.getStartAt(), reqDto.getEndAt(), reqDto.getIsAllDay(), reqDto.getIsPublic(), calendars, newRule
         );
+
+        if (oldRule != null && (newRule == null || !oldRule.getRepeatedRulesId().equals(newRule.getRepeatedRulesId()))) {
+            repeatedRulesRepository.delete(oldRule);
+        }
 
 //        알림 갱신
         eventsNotificationsRepository.deleteByEvents_EventsId(eventsId);
         saveNotifications(event, reqDto.getNotifications());
 
-        return EventResDto.fromEntity(event);
+        // 참석자 갱신: 기존 삭제 후 재등록 (소량이면 OK, 변경 diff 방식으로도 가능)
+        EventInstances instance = eventInstancesRepository.findFirstByEvents_EventsId(eventsId);
+        if (instance != null) {
+            eventAttendeesRepository.deleteByEventInstances(instance);
+            saveAttendees(companyId, instance, reqDto.getAttendeeEmpIds());
+            // 새로 추가된 참석자에게만 초대 알림 발송
+            sendAttendeeAlarm(companyId, event, reqDto.getAttendeeEmpIds());
+        }
+
+        return EventResDto.fromEntity(event, eventAttendeesRepository.findByEventInstances_Events_EventsId(eventsId));
     }
 
 
@@ -113,7 +151,7 @@ public class CalendarEventService {
 //  일정 상세 조회
     public EventResDto getEvent(UUID companyId, Long eventsId){
         Events event = findEventOrThrow(eventsId, companyId);
-        return EventResDto.fromEntity(event);
+        return EventResDto.fromEntity(event, eventAttendeesRepository.findByEventInstances_Events_EventsId(eventsId));
     }
 
 //    캘린더 뷰 일정조회 (월,주,일)
@@ -141,7 +179,10 @@ public class CalendarEventService {
 //        4. 전사일정
         List<Events> companyEvents = eventsRepository.findCompanyEvents(companyId, start, end);
 
-//        5. 통합(중복 제거)
+//        5. 내가 초대받은 일정 (참석자)
+        List<Events> invitedEvents = eventsRepository.findEventsAttendedByEmp(empId, companyId, start, end);
+
+//        6. 통합(중복 제거)
         Map<Long, Events> merged = new LinkedHashMap<>();
 
         for (Events e : myEvents) {
@@ -153,10 +194,23 @@ public class CalendarEventService {
         for (Events e : companyEvents) {
             merged.putIfAbsent(e.getEventsId(), e);
         }
+        for (Events e : invitedEvents) {
+            merged.putIfAbsent(e.getEventsId(), e);
+        }
+
+//        7. 참석자 일괄 조회 (eventId → 참석자 목록 매핑)
+        Map<Long, List<EventAttendees>> attendeesByEventId = new HashMap<>();
+        if (!merged.isEmpty()) {
+            List<EventAttendees> allAttendees = eventAttendeesRepository.findByEventIds(new ArrayList<>(merged.keySet()));
+            for (EventAttendees a : allAttendees) {
+                Long eid = a.getEventInstances().getEvents().getEventsId();
+                attendeesByEventId.computeIfAbsent(eid, k -> new ArrayList<>()).add(a);
+            }
+        }
 
         List<EventResDto> result = new ArrayList<>();
         for (Events e : merged.values()) {
-            result.add(EventResDto.fromEntity(e));
+            result.add(EventResDto.fromEntity(e, attendeesByEventId.get(e.getEventsId())));
         }
 
         // 6) 공휴일 머지 (NATIONAL + 회사의 COMPANY)
@@ -199,6 +253,22 @@ public class CalendarEventService {
 
     }
 
+
+    private void saveAttendees(UUID companyId, EventInstances instance, List<Long> attendeeEmpIds){
+        if (attendeeEmpIds == null || attendeeEmpIds.isEmpty()) return;
+        LocalDateTime now = LocalDateTime.now();
+        List<EventAttendees> rows = attendeeEmpIds.stream()
+                .map(eid -> EventAttendees.builder()
+                        .eventInstances(instance)
+                        .invitedEmpId(eid)
+                        .inviteStatus(InviteStatus.PENDING)
+                        .isHidden(false)
+                        .invitedAt(now)
+                        .companyId(companyId)
+                        .build())
+                .toList();
+        eventAttendeesRepository.saveAll(rows);
+    }
 
     private Events findEventOrThrow(Long eventsId, UUID companyId){
         Events events = eventsRepository.findById(eventsId).orElseThrow(()-> new CustomException(ErrorCode.EVENT_NOT_FOUND));
