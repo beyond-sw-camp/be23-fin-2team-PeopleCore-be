@@ -106,11 +106,19 @@ services:
     image: minio/mc
     depends_on:
       - minio
+    volumes:
+      - ./scripts/dummy/profile_images:/seed-images:ro
     entrypoint: >
       /bin/sh -c "
       until (/usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin) do echo 'Waiting for MinIO...' && sleep 1; done;
       /usr/bin/mc mb --ignore-existing myminio/approval-form;
       /usr/bin/mc anonymous set download myminio/approval-form;
+      /usr/bin/mc mb --ignore-existing myminio/peoplecore-profile;
+      /usr/bin/mc anonymous set download myminio/peoplecore-profile;
+      for i in $$(seq -w 1 28); do
+        empNum=EMP-2025-0$$i;
+        /usr/bin/mc cp /seed-images/$$empNum.jpg myminio/peoplecore-profile/seed/$$empNum.jpg || echo \"skip $$empNum\";
+      done;
       exit 0;
       "
 

@@ -190,16 +190,13 @@ public class AttendanceModifyService {
         log.info("[AttendanceModify] INSERT - attenModiId={}, docId={}",
                 saved.getAttenModiId(), saved.getApprovalDocId());
 
-        /* HR 관리자 알림 - 한도 초과 NOTIFY 면 메시지에 표기 */
+        /* 한도 초과(NOTIFY) 정책 안내만 HR 관리자에게 별도 발송
+         * 정상 접수 알림은 collab 측 결재라인 알림(결재자/참조/열람 전원)이 대체 - 중복 방지 */
         if (usage.isExceeded()) {
             notifyHrAdmins(event.getCompanyId(), saved,
                     emp.getEmpName() + " 사원의 근태 정정 신청 (주간 한도 초과)",
                     "정정 적용 시 주간 누적 " + formatHm(usage.usedMinutes())
                             + " / 한도 " + formatHm(usage.weeklyMaxMinutes()));
-        } else {
-            notifyHrAdmins(event.getCompanyId(), saved,
-                    emp.getEmpName() + " 사원의 근태 정정 신청",
-                    "신청이 접수되었습니다. 결재 진행을 확인해 주세요.");
         }
     }
 
