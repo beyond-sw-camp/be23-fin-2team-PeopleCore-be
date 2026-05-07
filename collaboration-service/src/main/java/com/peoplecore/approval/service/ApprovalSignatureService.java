@@ -70,9 +70,10 @@ public class ApprovalSignatureService {
                 .ifPresent(existing -> {
                     String oldObjectName = existing.getStoredFileName();
                     attachFileRepository.delete(existing);                    // DB 먼저 삭제
-                    signatureRepository.deleteByCompanyIdAndSigEmpId(companyId, empId);
                     minioService.deleteObject(oldObjectName);                 // MinIO 나중에 삭제
                 });
+        signatureRepository.deleteByCompanyIdAndSigEmpId(companyId, empId);   // 고아 row 대비 항상 정리
+        signatureRepository.flush();                                          // INSERT 전 DELETE 강제 반영 (UNIQUE 충돌 방지)
         // MinIO 업로드
         minioService.uploadAttachment(objectName, file);
         String presignedUrl = minioService.getPresignedUrl(objectName);

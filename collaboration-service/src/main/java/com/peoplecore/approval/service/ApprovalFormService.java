@@ -26,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StreamUtils;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
@@ -633,9 +634,10 @@ public class ApprovalFormService {
                 if (fileName == null) continue;
                 String formName = fileName.replace(".html", "");
 
+                // try-with-resources 로 InputStream 자동 close — 루프 반복 시 핸들 누수 방지
                 String formHtml;
-                try {
-                    formHtml = StreamUtils.copyToString(resource.getInputStream(), StandardCharsets.UTF_8);
+                try (InputStream in = resource.getInputStream()) {
+                    formHtml = StreamUtils.copyToString(in, StandardCharsets.UTF_8);
                 } catch (IOException e) {
                     throw new BusinessException("양식 HTML 읽기 실패: " + fileName, HttpStatus.INTERNAL_SERVER_ERROR);
                 }

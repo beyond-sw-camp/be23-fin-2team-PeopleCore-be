@@ -24,19 +24,21 @@ public class MinioService {
     private String bucketName;
 
 //  파일 업로드
-    public String uploadFile(MultipartFile file, String folder)throws Exception {
-//        고유 파일명 생성
+    public String uploadFile(MultipartFile file, String folder) throws Exception {
+        // 고유 파일명 생성
         String fileName = folder + "/" + UUID.randomUUID() + "_" + file.getOriginalFilename();
-        minioClient.putObject(
-                PutObjectArgs.builder()
-                        .bucket(bucketName)
-                        .object(fileName)
-                        .stream(file.getInputStream(), file.getSize(), -1)
-                        .contentType(file.getContentType())
-                        .build()
-        );
+        // try-with-resources 로 InputStream 자동 close → Direct ByteBuffer 누수 방지
+        try (InputStream stream = file.getInputStream()) {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(fileName)
+                            .stream(stream, file.getSize(), -1)
+                            .contentType(file.getContentType())
+                            .build()
+            );
+        }
         return fileName;
-
     }
 //        파일삭제
     public void  deleteFile(String fileName) throws Exception {
