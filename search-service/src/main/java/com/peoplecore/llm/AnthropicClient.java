@@ -56,10 +56,11 @@ public class AnthropicClient {
     }
 
     /**
-     * Messages API 단일 호출. system은 별도 필드, messages는 user/assistant turn list.
+     * Messages API 단일 호출. system은 text block 의 list — 각 블록에 cache_control 부착 가능.
+     * 단일 String system 이 필요한 호출자는 List.of(Map.of("type","text","text", text)) 로 감싸 전달.
      * tools 비우면 일반 채팅, 채우면 tool use 활성화. 응답의 stop_reason이 "tool_use"면 호출자가 도구 실행 후 재호출 책임.
      */
-    public MessagesResponse messages(String system, List<Map<String, Object>> messages, List<Map<String, Object>> tools) {
+    public MessagesResponse messages(List<Map<String, Object>> system, List<Map<String, Object>> messages, List<Map<String, Object>> tools) {
         if (!isConfigured()) {
             throw new IllegalStateException("ANTHROPIC_API_KEY is not configured");
         }
@@ -72,7 +73,7 @@ public class AnthropicClient {
         Map<String, Object> body = new HashMap<>();
         body.put("model", model);
         body.put("max_tokens", defaultMaxTokens);
-        if (system != null && !system.isBlank()) body.put("system", system);
+        if (system != null && !system.isEmpty()) body.put("system", system);
         body.put("messages", messages);
         if (tools != null && !tools.isEmpty()) body.put("tools", tools);
 
@@ -92,10 +93,10 @@ public class AnthropicClient {
     public static class MessagesResponse {
         public String id;
         public String role;
-        public String model;
-        public String stop_reason;
-        public List<ContentBlock> content;
-        public Usage usage;
+        public String model;       // 응답 만든 모델 ID
+        public String stop_reason; // 응답 종료 사유 end_turn, tool_use, max_tokens 각각 자연어 응답 가능 시점, 도구 사용 필요 판단 시점, 토큰 최대치 도달 시점
+        public List<ContentBlock> content;  // LLM이 실제로 한 말과 도구 호출
+        public Usage usage;                 // 토큰 사용량 통계
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -104,12 +105,16 @@ public class AnthropicClient {
         public String text;            // when type=text
         public String id;              // when type=tool_use (tool_use_id)
         public String name;            // when type=tool_use (tool name)
-        public Map<String, Object> input; // when type=tool_use (tool args)
+        public Map<String, Object> input; // when type=tool_use (tool args) {keyword=황주완, type=EMPLOYEE, size=5}  어떤 인자로?
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Usage {
         public Integer input_tokens;
         public Integer output_tokens;
+        // 프롬프트 캐싱 — 첫 요청은 cache_creation 만, 이후는 cache_read 만 채워진다.
+        // null 가능. cache_creation 은 1.25× 비용, cache_read 는 0.1× 비용.
+        public Integer cache_creation_input_tokens;
+        public Integer cache_read_input_tokens;
     }
 }
