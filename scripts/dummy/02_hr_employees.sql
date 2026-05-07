@@ -476,6 +476,32 @@ WHERE e.company_id = @cid
 
 
 -- =====================================================================
+-- 더미 프로필 이미지 URL 매핑 — 앞 28명 (MinIO seed와 1:1 대응)
+-- ---------------------------------------------------------------------
+-- 선행 조건:
+--   1) MinIO 버킷 'peoplecore-profile'에 28개 객체가 적재되어 있어야 함
+--      (docker-compose의 minio-init 서비스가 처리)
+--   2) 객체 키 패턴: emp-{emp_id}/{emp_num}.jpg
+--   3) 본 SQL은 @cid 변수가 살아있는 같은 세션에서 실행되어야 함
+--
+-- 매핑 결과:
+--   emp_num='EMP-2025-001', emp_id=1
+--     → emp_profile_image_url='/employee/profile-images/emp-1/EMP-2025-001.jpg'
+--
+-- ⚠️ emp_id 의존성:
+--   본 UPDATE는 INSERT 시점에 emp_id가 1~28로 깨끗하게 할당된 상태를 가정.
+--   (auto_increment 1부터 시작하는 신규 시드 환경)
+--   기존 데이터가 있어 emp_id가 어긋나면 MinIO 객체 키와 불일치 → 404.
+--   → 검증: SELECT MIN(emp_id), MAX(emp_id) FROM employee WHERE emp_num
+--           BETWEEN 'EMP-2025-001' AND 'EMP-2025-028';
+--   → 1, 28 이 아니면 본 UPDATE 직전에 MinIO 적재 키도 같이 조정 필요.
+-- =====================================================================
+UPDATE employee
+    SET emp_profile_image_url = CONCAT('/employee/profile-images/seed/', emp_num, '.jpg')
+    WHERE company_id = @cid
+    AND emp_num BETWEEN 'EMP-2025-001' AND 'EMP-2025-028';
+
+-- =====================================================================
 -- [검증 쿼리] INSERT 결과 카운트
 -- =====================================================================
 -- SELECT '총 사원' AS metric, COUNT(*) AS cnt FROM employee WHERE company_id = @cid;             -- 100
