@@ -46,7 +46,7 @@ public class SeasonScheduler {
 
 //    자정 시작 — 건별 트랜잭션은 executor/SeasonService 각자 보유
 //    분산 락으로 멀티 인스턴스 중복 실행 방지 (락 키: season-transition:{yyyy-MM-dd})
-    @Scheduled(cron = "0 0 0 * * *")
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     public void transitionByDate(){
         LocalDate today = LocalDate.now();
         String lockKey = LOCK_KEY_DAILY + ":" + today;

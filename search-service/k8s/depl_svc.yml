@@ -27,6 +27,8 @@ spec:
               cpu: "0.5"
               memory: "250Mi"
           env:
+            - name: TZ
+              value: Asia/Seoul
             # 아래의 name과 yml의 ${}의 변수명과 일치해야함
             - name: DB_USERNAME
               valueFrom:
