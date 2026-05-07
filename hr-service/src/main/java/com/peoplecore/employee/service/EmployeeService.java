@@ -76,11 +76,12 @@ public class EmployeeService {
     private final EmpRetirementAccountRepository empRetirementAccountRepository;
     private final RetirementSettingsRepository retirementSettingsRepository;
     private final ObjectMapper objectMapper;
+    private final ProfileImageService profileImageService;
 
     public static final String DEFAULT_CODE = "DEFAULT";
 
     @Autowired
-    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService, InsuranceJobTypesRepository insuranceJobTypesRepository, AccountVerifyService accountVerifyService, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, ObjectMapper objectMapper) {
+    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService, InsuranceJobTypesRepository insuranceJobTypesRepository, AccountVerifyService accountVerifyService, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, ObjectMapper objectMapper, ProfileImageService profileImageService) {
         this.employeeRepository = employeeRepository;
         this.companyRepository = companyRepository;
         this.departmentRepository = departmentRepository;
@@ -97,6 +98,7 @@ public class EmployeeService {
         this.empRetirementAccountRepository = empRetirementAccountRepository;
         this.retirementSettingsRepository = retirementSettingsRepository;
         this.objectMapper = objectMapper;
+        this.profileImageService = profileImageService;
     }
 
     private static final String EMAIL_DOMAIN = "@peoplecore.com";
@@ -203,8 +205,8 @@ public class EmployeeService {
 
         if(profileImage != null && !profileImage.isEmpty()){
             try{
-                String profileUrl = minioService.uploadFile(profileImage,"employee-profile");
-                savedEmployee.updateProfileImageUrl(profileUrl);
+                String profileUrl = profileImageService.upload(savedEmployee.getEmpId(), profileImage);
+                savedEmployee.updateProfileImage(profileUrl);
             } catch (Exception e) {
                 throw new BusinessException("프로필 사진 업로드에 실패했습니다", HttpStatus.BAD_REQUEST);
             }
@@ -404,8 +406,9 @@ public class EmployeeService {
         // 프로필 사진 업로드 (새 파일 들어왔을 때만 갱신, 미전송이면 기존 URL 유지)
         if (profileImage != null && !profileImage.isEmpty()) {
             try {
-                String profileUrl = minioService.uploadFile(profileImage, "employee-profile");
-                employee.updateProfileImageUrl(profileUrl);
+                profileImageService.deleteByUrl(employee.getEmpProfileImageUrl());
+                String profileUrl = profileImageService.upload(employee.getEmpId(), profileImage);
+                employee.updateProfileImage(profileUrl);
             } catch (Exception e) {
                 throw new BusinessException("프로필 사진 업로드에 실패했습니다", HttpStatus.BAD_REQUEST);
             }
