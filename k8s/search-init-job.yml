@@ -100,7 +100,7 @@ data:
         "tasks.max": "1",
         "database.hostname": "<RDS_ENDPOINT>",
         "database.port": "3306",
-        "database.user": "root",
+        "database.user": "<DB_USER>",
         "database.password": "<DB_PASSWORD>",
         "database.server.id": "184054",
         "topic.prefix": "peoplecore",
@@ -127,6 +127,22 @@ spec:
       containers:
         - name: curl
           image: curlimages/curl:latest
+          env:
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: DB_HOST
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: DB_PASSWORD
           command: ["sh", "-c"]
           args:
             - |
@@ -139,11 +155,16 @@ spec:
                 -d @/scripts/es-index-mapping.json || true
               echo 'Waiting for Kafka Connect...'
               until curl -s http://kafka-connect:8083 > /dev/null; do sleep 2; done
+              echo 'Rendering connector JSON with secrets...'
+              sed -e "s|<RDS_ENDPOINT>|${DB_HOST}|g" \
+                  -e "s|<DB_USER>|${DB_USERNAME}|g" \
+                  -e "s|<DB_PASSWORD>|${DB_PASSWORD}|g" \
+                  /scripts/debezium-connector.json > /tmp/debezium-connector.json
               echo 'Registering Debezium connector (ignore if exists)...'
               curl -s -o /dev/null -w 'Connector POST: %{http_code}\n' \
                 -X POST http://kafka-connect:8083/connectors \
                 -H 'Content-Type: application/json' \
-                -d @/scripts/debezium-connector.json || true
+                -d @/tmp/debezium-connector.json || true
               echo 'Search infra initialized.'
           volumeMounts:
             - name: scripts
