@@ -81,6 +81,9 @@ public class ApprovalDocumentService {
         if (needIdempotency) {
             validateHrApproverIncluded(companyId, request.getApprovalLines());
         }
+        /* 폼별 사전 검증(휴가 잔여 등) — 실패 시 BusinessException 으로 save 차단 */
+        formHandlerRegistry.findByForm(form)
+                .ifPresent(h -> h.preCreate(companyId, empId, request));
         CompanyInfoResponse companyInfoResponse = hrCacheService.getCompany(companyId);
         DeptInfoResponse deptInfoResponse = hrCacheService.getDept(deptId);
         /*slotContext 조립*/
