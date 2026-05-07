@@ -21,7 +21,7 @@ spec:
             # 컨테이너가 사용할수 있는 리소스의 최대치
             limits:
               cpu: "1"
-              memory: "500Mi"
+              memory: "750Mi"
             # 컨테이너가 시작될때 보장받아야 하는 최소 자원
             requests:
               cpu: "0.5"

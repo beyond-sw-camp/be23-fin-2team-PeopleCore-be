@@ -62,6 +62,8 @@ spring:
       idle-timeout: 300000
       max-lifetime: 1800000
       connection-timeout: 30000
+      # 60초 이상 미반환 커넥션 발견 시 stack trace 와 함께 WARN 로그 → 누수 가시화
+      leak-detection-threshold: 60000
   jpa:
     database: mysql
     database-platform: org.hibernate.dialect.MySQLDialect
