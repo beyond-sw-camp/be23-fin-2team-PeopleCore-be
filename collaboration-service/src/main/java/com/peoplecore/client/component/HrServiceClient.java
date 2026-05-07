@@ -1,17 +1,22 @@
 package com.peoplecore.client.component;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.approval.dto.EmpDetailResponse;
 import com.peoplecore.client.dto.AttendanceModifyHrMemberResDto;
 import com.peoplecore.client.dto.CompanyInfoResponse;
 import com.peoplecore.client.dto.DeptInfoResponse;
 import com.peoplecore.client.dto.EmployeeSimpleResDto;
 import com.peoplecore.client.dto.TitleInfoResponse;
+import com.peoplecore.client.dto.VacationValidateRequest;
+import com.peoplecore.event.VacationSlotItem;
 import com.peoplecore.exception.BusinessException;
+import com.peoplecore.exception.ErrorResponse;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
@@ -23,10 +28,12 @@ import java.util.stream.Collectors;
 @Slf4j
 public class HrServiceClient {
     private final RestClient restClient;
+    private final ObjectMapper objectMapper;
 
     @Autowired
-    public HrServiceClient(RestClient.Builder restClient) {
+    public HrServiceClient(RestClient.Builder restClient, ObjectMapper objectMapper) {
         this.restClient = restClient.baseUrl("http://hr-service").build();
+        this.objectMapper = objectMapper;
     }
 
     @CircuitBreaker(name = "hrService", fallbackMethod = "getDeptFallback")
@@ -112,5 +119,44 @@ public class HrServiceClient {
     public AttendanceModifyHrMemberResDto getHrMembersFallback(UUID companyId, Throwable t) {
         log.warn("HR 서비스 인사팀 사원 조회 실패 companyId: {}, error: {}", companyId, t.getMessage());
         throw new BusinessException("HR 서비스 연결 실패: 인사팀 사원 정보를 조회할 수 없습니다.", HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+    /* 휴가 신청 사전 검증 - 결재 문서 생성 전 hr-service 동기 호출 */
+    /* 4xx: ErrorResponse 파싱해 BusinessException 으로 전환 (실패 사유/상태 보존 → FE 노출) */
+    /* 연결실패/5xx: fallback 에서 SERVICE_UNAVAILABLE BusinessException */
+    @CircuitBreaker(name = "hrService", fallbackMethod = "validateVacationRequestFallback")
+    public void validateVacationRequest(UUID companyId, Long empId, Long infoId, List<VacationSlotItem> items) {
+        VacationValidateRequest body = VacationValidateRequest.builder()
+                .empId(empId)
+                .infoId(infoId)
+                .items(items)
+                .build();
+        restClient.post()
+                .uri("/internal/vacation/validate-request")
+                .header("X-User-Company", companyId.toString())
+                .body(body)
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, (req, res) -> {
+                    // hr-service ErrorResponse 파싱 - 사유/상태 그대로 보존해 FE 까지 전파
+                    try {
+                        ErrorResponse err = objectMapper.readValue(res.getBody(), ErrorResponse.class);
+                        throw new BusinessException(err.getMessage(), HttpStatus.valueOf(err.getStatus()));
+                    } catch (java.io.IOException ioe) {
+                        throw new BusinessException("HR 서비스 응답 파싱 실패", HttpStatus.BAD_GATEWAY);
+                    }
+                })
+                .toBodilessEntity();
+    }
+
+    /* fallback - 비즈니스 거부(BusinessException) 는 그대로 전파, 연결실패/5xx 만 SERVICE_UNAVAILABLE 로 변환 */
+    /* CircuitBreaker open 우려: 잔여 부족 등 정상 거부도 실패 카운트되나 기존 메서드들과 동일 정책 유지 */
+    public void validateVacationRequestFallback(UUID companyId, Long empId, Long infoId,
+                                                 List<VacationSlotItem> items, Throwable t) {
+        if (t instanceof BusinessException be) {
+            throw be;
+        }
+        log.warn("HR 서비스 휴가 신청 검증 실패 empId={}, error={}", empId, t.getMessage());
+        throw new BusinessException("HR 서비스 연결 실패: 휴가 신청 검증을 수행할 수 없습니다.",
+                HttpStatus.SERVICE_UNAVAILABLE);
     }
 }

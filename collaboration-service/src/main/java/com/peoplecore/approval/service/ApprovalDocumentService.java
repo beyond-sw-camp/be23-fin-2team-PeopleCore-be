@@ -12,7 +12,6 @@ import com.peoplecore.approval.repository.*;
 import com.peoplecore.approval.entity.SourceBoxType;
 import com.peoplecore.client.component.HrServiceClient;
 import com.peoplecore.client.dto.AttendanceModifyHrMemberResDto;
-import com.peoplecore.common.service.MinioService;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -47,13 +46,12 @@ public class ApprovalDocumentService {
     private final AlarmEventPublisher alarmEventPublisher;
     private final AutoClassifyExecutor autoClassifyExecutor;
     private final ApprovalSignatureRepository signatureRepository;
-    private final MinioService minioService;
     private final ApprovalEventPublisher approvalEventPublisher;
     private final HrServiceClient hrServiceClient;
     private final ApprovalDocumentRepository approvalDocumentRepository;
     private final ApprovalFormHandlerRegistry formHandlerRegistry;
 
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalDocumentRepository approvalDocumentRepository, ApprovalFormHandlerRegistry formHandlerRegistry) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalDocumentRepository approvalDocumentRepository, ApprovalFormHandlerRegistry formHandlerRegistry) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -65,7 +63,6 @@ public class ApprovalDocumentService {
         this.alarmEventPublisher = alarmEventPublisher;
         this.autoClassifyExecutor = autoClassifyExecutor;
         this.signatureRepository = signatureRepository;
-        this.minioService = minioService;
         this.approvalEventPublisher = approvalEventPublisher;
         this.hrServiceClient = hrServiceClient;
         this.approvalDocumentRepository = approvalDocumentRepository;
@@ -84,6 +81,9 @@ public class ApprovalDocumentService {
         if (needIdempotency) {
             validateHrApproverIncluded(companyId, request.getApprovalLines());
         }
+        /* 폼별 사전 검증(휴가 잔여 등) — 실패 시 BusinessException 으로 save 차단 */
+        formHandlerRegistry.findByForm(form)
+                .ifPresent(h -> h.preCreate(companyId, empId, request));
         CompanyInfoResponse companyInfoResponse = hrCacheService.getCompany(companyId);
         DeptInfoResponse deptInfoResponse = hrCacheService.getDept(deptId);
         /*slotContext 조립*/
@@ -192,7 +192,7 @@ public class ApprovalDocumentService {
                 .findFirst()
                 .ifPresent(ApprovalLine::markRead);
 
-        /* 기안자 + 결재선 서명 일괄 조회 (empId → presigned URL) */
+        /* 기안자 + 결재선 서명 일괄 조회 (empId → 백엔드 프록시 URL) */
         List<Long> empIds = new java.util.ArrayList<>(lines.stream().map(ApprovalLine::getEmpId).distinct().toList());
         if (!empIds.contains(document.getEmpId())) {
             empIds.add(document.getEmpId());
@@ -201,7 +201,7 @@ public class ApprovalDocumentService {
                 .stream()
                 .collect(Collectors.toMap(
                         ApprovalSignature::getSigEmpId,
-                        sig -> minioService.getPresignedUrl(sig.getSigUrl())
+                        sig -> "/approval/signatures/" + sig.getSigEmpId() + "/file?v=" + sig.getSigId()
                 ));
 
         DocumentDetailResponse response = DocumentDetailResponse.from(document, lines, signatureMap);

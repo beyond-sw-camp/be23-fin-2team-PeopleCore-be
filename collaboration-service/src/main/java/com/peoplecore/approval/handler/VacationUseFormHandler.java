@@ -1,6 +1,7 @@
 package com.peoplecore.approval.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.approval.dto.DocumentCreateRequest;
 import com.peoplecore.approval.dto.docdata.VacationUseDocData;
 import com.peoplecore.approval.entity.ApprovalDocument;
 import com.peoplecore.approval.entity.ApprovalLine;
@@ -8,16 +9,20 @@ import com.peoplecore.calendar.entity.Events;
 import com.peoplecore.calendar.entity.MyCalendars;
 import com.peoplecore.calendar.repository.EventsRepository;
 import com.peoplecore.calendar.service.MyCalendarService;
+import com.peoplecore.client.component.HrServiceClient;
 import com.peoplecore.event.VacationApprovalDocCreatedEvent;
 import com.peoplecore.event.VacationApprovalResultEvent;
 import com.peoplecore.event.VacationSlotItem;
+import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 @Slf4j
@@ -31,21 +36,40 @@ public class VacationUseFormHandler implements ApprovalFormHandler {
     private final ObjectMapper objectMapper;
     private final MyCalendarService myCalendarService;
     private final EventsRepository eventsRepository;
+    private final HrServiceClient hrServiceClient;
 
     @Autowired
     public VacationUseFormHandler(KafkaTemplate<String, String> kafkaTemplate,
                                   ObjectMapper objectMapper,
                                   MyCalendarService myCalendarService,
-                                  EventsRepository eventsRepository) {
+                                  EventsRepository eventsRepository,
+                                  HrServiceClient hrServiceClient) {
         this.kafkaTemplate = kafkaTemplate;
         this.objectMapper = objectMapper;
         this.myCalendarService = myCalendarService;
         this.eventsRepository = eventsRepository;
+        this.hrServiceClient = hrServiceClient;
     }
 
     @Override
     public boolean supports(ApprovalDocument document) {
         return FORM_CODE.equals(document.getFormId().getFormCode());
+    }
+
+    /* 결재 문서 save 전 동기 검증 — docData 파싱 후 hr-service 호출 */
+    /* 검증 실패 시 BusinessException 전파 → ApprovalDocumentService 의 save 자체가 막힘 */
+    /* docData 파싱 실패(JSON 깨짐) 는 FE 버그 → 400 */
+    @Override
+    public void preCreate(UUID companyId, Long empId, DocumentCreateRequest request) {
+        VacationUseDocData data;
+        try {
+            data = objectMapper.readValue(request.getDocData(), VacationUseDocData.class);
+        } catch (Exception e) {
+            log.warn("[VacationUseForm] docData 파싱 실패 - empId={}, err={}", empId, e.getMessage());
+            throw new BusinessException("휴가 신청서 docData 형식이 올바르지 않습니다.", HttpStatus.BAD_REQUEST);
+        }
+        hrServiceClient.validateVacationRequest(
+                companyId, empId, data.getInfoId(), data.getVacReqItems());
     }
 
     @Override

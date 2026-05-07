@@ -19,6 +19,12 @@ import java.util.UUID;
  * 인덱스:
  * - (company_id, emp_id, work_date) 회사 범위 사원별 조회
  * - (emp_id, work_date) 개인 근태 조회
+ *
+ * TODO 고도화:
+ *   - EKS 컨테이너 TZ=UTC 시절에 적재된 work_date 점검 필요.
+ *     KST 자정~09:00 사이 체크인 기록이 전날 파티션에 잘못 들어갔을 수 있음
+ *     (예: KST 5/8 01:00 → UTC 5/7 16:00 → workDate=2026-05-07 로 적재).
+ *     comRecCheckIn 시각과 workDate 가 다른 일자로 어긋난 행을 카운트 후 마이그레이션.
  */
 @Entity
 @Getter
