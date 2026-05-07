@@ -39,6 +39,18 @@ public interface PayrollDetailsRepository extends JpaRepository<PayrollDetails, 
     //    특정 급여대장의 전체 상세 조회
     List<PayrollDetails> findByPayrollRuns(PayrollRuns payrollRuns);
 
+    //    특정 급여대장의 전체 상세 조회 + Employee/Dept/Grade/WorkGroup fetch join
+    //    (getPayroll 화면용 — 사원별 dept/grade 표시 + workGroup 휴일판단에 필요)
+    @Query("""
+            SELECT pd FROM PayrollDetails pd
+             JOIN FETCH pd.employee e
+             LEFT JOIN FETCH e.dept
+             LEFT JOIN FETCH e.grade
+             LEFT JOIN FETCH e.workGroup
+             WHERE pd.payrollRuns = :run
+            """)
+    List<PayrollDetails> findByPayrollRunsWithEmpFetch(@Param("run") PayrollRuns run);
+
     //    특정 급여대장 + 특정 사원의 상세 조회
     List<PayrollDetails> findByPayrollRunsAndEmployee_EmpId(PayrollRuns payrollRuns, Long empId);
 
