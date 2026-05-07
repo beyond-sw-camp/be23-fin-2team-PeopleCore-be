@@ -11,6 +11,7 @@ import io.minio.StatObjectResponse;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,12 +27,19 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class MinioService {
     private final MinioClient minioClient;
+    private final MinioClient minioPresignClient;
     private final String bucket;
     private final String endpoint;
 
     @Autowired
-    public MinioService(MinioClient minioClient, @Value("${minio.bucket}") String bucket, @Value("${minio.endpoint}") String endpoint) {
+    public MinioService(
+            @Qualifier("minioClient") MinioClient minioClient,
+            @Qualifier("minioPresignClient") MinioClient minioPresignClient,
+            @Value("${minio.bucket}") String bucket,
+            @Value("${minio.endpoint}") String endpoint
+    ) {
         this.minioClient = minioClient;
+        this.minioPresignClient = minioPresignClient;
         this.bucket = bucket;
         this.endpoint = endpoint;
     }
@@ -105,7 +113,7 @@ public class MinioService {
      */
     public String getPresignedUrl(String objectName) {
         try {
-            return minioClient.getPresignedObjectUrl(
+            return minioPresignClient.getPresignedObjectUrl(
                     GetPresignedObjectUrlArgs.builder()
                             .method(Method.GET)
                             .bucket(bucket)
