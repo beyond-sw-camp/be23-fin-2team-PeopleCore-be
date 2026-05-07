@@ -6,6 +6,8 @@ import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import io.minio.RemoveObjectArgs;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -129,6 +131,36 @@ public class MinioService {
         } catch (Exception e) {
             log.error("MinIO 파일 삭제 실패 objectName={}, error={}", objectName, e.getMessage());
             throw new BusinessException("파일 삭제에 실패했습니다.", HttpStatus.SERVICE_UNAVAILABLE);
+        }
+    }
+
+    /**
+     * 첨부파일 다운로드용 InputStream 반환 (백엔드 프록시 GET 용)
+     */
+    public InputStream download(String objectName) {
+        try {
+            return minioClient.getObject(GetObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(objectName)
+                    .build());
+        } catch (Exception e) {
+            log.error("MinIO 다운로드 실패 objectName={}, error={}", objectName, e.getMessage());
+            throw new BusinessException("파일 다운로드에 실패했습니다.", HttpStatus.SERVICE_UNAVAILABLE);
+        }
+    }
+
+    /**
+     * 객체 메타데이터 조회 (content-type, size 등)
+     */
+    public StatObjectResponse stat(String objectName) {
+        try {
+            return minioClient.statObject(StatObjectArgs.builder()
+                    .bucket(bucket)
+                    .object(objectName)
+                    .build());
+        } catch (Exception e) {
+            log.error("MinIO stat 실패 objectName={}, error={}", objectName, e.getMessage());
+            throw new BusinessException("파일 정보 조회에 실패했습니다.", HttpStatus.SERVICE_UNAVAILABLE);
         }
     }
 }

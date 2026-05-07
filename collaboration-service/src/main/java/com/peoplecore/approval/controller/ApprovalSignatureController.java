@@ -4,6 +4,7 @@ import com.peoplecore.approval.dto.ApprovalSignatureResponseDto;
 import com.peoplecore.approval.service.ApprovalSignatureService;
 import com.peoplecore.auth.RoleRequired;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -83,5 +84,13 @@ public class ApprovalSignatureController {
             @PathVariable Long empId) {
         signatureService.delete(companyId, empId);
         return ResponseEntity.ok().build();
+    }
+
+    /** 서명 이미지 파일 프록시 GET (회사 내 인증된 사용자 누구나) */
+    @GetMapping("/{empId}/file")
+    public ResponseEntity<Resource> downloadSignatureFile(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @PathVariable Long empId) {
+        return signatureService.downloadFile(companyId, empId);
     }
 }

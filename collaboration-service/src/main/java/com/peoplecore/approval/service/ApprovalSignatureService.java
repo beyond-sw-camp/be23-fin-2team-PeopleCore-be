@@ -7,13 +7,20 @@ import com.peoplecore.common.entity.CommonAttachFile;
 import com.peoplecore.common.repository.CommonAttachFileRepository;
 import com.peoplecore.common.service.MinioService;
 import com.peoplecore.exception.BusinessException;
+import io.minio.StatObjectResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
 import java.util.UUID;
 
 @Service
@@ -21,6 +28,7 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 public class ApprovalSignatureService {
     private static final String ENTITY_TYPE = "SIGNATURE";
+    private static final String URL_PREFIX = "/approval/signatures/";
 
     private final CommonAttachFileRepository attachFileRepository;
     private final ApprovalSignatureRepository signatureRepository;
@@ -43,8 +51,9 @@ public class ApprovalSignatureService {
                 .map(ApprovalSignature::getSigManagerId)
                 .orElse(null);
 
-        String presignedUrl = minioService.getPresignedUrl(attachFile.getStoredFileName());
-        return ApprovalSignatureResponseDto.from(attachFile, managerId, presignedUrl);
+        /* 백엔드 프록시 URL — attachId 를 v 쿼리로 붙여 캐시버스팅 */
+        String fileUrl = URL_PREFIX + empId + "/file?v=" + attachFile.getAttachId();
+        return ApprovalSignatureResponseDto.from(attachFile, managerId, fileUrl);
     }
 
     /**
@@ -74,11 +83,10 @@ public class ApprovalSignatureService {
                 });
         signatureRepository.deleteByCompanyIdAndSigEmpId(companyId, empId);   // 고아 row 대비 항상 정리
         signatureRepository.flush();                                          // INSERT 전 DELETE 강제 반영 (UNIQUE 충돌 방지)
-        // MinIO 업로드
+        /* MinIO 업로드 */
         minioService.uploadAttachment(objectName, file);
-        String presignedUrl = minioService.getPresignedUrl(objectName);
 
-        // CommonAttachFile 저장 (storedFileName = objectName, fileUrl = 조립된 공개 URL)
+        /* CommonAttachFile 저장 (storedFileName = objectName) */
         CommonAttachFile attachFile = attachFileRepository.save(CommonAttachFile.builder()
                 .companyId(companyId)
                 .entityType(ENTITY_TYPE)
@@ -90,7 +98,7 @@ public class ApprovalSignatureService {
                 .fileType(fileType)
                 .build());
 
-        // ApprovalSignature 이력 저장
+        /* ApprovalSignature 이력 저장 */
         signatureRepository.save(ApprovalSignature.builder()
                 .companyId(companyId)
                 .sigEmpId(empId)
@@ -98,9 +106,9 @@ public class ApprovalSignatureService {
                 .sigManagerId(managerId)
                 .build());
 
-
-
-        return ApprovalSignatureResponseDto.from(attachFile, managerId,presignedUrl);
+        /* 백엔드 프록시 URL 반환 (attachId 캐시버스팅) */
+        String fileUrl = URL_PREFIX + empId + "/file?v=" + attachFile.getAttachId();
+        return ApprovalSignatureResponseDto.from(attachFile, managerId, fileUrl);
     }
 
     /**
@@ -122,5 +130,29 @@ public class ApprovalSignatureService {
     private String resolveFileType(String contentType) {
         if (contentType != null && contentType.startsWith("image/")) return "IMAGE";
         return "ETC";
+    }
+
+    /**
+     * 서명 이미지 프록시 다운로드 (회사 내 인증된 사용자)
+     */
+    public ResponseEntity<Resource> downloadFile(UUID companyId, Long empId) {
+        /* 회사 + 사원 기준 서명 첨부 메타 조회 (없으면 404) */
+        CommonAttachFile attachFile = attachFileRepository
+                .findByCompanyIdAndEntityTypeAndEntityId(companyId, ENTITY_TYPE, empId)
+                .orElseThrow(() -> new BusinessException("서명이 등록되어 있지 않습니다.", HttpStatus.NOT_FOUND));
+
+        String objectName = attachFile.getStoredFileName();
+        /* MinIO 객체 메타데이터 조회 (content-type/size) */
+        StatObjectResponse stat = minioService.stat(objectName);
+        /* MinIO 객체 스트림 획득 */
+        InputStream stream = minioService.download(objectName);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(stat.contentType()));
+        headers.setContentLength(stat.size());
+        headers.set(HttpHeaders.CONTENT_DISPOSITION, "inline");
+        /* URL ?v= 쿼리로 cache-busting → 강캐싱 안전 */
+        headers.setCacheControl("public, max-age=86400");
+        return ResponseEntity.ok().headers(headers).body(new InputStreamResource(stream));
     }
 }
