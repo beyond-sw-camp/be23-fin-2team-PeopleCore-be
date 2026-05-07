@@ -1,5 +1,6 @@
 package com.peoplecore.calendar.dtos;
 
+import com.peoplecore.calendar.entity.EventAttendees;
 import com.peoplecore.calendar.entity.Events;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,11 +29,16 @@ public class EventResDto {
     private String displayColor;
     private Long empId;
     private LocalDateTime createdAt;
+    private List<AttendeeResDto> attendees;
 
     private RepeatedRulesResDto repeatedRule;
     private List<NotificationResDto> notifications;
 
     public static EventResDto fromEntity(Events events){
+        return fromEntity(events, null);
+    }
+
+    public static EventResDto fromEntity(Events events, List<EventAttendees> attendeeList){
         return EventResDto.builder()
                 .eventsId(events.getEventsId())
                 .title(events.getTitle())
@@ -49,6 +55,7 @@ public class EventResDto {
                 .createdAt(events.getCreatedAt())
                 .repeatedRule(events.getRepeatedRules() != null ? RepeatedRulesResDto.fromEntity(events.getRepeatedRules()) : null)
                 .notifications(events.getNotifications() != null ? events.getNotifications().stream().map(NotificationResDto::fromEntity).toList() : List.of())
+                .attendees(attendeeList != null ? attendeeList.stream().map(AttendeeResDto::fromEntity).toList() : List.of())
                 .build();
     }
 
