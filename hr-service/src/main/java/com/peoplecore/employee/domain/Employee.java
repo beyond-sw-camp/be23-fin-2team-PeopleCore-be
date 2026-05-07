@@ -88,7 +88,7 @@ public class Employee extends BaseTimeEntity {
 
     // 폼 설정에서 추가된 동적 fieldKey 들의 값 (JSONB)
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "custom_fields", columnDefinition = "jsonb")
+    @Column(name = "custom_fields", columnDefinition = "json")
     @Builder.Default
     private Map<String, String> customFields = new HashMap<>();
 
