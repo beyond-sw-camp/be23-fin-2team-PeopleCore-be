@@ -13,6 +13,7 @@ public class OrgChartMemberDto {
     private String empName;
     private String gradeName;
     private String titleName;
+    private String profileImageUrl;
 
     public static OrgChartMemberDto from(Employee e) {
         return OrgChartMemberDto.builder()
@@ -20,6 +21,7 @@ public class OrgChartMemberDto {
                 .empName(e.getEmpName())
                 .gradeName(e.getGrade().getGradeName())
                 .titleName(e.getTitle() != null ? e.getTitle().getTitleName() : null)
+                .profileImageUrl(e.getEmpProfileImageUrl())
                 .build();
     }
 }

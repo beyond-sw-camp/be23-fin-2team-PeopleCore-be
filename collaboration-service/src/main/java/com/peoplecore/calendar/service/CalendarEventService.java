@@ -5,6 +5,7 @@ import com.peoplecore.alarm.service.AlarmService;
 import com.peoplecore.calendar.dtos.*;
 import com.peoplecore.calendar.entity.*;
 import com.peoplecore.calendar.repository.*;
+import com.peoplecore.entity.Holidays;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
@@ -13,8 +14,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+
+import static com.peoplecore.calendar.entity.QEvents.events;
 
 @Slf4j
 @Service
@@ -27,15 +31,18 @@ public class CalendarEventService {
     private final EventsNotificationsRepository eventsNotificationsRepository;
      private final InterestCalendarsRepository interestCalendarsRepository;
      private final AlarmEventPublisher alarmEventPublisher;
+     private final HolidayRepository holidayRepository;
+
 
     @Autowired
-    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, InterestCalendarsRepository interestCalendarsRepository, AlarmEventPublisher alarmEventPublisher) {
+    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, InterestCalendarsRepository interestCalendarsRepository, AlarmEventPublisher alarmEventPublisher, HolidayRepository holidayRepository) {
         this.myCalendarsRepository = myCalendarsRepository;
         this.eventsRepository = eventsRepository;
         this.repeatedRulesRepository = repeatedRulesRepository;
         this.eventsNotificationsRepository = eventsNotificationsRepository;
         this.interestCalendarsRepository = interestCalendarsRepository;
         this.alarmEventPublisher = alarmEventPublisher;
+        this.holidayRepository = holidayRepository;
     }
 
 //    일정 등록
@@ -111,7 +118,7 @@ public class CalendarEventService {
 
 //    캘린더 뷰 일정조회 (월,주,일)
 //    내캘린더 + 관심캘린더 + 전사일정통합
-    public List<EventResDto> getEventsForView(UUID companyId, Long empId, LocalDateTime start, LocalDateTime end) {
+    public CalendarEventRangeResDto getEventsForView(UUID companyId, Long empId, LocalDateTime start, LocalDateTime end) {
 
 //        1. 내캘린더 ID 추출 - 보이기 설정값
         List<MyCalendars> myCalendars = myCalendarsRepository.findByCompanyIdAndEmpIdOrderBySortOrderAsc(companyId, empId);
@@ -152,17 +159,44 @@ public class CalendarEventService {
             result.add(EventResDto.fromEntity(e));
         }
 
-        return result;
+        // 6) 공휴일 머지 (NATIONAL + 회사의 COMPANY)
+        LocalDate startDate = start.toLocalDate();
+        LocalDate endDate   = end.toLocalDate();
+        List<Holidays> rawHolidays =
+                holidayRepository.findByCompanyIdAndPeriod(companyId, startDate, endDate);
 
-//        // 5) 통합 - stream 사용방식 (참고)
-//        Map<Long, Events> merged = new LinkedHashMap<>();
-//        Stream.of(myEvents, interestEvents, companyEvents)
-//                .flatMap(Collection::stream)
-//                .forEach(e -> merged.putIfAbsent(e.getEventsId(), e));
-//
-//        return merged.values().stream()
-//                .map(EventResponse::from)
-//                .toList();
+        List<CalendarEventRangeResDto.HolidayItem> holidays = new ArrayList<>();
+        for (Holidays h : rawHolidays) {
+            if (Boolean.TRUE.equals(h.getIsRepeating())) {
+                // 반복 휴일은 [startDate~endDate] 범위 내의 모든 발생일을 펼침
+                int month = h.getDate().getMonthValue();
+                int day   = h.getDate().getDayOfMonth();
+                for (int year = startDate.getYear(); year <= endDate.getYear(); year++) {
+                    LocalDate occ;
+                    try {
+                        occ = LocalDate.of(year, month, day);
+                    } catch (Exception e) {
+                        occ = LocalDate.of(year, month, 28); // 2/29 평년 fallback
+                    }
+                    if (!occ.isBefore(startDate) && !occ.isAfter(endDate)) {
+                        holidays.add(CalendarEventRangeResDto.HolidayItem.of(h, occ));
+                    }
+                }
+            } else {
+                LocalDate d = h.getDate();
+                if (!d.isBefore(startDate) && !d.isAfter(endDate)) {
+                    if (!d.isBefore(startDate) && !d.isAfter(endDate)) {
+                        holidays.add(CalendarEventRangeResDto.HolidayItem.of(h, d));
+                    }
+                }
+            }
+        }
+
+        return CalendarEventRangeResDto.builder()
+                .events(result)
+                .holidays(holidays)
+                .build();
+
     }
 
 

@@ -44,7 +44,8 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/face/health",
             "/hr-service/ws",
             "/hr-service/chat/files",
-            "/hr-service/*"
+            "/hr-service/*",
+            "/hr-service/employee/profile-images"
     );
 
     //  hr담당자만 추가 접근 가능 경로
@@ -56,6 +57,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/hr-service/auth/face/employees",
             "/collaboration-service/filevault/admin-capability/config",
             "/hr-service/*"
+    );
+    private static final List<String> HR_ONLY_EXCEPTIONS = List.of(
+            "/hr-service/employee/me/"            // 본인 프로필 이미지 등록/제거
     );
 
     //  서버운영팀·서비스간 호출 전용 경로 (API Key 인증)
@@ -165,6 +169,9 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     //    hr 전용경로 확인
     private boolean isHrOnlyPath(String path) {
+        if (HR_ONLY_EXCEPTIONS.stream().anyMatch(path::startsWith)) {
+            return false;
+        }
         for (String hrPath : HR_ONLY_PATHS) {
             if (path.startsWith(hrPath)) {
                 return true;

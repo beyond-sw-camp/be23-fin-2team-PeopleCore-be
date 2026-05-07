@@ -47,6 +47,15 @@ public class LeaveAllowanceController {
             leaveAllowanceService.getResignedList(companyId, year));
     }
 
+    //    입사기념일 도래 사원 연차수당 목록 (해당 월 yearMonth='YYYY-MM')
+    @GetMapping("/anniversary")
+    public ResponseEntity<LeaveAllowanceSummaryResDto> getAnniversaryList(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestParam String yearMonth){
+        return ResponseEntity.ok(
+                leaveAllowanceService.getAnniversaryList(companyId, yearMonth));
+    }
+
 //        수당 산정(선택한 사원)
     @PostMapping("/calculate")
     public ResponseEntity<Void> calculate(
@@ -63,8 +72,7 @@ public class LeaveAllowanceController {
     public ResponseEntity<ApplyResultDto> applyToPayroll(
             @RequestHeader("X-User-Company") UUID companyId,
             @RequestBody List<Long> allowanceIds) {
-        leaveAllowanceService.applyToPayroll(companyId, allowanceIds);
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(leaveAllowanceService.applyToPayroll(companyId, allowanceIds));
     }
 
 //    검토 대기 카운트 ("검토 대기 N명" 카드 표시용)
