@@ -88,6 +88,13 @@ public class ResignService {
             throw new IllegalArgumentException("이미 처리된 퇴직 건입니다");
         }
 
+        LocalDate resignDate = resign.getResignDate();
+        if (resignDate != null && !resignDate.isAfter(LocalDate.now())) {
+            // 퇴직예정일이 오늘 이하면 스케줄러 거치지 않고 즉시 퇴직 처리
+            finalizeRetire(resign);
+        } else {
+            resign.confirmRetire(); // ACTIVE -> CONFIRMED (스케줄러 대기)
+        }
         resign.confirmRetire(); // ACTIVE -> CONFIRMED (스케줄러 대기)
         // 인사 [퇴직처리] 시점에도 자동 산정 트리거
         eventPublisher.publishEvent(
@@ -102,15 +109,19 @@ public class ResignService {
                 RetireStatus.CONFIRMED, LocalDate.now());
 
         for (Resign resign : targets) {
-            resign.processRetire();
-            Employee employee = resign.getEmployee();
-            employee.updateStatus(EmpStatus.RESIGNED);
-            employee.updateResignDate(resign.getResignDate());
-            faceAuthService.cascadeUnregisterFace(employee.getEmpId(), employee.getCompany().getCompanyId());
+            finalizeRetire(resign);
+        }
+    }
+
+    private void finalizeRetire(Resign resign) {
+        resign.processRetire();
+        Employee employee = resign.getEmployee();
+        employee.updateStatus(EmpStatus.RESIGNED);
+        employee.updateResignDate(resign.getResignDate());
+        faceAuthService.cascadeUnregisterFace(employee.getEmpId(), employee.getCompany().getCompanyId());
 
 //            이벤트 발생(-> 퇴직금+연차수당 산정) +평가자 중 퇴직자 알림(리스너 추가)
-            eventPublisher.publishEvent(new EmployeeRetiredEvent(employee.getCompany().getCompanyId(),employee.getEmpId()));
-        }
+        eventPublisher.publishEvent(new EmployeeRetiredEvent(employee.getCompany().getCompanyId(), employee.getEmpId()));
     }
 
     public void deleteResign(UUID companyId, Long resignId){
