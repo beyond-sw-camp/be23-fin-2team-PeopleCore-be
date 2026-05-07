@@ -834,4 +834,18 @@ WHERE s.company_id = @cid AND s.status = 'CLOSED' AND eg.final_grade IS NOT NULL
 GROUP BY eg.final_grade
 ORDER BY FIELD(eg.final_grade, 'S','A','B','C','D');
 
+
+-- =====================================================================
+-- [화면용] 인사팀 전원 동점 — 보정 참고사항 zeroStdDevTeams 시연
+-- ---------------------------------------------------------------------
+-- 인사팀 박제된 EvalGrade 의 manager_score 를 동일값으로 고정.
+-- team_std_dev=0 으로 박아 백엔드 getCalibrationReview 에서 zeroStdDevTeams 에 잡히게.
+-- =====================================================================
+UPDATE eval_grade eg
+SET eg.manager_score          = 80,
+    eg.manager_score_adjusted = 80,
+    eg.team_std_dev           = 0
+WHERE eg.dept_id_snapshot = (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='HR');
+
+
 COMMIT;

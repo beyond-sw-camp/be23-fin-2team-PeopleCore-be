@@ -55,6 +55,7 @@ SET @d_dev   := (SELECT dept_id FROM department WHERE company_id=@cid AND dept_c
 SET @d_inf   := (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='INF');
 SET @d_sales := (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='SALES');
 SET @d_mkt   := (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='MKT');
+SET @d_design:= (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='DESIGN');
 
 -- ▼ 직급 ID lookup ▼
 SET @g_emp := (SELECT grade_id FROM grade WHERE company_id=@cid AND grade_code='G1');
@@ -260,6 +261,63 @@ INSERT INTO employee (
 (@cid, @d_mkt,   @g_dae, @t_mem,  @j_etc, '도해린', 'emp118@peoplecore.kr', '010-2118-4118', 'EMP-2025-118', '2018-11-05', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1986-12-13', 'FEMALE', '2025-12-31', NULL, 1, 100, 'DC', FALSE),
 (@cid, @d_hr,    @g_dae, @t_mem,  @j_fin, '류은성', 'emp119@peoplecore.kr', '010-2119-4119', 'EMP-2025-119', '2021-04-13', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1990-09-08', 'MALE',   '2026-03-15', NULL, 1, 100, 'DC', FALSE),
 (@cid, @d_fin,   @g_gwa, @t_mem,  @j_fin, '문가온', 'emp120@peoplecore.kr', '010-2120-4120', 'EMP-2025-120', '2017-06-20', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1984-11-25', 'FEMALE', '2026-01-31', NULL, 1, 100, 'DC', FALSE);
+
+
+-- =====================================================================
+-- [추가 시드] 과거 퇴직자 (EMP-HIST-001 ~ 030) — 2015~2024-11 분포
+-- ---------------------------------------------------------------------
+-- 월별 입퇴사 추이 차트가 풍부하게 표시되도록 10년치 퇴직자를 다이나믹 분포로 주입.
+-- 모두 emp_status='RESIGNED', emp_resign 채움. 평가/목표/매핑은 ACTIVE 필터에 자동 제외됨.
+-- 일부 월은 0건, 일부 월은 1~2건 (HR 트렌드 곡선이 자연스럽게 보이도록).
+-- =====================================================================
+INSERT INTO employee (
+  company_id, dept_id, grade_id, title_id, insurance_job_types,
+  emp_name, emp_email, emp_phone, emp_num,
+  emp_hire_date, emp_type, emp_status, emp_password, emp_role,
+  emp_birth_date, emp_gender,
+  emp_resign, contract_end_date,
+  dependents_count, tax_rate_option, retirement_type, must_change_password
+) VALUES
+-- 2015 (2명)
+(@cid, @d_dev,   @g_dae, @t_mem, @j_it,  '김혜원', 'hist001@peoplecore.kr', '010-2200-1001', 'EMP-HIST-001', '2010-04-12', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1985-06-10', 'FEMALE', '2015-03-15', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_sales, @g_gwa, @t_mem, @j_dist,'이태성', 'hist002@peoplecore.kr', '010-2200-1002', 'EMP-HIST-002', '2012-09-08', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1983-02-22', 'MALE',   '2015-08-22', NULL, 1, 100, 'DC', FALSE),
+-- 2016 (2명)
+(@cid, @d_hr,    @g_emp, @t_mem, @j_fin, '박은지', 'hist003@peoplecore.kr', '010-2200-1003', 'EMP-HIST-003', '2011-06-22', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1990-11-05', 'FEMALE', '2016-02-10', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_inf,   @g_dae, @t_mem, @j_it,  '최승우', 'hist004@peoplecore.kr', '010-2200-1004', 'EMP-HIST-004', '2014-03-15', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1988-08-15', 'MALE',   '2016-09-05', NULL, 1, 100, 'DC', FALSE),
+-- 2017 (1명)
+(@cid, @d_fin,   @g_gwa, @t_mem, @j_fin, '정나영', 'hist005@peoplecore.kr', '010-2200-1005', 'EMP-HIST-005', '2013-11-08', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1986-05-18', 'FEMALE', '2017-06-18', NULL, 1, 100, 'DC', FALSE),
+-- 2018 (3명)
+(@cid, @d_mkt,   @g_emp, @t_mem, @j_etc, '강민혁', 'hist006@peoplecore.kr', '010-2200-1006', 'EMP-HIST-006', '2015-05-20', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1992-09-12', 'MALE',   '2018-01-25', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_dev,   @g_dae, @t_mem, @j_it,  '조유진', 'hist007@peoplecore.kr', '010-2200-1007', 'EMP-HIST-007', '2014-08-15', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1989-04-30', 'FEMALE', '2018-07-12', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_sales, @g_gwa, @t_mem, @j_dist,'윤재석', 'hist008@peoplecore.kr', '010-2200-1008', 'EMP-HIST-008', '2016-02-25', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1987-12-20', 'MALE',   '2018-11-30', NULL, 1, 100, 'DC', FALSE),
+-- 2019 (3명)
+(@cid, @d_hr,    @g_dae, @t_mem, @j_fin, '장혜린', 'hist009@peoplecore.kr', '010-2200-1009', 'EMP-HIST-009', '2015-10-30', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1991-07-08', 'FEMALE', '2019-04-08', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_inf,   @g_emp, @t_mem, @j_it,  '임도훈', 'hist010@peoplecore.kr', '010-2200-1010', 'EMP-HIST-010', '2017-04-12', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1993-03-15', 'MALE',   '2019-08-15', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_fin,   @g_gwa, @t_mem, @j_fin, '한지영', 'hist011@peoplecore.kr', '010-2200-1011', 'EMP-HIST-011', '2016-09-15', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1988-10-22', 'FEMALE', '2019-12-22', NULL, 1, 100, 'DC', FALSE),
+-- 2020 (4명)
+(@cid, @d_dev,   @g_emp, @t_mem, @j_it,  '오현석', 'hist012@peoplecore.kr', '010-2200-1012', 'EMP-HIST-012', '2017-08-22', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1994-01-15', 'MALE',   '2020-02-05', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_mkt,   @g_dae, @t_mem, @j_etc, '신예솔', 'hist013@peoplecore.kr', '010-2200-1013', 'EMP-HIST-013', '2018-12-10', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1992-08-05', 'FEMALE', '2020-05-18', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_sales, @g_gwa, @t_mem, @j_dist,'권태우', 'hist014@peoplecore.kr', '010-2200-1014', 'EMP-HIST-014', '2017-04-08', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1990-06-25', 'MALE',   '2020-08-25', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_hr,    @g_emp, @t_mem, @j_fin, '황소연', 'hist015@peoplecore.kr', '010-2200-1015', 'EMP-HIST-015', '2019-02-15', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1995-12-10', 'FEMALE', '2020-11-12', NULL, 1, 100, 'DC', FALSE),
+-- 2021 (3명)
+(@cid, @d_inf,   @g_dae, @t_mem, @j_it,  '안준영', 'hist016@peoplecore.kr', '010-2200-1016', 'EMP-HIST-016', '2018-07-22', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1991-04-18', 'MALE',   '2021-03-09', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_dev,   @g_emp, @t_mem, @j_it,  '송하린', 'hist017@peoplecore.kr', '010-2200-1017', 'EMP-HIST-017', '2019-09-30', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1996-02-08', 'FEMALE', '2021-07-20', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_fin,   @g_dae, @t_mem, @j_fin, '류지환', 'hist018@peoplecore.kr', '010-2200-1018', 'EMP-HIST-018', '2017-12-05', 'CONTRACT', 'RESIGNED', @pwd, 'EMPLOYEE', '1989-11-30', 'MALE', '2021-10-15', '2021-10-15', 1, 100, 'DC', FALSE),
+-- 2022 (4명)
+(@cid, @d_mkt,   @g_gwa, @t_mem, @j_etc, '배미경', 'hist019@peoplecore.kr', '010-2200-1019', 'EMP-HIST-019', '2019-04-18', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1990-08-22', 'FEMALE', '2022-01-28', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_sales, @g_emp, @t_mem, @j_dist,'서지호', 'hist020@peoplecore.kr', '010-2200-1020', 'EMP-HIST-020', '2020-08-10', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1995-05-15', 'MALE',   '2022-05-10', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_dev,   @g_emp, @t_mem, @j_it,  '문수아', 'hist021@peoplecore.kr', '010-2200-1021', 'EMP-HIST-021', '2021-01-25', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1997-09-08', 'FEMALE', '2022-08-22', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_hr,    @g_gwa, @t_mem, @j_fin, '진동현', 'hist022@peoplecore.kr', '010-2200-1022', 'EMP-HIST-022', '2019-11-15', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1988-06-12', 'MALE',   '2022-11-30', NULL, 1, 100, 'DC', FALSE),
+-- 2023 (5명)
+(@cid, @d_inf,   @g_dae, @t_mem, @j_it,  '차예원', 'hist023@peoplecore.kr', '010-2200-1023', 'EMP-HIST-023', '2020-05-08', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1991-12-25', 'FEMALE', '2023-02-14', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_fin,   @g_emp, @t_mem, @j_fin, '구하영', 'hist024@peoplecore.kr', '010-2200-1024', 'EMP-HIST-024', '2021-03-20', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1996-07-04', 'FEMALE', '2023-04-25', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_mkt,   @g_emp, @t_mem, @j_etc, '표민호', 'hist025@peoplecore.kr', '010-2200-1025', 'EMP-HIST-025', '2020-12-12', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1994-03-30', 'MALE',   '2023-07-08', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_sales, @g_dae, @t_mem, @j_dist,'은지윤', 'hist026@peoplecore.kr', '010-2200-1026', 'EMP-HIST-026', '2022-01-30', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1992-10-18', 'FEMALE', '2023-09-15', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_dev,   @g_gwa, @t_mem, @j_it,  '도지훈', 'hist027@peoplecore.kr', '010-2200-1027', 'EMP-HIST-027', '2021-08-25', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1989-05-22', 'MALE',   '2023-12-20', NULL, 1, 100, 'DC', FALSE),
+-- 2024 (Jan~Nov, 3명)
+(@cid, @d_hr,    @g_dae, @t_mem, @j_fin, '백서영', 'hist028@peoplecore.kr', '010-2200-1028', 'EMP-HIST-028', '2022-04-10', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1993-08-14', 'FEMALE', '2024-03-12', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_inf,   @g_emp, @t_mem, @j_it,  '노태진', 'hist029@peoplecore.kr', '010-2200-1029', 'EMP-HIST-029', '2021-11-15', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1996-04-25', 'MALE',   '2024-06-25', NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_mkt,   @g_gwa, @t_mem, @j_etc, '홍시아', 'hist030@peoplecore.kr', '010-2200-1030', 'EMP-HIST-030', '2022-08-30', 'FULL', 'RESIGNED', @pwd, 'EMPLOYEE', '1990-01-08', 'FEMALE', '2024-10-30', NULL, 1, 100, 'DC', FALSE);
 
 
 -- =====================================================================
@@ -500,6 +558,24 @@ UPDATE employee
     SET emp_profile_image_url = CONCAT('/employee/profile-images/seed/', emp_num, '.jpg')
     WHERE company_id = @cid
     AND emp_num BETWEEN 'EMP-2025-001' AND 'EMP-2025-028';
+
+
+-- =====================================================================
+-- [추가 시드] 디자인팀 사원 3명 (소규모팀 시연용 — undersizedTeams)
+-- ---------------------------------------------------------------------
+-- 평가 시즌 자동 산정 시 teamSize=3 < minTeamSize=5 → 보정 참고사항에 노출
+-- =====================================================================
+INSERT INTO employee (
+  company_id, dept_id, grade_id, title_id, insurance_job_types,
+  emp_name, emp_email, emp_phone, emp_num,
+  emp_hire_date, emp_type, emp_status, emp_password, emp_role,
+  emp_birth_date, emp_gender,
+  emp_resign, contract_end_date,
+  dependents_count, tax_rate_option, retirement_type, must_change_password
+) VALUES
+(@cid, @d_design, @g_dae, @t_mem, @j_etc, '윤은서', 'emp180@peoplecore.kr', '010-2180-4180', 'EMP-2025-180', '2024-03-15', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1995-04-22', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_design, @g_emp, @t_mem, @j_etc, '오태성', 'emp181@peoplecore.kr', '010-2181-4181', 'EMP-2025-181', '2024-09-08', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2000-11-15', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+(@cid, @d_design, @g_emp, @t_mem, @j_etc, '한가람', 'emp182@peoplecore.kr', '010-2182-4182', 'EMP-2025-182', '2025-02-20', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2001-08-03', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE);
 
 -- =====================================================================
 -- [검증 쿼리] INSERT 결과 카운트
