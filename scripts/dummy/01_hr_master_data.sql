@@ -1,3 +1,4 @@
+
 use peoplecore;
 
 -- =====================================================================
@@ -78,7 +79,7 @@ INSERT INTO grade (company_id, grade_name, grade_code, grade_order) VALUES
 --   팀원 / 팀장 / 본부장 / 대표
 -- =====================================================================
 
-INSERT INTO title (company_id, title_name, title_code, title_order) VALUES
+INSERT INTO title (company_id,  title_name, title_code, title_order) VALUES
 (@cid, '팀원',   'T-MEMBER', 1),
 (@cid, '팀장',   'T-LEAD',   2),
 (@cid, '본부장', 'T-HEAD',   3),
