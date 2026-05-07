@@ -1,0 +1,37 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: minio-ingress
+  namespace: default
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: my-issuer
+    # 큰 파일 PUT 대응
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"          # 0 = 무제한 (또는 "500m" 등 명시)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://www.peoplecore.cloud"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, PUT, POST, HEAD, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Authorization, Content-Type, Origin, Accept, X-Requested-With, x-amz-content-sha256, x-amz-date, x-amz-user-agent, x-amz-acl"
+    nginx.ingress.kubernetes.io/cors-expose-headers: "ETag, x-amz-request-id, x-amz-version-id"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "false"
+    nginx.ingress.kubernetes.io/cors-max-age: "3000"
+spec:
+  tls:
+    - hosts:
+        - minio.peoplecore.cloud
+      secretName: minio-peoplecore-tls
+  rules:
+    - host: minio.peoplecore.cloud
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: minio
+                port:
+                  number: 9000
