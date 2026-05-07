@@ -1,6 +1,5 @@
 package com.peoplecore.auth.controller;
 
-import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.auth.dto.LoginRequest;
 import com.peoplecore.auth.dto.LoginResponse;
 import com.peoplecore.auth.dto.TokenRefreshRequest;
