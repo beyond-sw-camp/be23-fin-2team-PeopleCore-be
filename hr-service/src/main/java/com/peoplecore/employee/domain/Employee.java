@@ -183,6 +183,14 @@ public class Employee extends BaseTimeEntity {
         this.empPassword = encodedPassword;
     }
 
+    public void updateProfileImage(String url) {
+        this.empProfileImageUrl = url;
+    }
+
+    public void updateSimplePassword(String encoded) {
+        this.simplePassword = encoded;
+    }
+
     public void updateRole(EmpRole role) {
         this.empRole = role;
     }

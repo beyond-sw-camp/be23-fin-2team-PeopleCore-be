@@ -6,8 +6,8 @@ spec:
   accessModes: ["ReadWriteOnce"]
   resources:
     requests:
-      storage: 10Giz
-  storageClassName: gp3   # 환경에 맞게 (gp2/gp3)
+      storage: 10Gi
+  storageClassName: gp2   # 환경에 맞게 (gp2/gp3)
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -25,6 +25,22 @@ spec:
       labels:
         app: elasticsearch
     spec:
+      # 새 EBS 볼륨이 root:root 로 마운트되어 ES 유저(UID 1000)가 쓰기 못 하는 문제 방지
+      securityContext:
+        fsGroup: 0                       # 마운트 시 그룹 ownership=root → ES 유저가 그룹쓰기 가능
+      initContainers:
+        # 메인 컨테이너 시작 전 데이터 디렉토리 소유자/권한 보정 (1회성)
+        - name: fix-permissions
+          image: busybox:1.36            # chown/chmod 만 쓰니 가장 작은 이미지면 충분
+          command:
+            - sh
+            - -c
+            - "chown -R 1000:0 /usr/share/elasticsearch/data && chmod -R g+w /usr/share/elasticsearch/data"
+          securityContext:
+            runAsUser: 0                 # chown 은 root 권한 필요 (메인 컨테이너는 그대로 UID 1000)
+          volumeMounts:
+            - name: es-data              # 메인과 같은 PVC 를 같은 경로로 마운트해야 권한이 적용됨
+              mountPath: /usr/share/elasticsearch/data
       containers:
         - name: elasticsearch
           image: 346720668840.dkr.ecr.ap-northeast-2.amazonaws.com/peoplecore/elasticsearch-nori:latest

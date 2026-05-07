@@ -1,9 +1,7 @@
 rootProject.name = 'be23-fin-PeopleCore'
 
 include(
-        'common',
         'api-gateway',
-        'config-server',
         'eureka-server',
         'hr-service',
         'collaboration-service',

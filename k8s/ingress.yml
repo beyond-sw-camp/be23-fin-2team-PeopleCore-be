@@ -16,10 +16,7 @@ metadata:
     nginx.ingress.kubernetes.io/configuration-snippet: |
       proxy_set_header Upgrade $http_upgrade;
       proxy_set_header Connection "upgrade";
-    nginx.ingress.kubernetes.io/affinity: "cookie"
-    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
-    nginx.ingress.kubernetes.io/session-cookie-name: "SERVERID"
-    nginx.ingress.kubernetes.io/session-cookie-max-age: "3600"
+#    nginx.ingress.kubernetes.io/upstream-hash-by: "$binary_remote_addr"
 spec:
   tls:
     - hosts:

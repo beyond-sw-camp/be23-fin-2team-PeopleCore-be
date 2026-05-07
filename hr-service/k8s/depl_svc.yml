@@ -1,0 +1,118 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hr-service-depl
+spec:
+  selector:
+    matchLabels:
+      app: hr-service
+  template:
+    metadata:
+      labels:
+        app: hr-service
+    spec:
+      containers:
+        - name: hr-service
+          image: 346720668840.dkr.ecr.ap-northeast-2.amazonaws.com/peoplecore/hr-service:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+          resources:
+            # 컨테이너가 사용할수 있는 리소스의 최대치
+            limits:
+              cpu: "1"
+              memory: "500Mi"
+            # 컨테이너가 시작될때 보장받아야 하는 최소 자원
+            requests:
+              cpu: "0.5"
+              memory: "250Mi"
+          env:
+            # 아래의 name과 yml의 ${}의 변수명과 일치해야함
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: DB_PASSWORD
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                   name: peoplecore-secrets
+                   key: DB_HOST
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: JWT_SECRET
+            - name: JWT_SECRET_RT
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: JWT_SECRET_RT
+            - name: MAIL_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MAIL_USERNAME
+            - name: MAIL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MAIL_PASSWORD
+            - name: COOLSMS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: COOLSMS_API_KEY
+            - name: COOLSMS_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: COOLSMS_API_SECRET
+            - name: INIT_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: INIT_ADMIN_PASSWORD
+            - name: MINIO_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MINIO_ACCESS_KEY
+            - name: MINIO_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: MINIO_SECRET_KEY
+            - name: DISCORD_WEBHOOK
+              valueFrom:
+                secretKeyRef:
+                  name: peoplecore-secrets
+                  key: DISCORD_WEBHOOK
+            # 컨테이너 상태 확인을 통해 롤링업데이트 최적화
+          readinessProbe:
+            httpGet:
+              # healthcheck 경로
+              path: /health
+              port: 8080
+            # 컨테이너 시작 후 지연
+            initialDelaySeconds: 10
+            # 확인 반복 주기
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  #  게이트웨이의 yml중 라우터이름이랑 같아야함 / uri: http://member-service
+  name: hr-service
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    app: hr-service

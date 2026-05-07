@@ -194,14 +194,6 @@ public class EmpSalaryService {
     @Transactional
     public void updateEmpAccount(UUID companyId, Long empId, EmpAccountReqDto reqDto){
 
-        // 토큰 검증
-        accountVerifyService.consumeToken(
-                reqDto.getVerificationToken(),
-                reqDto.getBankCode(),
-                reqDto.getAccountNumber(),
-                reqDto.getAccountHolder()
-        );
-
         Optional<EmpAccounts> empAccount = empAccountsRepository.findByEmployee_EmpIdAndCompany_CompanyId(empId, companyId);
 
         if(empAccount.isPresent()){

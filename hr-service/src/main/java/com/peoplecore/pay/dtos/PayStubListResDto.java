@@ -16,7 +16,7 @@ public class PayStubListResDto {
 
     private Long stubId;                // entity: payStubsId
     private String payYearMonth;        // "YYYY-MM"
-    private LocalDateTime issuedAt;     // entity: issuedAT
+    private LocalDateTime issuedAt;     // entity: issuedAt
     private Long totalPay;
     private Long totalDeduction;
     private Long netPay;

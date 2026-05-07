@@ -95,6 +95,12 @@ public class ResignService {
         } else {
             resign.confirmRetire(); // ACTIVE -> CONFIRMED (스케줄러 대기)
         }
+        resign.confirmRetire(); // ACTIVE -> CONFIRMED (스케줄러 대기)
+        // 인사 [퇴직처리] 시점에도 자동 산정 트리거
+        eventPublisher.publishEvent(
+                new EmployeeRetiredEvent(
+                        resign.getEmployee().getCompany().getCompanyId(),
+                        resign.getEmployee().getEmpId()));
     }
 
     //스케줄러용: CONFIRMED 상태이고 퇴직예정일이 오늘 이하인 건들 퇴직 처리

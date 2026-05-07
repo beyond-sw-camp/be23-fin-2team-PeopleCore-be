@@ -6,6 +6,7 @@ import com.peoplecore.pay.service.SeveranceService;
 import com.peoplecore.resign.event.EmployeeRetiredEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -22,6 +23,8 @@ public class SeveranceEventListener {
         this.severanceService = severanceService;
     }
 
+    // 연차수당(Order=1) 산정 후 실행 - 퇴직금 평균임금에 연차수당 합산 보장
+    @Order(2)
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onEmployeeRetired(EmployeeRetiredEvent event) {
         try {

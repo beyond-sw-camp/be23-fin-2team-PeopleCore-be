@@ -14,6 +14,13 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder    //공휴일
+@Table(
+        name = "holidays",
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_holiday_date_type_company",
+                columnNames = {"date", "holiday_type", "company_id"}
+        )
+)
 public class Holidays extends BaseTimeEntity{
 
     @Id
@@ -37,4 +44,10 @@ public class Holidays extends BaseTimeEntity{
 
     private Long empModifyId;
 
+    public void update(LocalDate date, String holidayName, Boolean isRepeating, Long empModifyId) {
+        this.date = date;
+        this.holidayName = holidayName;
+        this.isRepeating = isRepeating;
+        this.empModifyId = empModifyId;
+    }
 }

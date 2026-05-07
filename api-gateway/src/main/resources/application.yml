@@ -3,5 +3,4 @@ spring:
     name: api-gateway
   profiles:
     active: local
-  config:
-    import: optional:configserver:http://localhost:8888/
+  

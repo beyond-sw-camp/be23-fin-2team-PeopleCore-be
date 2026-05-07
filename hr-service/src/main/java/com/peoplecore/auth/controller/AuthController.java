@@ -5,6 +5,7 @@ import com.peoplecore.auth.dto.LoginResponse;
 import com.peoplecore.auth.dto.TokenRefreshRequest;
 import com.peoplecore.auth.dto.VerifyPasswordRequest;
 import com.peoplecore.auth.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -19,8 +20,9 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
-        return ResponseEntity.ok(authService.login(request));
+    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request,
+                                               HttpServletRequest httpServletRequest) {
+        return ResponseEntity.ok(authService.login(request, httpServletRequest));
     }
 
     @PostMapping("/refresh")

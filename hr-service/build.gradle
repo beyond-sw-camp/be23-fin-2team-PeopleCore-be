@@ -27,7 +27,7 @@ ext {
 }
 
 dependencies {
-	implementation project(':common')
+	implementation 'com.peoplecore:common:1.0.2-SNAPSHOT'
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-batch'
 	implementation 'org.springframework.boot:spring-boot-starter-quartz'
@@ -36,9 +36,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springframework.boot:spring-boot-starter-webflux'
-	implementation 'org.springframework.cloud:spring-cloud-bus'
+//	implementation 'org.springframework.cloud:spring-cloud-bus'
 	implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
-	implementation 'org.springframework.cloud:spring-cloud-starter-config'
 	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
 	implementation 'org.springframework.cloud:spring-cloud-stream-binder-kafka'
 	implementation 'org.springframework.kafka:spring-kafka'
@@ -89,4 +88,16 @@ dependencyManagement {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// =====================================================================
+// 시드 SQL 동기화: scripts/seed/ 의 정본을 build/resources/main/seed/ 로 복사
+// → spring.sql.init.data-locations=classpath:seed/holidays_national.sql 가 인식
+// → 단일 정본(scripts/seed)에서만 수정하면 빌드 시 자동 반영
+// =====================================================================
+tasks.named('processResources') {
+	from(rootProject.file('scripts/seed')) {
+		into 'seed'
+		include 'holidays_national.sql'
+	}
 }

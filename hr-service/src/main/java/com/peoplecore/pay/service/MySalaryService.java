@@ -130,6 +130,7 @@ public class MySalaryService {
                 .titleName(emp.getTitle() != null ? emp.getTitle().getTitleName() : null)
                 .profileImageUrl(emp.getEmpProfileImageUrl())
                 .salaryInfo(salaryInfo)
+                .empPersonalEmail(emp.getEmpPersonalEmail())
                 .dependentsCount(emp.getDependentsCount())
                 .salaryAccount(salaryAccount)
                 .retirementAccount(retirementAccount)

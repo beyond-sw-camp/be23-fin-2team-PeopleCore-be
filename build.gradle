@@ -18,6 +18,21 @@ subprojects {
 
     repositories {
         mavenCentral()
+        mavenLocal()
+        maven {
+            name = 'GitHubPackages'
+            url  = uri('https://maven.pkg.github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-be')
+            credentials {
+                username = project.findProperty('gpr.user')  ?: System.getenv('GITHUB_ACTOR')
+                password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
+            }
+        }
+
+    }
+
+    // SNAPSHOT 의존성을 매번 새로 받음 (캐시 0초)
+    configurations.all {
+        resolutionStrategy.cacheChangingModulesFor 0, 'seconds'
     }
 
     dependencyManagement {
@@ -40,11 +55,4 @@ subprojects {
 // common은 라이브러리라 bootJar 제외
 configure(subprojects.findAll { it.name != 'common' }) {
     apply plugin: 'org.springframework.boot'
-}
-
-project(':common') {
-    apply plugin: 'java-library'
-    jar {
-        enabled = true
-    }
 }

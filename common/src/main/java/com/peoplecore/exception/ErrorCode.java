@@ -38,6 +38,8 @@ public enum ErrorCode {
 
     // 비밀번호
     SAME_PASSWORD(400, "기존 비밀번호와 동일합니다."),
+    SIMPLE_PIN_MISMATCH(400, "간편 비밀번호가 일치하지 않습니다"),
+    INVALID_PIN_FORMAT(400, "간편 비밀번호는 4자리 숫자여야 합니다"),
 
     // 부서
     DEPARTMENT_NOT_FOUND(404, "부서를 찾을 수 없습니다."),
@@ -193,6 +195,12 @@ public enum ErrorCode {
     //    전사 캘린더
     COMPANY_EVENT_NOT_FOUND(404, "전사 일정을 찾을 수 없습니다."),
     COMPANY_EVENT_NOT_COMPANY(400, "전사 일정이 아닙니다."),
+
+// 공휴일
+    HOLIDAY_NOT_FOUND(404, "휴일을 찾을 수 없습니다."),
+    HOLIDAY_NOT_COMPANY(403, "법정공휴일은 수정/삭제할 수 없습니다."),
+    HOLIDAY_ACCESS_DENIED(403, "다른 회사의 휴일은 변경할 수 없습니다."),
+    HOLIDAY_DUPLICATED(409, "이미 등록된 날짜의 휴일입니다."),
 
 
     // 공통
