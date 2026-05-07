@@ -3,8 +3,10 @@ package com.peoplecore.vacation.batch;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
+import reactor.netty.http.client.HttpClient;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -26,14 +28,14 @@ public class DiscordNotifier {
     private final String webhookUrl;
     private final WebClient webClient;
 
-    // TODO(배포 전): webhookUrl 을 환경변수 DISCORD_BATCH_WEBHOOK 로 분리 + Discord 에서 현재 URL 폐기 후 재발급
-    //                 (application-local.yml 에 평문 커밋되어 있어 보안 위험)
-    // TODO(배포 전): WebClient 에 responseTimeout(5초) 적용 - 현재 미설정이라 Discord 미응답 시 무기한 대기 가능
-    //                 HttpClient.create().responseTimeout(Duration.ofSeconds(5)) → ReactorClientHttpConnector 로 주입
     @Autowired
     public DiscordNotifier(@Value("${discord.batch-webhook:}") String webhookUrl) {
         this.webhookUrl = webhookUrl;
-        this.webClient = WebClient.builder().build();
+        // Discord 미응답 시 reactor 워커 무기한 대기 방지 — 5초 hard cap
+        this.webClient = WebClient.builder()
+                .clientConnector(new ReactorClientHttpConnector(
+                        HttpClient.create().responseTimeout(Duration.ofSeconds(5))))
+                .build();
     }
 
     /* 배치 실패 알림 - 실패 건별 호출. 웹훅 미설정 시 조용히 skip */
