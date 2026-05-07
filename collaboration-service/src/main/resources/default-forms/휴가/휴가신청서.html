@@ -110,22 +110,23 @@
     <tr class="use-row">
       <th>휴가 종류</th>
       <td colspan="3">
-        <input type="text" name="vacationTypeName" class="field-input field-center field-label" readonly>
-        <!-- 실제 식별자는 hidden으로 전송 -->
+        <input type="text" name="vacationTypeName" class="field-input field-center field-label" placeholder="예: 연차, 반차, 병가">
+        <!-- 모달 흐름에서 식별자 자동 주입, 직접 입력 시에는 비어있음 -->
         <input type="hidden" name="infoId">
       </td>
     </tr>
     <tr class="use-row">
       <th>요청 휴가일수</th>
       <td colspan="3" class="use-cell">
-        <input type="text" name="vacReqUseDay" class="field-input field-center field-label" readonly> 일
+        <input type="number" name="vacReqUseDay" class="field-input field-center field-label" min="0" step="0.5" placeholder="0"> 일
       </td>
     </tr>
     <tr>
       <th>휴가 일자</th>
       <td colspan="3">
-        <textarea name="vacReqDatesText" readonly rows="4"
-                  style="width:100%;resize:none;white-space:pre-line;"></textarea>
+        <textarea name="vacReqDatesText" rows="4"
+                  placeholder="예: 2026-05-19 (화) 09:00 ~ 18:00"
+                  style="width:100%;resize:vertical;white-space:pre-line;"></textarea>
       </td>
     </tr>
   </table>
