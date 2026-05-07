@@ -14,6 +14,9 @@ import com.peoplecore.pay.dtos.LeaveAllowanceSummaryResDto;
 import com.peoplecore.pay.dtos.LeavePolicyTypeResDto;
 import com.peoplecore.pay.enums.*;
 import com.peoplecore.pay.repository.*;
+import com.peoplecore.resign.domain.Resign;
+import com.peoplecore.resign.domain.RetireStatus;
+import com.peoplecore.resign.repository.ResignRepository;
 import com.peoplecore.salarycontract.domain.SalaryContract;
 import com.peoplecore.salarycontract.repository.SalaryContractRepository;
 import com.peoplecore.vacation.entity.VacationBalance;
@@ -32,9 +35,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.DateTimeException;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.time.YearMonth;
+import java.util.*;
 
 @Slf4j
 @Service
@@ -53,10 +55,12 @@ public class LeaveAllowanceService {
     private final VacationPolicyRepository vacationPolicyRepository;
     private final VacationPromotionNoticeRepository vacationPromotionNoticeRepository;  // 촉진 통지 이력 (면제 판정용)
     private final PayrollEmpStatusRepository payrollEmpStatusRepository;
+    private final ResignRepository resignRepository;
+    private final PaySettingsRepository paySettingsRepository;
 
 
     @Autowired
-    public LeaveAllowanceService(CompanyRepository companyRepository, PayItemsRepository payItemsRepository, EmployeeRepository employeeRepository, LeaveAllowanceRepository leaveAllowanceRepository, SalaryContractRepository salaryContractRepository, VacationBalanceRepository vacationBalanceRepository, VacationTypeRepository vacationTypeRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, VacationPolicyRepository vacationPolicyRepository, VacationPromotionNoticeRepository vacationPromotionNoticeRepository, PayrollEmpStatusRepository payrollEmpStatusRepository) {
+    public LeaveAllowanceService(CompanyRepository companyRepository, PayItemsRepository payItemsRepository, EmployeeRepository employeeRepository, LeaveAllowanceRepository leaveAllowanceRepository, SalaryContractRepository salaryContractRepository, VacationBalanceRepository vacationBalanceRepository, VacationTypeRepository vacationTypeRepository, PayrollDetailsRepository payrollDetailsRepository, PayrollRunsRepository payrollRunsRepository, VacationPolicyRepository vacationPolicyRepository, VacationPromotionNoticeRepository vacationPromotionNoticeRepository, PayrollEmpStatusRepository payrollEmpStatusRepository, ResignRepository resignRepository, PaySettingsRepository paySettingsRepository) {
         this.companyRepository = companyRepository;
         this.payItemsRepository = payItemsRepository;
         this.employeeRepository = employeeRepository;
@@ -69,15 +73,19 @@ public class LeaveAllowanceService {
         this.vacationPolicyRepository = vacationPolicyRepository;
         this.vacationPromotionNoticeRepository = vacationPromotionNoticeRepository;
         this.payrollEmpStatusRepository = payrollEmpStatusRepository;
+        this.resignRepository = resignRepository;
+        this.paySettingsRepository = paySettingsRepository;
     }
 
 
     //    연말 미사용 연차 산정 목록
+    @Transactional
     public LeaveAllowanceSummaryResDto getFiscalYearList(UUID companyId, Integer year) {
         return buildSummary(companyId, year, AllowanceType.FISCAL_YEAR);
     }
 
     //    퇴직자 연차 정산 목록
+    @Transactional
     public LeaveAllowanceSummaryResDto getResignedList(UUID companyId, Integer year) {
         return buildSummary(companyId, year, AllowanceType.RESIGNED);
     }
@@ -94,8 +102,10 @@ public class LeaveAllowanceService {
         for (Long empId : empIds) {
             Employee emp = employeeRepository.findById(empId).orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
-            // 이미 산정된 경우 스킵
-            if (leaveAllowanceRepository.existsByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(companyId, empId, year, type)) {
+            // PENDING 은 산정 진행, CALCULATED/APPLIED/EXEMPTED 는 스킵
+            LeaveAllowance existing = leaveAllowanceRepository.findFirstByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(companyId, empId, year, type).orElse(null);
+
+            if (existing != null && existing.getStatus() != AllowanceStatus.PENDING) {
                 continue;
             }
 
@@ -152,14 +162,16 @@ public class LeaveAllowanceService {
             long noticeCnt = vacationPromotionNoticeRepository.countNoticeStages(companyId, empId, year);
             if (noticeCnt >= 2) {
                 log.info("[LeaveAllowance] 촉진 통지 완료 - 수당 면제. empId={}, year={}", empId, year);
-                LeaveAllowance exempted = LeaveAllowance.builder()
-                        .company(company)
-                        .employee(emp)
-                        .year(year)
-                        .allowanceType(type)
-                        .resignDate(type == AllowanceType.RESIGNED ? emp.getEmpResignDate() : null)
-                        .status(AllowanceStatus.EXEMPTED)
-                        .build();
+                LeaveAllowance exempted = existing != null
+                        ? existing
+                        : LeaveAllowance.builder()
+                          .company(company)
+                          .employee(emp)
+                          .year(year)
+                          .allowanceType(type)
+                          .resignDate(type == AllowanceType.RESIGNED ? emp.getEmpResignDate() : null)
+                          .status(AllowanceStatus.EXEMPTED)
+                          .build();
                 exempted.calculate(monthlySalary, dailyWage, totalDays, usedDays, unusedDays, 0L);
                 leaveAllowanceRepository.save(exempted);
                 continue;
@@ -168,14 +180,16 @@ public class LeaveAllowanceService {
 //            산정금액 = 미사용일수 * 일 통상임금
             long amount = unusedDays.multiply(BigDecimal.valueOf(dailyWage)).longValue();
 
-            LeaveAllowance allowance = LeaveAllowance.builder()
-                    .company(company)
-                    .employee(emp)
-                    .year(year)
-                    .allowanceType(type)
-                    .resignDate(type == AllowanceType.RESIGNED ? emp.getEmpResignDate() : null)
-                    .status(AllowanceStatus.PENDING)
-                    .build();
+            LeaveAllowance allowance = existing != null
+                    ? existing  // 기존 PENDING 재사용 (dirty checking으로 update)
+                    : LeaveAllowance.builder()
+                      .company(company)
+                      .employee(emp)
+                      .year(year)
+                      .allowanceType(type)
+                      .resignDate(type == AllowanceType.RESIGNED ? emp.getEmpResignDate() : null)
+                      .status(AllowanceStatus.PENDING)
+                      .build();
 
             allowance.calculate(monthlySalary, dailyWage, totalDays, usedDays, unusedDays, amount);
             leaveAllowanceRepository.save(allowance);
@@ -353,40 +367,75 @@ public class LeaveAllowanceService {
                 .build();
     }
 
-
-    ///    반영대상 월 결정
+    /* 반영 대상 월 결정 - 회사 급여 지급일/정책 기준으로 자동 결정.
+     * 노동법: 만료 직후 가장 빠른 정기 임금일이 속한 월.
+     * - CURRENT(당월): 5월 근로 → 5월 25일 지급
+     * - NEXT(익월): 5월 근로 → 6월 25일 지급
+     */
     private String resolveTargetMonth(LeaveAllowance la) {
-        if (la.getAllowanceType() == AllowanceType.FISCAL_YEAR) {
-//           회계년도 : 연말 미사용 -> 해당 연도 12월
-            return la.getYear() + "-12";
-        } else if (la.getAllowanceType() == AllowanceType.ANNIVERSARY) {
-//           입사일 기준 -> 입사 기념일 월
-            if (la.getEmployee().getEmpHireDate() == null){
-                throw new CustomException(ErrorCode.EMPLOYEE_HIRE_DATE_NOT_FOUND);
-            }
-            int month = la.getEmployee().getEmpHireDate().getMonthValue();
-            return la.getYear() + "-" + String.format("%02d",month);
-        } else {
-//           퇴직자 -> 퇴직월
+        UUID companyId = la.getCompany().getCompanyId();
+        LocalDate expiration = resolveExpirationDate(la);       // 만료일
+        LocalDate dueDate = expiration.plusDays(1);   // 산정 가능 시점
+
+        // 회사 급여 설정 (없으면 안전 기본값: 매월 25일, 당월 지급)
+        CompanyPaySettings settings = paySettingsRepository
+                .findByCompany_CompanyId(companyId)
+                .orElse(null);
+
+        int payDay = (settings == null) ? 25
+                : Boolean.TRUE.equals(settings.getSalaryPayLastDay()) ? 31
+                  : settings.getSalaryPayDay();
+        PayMonth payMonth = (settings == null || settings.getSalaryPayMonth() == null)
+                ? PayMonth.CURRENT
+                : settings.getSalaryPayMonth();
+
+        // 만료 다음의 가장 빠른 정기 임금일이 속한 yearMonth (근로월 기준)
+        YearMonth workMonth = YearMonth.from(dueDate);
+        int dayCap = Math.min(payDay, workMonth.lengthOfMonth());
+        LocalDate firstPaydayAfter = workMonth.atDay(dayCap);
+        if (dueDate.isAfter(firstPaydayAfter)) {
+            workMonth = workMonth.plusMonths(1);   // 그 달 급여일 지났으면 다음 근로월
+        }
+
+        // NEXT(익월 지급) 정책이면 한 달 더 미룸 (5월 근로 → 6월 25일 지급)
+        YearMonth payTargetMonth = (payMonth == PayMonth.NEXT) ? workMonth.plusMonths(1) : workMonth;
+
+        return payTargetMonth.toString();   // "2026-05" / "2027-01"
+    }
+
+
+    /* 만료일 결정 - FISCAL: 그 해 12-31, ANNIVERSARY: 그 해 입사기념일, RESIGNED: 퇴직일 */
+    private LocalDate resolveExpirationDate(LeaveAllowance la) {
+        if (la.getAllowanceType() == AllowanceType.RESIGNED) {
             if (la.getResignDate() == null) {
                 throw new CustomException(ErrorCode.LEAVE_ALLOWANCE_NO_RESIGN_DATE);
             }
-            return la.getResignDate().getYear() + "-" +
-                    String.format("%02d", la.getResignDate().getMonthValue());
+            return la.getResignDate();
         }
+        if (la.getAllowanceType() == AllowanceType.ANNIVERSARY) {
+            LocalDate hire = la.getEmployee().getEmpHireDate();
+            if (hire == null) {
+                throw new CustomException(ErrorCode.EMPLOYEE_HIRE_DATE_NOT_FOUND);
+            }
+            try {
+                return LocalDate.of(la.getYear(), hire.getMonthValue(), hire.getDayOfMonth());
+            } catch (DateTimeException e) {
+                return LocalDate.of(la.getYear(), hire.getMonthValue(), 28);
+            }
+        }
+        // FISCAL_YEAR
+        return LocalDate.of(la.getYear(), 12, 31);
     }
 
 
 //  상단 요약 dto
     private LeaveAllowanceSummaryResDto buildSummary(UUID companyId, Integer year, AllowanceType type){
-        List<LeaveAllowance> list = leaveAllowanceRepository.findAllByCompanyAndYearAndType(companyId, year, type);
-
-//        아직 LeaveAllowance 엔티티가 없는 대상자
-//        최초 조회시 대상 사원을 PENDING 상태로 자동 생성
-        if(list.isEmpty()){
+        // 신규 대상자 자동 포함 - ANNIVERSARY 는 별도 트리거(createAnniversaryPendingRecords)
+        if (type != AllowanceType.ANNIVERSARY) {
             createPendingRecords(companyId, year, type);
-            list = leaveAllowanceRepository.findAllByCompanyAndYearAndType(companyId, year, type);
         }
+        List<LeaveAllowance> list = leaveAllowanceRepository
+                .findAllByCompanyAndYearAndType(companyId, year, type);
 
         List<LeaveAllowanceResDto> employees = list.stream().map(LeaveAllowanceResDto::fromEntity).toList();
 
@@ -425,47 +474,56 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
         List<Employee> targets;
 
         if (type == AllowanceType.FISCAL_YEAR){
-//        재직/휴직 사원(퇴직자 제외)
+        // 회계연도(12-31) 미도래 시 PENDING 생성 안 함
+            if (LocalDate.now().isBefore(LocalDate.of(year, 12, 31).plusDays(1))) return;
+//      재직/휴직 사원(퇴직자 제외)
             targets = employeeRepository.findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(companyId, List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE));
         } else {
-//            해당연도 퇴직 사원
-            targets = employeeRepository.findByCompany_CompanyIdAndEmpStatusAndDeleteAtIsNull(companyId, EmpStatus.RESIGNED)
-                    .stream()
-                    .filter(e-> e.getEmpResignDate() != null && e.getEmpResignDate().getYear() == year)
-                    .toList();
+            // 해당연도 퇴직(완료) + 퇴직예정(CONFIRMED) 사원
+            targets = collectResignedAndPendingTargets(companyId, year);
         }
 
         for (Employee emp : targets){
             if(leaveAllowanceRepository.existsByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(companyId, emp.getEmpId(),year, type)){
                 continue;
             }
+            LocalDate effectiveResignDate = resolveEffectiveResignDate(companyId, emp, type);
             LeaveAllowance allowance = LeaveAllowance.builder()
                     .company(company)
                     .employee(emp)
                     .year(year)
                     .allowanceType(type)
-                    .resignDate(type == AllowanceType.RESIGNED ? emp.getEmpResignDate() : null)
+                    .resignDate(type == AllowanceType.RESIGNED ? effectiveResignDate : null)
                     .status(AllowanceStatus.PENDING)
                     .build();
             leaveAllowanceRepository.save(allowance);
         }
     }
 
-//   이번달이 입사일기준 대상사원 PENDING 레코드 생성
+//   이번달이 입사일기준 대상사원 PENDING 레코드 생성 (입사기념일 도래자만)
     @Transactional
     public void createAnniversaryPendingRecords(UUID companyId, int year, int month){
         Company company = companyRepository.findById(companyId).orElseThrow(()-> new CustomException(ErrorCode.COMPANY_NOT_FOUND));
 
-//        재직/휴직 사원중 입사월이 대상 월인 사원
-        List<Employee> targets = employeeRepository.findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(companyId, List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE  ))
+        LocalDate today = LocalDate.now();
+
+//        재직/휴직 사원중 입사월이 대상 월이고, 그 해 입사기념일이 도래(당일 포함)한 사원만
+        List<Employee> targets = employeeRepository
+                .findByCompany_CompanyIdAndEmpStatusInAndDeleteAtIsNull(
+                        companyId, List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE))
                 .stream()
-                .filter(e-> e.getEmpHireDate() != null && e.getEmpHireDate().getMonthValue() == month)
+                .filter(e -> e.getEmpHireDate() != null
+                        && e.getEmpHireDate().getMonthValue() == month
+                        && !resolveAnniversaryDateInYear(e.getEmpHireDate(), year)
+                        .isAfter(today))
                 .toList();
 
-        for(Employee emp : targets){
-            if(leaveAllowanceRepository.existsByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(companyId, emp.getEmpId(), year, AllowanceType.ANNIVERSARY)){
+        for (Employee emp : targets) {
+            if (leaveAllowanceRepository.existsByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(
+                    companyId, emp.getEmpId(), year, AllowanceType.ANNIVERSARY)) {
                 continue;
             }
+
 
             LeaveAllowance allowance = LeaveAllowance.builder()
                     .company(company)
@@ -507,8 +565,12 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
      */
     private LocalDate resolveBasisDate(AllowanceType type, int year, Employee emp) {
         if (type == AllowanceType.RESIGNED) {
-            // 퇴직일이 없으면 fallback (방어 — 자동 산정 트리거에서 미설정 사원 걸러짐)
-            return emp.getEmpResignDate() != null ? emp.getEmpResignDate() : LocalDate.of(year, 12, 31);
+            if (emp.getEmpResignDate() != null) return emp.getEmpResignDate();
+            // 퇴직예정 사원 - Resign.resignDate fallback
+            UUID companyId = emp.getCompany().getCompanyId();
+            return resignRepository.findActiveOrConfirmedByEmpId(companyId, emp.getEmpId())
+                    .map(Resign::getResignDate)
+                    .orElse(LocalDate.of(year, 12, 31)); // 둘 다 없으면 마지막 fallback
         }
         if (type == AllowanceType.ANNIVERSARY) {
             LocalDate hire = emp.getEmpHireDate();
@@ -522,5 +584,59 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
         }
         // FISCAL_YEAR
         return LocalDate.of(year, 12, 31);
+    }
+
+
+    /**
+     * 해당 연도에 퇴직(완료/예정)인 사원 수집.
+     * - EmpStatus.RESIGNED: empResignDate.year == year
+     * - Resign.retireStatus IN (CONFIRMED): resignDate.year == year, Employee.empStatus 무관
+     * 동일 사원 중복 시 RESIGNED 우선.
+     */
+    private List<Employee> collectResignedAndPendingTargets(UUID companyId, int year) {
+        Map<Long, Employee> byEmpId = new LinkedHashMap<>();
+
+        // 1) 이미 퇴직 완료된 사원
+        employeeRepository
+                .findByCompany_CompanyIdAndEmpStatusAndDeleteAtIsNull(companyId, EmpStatus.RESIGNED)
+                .stream()
+                .filter(e -> e.getEmpResignDate() != null && e.getEmpResignDate().getYear() == year)
+                .forEach(e -> byEmpId.put(e.getEmpId(), e));
+
+        // 2) 퇴직예정 사원 (Resign.retireStatus = CONFIRMED)
+        resignRepository
+                .findAllByRetireStatusAndIsDeletedFalseAndResignDateBetween(
+                        RetireStatus.CONFIRMED,
+                        LocalDate.of(year, 1, 1),
+                        LocalDate.of(year, 12, 31))
+                .stream()
+                .filter(r -> r.getEmployee().getCompany().getCompanyId().equals(companyId))
+                .filter(r -> Boolean.FALSE.equals(r.getEmployee().getDeleteAt() != null)) // 삭제된 사원 제외
+                .forEach(r -> byEmpId.putIfAbsent(r.getEmployee().getEmpId(), r.getEmployee()));
+
+        return new ArrayList<>(byEmpId.values());
+    }
+
+
+    private LocalDate resolveAnniversaryDateInYear(LocalDate hireDate, int year) {
+        try {
+            return LocalDate.of(year, hireDate.getMonthValue(), hireDate.getDayOfMonth());
+        } catch (DateTimeException e) {
+            return LocalDate.of(year, hireDate.getMonthValue(), 28);
+        }
+    }
+
+
+    /**
+     * 퇴직일 fallback - empResignDate 없으면 Resign.resignDate 로 대체.
+     * SeveranceService.java:113-120 와 동일 패턴.
+     */
+    private LocalDate resolveEffectiveResignDate(UUID companyId, Employee emp, AllowanceType type) {
+        if (type != AllowanceType.RESIGNED) return null;
+        if (emp.getEmpResignDate() != null) return emp.getEmpResignDate();
+        return resignRepository
+                .findActiveOrConfirmedByEmpId(companyId, emp.getEmpId())
+                .map(Resign::getResignDate)
+                .orElse(null);
     }
 }

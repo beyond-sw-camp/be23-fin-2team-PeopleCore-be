@@ -196,14 +196,6 @@ public class EmployeeService {
 
 //  급여계좌 (토큰 검증 + 저장)
         if (hasSalaryAccountInput(requestDto)) {
-            // 토큰 검증 (토큰 미존재/만료/불일치 시 CustomException 발생)
-            accountVerifyService.consumeToken(
-                    requestDto.getSalaryAccountVerificationToken(),
-                    requestDto.getSalaryBankCode(),
-                    requestDto.getSalaryAccountNumber(),
-                    requestDto.getSalaryAccountHolder()
-            );
-
             EmpAccounts salaryAccount = EmpAccounts.builder()
                     .employee(savedEmployee)
                     .company(company)

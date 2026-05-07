@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 @Data
 @Builder
 @NoArgsConstructor
@@ -30,4 +32,13 @@ public class PayrollEmpResDto {
     private Long approvalDocId;
 
     private Long pendingOvertimeAmount;   // null = OT 결재 없음, 0 = 적용완료, > 0 = 미적용 금액
+
+    /* 일할계산 정보 - 그 달 일부만 재직한 경우(입사 또는 퇴직) */
+    private Boolean isProrated;
+    private Integer proratedDays;        // 실제 재직 일수
+    private Integer monthDays;           // 그 달 총 일수
+    private LocalDate effectiveResignDate;  // 퇴직(예정)일 — 그 달에만
+    private LocalDate effectiveHireDate;    // 신규 입사일 — 그 달에만
+
+
 }

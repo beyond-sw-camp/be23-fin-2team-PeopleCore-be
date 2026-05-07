@@ -89,3 +89,15 @@ dependencyManagement {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// =====================================================================
+// 시드 SQL 동기화: scripts/seed/ 의 정본을 build/resources/main/seed/ 로 복사
+// → spring.sql.init.data-locations=classpath:seed/holidays_national.sql 가 인식
+// → 단일 정본(scripts/seed)에서만 수정하면 빌드 시 자동 반영
+// =====================================================================
+tasks.named('processResources') {
+	from(rootProject.file('scripts/seed')) {
+		into 'seed'
+		include 'holidays_national.sql'
+	}
+}

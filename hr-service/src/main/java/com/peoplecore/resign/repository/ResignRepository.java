@@ -70,4 +70,10 @@ public interface ResignRepository extends JpaRepository<Resign, Long>,ResignRepo
             """)
     List<Resign> findHistoryByEmpId(@Param("companyId") UUID companyId,
                                     @Param("empId") Long empId);
+
+
+    /* 연도 범위로 retireStatus 사원 조회 (퇴직예정자 연차수당 산정용) */
+    List<Resign> findAllByRetireStatusAndIsDeletedFalseAndResignDateBetween(
+            RetireStatus retireStatus, LocalDate from, LocalDate to);
+
 }

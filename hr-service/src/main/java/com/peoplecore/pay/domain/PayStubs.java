@@ -36,7 +36,7 @@ public class PayStubs {
     private LocalDateTime sentAt;
     @Column(length = 500)
     private String pdfUrl;
-    private LocalDateTime issuedAT;
+    private LocalDateTime issuedAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id", nullable = false)
