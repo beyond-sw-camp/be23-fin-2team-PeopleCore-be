@@ -72,11 +72,31 @@ public class CopilotService {
                단일 영역(결재만 / 일정만) 조회 발화는 search_documents 로 처리.
             """;
 
-    private static String buildSystemPrompt(CopilotRequest.PageContext pageContext) {
+    /**
+     * 시스템 프롬프트를 캐싱 친화적인 블록 리스트로 구성.
+     * - 정적 블록(템플릿 + 오늘 날짜): cache_control 부착 → 동일 일자 안에서 재사용
+     * - pageContext 블록(요청별 가변): cache_control 미부착 — breakpoint 뒤로 빠져 캐시 무효화 영향 없음
+     *
+     * 오늘 날짜는 매 요청 새로 채우지만 같은 날 안에서는 동일 → 정적 블록에 안전하게 포함.
+     * 자정 1분만 캐시 invalidate 되고 그 이후 새 prefix 로 재캐시.
+     */
+    private static List<Map<String, Object>> buildSystemBlocks(CopilotRequest.PageContext pageContext) {
         String base = String.format(SYSTEM_PROMPT_TEMPLATE,
                 LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy년 M월 d일 (E)", java.util.Locale.KOREAN)));
+
+        List<Map<String, Object>> blocks = new ArrayList<>();
+        Map<String, Object> staticBlock = new LinkedHashMap<>();
+        staticBlock.put("type", "text");
+        staticBlock.put("text", base);
+        staticBlock.put("cache_control", Map.of("type", "ephemeral"));
+        blocks.add(staticBlock);
+
         String contextLine = renderPageContextLine(pageContext);
-        return contextLine == null ? base : base + "\n\n" + contextLine;
+        if (contextLine != null) {
+            // pageContext 는 요청별 가변 → cache_control 안 붙임. 캐시된 정적 블록 뒤에 추가만.
+            blocks.add(Map.of("type", "text", "text", contextLine));
+        }
+        return blocks;
     }
 
     /**
@@ -161,28 +181,39 @@ public class CopilotService {
         }
         messages.add(Map.of("role", "user", "content", req.getMessage()));
 
-        List<Map<String, Object>> tools = List.of(
+        // 도구 4개 — 마지막 도구에 cache_control 부착해 4개 모두 캐시.
+        // Render 순서가 tools → system → messages 이므로 도구의 마지막 항목 breakpoint 가
+        // 도구 전체를 한 덩어리로 캐싱한다 (앞 3개도 자동으로 같은 entry 에 포함).
+        List<Map<String, Object>> tools = new ArrayList<>(List.of(
                 buildSearchTool(),
                 buildCreateCalendarEventTool(),
                 buildPrefillApprovalFormTool(),
                 buildTodayDigestTool()
-        );
-        String systemPrompt = buildSystemPrompt(req.getPageContext());
+        ));
+        Map<String, Object> lastTool = new LinkedHashMap<>(tools.get(tools.size() - 1));
+        lastTool.put("cache_control", Map.of("type", "ephemeral"));
+        tools.set(tools.size() - 1, lastTool);
+
+        List<Map<String, Object>> systemBlocks = buildSystemBlocks(req.getPageContext());
 
         List<CopilotResponse.Citation> citations = new ArrayList<>();
         List<CopilotResponse.ToolCall> toolCalls = new ArrayList<>();
         List<CopilotResponse.Action> actions = new ArrayList<>();
         int totalIn = 0;
         int totalOut = 0;
+        int totalCacheRead = 0;
+        int totalCacheWrite = 0;
         String stopReason = null;
         String finalAnswer = "";
 
         for (int iter = 0; iter < maxIterations; iter++) {
-            AnthropicClient.MessagesResponse resp = anthropicClient.messages(systemPrompt, messages, tools);
+            AnthropicClient.MessagesResponse resp = anthropicClient.messages(systemBlocks, messages, tools);
             stopReason = resp.stop_reason;
             if (resp.usage != null) {
                 if (resp.usage.input_tokens != null) totalIn += resp.usage.input_tokens;
                 if (resp.usage.output_tokens != null) totalOut += resp.usage.output_tokens;
+                if (resp.usage.cache_read_input_tokens != null) totalCacheRead += resp.usage.cache_read_input_tokens;
+                if (resp.usage.cache_creation_input_tokens != null) totalCacheWrite += resp.usage.cache_creation_input_tokens;
             }
 
             // assistant 응답 전체(content blocks) 를 그대로 messages 에 다시 넣어야 다음 호출에서
@@ -218,9 +249,16 @@ public class CopilotService {
             finalAnswer = "도구 호출 한도(" + maxIterations + "회) 에 도달했습니다. 질문을 더 구체적으로 다시 해주세요.";
         }
 
+        // 캐시 적중률 — Phase 2 메트릭 대시보드에서 hit_ratio 계산할 때 쓰는 4개 카운터.
+        // 적중 이상치 진단용으로 매 chat 마다 한 줄 로깅.
+        log.info("[Copilot] usage: in={}, out={}, cacheRead={}, cacheWrite={} (model={})",
+                totalIn, totalOut, totalCacheRead, totalCacheWrite, anthropicClient.getModel());
+
         Map<String, Integer> usage = new HashMap<>();
         usage.put("inputTokens", totalIn);
         usage.put("outputTokens", totalOut);
+        usage.put("cacheReadTokens", totalCacheRead);
+        usage.put("cacheWriteTokens", totalCacheWrite);
 
         return CopilotResponse.builder()
                 .answer(finalAnswer)
@@ -615,6 +653,7 @@ public class CopilotService {
         if ("get_my_today_digest".equals(name)) {
             return executeTodayDigest(input, companyId, empId, toolCalls);
         }
+//        LLM의 도구 환각 방지(서버에 있는 도구가 아니면 error JSON 반환)
         if (!"search_documents".equals(name)) {
             return Map.of("content", "[{\"error\":\"unknown tool: " + escape(name) + "\"}]");
         }
