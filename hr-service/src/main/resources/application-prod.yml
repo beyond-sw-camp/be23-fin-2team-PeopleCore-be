@@ -109,7 +109,7 @@ eureka:
 jwt:
   expirationAt: 3600000
   secretKey: ${JWT_SECRET}
-  expirationRt: 3600000
+  expirationRt: 604800000
   secretKeyRt: ${JWT_SECRET_RT}
 
 coolsms:
