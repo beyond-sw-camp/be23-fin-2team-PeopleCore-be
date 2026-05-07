@@ -14,6 +14,7 @@ import com.peoplecore.employee.domain.*;
 import com.peoplecore.employee.dto.EmpDetailResponseDto;
 import com.peoplecore.employee.dto.EmployeeCreateRequestDto;
 import com.peoplecore.employee.dto.EmployeeCardResponseDto;
+import com.peoplecore.employee.dto.EmployeeFileResDto;
 import com.peoplecore.employee.dto.EmployeeListDto;
 import com.peoplecore.employee.dto.EmployeeUpdateRequestDto;
 import com.peoplecore.employee.repository.EmployeeFileRepository;
@@ -39,18 +40,27 @@ import com.peoplecore.title.domain.Title;
 import com.peoplecore.title.repository.TitleRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -363,14 +373,24 @@ public class EmployeeService {
     public EmpDetailResponseDto getEmployeeDetail(UUID companyId, Long empId) {
 
         Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
-        return EmpDetailResponseDto.from(employee);
+        EmpDetailResponseDto dto = EmpDetailResponseDto.from(employee);
 
+        List<EmployeeFile> empFiles = employeeFileRepository.findByEmployee_EmpId(empId);
+        List<EmployeeFileResDto> fileDtos = new ArrayList<>();
+        for (EmployeeFile f : empFiles) {
+            fileDtos.add(EmployeeFileResDto.from(f));
+        }
+        dto.setFiles(fileDtos);
+
+        return dto;
     }
 
     //    5. 사원 정보 수정
     public EmpDetailResponseDto updateEmployee(UUID companyId, Long empId,
                                                EmployeeUpdateRequestDto requestDto,
-                                               MultipartFile profileImage) {
+                                               MultipartFile profileImage,
+                                               List<MultipartFile> newFiles,
+                                               List<Long> deleteFileIds) {
 
         Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
 
@@ -427,7 +447,87 @@ public class EmployeeService {
             }
         }
 
-        return EmpDetailResponseDto.from(employee);
+        // 인사 서류 — 삭제 (DB row + minio 객체)
+        if (deleteFileIds != null && !deleteFileIds.isEmpty()) {
+            for (Long fileId : deleteFileIds) {
+                EmployeeFile target = employeeFileRepository.findById(fileId).orElse(null);
+                if (target == null) continue;
+                // 본인 사원 소속 파일인지 확인 (다른 사원 파일 삭제 차단)
+                if (!target.getEmployee().getEmpId().equals(empId)) {
+                    throw new BusinessException("다른 사원의 파일은 삭제할 수 없습니다", HttpStatus.FORBIDDEN);
+                }
+                employeeFileRepository.delete(target);
+                try {
+                    minioService.deleteFile(target.getStoredFilePath());
+                } catch (Exception e) {
+                    throw new BusinessException("파일 삭제에 실패했습니다", HttpStatus.BAD_REQUEST);
+                }
+            }
+        }
+
+        // 인사 서류 — 추가 업로드
+        if (newFiles != null && !newFiles.isEmpty()) {
+            for (MultipartFile file : newFiles) {
+                if (file == null || file.isEmpty()) continue;
+                try {
+                    String storedFilePath = minioService.uploadFile(file, "employee-docs");
+                    employeeFileRepository.save(EmployeeFile.builder()
+                            .employee(employee)
+                            .originalFileName(file.getOriginalFilename())
+                            .storedFilePath(storedFilePath)
+                            .contentType(file.getContentType())
+                            .fileSize(file.getSize())
+                            .build());
+                } catch (Exception e) {
+                    throw new BusinessException("파일 업로드에 실패했습니다", HttpStatus.BAD_REQUEST);
+                }
+            }
+        }
+
+        EmpDetailResponseDto dto = EmpDetailResponseDto.from(employee);
+        List<EmployeeFile> empFiles = employeeFileRepository.findByEmployee_EmpId(empId);
+        List<EmployeeFileResDto> fileDtos = new ArrayList<>();
+        for (EmployeeFile f : empFiles) {
+            fileDtos.add(EmployeeFileResDto.from(f));
+        }
+        dto.setFiles(fileDtos);
+        return dto;
+    }
+
+    //    5-1. 인사 서류 다운로드 (minio 스트리밍)
+    @Transactional(readOnly = true)
+    public ResponseEntity<Resource> downloadEmployeeFile(UUID companyId, Long empId, Long fileId) {
+        EmployeeFile file = employeeFileRepository.findById(fileId)
+                .orElseThrow(() -> new BusinessException("파일을 찾을 수 없습니다", HttpStatus.NOT_FOUND));
+
+        // 경로의 empId 와 파일 소속 empId 일치 + 동일 회사 소속 검증
+        if (!file.getEmployee().getEmpId().equals(empId)) {
+            throw new BusinessException("경로와 파일이 일치하지 않습니다", HttpStatus.BAD_REQUEST);
+        }
+        Employee owner = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId)
+                .orElseThrow(() -> new BusinessException("사원을 찾을 수 없습니다", HttpStatus.NOT_FOUND));
+        if (!owner.getEmpId().equals(file.getEmployee().getEmpId())) {
+            throw new BusinessException("열람 권한이 없습니다", HttpStatus.FORBIDDEN);
+        }
+
+        InputStream in;
+        try {
+            in = minioService.downloadFile(file.getStoredFilePath());
+        } catch (Exception e) {
+            throw new BusinessException("파일 다운로드에 실패했습니다", HttpStatus.BAD_REQUEST);
+        }
+
+        String encodedName = URLEncoder.encode(file.getOriginalFileName(), StandardCharsets.UTF_8)
+                .replaceAll("\\+", "%20");
+        String contentType = file.getContentType() != null
+                ? file.getContentType()
+                : MediaType.APPLICATION_OCTET_STREAM_VALUE;
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename*=UTF-8''" + encodedName)
+                .contentType(MediaType.parseMediaType(contentType))
+                .contentLength(file.getFileSize())
+                .body(new InputStreamResource(in));
     }
 
     //    6.사원 삭제
