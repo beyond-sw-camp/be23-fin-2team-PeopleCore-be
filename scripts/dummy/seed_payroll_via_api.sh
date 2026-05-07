@@ -34,6 +34,8 @@ set -euo pipefail
 DB_USER=${DB_USER:-root}
 DB_PASS=${DB_PASS:?need DB_PASS env var}
 DB_NAME=${DB_NAME:-peoplecore}
+DB_HOST=${DB_HOST:-localhost}
+DB_PORT=${DB_PORT:-3306}
 HR_HOST=${HR_HOST:-http://localhost:8080}
 COMPANY_NAME=${COMPANY_NAME:-peoplecore}
 ADMIN_EMP_NUM=${ADMIN_EMP_NUM:-EMP-2025-001}
@@ -41,8 +43,9 @@ START_YM=${START_YM:-2025-01}
 END_YM=${END_YM:-2026-04}
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+MYSQL_SSL_OPT=${MYSQL_SSL_OPT:---skip-ssl}
 mysql_q() {
-  mysql -u"$DB_USER" -p"$DB_PASS" -N -B -e "$1" 2>/dev/null
+  mysql $MYSQL_SSL_OPT -h"$DB_HOST" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" -N -B -e "$1" 2>/dev/null
 }
 
 # ---- 1. 회사 ID + 처리자 emp_id 조회 ----

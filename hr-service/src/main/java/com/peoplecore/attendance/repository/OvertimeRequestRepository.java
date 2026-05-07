@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -31,6 +32,17 @@ public interface OvertimeRequestRepository extends JpaRepository<OvertimeRequest
     List<OvertimeRequest> findApprovedByEmpAndDateRange(Long empId,
                                                        LocalDateTime dayStart,
                                                        LocalDateTime dayEnd);
+
+    /** 다수 사원 + 날짜 범위 + APPROVED — 배치 조회용 (N+1 회피) */
+    @Query("""
+            SELECT o FROM OvertimeRequest o
+             WHERE o.employee.empId IN :empIds
+               AND o.otStatus = com.peoplecore.attendance.entity.OtStatus.APPROVED
+               AND o.otDate BETWEEN :dayStart AND :dayEnd
+            """)
+    List<OvertimeRequest> findApprovedByEmpIdsAndDateRange(@Param("empIds") Collection<Long> empIds,
+                                                          @Param("dayStart") LocalDateTime dayStart,
+                                                          @Param("dayEnd") LocalDateTime dayEnd);
 
     /** 사원 + 주 범위 PENDING/APPROVED 분 합계. JPQL TIMESTAMPDIFF 미지원 → native */
     @Query(value = """
