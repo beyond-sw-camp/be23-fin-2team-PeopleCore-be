@@ -31,7 +31,7 @@ public class HrOrderScheduler {
         this.resignService = resignService;
     }
 
-    @Scheduled(cron = "0 0 0 * * *")
+    @Scheduled(cron = "0 0 0 * * *", zone = "Asia/Seoul")
     public void applyConfirmedOrders() {
         LocalDate today = LocalDate.now();
         String lockKey = LOCK_KEY_PREFIX + ":" + today;
