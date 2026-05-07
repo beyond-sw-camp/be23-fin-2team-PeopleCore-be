@@ -103,18 +103,17 @@ public class HrStatusService {
         return result;
     }
 
-    //    3.월별 입퇴사 (6개월)
+    //    3.월별 입퇴사 (전체 — 가장 오래된 입사월부터 현재까지)
     public List<MonthlyTrendDto> getTrend(UUID companyId) {
-        LocalDate from = LocalDate.now().minusMonths(5).withDayOfMonth(1);
+        // 충분히 과거부터 = 사실상 전체
+        LocalDate epoch = LocalDate.of(2000, 1, 1);
 
-//       6개월 이내 입/퇴사자 전체 조회
-        List<Employee> hiredList = employeeRepository.findHiredAfter(companyId, from);
-        List<Employee> resignedList = employeeRepository.findResignedAfter(companyId, from);
+        List<Employee> hiredList = employeeRepository.findHiredAfter(companyId, epoch);
+        List<Employee> resignedList = employeeRepository.findResignedAfter(companyId, epoch);
 
         Map<YearMonth, Integer> hiredMap = new HashMap<>();
         for (Employee emp : hiredList) {
             YearMonth ym = YearMonth.from(emp.getEmpHireDate());
-//            해당 년월 카운트 있으면 +1, 없으면 0
             hiredMap.put(ym, hiredMap.getOrDefault(ym, 0) + 1);
         }
 
@@ -123,21 +122,22 @@ public class HrStatusService {
             YearMonth ym = YearMonth.from(emp.getEmpResignDate());
             resignedMap.put(ym, resignedMap.getOrDefault(ym, 0) + 1);
         }
-//        6개월 구간 1개월씩 순회
-        List<MonthlyTrendDto> result = new ArrayList<>();
-//        순회 시작점
-        YearMonth current = YearMonth.from(from);
-//        순환 종료(현재)
+
+        // 가장 오래된 입사월부터 현재까지 모두 노출
+        YearMonth start = hiredMap.keySet().stream()
+                .min(YearMonth::compareTo)
+                .orElse(YearMonth.now());
+        YearMonth current = start;
         YearMonth end = YearMonth.now();
 
-//        current가 end를 넘지 않는 동안 반복
+        List<MonthlyTrendDto> result = new ArrayList<>();
         while (!current.isAfter(end)) {
             result.add(MonthlyTrendDto.builder()
                     .month(current)
                     .hired(hiredMap.getOrDefault(current, 0))
                     .resigned(resignedMap.getOrDefault(current, 0))
                     .build());
-            current =current.plusMonths(1);
+            current = current.plusMonths(1);
         }
         return result;
     }
