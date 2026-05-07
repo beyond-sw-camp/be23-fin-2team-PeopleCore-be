@@ -48,7 +48,7 @@ public class PasswordResetService {
         emailAuthService.checkVerified(request.getEmpEmail());
 
         // 2. 사원 조회 (이메일로)
-        Employee employee = employeeRepository.findByEmpEmail(request.getEmpEmail())
+        Employee employee = employeeRepository.findByEmpPersonalEmail(request.getEmpEmail())
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
         // 3. 기존 비밀번호와 동일한지 확인

@@ -32,13 +32,13 @@ public class EmailAuthService {
         this.employeeRepository = employeeRepository;
     }
 
-    public void sendCode(String empEmail) {
+    public void sendCode(String empPersonalEmail) {
         // 사원 존재 확인
-        employeeRepository.findByEmpEmail(empEmail)
+        employeeRepository.findByEmpPersonalEmail(empPersonalEmail)
                 .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
         // 쿨다운 확인
-        String cooldownKey = "EMAIL_COOLDOWN:" + empEmail;
+        String cooldownKey = "EMAIL_COOLDOWN:" + empPersonalEmail;
         if (Boolean.TRUE.equals(emailRedis.hasKey(cooldownKey))) {
             throw new CustomException(ErrorCode.EMAIL_COOLDOWN);
         }
@@ -46,14 +46,14 @@ public class EmailAuthService {
         // 인증코드 생성 및 저장
         String code = String.format("%06d", secureRandom.nextInt(1_000_000));
 
-        emailRedis.opsForValue().set("EMAIL_CODE:" + empEmail, code, CODE_TTL, TimeUnit.MINUTES);
+        emailRedis.opsForValue().set("EMAIL_CODE:" + empPersonalEmail, code, CODE_TTL, TimeUnit.MINUTES);
         emailRedis.opsForValue().set(cooldownKey, "wait", COOLDOWN_SEC, TimeUnit.SECONDS);
 
         // 발송 실패 시 저장한 코드/쿨다운 롤백
         try {
-            emailSender.send(empEmail, code);
+            emailSender.send(empPersonalEmail, code);
         } catch (RuntimeException e) {
-            emailRedis.delete("EMAIL_CODE:" + empEmail);
+            emailRedis.delete("EMAIL_CODE:" + empPersonalEmail);
             emailRedis.delete(cooldownKey);
             throw e;
         }
