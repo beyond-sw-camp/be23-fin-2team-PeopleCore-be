@@ -39,7 +39,7 @@ public class KpiTemplate extends BaseTimeEntity {
     @Column(name = "name", length = 100, nullable = false)
     private String name; // 지표명
 
-    @Column(name = "description", length = 300, nullable = false)
+    @Column(name = "description", length = 1000, nullable = false)
     private String description; // 설명
 
 

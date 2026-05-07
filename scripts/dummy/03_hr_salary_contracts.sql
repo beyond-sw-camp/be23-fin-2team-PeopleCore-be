@@ -65,6 +65,61 @@ SELECT
   @pi_basic AS pi_basic, @pi_pos AS pi_pos, @pi_meal AS pi_meal, @pi_trans AS pi_trans,
   @e_creator AS e_creator;
 
+-- ▼ 폼 스냅샷 (회사 전역 - 모든 계약 동일) ▼
+-- FormFieldSetupService.buildSalaryContractDefaults() + 동적 payItem 항목과 동일 구조
+SET @form_snapshot := JSON_ARRAY(
+  -- 인적사항
+  JSON_OBJECT('fieldKey','empSearch','label','사원 검색','section','인적사항',
+              'fieldType','SEARCH','visible',TRUE,'required',TRUE,'sortOrder',1,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE),
+  JSON_OBJECT('fieldKey','department','label','부서','section','인적사항',
+              'fieldType','TEXT','visible',TRUE,'required',TRUE,'sortOrder',2,
+              'options',NULL,'autoFillFrom','department','locked',FALSE),
+  JSON_OBJECT('fieldKey','rank','label','직급','section','인적사항',
+              'fieldType','TEXT','visible',TRUE,'required',TRUE,'sortOrder',3,
+              'options',NULL,'autoFillFrom','rank','locked',FALSE),
+  JSON_OBJECT('fieldKey','position','label','직책','section','인적사항',
+              'fieldType','TEXT','visible',TRUE,'required',TRUE,'sortOrder',4,
+              'options',NULL,'autoFillFrom','position','locked',FALSE),
+  JSON_OBJECT('fieldKey','employType','label','근로형태','section','인적사항',
+              'fieldType','TEXT','visible',TRUE,'required',TRUE,'sortOrder',5,
+              'options',NULL,'autoFillFrom','employType','locked',FALSE),
+  -- 계약기간
+  JSON_OBJECT('fieldKey','contractStart','label','계약 시작일','section','계약기간',
+              'fieldType','DATE','visible',TRUE,'required',TRUE,'sortOrder',1,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE),
+  JSON_OBJECT('fieldKey','contractEnd','label','계약 종료일','section','계약기간',
+              'fieldType','DATE','visible',TRUE,'required',FALSE,'sortOrder',2,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE),
+  JSON_OBJECT('fieldKey','weeklyHours','label','주당 근로시간','section','계약기간',
+              'fieldType','SELECT','visible',TRUE,'required',TRUE,'sortOrder',3,
+              'options',JSON_ARRAY('40시간 (주 5일)','35시간','30시간','20시간 (시간제)','15시간 (단시간)'),
+              'autoFillFrom',NULL,'locked',FALSE),
+  -- 급여 (고정 annualSalary + 동적 payItem)
+  JSON_OBJECT('fieldKey','annualSalary','label','연봉','section','급여',
+              'fieldType','NUMBER','visible',TRUE,'required',FALSE,'sortOrder',0,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE),
+  JSON_OBJECT('fieldKey',CONCAT('payItem_',@pi_basic),'label','기본급','section','급여',
+              'fieldType','NUMBER','visible',TRUE,'required',FALSE,'sortOrder',1,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE,'isFixed',TRUE),
+  JSON_OBJECT('fieldKey',CONCAT('payItem_',@pi_pos),'label','직책수당','section','급여',
+              'fieldType','NUMBER','visible',TRUE,'required',FALSE,'sortOrder',2,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE,'isFixed',TRUE),
+  JSON_OBJECT('fieldKey',CONCAT('payItem_',@pi_meal),'label','식대','section','급여',
+              'fieldType','NUMBER','visible',TRUE,'required',FALSE,'sortOrder',3,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE,'isFixed',TRUE),
+  JSON_OBJECT('fieldKey',CONCAT('payItem_',@pi_trans),'label','교통비','section','급여',
+              'fieldType','NUMBER','visible',TRUE,'required',FALSE,'sortOrder',4,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE,'isFixed',TRUE),
+  -- 기타사항
+  JSON_OBJECT('fieldKey','memo','label','특약사항 / 메모','section','기타사항',
+              'fieldType','TEXTAREA','visible',TRUE,'required',FALSE,'sortOrder',1,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE),
+  JSON_OBJECT('fieldKey','attachment','label','서명 완료 계약서 첨부','section','기타사항',
+              'fieldType','FILE','visible',TRUE,'required',FALSE,'sortOrder',2,
+              'options',NULL,'autoFillFrom',NULL,'locked',FALSE)
+);
+
 
 -- =====================================================================
 -- 1) salary_contract — 사원당 1건 (총 100건)
@@ -108,7 +163,7 @@ SELECT
     ELSE NULL
   END                     AS apply_to,
   NULL, NULL, NULL, NULL, -- 첨부파일 없음
-  NULL, NULL, NULL,       -- form_values / form_snapshot / form_version (NULL 허용, 결산 로직 미참조)
+  NULL, NULL, NULL,       -- form_values / form_snapshot / form_version (아래 UPDATE에서 채움)
   NOW(),                  -- created_at
   NULL                    -- delete_at (soft delete 안 됨)
 FROM employee e
@@ -163,6 +218,45 @@ INSERT INTO salary_contract_detail (contract_id, pay_item_id, amount)
 SELECT sc.contract_id, @pi_trans, 200000
   FROM salary_contract sc
  WHERE sc.company_id = @cid;
+
+
+-- =====================================================================
+-- 3) form_snapshot / form_version — 모든 계약 동일
+-- =====================================================================
+UPDATE salary_contract sc
+SET sc.form_snapshot = @form_snapshot,
+    sc.form_version  = UNIX_TIMESTAMP(NOW(3)) * 1000
+WHERE sc.company_id = @cid;
+
+
+-- =====================================================================
+-- 4) form_values — 사원별 인적사항/계약기간/연봉/메모
+-- ---------------------------------------------------------------------
+--   payItem_<id> 값은 toDetailRes 가 salary_contract_detail 에서 자동 합성
+--   → 일반 필드만 채워두면 상세보기에서 모든 항목이 보임
+-- =====================================================================
+UPDATE salary_contract sc
+JOIN employee   e ON e.emp_id   = sc.emp_id
+JOIN department d ON d.dept_id  = e.dept_id
+JOIN grade      g ON g.grade_id = e.grade_id
+LEFT JOIN title t ON t.title_id = e.title_id
+SET sc.form_values = JSON_OBJECT(
+      'empSearch',     e.emp_name,
+      'department',    d.dept_name,
+      'rank',          g.grade_name,
+      'position',      IFNULL(t.title_name, ''),
+      'employType',    CASE e.emp_type
+                         WHEN 'FULL'     THEN '정규직'
+                         WHEN 'CONTRACT' THEN '계약직'
+                         ELSE e.emp_type
+                       END,
+      'contractStart', DATE_FORMAT(sc.apply_from, '%Y-%m-%d'),
+      'contractEnd',   COALESCE(DATE_FORMAT(sc.apply_to, '%Y-%m-%d'), ''),
+      'weeklyHours',   '40시간 (주 5일)',
+      'annualSalary',  CAST(sc.total_amount AS CHAR),
+      'memo',          ''
+    )
+WHERE sc.company_id = @cid;
 
 
 -- =====================================================================

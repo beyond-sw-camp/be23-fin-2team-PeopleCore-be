@@ -29,7 +29,7 @@ public class Calibration extends BaseTimeEntity {
     @Column(name = "to_grade", length = 5)
     private String toGrade; // 변경 후 등급
 
-    @Column(name = "reason", length = 500)
+    @Column(name = "reason", length = 1000)
     private String reason; // 보정 사유
 
     @ManyToOne(fetch = FetchType.LAZY)

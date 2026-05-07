@@ -2,6 +2,7 @@ package com.peoplecore.hrorder.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.peoplecore.alarm.publisher.HrAlarmPublisher;
 import com.peoplecore.department.domain.Department;
 import com.peoplecore.department.repository.DepartmentRepository;
 import com.peoplecore.employee.domain.Employee;
@@ -46,8 +47,9 @@ public class HrOrderService {
     private final TitleRepository titleRepository;
     private final ResignRepository resignRepository;
     private final ObjectMapper objectMapper;
+    private final HrAlarmPublisher hrAlarmPublisher;
 
-    public HrOrderService(HrOrderRepository hrOrderRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, HrOrderDetailRepository hrOrderDetailRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, ResignRepository resignRepository, ObjectMapper objectMapper) {
+    public HrOrderService(HrOrderRepository hrOrderRepository, EmployeeRepository employeeRepository, FormFieldSetupService formFieldSetupService, HrOrderDetailRepository hrOrderDetailRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, ResignRepository resignRepository, ObjectMapper objectMapper, HrAlarmPublisher hrAlarmPublisher) {
         this.hrOrderRepository = hrOrderRepository;
         this.employeeRepository = employeeRepository;
         this.formFieldSetupService = formFieldSetupService;
@@ -57,6 +59,7 @@ public class HrOrderService {
         this.titleRepository = titleRepository;
         this.resignRepository = resignRepository;
         this.objectMapper = objectMapper;
+        this.hrAlarmPublisher = hrAlarmPublisher;
     }
 
 //    1. 목록조회
@@ -191,46 +194,6 @@ public class HrOrderService {
         order.softDelete();
     }
 
-    //    6.통보 //TODO: 알림서비스 호출
-    public void notifyOrder(UUID companyId, Long orderId) {
-        HrOrder order = hrOrderRepository.findByOrderIdAndCompanyId(orderId, companyId).orElseThrow(() -> new IllegalArgumentException("발령 정보를 찾을 수 없습니다"));
-
-        Employee employee = order.getEmployee();
-
-//        변경 상세에서 내용 조립
-        List<HrOrderDetail> details = hrOrderDetailRepository.findByHrOrder_OrderId(orderId);
-        StringBuilder content = new StringBuilder();
-        content.append(employee.getEmpName()).append("님, ");
-        for (HrOrderDetail d : details) {
-            String before = resolveTargetName(d.getTargetType(), d.getBeforeId());
-            String after = resolveTargetName(d.getTargetType(), d.getAfterId());
-            content.append(before).append("->").append(after).append(" ");
-        }
-        content.append("발령이 확정되었습니다. (발령일: ").append(order.getEffectiveDate()).append(")");
-
-        AlarmEvent event = AlarmEvent.builder()
-                .companyId(companyId)
-                .alarmType("Hr")
-                .alarmTitle("인사발령 통보")
-                .alarmContent(employee.getEmpName() + "님" + order.getOrderType().name() + "이(가) 확정되었습니다")
-                .alarmLink("/hr/appointment/" + orderId) //프론트발령 상세페이지
-                .alarmRefType("HR_ORDER")
-                .alarmRefId(orderId)
-                .empIds(List.of(employee.getEmpId())) //대상사원 1명
-                .build();
-
-//        kafka알림 이벤트 발행
-
-        try {
-            String message = objectMapper.writeValueAsString(event);
-        } catch (JsonProcessingException e) {
-            throw new IllegalStateException("알림 발송에 실패했습니다");
-        }
-//        통보상태 업데이트
-        order.markNotified();
-
-    }
-
     //    7. 발령일 도래 시 일괄 반영 (SCHEDULED + 발령일이 오늘 이전인 건 -> employee 반영 + APPLIED)
     public int applyAllScheduledOrders() {
         List<HrOrder> orders = hrOrderRepository.findByStatusAndEffectiveDateLessThanEqual(
@@ -259,6 +222,27 @@ public class HrOrderService {
             }
         }
         order.updateStatus(OrderStatus.APPLIED);
+
+        //  발령 적용 시 본인에게 자동 알림 (alarm-event 토픽 publish)
+        StringBuilder content = new StringBuilder();
+        content.append(employee.getEmpName()).append("님, ");
+        for (HrOrderDetail d : details) {
+            String before = resolveTargetName(d.getTargetType(), d.getBeforeId());
+            String after  = resolveTargetName(d.getTargetType(), d.getAfterId());
+            content.append(before).append("→").append(after).append(" ");
+        }
+        content.append("발령이 적용되었습니다. (발령일: ").append(order.getEffectiveDate()).append(")");
+
+        hrAlarmPublisher.publisher(AlarmEvent.builder()
+                .companyId(employee.getCompany().getCompanyId())
+                .alarmType("HR")
+                .alarmTitle("인사발령 적용")
+                .alarmContent(content.toString())
+                .alarmLink("/hr/appointment/" + order.getOrderId())
+                .alarmRefType("HR_ORDER")
+                .alarmRefId(order.getOrderId())
+                .empIds(List.of(employee.getEmpId()))
+                .build());
     }
 
 
@@ -268,6 +252,11 @@ public class HrOrderService {
         List<HrOrderHistoryResDto> result = new ArrayList<>();
 
         // 1) hr_order 발령 이력 (PROMOTION / TRANSFER / TITLE_CHANGE)
+        // 입사 당시 값 역산용 — 각 type별 가장 빠른(effectiveDate 최소) 발령의 detail 추적
+        HrOrder earliestDeptOrder = null;  HrOrderDetail earliestDeptDetail = null;
+        HrOrder earliestGradeOrder = null; HrOrderDetail earliestGradeDetail = null;
+        HrOrder earliestTitleOrder = null; HrOrderDetail earliestTitleDetail = null;
+
         List<HrOrder> orders = hrOrderRepository.findHistoryByEmpId(companyId, empId);
         for (HrOrder order : orders) {
             List<HrOrderDetail> detailEntities = hrOrderDetailRepository.findByHrOrder_OrderId(order.getOrderId());
@@ -279,6 +268,24 @@ public class HrOrderService {
                         .beforeName(resolveTargetName(d.getTargetType(), d.getBeforeId()))
                         .afterName(resolveTargetName(d.getTargetType(), d.getAfterId()))
                         .build());
+
+                // 입사 시점 역산용 — 같은 type 중 effectiveDate 최소인 것 갱신
+                if (d.getTargetType() == OrderDetailTargetType.DEPARTMENT) {
+                    if (earliestDeptOrder == null || order.getEffectiveDate().isBefore(earliestDeptOrder.getEffectiveDate())) {
+                        earliestDeptOrder = order;
+                        earliestDeptDetail = d;
+                    }
+                } else if (d.getTargetType() == OrderDetailTargetType.GRADE) {
+                    if (earliestGradeOrder == null || order.getEffectiveDate().isBefore(earliestGradeOrder.getEffectiveDate())) {
+                        earliestGradeOrder = order;
+                        earliestGradeDetail = d;
+                    }
+                } else if (d.getTargetType() == OrderDetailTargetType.TITLE) {
+                    if (earliestTitleOrder == null || order.getEffectiveDate().isBefore(earliestTitleOrder.getEffectiveDate())) {
+                        earliestTitleOrder = order;
+                        earliestTitleDetail = d;
+                    }
+                }
             }
             result.add(HrOrderHistoryResDto.builder()
                     .orderId(order.getOrderId())
@@ -290,16 +297,62 @@ public class HrOrderService {
                     .build());
         }
 
-        // 2) HIRE 합성: Employee.empHireDate 기준
+        // 2) HIRE 합성: Employee.empHireDate 기준 + 입사 당시 부서/직급/직책 채우기
+        //    - 첫 번째 전보의 beforeName = 입사 당시 부서 (그 사이 다른 전보가 없었으므로)
+        //    - 발령 이력이 없으면 현재값 사용 (입사 후 한 번도 안 바뀌었다는 뜻)
         Employee emp = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElse(null);
         if (emp != null && emp.getEmpHireDate() != null) {
+            String initialDept;
+            if (earliestDeptDetail != null) {
+                initialDept = resolveTargetName(OrderDetailTargetType.DEPARTMENT, earliestDeptDetail.getBeforeId());
+            } else {
+                initialDept = emp.getDept() != null ? emp.getDept().getDeptName() : null;
+            }
+
+            String initialGrade;
+            if (earliestGradeDetail != null) {
+                initialGrade = resolveTargetName(OrderDetailTargetType.GRADE, earliestGradeDetail.getBeforeId());
+            } else {
+                initialGrade = emp.getGrade() != null ? emp.getGrade().getGradeName() : null;
+            }
+
+            String initialTitle;
+            if (earliestTitleDetail != null) {
+                initialTitle = resolveTargetName(OrderDetailTargetType.TITLE, earliestTitleDetail.getBeforeId());
+            } else {
+                initialTitle = emp.getTitle() != null ? emp.getTitle().getTitleName() : null;
+            }
+
+            List<HrOrderHistoryResDto.DetailChange> hireDetail = new ArrayList<>();
+            if (initialDept != null) {
+                hireDetail.add(HrOrderHistoryResDto.DetailChange.builder()
+                        .targetType("DEPARTMENT")
+                        .beforeName("")
+                        .afterName(initialDept)
+                        .build());
+            }
+            if (initialGrade != null) {
+                hireDetail.add(HrOrderHistoryResDto.DetailChange.builder()
+                        .targetType("GRADE")
+                        .beforeName("")
+                        .afterName(initialGrade)
+                        .build());
+            }
+            if (initialTitle != null) {
+                hireDetail.add(HrOrderHistoryResDto.DetailChange.builder()
+                        .targetType("TITLE")
+                        .beforeName("")
+                        .afterName(initialTitle)
+                        .build());
+            }
+
             result.add(HrOrderHistoryResDto.builder()
                     .orderId(null)
                     .orderType("HIRE")
                     .effectiveDate(emp.getEmpHireDate().toString())
                     .status("APPLIED")
                     .createAt(emp.getEmpHireDate().toString())
-                    .detailChange(new ArrayList<>())
+                    .detailChange(hireDetail)
                     .build());
         }
 

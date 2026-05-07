@@ -1,5 +1,8 @@
 package com.peoplecore.employee.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.attendance.entity.WorkGroup;
 import com.peoplecore.attendance.repository.WorkGroupRepository;
 import com.peoplecore.auth.service.FaceAuthService;
@@ -49,6 +52,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -71,11 +75,12 @@ public class EmployeeService {
     private final EmpAccountsRepository empAccountsRepository;
     private final EmpRetirementAccountRepository empRetirementAccountRepository;
     private final RetirementSettingsRepository retirementSettingsRepository;
+    private final ObjectMapper objectMapper;
 
     public static final String DEFAULT_CODE = "DEFAULT";
 
     @Autowired
-    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService, InsuranceJobTypesRepository insuranceJobTypesRepository, AccountVerifyService accountVerifyService, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository) {
+    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService, InsuranceJobTypesRepository insuranceJobTypesRepository, AccountVerifyService accountVerifyService, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, ObjectMapper objectMapper) {
         this.employeeRepository = employeeRepository;
         this.companyRepository = companyRepository;
         this.departmentRepository = departmentRepository;
@@ -91,6 +96,7 @@ public class EmployeeService {
         this.empAccountsRepository = empAccountsRepository;
         this.empRetirementAccountRepository = empRetirementAccountRepository;
         this.retirementSettingsRepository = retirementSettingsRepository;
+        this.objectMapper = objectMapper;
     }
 
     private static final String EMAIL_DOMAIN = "@peoplecore.com";
@@ -127,7 +133,7 @@ public class EmployeeService {
     }
 
     //    사원등록
-    public Long createEmployee(UUID companyId, EmployeeCreateRequestDto requestDto, List<MultipartFile> files) {
+    public Long createEmployee(UUID companyId, EmployeeCreateRequestDto requestDto, List<MultipartFile> files, MultipartFile profileImage) {
 
 //        연관 entity조회
         Company company = companyRepository.getReferenceById(companyId);
@@ -193,6 +199,30 @@ public class EmployeeService {
                 .build();
 
         Employee savedEmployee = employeeRepository.save(employee);
+
+
+        if(profileImage != null && !profileImage.isEmpty()){
+            try{
+                String profileUrl = minioService.uploadFile(profileImage,"employee-profile");
+                savedEmployee.updateProfileImageUrl(profileUrl);
+            } catch (Exception e) {
+                throw new BusinessException("프로필 사진 업로드에 실패했습니다", HttpStatus.BAD_REQUEST);
+            }
+        }
+
+//        커스텀 필드 저장 (HR이 폼 설정에서 추가한 동적 fieldKey 들의 값)
+        if (requestDto.getCustomFieldsJson() != null && !requestDto.getCustomFieldsJson().isBlank()) {
+            try {
+                Map<String, String> customFields = objectMapper.readValue(
+                        requestDto.getCustomFieldsJson(),
+                        new TypeReference<Map<String, String>>() {}
+                );
+                savedEmployee.updateCustomFields(customFields);
+            } catch (JsonProcessingException e) {
+                throw new BusinessException("커스텀 필드 파싱 실패", HttpStatus.BAD_REQUEST);
+            }
+        }
+
 
 //  급여계좌 (토큰 검증 + 저장)
         if (hasSalaryAccountInput(requestDto)) {
@@ -336,24 +366,20 @@ public class EmployeeService {
     }
 
     //    5. 사원 정보 수정
-    public EmpDetailResponseDto updateEmployee(UUID companyId, Long empId, EmployeeUpdateRequestDto requestDto) {
+    public EmpDetailResponseDto updateEmployee(UUID companyId, Long empId,
+                                               EmployeeUpdateRequestDto requestDto,
+                                               MultipartFile profileImage) {
 
-        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId)
-                .orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
+        Employee employee = employeeRepository.findByEmpIdAndCompany_CompanyId(empId, companyId).orElseThrow(() -> new EntityNotFoundException("사원을 찾을 수 없습니다"));
 
         // id + companyId 로 단건 보장 + 테넌트 격리
-        Department dept = departmentRepository.findByDeptIdAndCompany_CompanyId(requestDto.getDeptId(), companyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        Department dept = departmentRepository.findByDeptIdAndCompany_CompanyId(requestDto.getDeptId(), companyId).orElseThrow(() -> new BusinessException(ErrorCode.DEPARTMENT_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Grade grade = gradeRepository.findByGradeIdAndCompanyId(requestDto.getGradeId(), companyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        Grade grade = gradeRepository.findByGradeIdAndCompanyId(requestDto.getGradeId(), companyId).orElseThrow(() -> new BusinessException(ErrorCode.GRADE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        Title title = titleRepository.findByTitleIdAndCompanyId(requestDto.getTitleId(), companyId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
+        Title title = titleRepository.findByTitleIdAndCompanyId(requestDto.getTitleId(), companyId).orElseThrow(() -> new BusinessException(ErrorCode.TITLE_NOT_FOUND.getMessage(), HttpStatus.NOT_FOUND));
 
-        InsuranceJobTypes jobTypes = insuranceJobTypesRepository
-                .findByCompany_CompanyIdAndJobTypeName(companyId, requestDto.getInsuranceJobTypeName())
-                .orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
+        InsuranceJobTypes jobTypes = insuranceJobTypesRepository.findByCompany_CompanyIdAndJobTypeName(companyId, requestDto.getInsuranceJobTypeName()).orElseThrow(() -> new CustomException(ErrorCode.INSURANCE_JOB_TYPE_NOT_FOUND));
 
         employee.updateInfo(
                 requestDto.getEmpName(),
@@ -374,6 +400,29 @@ public class EmployeeService {
                 requestDto.getEmpRole()
         );
         employee.updateInsuranceJobType(jobTypes);
+
+        // 프로필 사진 업로드 (새 파일 들어왔을 때만 갱신, 미전송이면 기존 URL 유지)
+        if (profileImage != null && !profileImage.isEmpty()) {
+            try {
+                String profileUrl = minioService.uploadFile(profileImage, "employee-profile");
+                employee.updateProfileImageUrl(profileUrl);
+            } catch (Exception e) {
+                throw new BusinessException("프로필 사진 업로드에 실패했습니다", HttpStatus.BAD_REQUEST);
+            }
+        }
+
+        // 커스텀 필드 갱신 (폼 설정에서 추가된 동적 fieldKey 들의 값)
+        if (requestDto.getCustomFieldsJson() != null && !requestDto.getCustomFieldsJson().isBlank()) {
+            try {
+                Map<String, String> customFields = objectMapper.readValue(
+                        requestDto.getCustomFieldsJson(),
+                        new TypeReference<Map<String, String>>() {}
+                );
+                employee.updateCustomFields(customFields);
+            } catch (JsonProcessingException e) {
+                throw new BusinessException("커스텀 필드 파싱 실패", HttpStatus.BAD_REQUEST);
+            }
+        }
 
         return EmpDetailResponseDto.from(employee);
     }

@@ -70,6 +70,14 @@ public class SeasonService {
         return seasonRepository.findActiveByCompany(companyId);
     }
 
+    //    2-1. 현재 진행 시즌 상세 (회사당 1개) — 단계 게이트(목표등록/자기평가 등) 화면용
+    //    OPEN 시즌이 없으면 null 반환. DRAFT 시즌은 무시 (게이트는 진행중 시즌만 본다)
+    public SeasonDetailDto getCurrentSeasonDetail(UUID companyId) {
+        java.util.Optional<Season> opt = seasonRepository.findByCompany_CompanyIdAndStatus(companyId, EvalSeasonStatus.OPEN);
+        if (opt.isEmpty()) return null;
+        return getSeasonDetail(companyId, opt.get().getSeasonId());
+    }
+
     //    3.시즌상세조회
     //    - rules: OPEN 이후면 Season.formSnapshot(박제본) 기준, DRAFT 면 회사 현재 규칙 기준
     public SeasonDetailDto getSeasonDetail(UUID companyId, Long seasonId) {

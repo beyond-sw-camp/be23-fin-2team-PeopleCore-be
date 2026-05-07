@@ -48,14 +48,16 @@ SELECT
 --   인프라팀 (INF) / 영업팀 (SALES) / 마케팅팀 (MKT)
 -- =====================================================================
 
-INSERT INTO department (company_id, parent_dept_id, dept_name, dept_code, created_at, is_use, sort_order) VALUES
-(@cid, NULL, '임원실',   'EXEC',  NOW(), 'Y', 1),
-(@cid, NULL, '인사팀',   'HR',    NOW(), 'Y', 2),
-(@cid, NULL, '재무팀',   'FIN',   NOW(), 'Y', 3),
-(@cid, NULL, '개발팀',   'DEV',   NOW(), 'Y', 4),
-(@cid, NULL, '인프라팀', 'INF',   NOW(), 'Y', 5),
-(@cid, NULL, '영업팀',   'SALES', NOW(), 'Y', 6),
-(@cid, NULL, '마케팅팀', 'MKT',   NOW(), 'Y', 7);
+INSERT INTO department (company_id, parent_dept_id, dept_name, dept_code, sort_order, created_at, is_use) VALUES
+(@cid, NULL, '임원실',   'EXEC',  1, NOW(), 'Y'),
+(@cid, NULL, '인사팀',   'HR',    2, NOW(), 'Y'),
+(@cid, NULL, '재무팀',   'FIN',   3, NOW(), 'Y'),
+(@cid, NULL, '개발팀',   'DEV',   4, NOW(), 'Y'),
+(@cid, NULL, '인프라팀', 'INF',   5, NOW(), 'Y'),
+(@cid, NULL, '영업팀',   'SALES', 6, NOW(), 'Y'),
+(@cid, NULL, '마케팅팀', 'MKT',   7, NOW(), 'Y');
+
+
 -- =====================================================================
 -- 2) Grade  (한국 일반 직급 6단계 추가)
 --   사원(G1) → 대리(G2) → 과장(G3) → 차장(G4) → 부장(G5) → 이사(G6)

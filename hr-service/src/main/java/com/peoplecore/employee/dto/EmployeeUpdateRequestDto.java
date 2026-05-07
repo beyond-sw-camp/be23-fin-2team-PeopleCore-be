@@ -67,4 +67,7 @@ public class EmployeeUpdateRequestDto {
     // 권한
     @NotNull
     private EmpRole empRole;
+
+    // 폼 설정에서 추가된 동적 fieldKey 들의 값 (프론트가 JSON 문자열로 직렬화)
+    private String customFieldsJson;
 }

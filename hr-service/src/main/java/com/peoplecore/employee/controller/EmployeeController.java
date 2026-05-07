@@ -55,13 +55,14 @@ public class EmployeeController {
         return ResponseEntity.ok(employeeService.getCard(companyId));
 
     }
-//
+
 ////    3. 신규등록
     @PostMapping
     public ResponseEntity<Long> createEmployee(@RequestHeader("X-User-Company")UUID companyId,
                                               @Valid @ModelAttribute EmployeeCreateRequestDto responseDto,
-                                              @RequestPart(required = false) List<MultipartFile> files){
-        return ResponseEntity.ok(employeeService.createEmployee(companyId, responseDto,files));
+                                              @RequestPart(required = false) List<MultipartFile> files,
+                                               @RequestPart(required = false) MultipartFile profileImage){
+        return ResponseEntity.ok(employeeService.createEmployee(companyId, responseDto,files,profileImage));
     }
 
 //    3-1. 사번 미리보기 (락 x)
@@ -74,20 +75,21 @@ public class EmployeeController {
 
 
 
-//
-////    4. 상세 조희
+
+//    4. 상세 조희
     @GetMapping("/{empId}")
     public ResponseEntity<EmpDetailResponseDto>getEmpDetail(@RequestHeader("X-User-Company")UUID companyId,@PathVariable Long empId){
         return ResponseEntity.ok(employeeService.getEmployeeDetail(companyId,empId));
     }
-//
-////    5. 정보 수정
+
+//    5. 정보 수정
     @PutMapping("/{empId}")
     public ResponseEntity<EmpDetailResponseDto> updateEmployee(
             @RequestHeader("X-User-Company") UUID companyId,
             @PathVariable Long empId,
-            @Valid @RequestBody EmployeeUpdateRequestDto requestDto) {
-        return ResponseEntity.ok(employeeService.updateEmployee(companyId, empId, requestDto));
+            @Valid @ModelAttribute EmployeeUpdateRequestDto requestDto,
+            @RequestPart(required = false) MultipartFile profileImage) {
+        return ResponseEntity.ok(employeeService.updateEmployee(companyId, empId, requestDto, profileImage));
     }
 
 //    6. 삭제
