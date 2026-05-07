@@ -10,9 +10,13 @@ import com.peoplecore.pay.enums.RetirementType;
 import com.peoplecore.title.domain.Title;
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 @Entity
 @Table(name = "employee")
@@ -81,6 +85,12 @@ public class Employee extends BaseTimeEntity {
 
     @Column(name = "emp_profile_image_url", length = 500)
     private String empProfileImageUrl;
+
+    // 폼 설정에서 추가된 동적 fieldKey 들의 값 (JSONB)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "custom_fields", columnDefinition = "jsonb")
+    @Builder.Default
+    private Map<String, String> customFields = new HashMap<>();
 
     @Column(name = "emp_password", nullable = false)
     private String empPassword;
@@ -269,6 +279,16 @@ public class Employee extends BaseTimeEntity {
     // 부양가족수 수정
     public void updateDependentsCount(int count){
         this.dependentsCount = count;
+    }
+
+//    프로필 이미지 세팅
+    public void updateProfileImageUrl(String url){
+        this.empProfileImageUrl=url;
+    }
+
+//    폼 설정에서 추가된 동적 fieldKey 들의 값 일괄 갱신
+    public void updateCustomFields(Map<String, String> fields){
+        this.customFields = fields != null ? fields : new HashMap<>();
     }
 
 

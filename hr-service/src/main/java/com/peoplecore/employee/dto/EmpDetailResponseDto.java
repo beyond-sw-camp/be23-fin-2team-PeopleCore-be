@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import org.checkerframework.checker.units.qual.N;
 
 import java.time.LocalDate;
+import java.util.Map;
 
 @AllArgsConstructor
 @NoArgsConstructor
@@ -46,6 +47,12 @@ public class EmpDetailResponseDto {
     // 권한 정보
     private String    empRole;
 
+    // 프로필 사진 URL (minio)
+    private String    empProfileImageUrl;
+
+    // 폼 설정에서 추가된 동적 fieldKey 들의 값 (jsonb)
+    private Map<String, String> customFields;
+
 
     public static EmpDetailResponseDto from(Employee emp){
         return EmpDetailResponseDto.builder()
@@ -72,6 +79,8 @@ public class EmpDetailResponseDto {
                 .empNum(emp.getEmpNum())
                 .empEmail(emp.getEmpEmail())
                 .empRole(emp.getEmpRole() != null ? emp.getEmpRole().name() : null)
+                .empProfileImageUrl(emp.getEmpProfileImageUrl())
+                .customFields(emp.getCustomFields())
                 .build();
     }
 }
