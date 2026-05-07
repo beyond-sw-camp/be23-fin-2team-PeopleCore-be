@@ -69,7 +69,8 @@ logging:
 minio:
   endpoint: http://minio:9000
   #  public-url: https://minio.yourdomain.com   # 프론트 → MinIO (이미지 조회용)
-  public-url: http://localhost:9000   # 프론트 → MinIO (이미지 조회용)
+  public-endpoint: https://minio.peoplecore.cloud   # 추가
+  public-url: https://minio.peoplecore.cloud        # localhost → 실제 도메인으로 변경
   access-key: ${MINIO_ACCESS_KEY}
   secret-key: ${MINIO_SECRET_KEY}
   bucket: approval-form

@@ -1,0 +1,15 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: minio-peoplecore-tls
+  namespace: default
+spec:
+  secretName: minio-peoplecore-tls   # nginx-ingress가 이 Secret을 읽어서 TLS 종료
+  duration: 2160h                    # 90일
+  renewBefore: 360h                  # 15일 전 갱신
+  issuerRef:
+    name: my-issuer                  # https.yml에 이미 정의된 ClusterIssuer
+    kind: ClusterIssuer
+  commonName: minio.peoplecore.cloud
+  dnsNames:
+    - minio.peoplecore.cloud
