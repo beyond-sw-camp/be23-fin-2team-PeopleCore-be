@@ -5,6 +5,7 @@ import com.peoplecore.auth.RoleRequired;
 import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.employee.service.ProfileImageService;
+import com.peoplecore.pay.service.MySalaryCacheService;
 import io.minio.StatObjectResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,7 @@ import java.io.InputStream;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @Slf4j
@@ -29,11 +31,13 @@ public class ProfileImageController{
 
     private final ProfileImageService profileImageService;
     private final EmployeeRepository employeeRepository;
+    private final MySalaryCacheService mySalaryCacheService;
 
     @Autowired
-    public ProfileImageController(ProfileImageService profileImageService, EmployeeRepository employeeRepository) {
+    public ProfileImageController(ProfileImageService profileImageService, EmployeeRepository employeeRepository, MySalaryCacheService mySalaryCacheService) {
         this.profileImageService = profileImageService;
         this.employeeRepository = employeeRepository;
+        this.mySalaryCacheService = mySalaryCacheService;
     }
 
 
@@ -43,6 +47,7 @@ public class ProfileImageController{
     @RoleRequired({"EMPLOYEE", "HR_ADMIN", "HR_SUPER_ADMIN"})
     @Transactional
     public ResponseEntity<Map<String, String>> upload(
+            @RequestHeader("X-User-Company") UUID companyId,
             @RequestHeader("X-User-Id") Long empId,
             @RequestPart("file") MultipartFile file
     ) throws Exception {
@@ -54,6 +59,7 @@ public class ProfileImageController{
 
         String newUrl = profileImageService.upload(empId, file);
         emp.updateProfileImage(newUrl);
+        mySalaryCacheService.evictSalaryInfoCache(companyId, empId);
 
         return ResponseEntity.ok(Map.of("profileImageUrl", newUrl));
     }
@@ -62,11 +68,14 @@ public class ProfileImageController{
     @DeleteMapping("/employee/me/profile-image")
     @RoleRequired({"EMPLOYEE", "HR_ADMIN", "HR_SUPER_ADMIN"})
     @Transactional
-    public ResponseEntity<Void> delete(@RequestHeader("X-User-Id") Long empId) {
+    public ResponseEntity<Void> delete(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestHeader("X-User-Id") Long empId) {
         Employee emp = employeeRepository.findById(empId)
                 .orElseThrow(() -> new IllegalArgumentException("사원을 찾을 수 없습니다"));
         profileImageService.deleteByUrl(emp.getEmpProfileImageUrl());
         emp.updateProfileImage(null);
+        mySalaryCacheService.evictSalaryInfoCache(companyId, empId);
         return ResponseEntity.noContent().build();
     }
 
