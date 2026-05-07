@@ -55,7 +55,8 @@ INSERT INTO department (company_id, parent_dept_id, dept_name, dept_code, sort_o
 (@cid, NULL, '개발팀',   'DEV',   4, NOW(), 'Y'),
 (@cid, NULL, '인프라팀', 'INF',   5, NOW(), 'Y'),
 (@cid, NULL, '영업팀',   'SALES', 6, NOW(), 'Y'),
-(@cid, NULL, '마케팅팀', 'MKT',   7, NOW(), 'Y');
+(@cid, NULL, '마케팅팀', 'MKT',   7, NOW(), 'Y'),
+(@cid, NULL, '디자인팀', 'DESIGN',8, NOW(), 'Y');
 
 
 -- =====================================================================
