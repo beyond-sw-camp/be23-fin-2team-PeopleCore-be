@@ -37,25 +37,10 @@ import java.util.TimeZone;
  *   왜: Quartz 클러스터링은 QRTZ_LOCKS 테이블에 SELECT FOR UPDATE 를 주기적으로 발사 (clusterCheckinInterval 마다).
  *       기존 풀 그대로면 트래픽 피크 시 락 획득 대기로 잡 실행 지연.
  *
- * TODO-4 (시간대): 모든 CronTrigger 에 Asia/Seoul 명시.
- *   왜: EKS 노드 기본 timezone 은 보통 UTC. 명시 누락하면 cron 식이 UTC 로 해석돼 9시간 어긋남.
- *       ex: 23:00 자동마감이 한국 시각 익일 08:00 fire.
- *   어떻게: Quartz 트리거 빌드 시 .inTimeZone(TimeZone.getTimeZone("Asia/Seoul")).
- *
  * TODO-5 (시계 동기화): 노드 간 시계 차이 < 1초 (Quartz 권장 < 7초).
  *   왜: 클러스터 노드는 자기 시계 기준으로 fire 판단. 시계 차 크면 이중 fire 또는 misfire 오인.
  *   어떻게: AWS EC2/EKS 워커는 Amazon Time Sync Service 자동 사용 → 보통 OK.
  *           운영 시작 후 각 파드에서 date 출력 비교로 점검.
- *
- * TODO-6 (DB 마이그레이션): 배포 직전 RDS 에 메타테이블 수동 적용.
- *   왜: 운영 yml 의 initialize-schema=never 로 자동 생성 안 됨. 테이블 없으면 부팅 실패.
- *   어떻게: hr-service/src/main/resources/db/migration/ 에 두 SQL 커밋 후 RDS 에 실행:
- *           - quartz_tables_mysql_innodb.sql (Quartz jar 의 tables_mysql_innodb.sql)
- *           - spring_batch_schema_mysql.sql  (spring-batch-core jar 의 schema-mysql.sql)
- *
- * TODO-7 (실패 알림): JobListener 등록해서 잡 실패 시 Discord webhook 발사.
- *   왜: EKS 파드 로그 보존 짧음. 실패 인지 늦으면 자동마감/연차만료 등 하루치 데이터 누락이 그대로 굳음.
- *   어떻게: application-local.yml 의 discord.batch-webhook 재활용. JobListener 구현 추가.
  */
 
 /*
