@@ -248,7 +248,8 @@ public class LeaveAllowanceService {
 
         for (LeaveAllowance la : allowances) {
             if (la.getStatus() == AllowanceStatus.APPLIED) continue;
-            if (la.getStatus() != AllowanceStatus.CALCULATED) {
+            // CALCULATED: 신규 반영 / SKIPPED: 이전 시도가 잠금으로 실패 → 재시도 허용
+            if (la.getStatus() != AllowanceStatus.CALCULATED && la.getStatus() != AllowanceStatus.SKIPPED) {
                 throw new CustomException(ErrorCode.LEAVE_ALLOWANCE_NOT_CALCULATED);
             }
 
@@ -262,6 +263,7 @@ public class LeaveAllowanceService {
             if (run.getPayrollStatus() == PayrollStatus.PAID) {
                 skippedCount++;
                 skippedAllowanceIds.add(la.getAllowanceId());
+                la.markSkipped();   // 카운트 잔존 방지 — CALCULATED → SKIPPED
                 log.warn("[연차수당 반영 skip] runId={}, 이미 지급완료", run.getPayrollRunId());
                 continue;
             }
@@ -275,6 +277,7 @@ public class LeaveAllowanceService {
             if (pes != null && pes.getStatus() != PayrollEmpStatusType.CALCULATING) {
                 skippedCount++;
                 skippedAllowanceIds.add(la.getAllowanceId());
+                la.markSkipped();   // 카운트 잔존 방지 — CALCULATED → SKIPPED
                 log.warn("[연차수당 반영 skip] empId={} 사원 상태={}, runId={}",
                         la.getEmployee().getEmpId(), pes.getStatus(), run.getPayrollRunId());
                 continue;
@@ -373,15 +376,17 @@ public class LeaveAllowanceService {
      * - NEXT(익월): 5월 근로 → 6월 25일 지급
      */
     private String resolveTargetMonth(LeaveAllowance la) {
-        UUID companyId = la.getCompany().getCompanyId();
+        CompanyPaySettings settings = paySettingsRepository
+                .findByCompany_CompanyId(la.getCompany().getCompanyId())
+                .orElse(null);
+        return resolveTargetMonth(la, settings);
+    }
+
+    private String resolveTargetMonth(LeaveAllowance la, CompanyPaySettings settings) {
         LocalDate expiration = resolveExpirationDate(la);       // 만료일
         LocalDate dueDate = expiration.plusDays(1);   // 산정 가능 시점
 
         // 회사 급여 설정 (없으면 안전 기본값: 매월 25일, 당월 지급)
-        CompanyPaySettings settings = paySettingsRepository
-                .findByCompany_CompanyId(companyId)
-                .orElse(null);
-
         int payDay = (settings == null) ? 25
                 : Boolean.TRUE.equals(settings.getSalaryPayLastDay()) ? 31
                   : settings.getSalaryPayDay();
@@ -401,6 +406,55 @@ public class LeaveAllowanceService {
         YearMonth payTargetMonth = (payMonth == PayMonth.NEXT) ? workMonth.plusMonths(1) : workMonth;
 
         return payTargetMonth.toString();   // "2026-05" / "2027-01"
+    }
+
+//    "검토 대기 N명" — 지정한 yearMonth 급여대장에 "지금 반영 가능한" CALCULATED 건의 distinct 사원수
+//    포함 타입: FISCAL_YEAR(연말미사용), ANNIVERSARY(입사기념일), RESIGNED(퇴직자)
+//      ㄴ FISCAL_YEAR/ANNIVERSARY 는 회사 policyBaseType 에 따라 상호배타적으로 발생, RESIGNED 는 별개
+//    잠금 상태(CONFIRMED/PENDING_APPROVAL/APPROVED/PAID)거나 사원이 그 달 급여대장에 없는 경우 카운트 제외
+//    → 알람의 본래 의도: "지금 클릭하면 반영된다"는 신호. 사용자가 액션 가능한 건만 카운트
+    public long countPendingReviewForMonth(UUID companyId, String yearMonth) {
+        List<LeaveAllowance> candidates = leaveAllowanceRepository
+                .findPendingReviewCandidates(companyId, AllowanceStatus.CALCULATED,
+                        List.of(AllowanceType.FISCAL_YEAR, AllowanceType.ANNIVERSARY, AllowanceType.RESIGNED));
+        if (candidates.isEmpty()) return 0L;
+
+        CompanyPaySettings settings = paySettingsRepository
+                .findByCompany_CompanyId(companyId)
+                .orElse(null);
+
+        // 해당 월 급여대장 (없으면 알람은 그대로 유지 — 급여대장 생성 필요 알림 의미)
+        PayrollRuns run = payrollRunsRepository
+                .findByCompany_CompanyIdAndPayYearMonth(companyId, yearMonth)
+                .orElse(null);
+
+        return candidates.stream()
+                .filter(la -> {
+                    try {
+                        if (!yearMonth.equals(resolveTargetMonth(la, settings))) return false;
+
+                        // 급여대장 미생성: 카운트 유지 (사용자에게 생성 필요 환기)
+                        if (run == null) return true;
+
+                        // run-level 차단: PAID
+                        if (run.getPayrollStatus() == PayrollStatus.PAID) return false;
+
+                        // 사원별 PayrollEmpStatus 검사
+                        //   - 행 없음 = 그 달 급여대장에 사원이 없음 → 반영 불가 → 제외
+                        //   - CALCULATING 만 카운트 (CONFIRMED/PENDING_APPROVAL/APPROVED/PAID 는 잠금 해제 전 반영 불가)
+                        return payrollEmpStatusRepository
+                                .findByPayrollRuns_PayrollRunIdAndEmployee_EmpId(
+                                        run.getPayrollRunId(), la.getEmployee().getEmpId())
+                                .map(pes -> pes.getStatus() == PayrollEmpStatusType.CALCULATING)
+                                .orElse(false);
+                    } catch (Exception e) {
+                        log.warn("[검토 대기 카운트 skip] allowanceId={}, msg={}", la.getAllowanceId(), e.getMessage());
+                        return false;
+                    }
+                })
+                .map(la -> la.getEmployee().getEmpId())
+                .distinct()
+                .count();
     }
 
 

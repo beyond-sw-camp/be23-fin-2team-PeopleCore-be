@@ -104,15 +104,24 @@ public class PayrollService {
         this.resignRepository = resignRepository;
     }
 
-///       급여대장 조회(특정 월)
+///       급여대장 조회(특정 월) — 117명 N+1 제거 (배치 조회 + Map 캐싱)
     public PayrollRunResDto getPayroll(UUID companyId, String payYearMonth){
 
         PayrollRuns run = payrollRunsRepository.findByCompany_CompanyIdAndPayYearMonth(companyId, payYearMonth).orElseThrow(()-> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
-        List<PayrollDetails> allDetails = payrollDetailsRepository.findByPayrollRuns(run);
+        // fetch join: employee + dept + grade + workGroup 한 번에 로드
+        List<PayrollDetails> allDetails = payrollDetailsRepository.findByPayrollRunsWithEmpFetch(run);
         YearMonth payMonth = YearMonth.parse(payYearMonth);
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd   = payMonth.atEndOfMonth();
+        LocalDateTime monthStartTime = monthStart.atStartOfDay();
+        LocalDateTime monthEndTime   = monthEnd.atTime(LocalTime.MAX);
 
 //        사원별 그룹핑
         Map<Long, List<PayrollDetails>> detailsByEmp = allDetails.stream().collect(Collectors.groupingBy(d -> d.getEmployee().getEmpId()));
+        Set<Long> empIds = detailsByEmp.keySet();
+        Map<Long, Employee> empMap = allDetails.stream()
+                .map(PayrollDetails::getEmployee)
+                .collect(Collectors.toMap(Employee::getEmpId, e -> e, (a, b) -> a));
 
         // 사원별 PayrollEmpStatus 한 번에 조회
         Map<Long, PayrollEmpStatus> empStatusMap = payrollEmpStatusRepository
@@ -130,7 +139,46 @@ public class PayrollService {
                 .map(d -> d.getEmployee().getEmpId())
                 .collect(Collectors.toSet());
 
+        // [BATCH] 시급 — 활성 연봉계약 일괄 조회 → empId → hourlyWage
+        Map<Long, Long> hourlyWageByEmp = empIds.isEmpty() ? Map.of() :
+                salaryContractRepository
+                        .findActiveContractsByEmpIds(companyId, new ArrayList<>(empIds), monthStart, monthEnd)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                sc -> sc.getEmployee().getEmpId(),
+                                sc -> {
+                                    long monthly = sc.getTotalAmount()
+                                            .divide(BigDecimal.valueOf(12), 0, RoundingMode.FLOOR).longValue();
+                                    return Math.round((double) monthly / 209);
+                                },
+                                (a, b) -> a
+                        ));
+
+        // [BATCH] OvertimeRequest — 일괄 조회 → empId 별 그룹핑
+        Map<Long, List<OvertimeRequest>> otByEmp = empIds.isEmpty() ? Map.of() :
+                overtimeRequestRepository
+                        .findApprovedByEmpIdsAndDateRange(empIds, monthStartTime, monthEndTime)
+                        .stream()
+                        .collect(Collectors.groupingBy(o -> o.getEmployee().getEmpId()));
+
+        // [BATCH] Resign — 일괄 조회 → empId 별 최신 1건
+        Map<Long, Resign> resignByEmp = empIds.isEmpty() ? Map.of() :
+                resignRepository
+                        .findActiveOrConfirmedByEmpIds(companyId, empIds)
+                        .stream()
+                        .sorted(Comparator.comparing(Resign::getResignDate).reversed())
+                        .collect(Collectors.toMap(
+                                r -> r.getEmployee().getEmpId(),
+                                r -> r,
+                                (a, b) -> a // 첫 번째(최신) 유지
+                        ));
+
+        // [BATCH] OT 금액 사원별 계산 — DB 안 침
+        Map<Long, Long> pendingOtAmountByEmp = calculatePendingOvertimeBatch(
+                companyId, empIds, otByEmp, empMap, hourlyWageByEmp);
+
         List<PayrollEmpResDto> empList = detailsByEmp.entrySet().stream().map(entry -> {
+            Long empId = entry.getKey();
             Employee emp = entry.getValue().get(0).getEmployee();
             List<PayrollDetails> details = entry.getValue();
 
@@ -141,20 +189,21 @@ public class PayrollService {
                     .mapToLong(PayrollDetails::getAmount).sum();
 
         // 사원의 PayrollEmpStatus 1건 추출
-        PayrollEmpStatus pes = empStatusMap.get(emp.getEmpId());
+        PayrollEmpStatus pes = empStatusMap.get(empId);
         String empStatusValue = pes != null ? pes.getStatus().name() : "CALCULATING";
         Long approvalDocIdValue = pes != null ? pes.getApprovalDocId() : null;
 
-        // pendingOvertimeAmount 계산
+        // pendingOvertimeAmount — Map 에서 꺼내쓰기 (DB 안 침)
         Long pendingOtValue;
-        if (appliedOtEmpIds.contains(emp.getEmpId())) {
+        if (appliedOtEmpIds.contains(empId)) {
             pendingOtValue = 0L;   // 이미 적용 완료
         } else {
-            ApprovedOvertimeResDto ot = getApprovedOvertime(companyId, run.getPayrollRunId(), emp.getEmpId());
-            pendingOtValue = ot.getTotalAmount() > 0 ? ot.getTotalAmount() : null;
+            long amt = pendingOtAmountByEmp.getOrDefault(empId, 0L);
+            pendingOtValue = amt > 0 ? amt : null;
         }
 
-        ProrateInfo prorate = resolveProrate(companyId, emp, payMonth);
+        // prorate — Map 에서 꺼내쓰기 (DB 안 침)
+        ProrateInfo prorate = resolveProrateFromCache(emp, payMonth, resignByEmp.get(empId));
 
         return PayrollEmpResDto.builder()
                 .empId(emp.getEmpId())
@@ -182,6 +231,94 @@ public class PayrollService {
         .toList();
 
         return PayrollRunResDto.fromEntity(run, empList);
+    }
+
+    /**
+     * [BATCH] 사원별 pending overtime 금액 일괄 계산.
+     * 추가 DB 조회 없이 사전 로딩된 Map 들로만 계산 — getApprovedOvertime() 의 산식과 동일.
+     * 회사 공휴일 캐시는 사원 전체에 대해 동일한 한 달 범위라 BusinessDayCalculator 가 한 번 채움.
+     */
+    private Map<Long, Long> calculatePendingOvertimeBatch(
+            UUID companyId,
+            Set<Long> empIds,
+            Map<Long, List<OvertimeRequest>> otByEmp,
+            Map<Long, Employee> empMap,
+            Map<Long, Long> hourlyWageByEmp) {
+
+        Map<Long, Long> result = new HashMap<>(empIds.size() * 2);
+        for (Long empId : empIds) {
+            List<OvertimeRequest> list = otByEmp.getOrDefault(empId, List.of());
+            if (list.isEmpty()) {
+                result.put(empId, 0L);
+                continue;
+            }
+            Employee emp = empMap.get(empId);
+            WorkGroup wg = emp != null ? emp.getWorkGroup() : null;
+            Long hourlyWage = hourlyWageByEmp.get(empId);
+            if (hourlyWage == null) {
+                result.put(empId, 0L);
+                continue;
+            }
+
+            long totalExtMin = 0L, totalNightMin = 0L, totalHolidayMin = 0L;
+            for (OvertimeRequest ot : list) {
+                long minutes = Duration.between(ot.getOtPlanStart(), ot.getOtPlanEnd()).toMinutes();
+                if (minutes <= 0) continue;
+                LocalDate otDate = ot.getOtDate().toLocalDate();
+                boolean holiday = isHolidayForWorkGroup(companyId, otDate, wg);
+                long nightMin = nightOverlapMinutes(ot.getOtPlanStart(), ot.getOtPlanEnd());
+                if (holiday) totalHolidayMin += minutes;
+                else         totalExtMin     += minutes;
+                totalNightMin += nightMin;
+            }
+
+            long holNormalMin = Math.min(totalHolidayMin, 8L * 60);
+            long holOverMin   = Math.max(0L, totalHolidayMin - 8L * 60);
+            long extendedPay  = Math.round(hourlyWage * 1.5 * totalExtMin / 60.0);
+            long holidayPay   = Math.round(
+                    hourlyWage * 1.5 * holNormalMin / 60.0
+                            + hourlyWage * 2.0 * holOverMin / 60.0);
+            long nightPay     = Math.round(hourlyWage * 0.5 * totalNightMin / 60.0);
+            result.put(empId, extendedPay + holidayPay + nightPay);
+        }
+        return result;
+    }
+
+    /**
+     * [BATCH] resolveProrate 의 캐시 버전 — DB 조회 없이 사전 로딩된 Resign 으로 처리.
+     * 산식은 resolveProrate() 와 동일.
+     */
+    private ProrateInfo resolveProrateFromCache(Employee emp, YearMonth payMonth, Resign cachedResign) {
+        LocalDate monthStart = payMonth.atDay(1);
+        LocalDate monthEnd   = payMonth.atEndOfMonth();
+
+        LocalDate effHire = null;
+        if (emp.getEmpHireDate() != null
+                && !emp.getEmpHireDate().isBefore(monthStart)
+                && !emp.getEmpHireDate().isAfter(monthEnd)) {
+            effHire = emp.getEmpHireDate();
+        }
+
+        LocalDate resignDate = emp.getEmpResignDate();
+        if (resignDate == null && cachedResign != null) {
+            resignDate = cachedResign.getResignDate();
+        }
+        LocalDate effResign = (resignDate != null
+                && !resignDate.isBefore(monthStart)
+                && !resignDate.isAfter(monthEnd)) ? resignDate : null;
+
+        boolean isProrated = effHire != null || effResign != null;
+        LocalDate from = effHire != null ? effHire : monthStart;
+        LocalDate to   = effResign != null ? effResign : monthEnd;
+        int proratedDays = (int) (ChronoUnit.DAYS.between(from, to) + 1);
+        int monthDays    = (int) (ChronoUnit.DAYS.between(monthStart, monthEnd) + 1);
+
+        BigDecimal ratio = isProrated
+                ? BigDecimal.valueOf(proratedDays)
+                  .divide(BigDecimal.valueOf(monthDays), 4, RoundingMode.HALF_UP)
+                : BigDecimal.ONE;
+
+        return new ProrateInfo(isProrated, proratedDays, monthDays, effHire, effResign, ratio);
     }
 
 ///    급여 산정 생성 (연봉계약 기반)

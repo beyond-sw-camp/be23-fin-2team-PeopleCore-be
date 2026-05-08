@@ -88,6 +88,12 @@ public class LeaveAllowance extends BaseTimeEntity {
         this.status = AllowanceStatus.APPLIED;
     }
 
+//    급여대장 반영 skip — 사원별 PayrollEmpStatus 잠금이나 PAID 등으로 반영 불가한 경우 호출
+//    재산정(calculate) 시 PENDING 으로 되돌릴 수 있도록 status 만 SKIPPED 로 두고 appliedMonth 는 비워둠
+    public void markSkipped(){
+        this.status = AllowanceStatus.SKIPPED;
+    }
+
 //    연차 소멸/수당발생 일자 계산
     public LocalDate resolveExpiredDate(String fiscalYearStart){
         return this.allowanceType.resolveExpiredDate(this, fiscalYearStart);

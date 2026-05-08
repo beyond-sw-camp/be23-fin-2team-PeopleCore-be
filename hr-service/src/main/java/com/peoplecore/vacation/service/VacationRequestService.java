@@ -321,6 +321,43 @@ public class VacationRequestService {
         catch (DateTimeException e) { return null; }
     }
 
+    /* 결재 문서 생성 전 사전 검증 - /internal/vacation/validate-request 진입점 */
+    /* 통과 시 void, 실패 시 CustomException - createFromApproval 검증 로직과 동일하나 readOnly */
+    /* 사전 동기 차단(여기) + 사후 비동기 검증(createFromApproval) 이중 안전망 구성 */
+    @Transactional(readOnly = true)
+    public void validateForCreate(UUID companyId, Long empId, Long infoId, List<VacationSlotItem> items) {
+        // items 비어있으면 즉시 실패
+        if (items == null || items.isEmpty()) {
+            throw new CustomException(ErrorCode.VACATION_REQ_ITEMS_EMPTY);
+        }
+        Employee employee = employeeRepository.findById(empId)
+                .orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
+        VacationType vacationType = vacationTypeRepository.findById(infoId)
+                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND));
+
+        // 성별 제한 (임신/출산 등 한정 유형)
+        if (!vacationType.getGenderLimit().allows(employee.getEmpGender())) {
+            throw new CustomException(ErrorCode.VACATION_TYPE_GENDER_NOT_ALLOWED);
+        }
+
+        BigDecimal totalDays = items.stream()
+                .map(VacationSlotItem::getUseDay)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        // 미리쓰기 허용(연차/월차 + 정책 ON) 이면 잔여 검증 생략
+        boolean allowNegative = isAdvanceUseAllowed(companyId, vacationType);
+        if (allowNegative) return;
+
+        // 미리쓰기 OFF - Balance row 없음 = 잔여 0 → INSUFFICIENT
+        Integer balanceYear = items.get(0).getStartAt().toLocalDate().getYear();
+        VacationBalance balance = vacationBalanceRepository
+                .findOne(companyId, empId, vacationType.getTypeId(), balanceYear)
+                .orElseThrow(() -> new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT));
+        if (balance.getAvailableDays().compareTo(totalDays) < 0) {
+            throw new CustomException(ErrorCode.VACATION_BALANCE_INSUFFICIENT);
+        }
+    }
+
     /* allowAdvanceUse 정책 + 연차/월차 유형 동시 만족 시 true (available 검증 스킵 대상) */
     /* 그 외 (법정휴가 / 정책 OFF / 정책 없음) 는 false - 기존 엄격 검증 유지 */
     private boolean isAdvanceUseAllowed(UUID companyId, VacationType vacationType) {

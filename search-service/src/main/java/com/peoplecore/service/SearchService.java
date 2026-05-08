@@ -293,6 +293,7 @@ public class SearchService {
                                     .multiMatch(mm -> mm
                                             .query(keyword)
                                             .fields(SEARCH_FIELDS)
+                                            .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)
                                     )
                             );
                             return b;
@@ -375,6 +376,7 @@ public class SearchService {
                                     .multiMatch(mm -> mm
                                             .query(keyword)
                                             .fields(SEARCH_FIELDS)
+                                            .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)
                                     )
                             );
                             return b;
@@ -427,6 +429,7 @@ public class SearchService {
                                     .multiMatch(mm -> mm
                                             .query(keyword)
                                             .fields(SUGGEST_FIELDS)
+                                            .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)
                                     )
                             );
                             return b;

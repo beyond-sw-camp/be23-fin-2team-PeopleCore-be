@@ -9,13 +9,22 @@ import com.peoplecore.approval.repository.ApprovalDocumentRepository;
 import com.peoplecore.approval.repository.ApprovalLineRepository;
 import com.peoplecore.common.service.MinioService;
 import com.peoplecore.exception.BusinessException;
+import io.minio.StatObjectResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -24,6 +33,8 @@ import java.util.UUID;
 @Transactional(readOnly = true)
 @Slf4j
 public class ApprovalAttachmentService {
+
+    private static final String URL_PREFIX = "/approval/document/attachments/";
 
     private final ApprovalAttachmentRepository attachmentRepository;
     private final ApprovalDocumentRepository documentRepository;
@@ -83,8 +94,8 @@ public class ApprovalAttachmentService {
             attachmentRepository.save(attachment);
             log.info("[DB 저장 완료] attachId={}, docId={}", attachment.getAttachId(), docId);
 
-            /* Pre-signed URL 포함하여 응답 */
-            String fileUrl = minioService.getPresignedUrl(objectName);
+            /* 백엔드 프록시 URL 반환 (브라우저가 해당 경로로 GET → 백엔드가 MinIO 에서 스트림) */
+            String fileUrl = URL_PREFIX + attachment.getAttachId() + "/file";
             responses.add(AttachmentResponse.from(attachment, fileUrl));
         }
 
@@ -105,13 +116,50 @@ public class ApprovalAttachmentService {
         ApprovalAttachment attachment = attachmentRepository.findWithDocById(attachId)
                 .orElseThrow(() -> new BusinessException("첨부파일을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
 
+        /* 권한 가드 - 기안자 또는 결재라인 본인만 통과 */
         ApprovalDocument doc = attachment.getDocId();
         boolean isDrafter = doc.getEmpId().equals(empId);
         boolean inLine = lineRepository.findByDocId_DocIdAndEmpId(doc.getDocId(), empId).isPresent();
         if (!isDrafter && !inLine) {
             throw new BusinessException("첨부파일에 접근할 권한이 없습니다.", HttpStatus.FORBIDDEN);
         }
-        return minioService.getPresignedUrl(attachment.getObjectName());
+        /* 백엔드 프록시 URL 반환 (실제 다운로드는 GET /attachments/{attachId}/file) */
+        return URL_PREFIX + attachId + "/file";
+    }
+
+    /**
+     * 첨부파일 프록시 다운로드 - 권한 검증 후 MinIO 스트림 응답
+     */
+    public ResponseEntity<Resource> downloadFile(Long empId, Long attachId) {
+        ApprovalAttachment attachment = attachmentRepository.findWithDocById(attachId)
+                .orElseThrow(() -> new BusinessException("첨부파일을 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+
+        /* 권한 가드 - 기안자 또는 결재라인 본인만 통과 */
+        ApprovalDocument doc = attachment.getDocId();
+        boolean isDrafter = doc.getEmpId().equals(empId);
+        boolean inLine = lineRepository.findByDocId_DocIdAndEmpId(doc.getDocId(), empId).isPresent();
+        if (!isDrafter && !inLine) {
+            throw new BusinessException("첨부파일에 접근할 권한이 없습니다.", HttpStatus.FORBIDDEN);
+        }
+
+        String objectName = attachment.getObjectName();
+        /* MinIO 메타 + 스트림 획득 */
+        StatObjectResponse stat = minioService.stat(objectName);
+        InputStream stream = minioService.download(objectName);
+
+        HttpHeaders headers = new HttpHeaders();
+        /* DB 저장된 contentType 우선, 없으면 stat 의 값 사용 */
+        String contentType = attachment.getContentType() != null
+                ? attachment.getContentType()
+                : stat.contentType();
+        headers.setContentType(MediaType.parseMediaType(contentType));
+        headers.setContentLength(stat.size());
+        /* 한글 파일명 RFC 5987 인코딩으로 attachment 다운로드 */
+        ContentDisposition disposition = ContentDisposition.attachment()
+                .filename(attachment.getFileName(), StandardCharsets.UTF_8)
+                .build();
+        headers.setContentDisposition(disposition);
+        return ResponseEntity.ok().headers(headers).body(new InputStreamResource(stream));
     }
 
     /** 첨부파일 단건 삭제 (MinIO + DB) */

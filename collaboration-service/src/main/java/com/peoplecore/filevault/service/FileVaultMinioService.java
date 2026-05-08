@@ -4,6 +4,7 @@ import com.peoplecore.exception.BusinessException;
 import io.minio.*;
 import io.minio.http.Method;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
@@ -20,13 +21,16 @@ import java.util.concurrent.TimeUnit;
 public class FileVaultMinioService {
 
     private final MinioClient minioClient;
+    private final MinioClient minioPresignClient;
     private final String bucket;
 
     public FileVaultMinioService(
-        MinioClient minioClient,
+        @Qualifier("minioClient") MinioClient minioClient,
+        @Qualifier("minioPresignClient") MinioClient minioPresignClient,
         @Value("${minio.filevault.bucket:filevault}") String bucket
     ) {
         this.minioClient = minioClient;
+        this.minioPresignClient = minioPresignClient;
         this.bucket = bucket;
     }
 
@@ -45,7 +49,7 @@ public class FileVaultMinioService {
 
     public String generatePresignedPutUrl(String storageKey, int expiryMinutes) {
         try {
-            return minioClient.getPresignedObjectUrl(
+            return minioPresignClient.getPresignedObjectUrl(
                 GetPresignedObjectUrlArgs.builder()
                     .method(Method.PUT)
                     .bucket(bucket)
@@ -79,7 +83,7 @@ public class FileVaultMinioService {
                 String disposition = "attachment; filename*=UTF-8''" + encoded;
                 builder.extraQueryParams(Map.of("response-content-disposition", disposition));
             }
-            return minioClient.getPresignedObjectUrl(builder.build());
+            return minioPresignClient.getPresignedObjectUrl(builder.build());
         } catch (Exception e) {
             log.error("Presigned GET URL 생성 실패 key={}, error={}", storageKey, e.getMessage());
             throw new BusinessException("파일 다운로드 URL 생성에 실패했습니다.", HttpStatus.SERVICE_UNAVAILABLE);

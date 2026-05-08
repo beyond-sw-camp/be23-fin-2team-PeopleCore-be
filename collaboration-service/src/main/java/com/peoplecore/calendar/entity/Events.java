@@ -67,7 +67,7 @@ public class Events extends BaseTimeEntity {
     private List<EventsNotifications> notifications = new ArrayList<>();
 
 
-    public void update(String title, String description, String location, LocalDateTime startAt, LocalDateTime endAt, Boolean isAllDay, Boolean isPublic, MyCalendars myCalendars){
+    public void update(String title, String description, String location, LocalDateTime startAt, LocalDateTime endAt, Boolean isAllDay, Boolean isPublic, MyCalendars myCalendars, RepeatedRules repeatedRules){
 
         this.title = title;
         this.description = description;
@@ -77,6 +77,7 @@ public class Events extends BaseTimeEntity {
         this.isAllDay = isAllDay;
         this.isPublic = isPublic;
         this.myCalendars = myCalendars;
+        this.repeatedRules = repeatedRules;
 
     }
 

@@ -4,7 +4,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.boot.archive.scan.internal.ScanResultImpl;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -23,6 +22,8 @@ public class EventUpdateReqDto {
     private Boolean isAllDay;
     private Boolean isPublic;
     private Long myCalendarsId;
+    private RepeatedRulesReqDto repeatedRule;
+    private List<Long> attendeeEmpIds;
 
     private List<NotificationReqDto> notifications;
 

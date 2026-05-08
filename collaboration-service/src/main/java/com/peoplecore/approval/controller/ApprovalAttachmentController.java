@@ -4,6 +4,7 @@ import com.peoplecore.approval.dto.AttachmentListResponse;
 import com.peoplecore.approval.dto.AttachmentResponse;
 import com.peoplecore.approval.service.ApprovalAttachmentService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.io.Resource;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -47,6 +48,14 @@ public class ApprovalAttachmentController {
             @RequestHeader("X-User-Id") Long empId,
             @PathVariable Long attachId) {
         return ResponseEntity.ok(attachmentService.getDownloadUrl(empId, attachId));
+    }
+
+    /** 첨부파일 프록시 GET (실제 파일 스트림) - 기안자/결재라인 본인만 통과 */
+    @GetMapping("/attachments/{attachId}/file")
+    public ResponseEntity<Resource> downloadAttachmentFile(
+            @RequestHeader("X-User-Id") Long empId,
+            @PathVariable Long attachId) {
+        return attachmentService.downloadFile(empId, attachId);
     }
 
     /** 첨부파일 단건 삭제 */

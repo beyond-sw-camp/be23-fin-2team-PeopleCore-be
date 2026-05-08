@@ -55,11 +55,30 @@ public interface LeaveAllowanceRepository extends JpaRepository<LeaveAllowance, 
             @Param("statuses") List<AllowanceStatus> statuses);
 
 
-    // 특정 월에 검토 대기(CALCULATED + 미반영) 건수
-    long countByCompany_CompanyIdAndStatusAndAppliedMonthIsNull(UUID companyId, AllowanceStatus status);
+    // 검토 대기(CALCULATED + 미반영) 후보 — 반영월 계산을 service 에서 하기 위해 employee join fetch
+    @Query("SELECT la FROM LeaveAllowance la " +
+            "JOIN FETCH la.employee " +
+            "WHERE la.company.companyId = :companyId " +
+            "AND la.status = :status " +
+            "AND la.appliedMonth IS NULL")
+    List<LeaveAllowance> findPendingReviewCandidates(
+            @Param("companyId") UUID companyId,
+            @Param("status") AllowanceStatus status);
 
 
     Optional<LeaveAllowance> findFirstByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(
             UUID companyId, Long empId, Integer year, AllowanceType type);
+
+
+    @Query("SELECT la FROM LeaveAllowance la " +
+            "JOIN FETCH la.employee " +
+            "WHERE la.company.companyId = :companyId " +
+            "AND la.status = :status " +
+            "AND la.appliedMonth IS NULL " +
+            "AND la.allowanceType IN :types")
+    List<LeaveAllowance> findPendingReviewCandidates(
+            @Param("companyId") UUID companyId,
+            @Param("status") AllowanceStatus status,
+            @Param("types") List<AllowanceType> types);
 
 }
