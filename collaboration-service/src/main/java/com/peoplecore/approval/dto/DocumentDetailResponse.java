@@ -70,6 +70,7 @@ public class DocumentDetailResponse {
         private LocalDateTime lineProcessedAt;
         private String lineComment;
         private Boolean isDelegated;
+        private Long lineDelegatedId;   // 대리 처리 시 원 결재자 empId, 그 외엔 null
         private Boolean isRead;
         private String sigUrl;
     }
@@ -92,6 +93,7 @@ public class DocumentDetailResponse {
                 .lineProcessedAt(line.getLineProcessedAt())
                 .lineComment(line.getLineComment())
                 .isDelegated(line.getIsDelegated())
+                .lineDelegatedId(line.getLineDelegatedId())
                 .isRead(line.getIsRead())
                 .sigUrl(signatureMap.get(line.getEmpId()))
                 .build()).toList();
