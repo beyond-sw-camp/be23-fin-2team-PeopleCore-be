@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Service
@@ -50,8 +51,9 @@ public class ApprovalDocumentService {
     private final HrServiceClient hrServiceClient;
     private final ApprovalDocumentRepository approvalDocumentRepository;
     private final ApprovalFormHandlerRegistry formHandlerRegistry;
+    private final ApprovalDelegationRepository delegationRepository;
 
-    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalDocumentRepository approvalDocumentRepository, ApprovalFormHandlerRegistry formHandlerRegistry) {
+    public ApprovalDocumentService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalFormRepository formRepository, ApprovalNumberService numberService, HrCacheService hrCacheService, ApprovalStatusHistoryRepository historyRepository, ApprovalAttachmentService attachmentService, ApprovalAttachmentRepository attachmentRepository, AlarmEventPublisher alarmEventPublisher, AutoClassifyExecutor autoClassifyExecutor, ApprovalSignatureRepository signatureRepository, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalDocumentRepository approvalDocumentRepository, ApprovalFormHandlerRegistry formHandlerRegistry, ApprovalDelegationRepository delegationRepository) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.formRepository = formRepository;
@@ -67,6 +69,29 @@ public class ApprovalDocumentService {
         this.hrServiceClient = hrServiceClient;
         this.approvalDocumentRepository = approvalDocumentRepository;
         this.formHandlerRegistry = formHandlerRegistry;
+        this.delegationRepository = delegationRepository;
+    }
+
+    /** 결재선 → INBOX/알림 수신자: APPROVER 라인의 활성 위임 대리자(deleEmpId)까지 포함. IN 절 1회 조회로 N+1 방지. */
+    private List<Long> collectReceivers(UUID companyId, List<ApprovalLine> lines) {
+        Set<Long> set = new LinkedHashSet<>();
+        List<Long> approverIds = lines.stream()
+                .filter(l -> l.getApprovalRole() == ApprovalRole.APPROVER)
+                .map(ApprovalLine::getEmpId).toList();
+        Map<Long, Long> deleMap = approverIds.isEmpty() ? Map.of()
+                : delegationRepository.findActiveByEmps(companyId, approverIds, LocalDate.now()).stream()
+                        .collect(Collectors.toMap(
+                                ApprovalDelegation::getEmpId,
+                                ApprovalDelegation::getDeleEmpId,
+                                (a, b) -> a));   // 같은 empId 에 활성 위임 2건이면 첫 항목 사용
+        for (ApprovalLine line : lines) {
+            set.add(line.getEmpId());
+            if (line.getApprovalRole() == ApprovalRole.APPROVER) {
+                Long dele = deleMap.get(line.getEmpId());
+                if (dele != null) set.add(dele);
+            }
+        }
+        return new ArrayList<>(set);
     }
 
     /* 문서 기안(결재 요청) - Pending 상태로 바로 생성 + 채번 + 첨부 업로드 */
@@ -141,15 +166,13 @@ public class ApprovalDocumentService {
         /*기안자 자동분류 (SENT) */
         autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, document);
 
-        /*결재선 전원 자동분류 (INBOX) */
-        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
-                .stream()
-                .map(ApprovalLine::getEmpId)
-                .toList();
+        /* 결재선 + 활성 위임 대리자 INBOX 자동분류 */
+        List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId());
+        List<Long> receiverIds = collectReceivers(companyId, savedLines);
         receiverIds.forEach(receiverId ->
                 autoClassifyExecutor.classify(companyId, receiverId, SourceBoxType.INBOX, document));
 
-        /*결재 라인 전원에게 알림 발행 */
+        /*결재 라인 + 대리자 전원에게 알림 발행 */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(receiverIds)
@@ -162,7 +185,6 @@ public class ApprovalDocumentService {
                 .build());
 
         /* hr-service 에 docCreated 이벤트 발행 — 결재선 포함해 최종결재자까지 전달 */
-        List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId());
         approvalEventPublisher.publishDocCreated(document, savedLines, request.getHtmlContent());
 
         /* 첨부파일이 같이 왔으면 MinIO + DB 저장 (같은 트랜잭션) */
@@ -324,9 +346,11 @@ public class ApprovalDocumentService {
         /*기안자 자동분류 (SENT) */
         autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, document);
 
-        /*결재선 전원 자동분류 (INBOX) */
-        lineRepository.findByDocId_DocIdOrderByLineStep(docId)
-                .forEach(line -> autoClassifyExecutor.classify(companyId, line.getEmpId(), SourceBoxType.INBOX, document));
+        /* 결재선 + 활성 위임 대리자 INBOX 자동분류 */
+        List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
+        List<Long> receiverIds = collectReceivers(companyId, savedLines);
+        receiverIds.forEach(receiverId ->
+                autoClassifyExecutor.classify(companyId, receiverId, SourceBoxType.INBOX, document));
 
         historyRepository.save(ApprovalStatusHistory.builder()
                 .docId(docId)
@@ -341,12 +365,7 @@ public class ApprovalDocumentService {
                 .changedAt(LocalDateTime.now())
                 .build());
 
-        /*결재 라인 전원에게 알림 발행 */
-        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(document.getDocId())
-                .stream()
-                .map(ApprovalLine::getEmpId)
-                .toList();
-
+        /*결재 라인 + 대리자 전원에게 알림 발행 */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(receiverIds)
@@ -495,13 +514,13 @@ public class ApprovalDocumentService {
         /* 기안자 자동분류 (SENT) - 새 문서 기준 */
         autoClassifyExecutor.classify(companyId, empId, SourceBoxType.SENT, newDoc);
 
-        /* 결재선 전원 자동분류 (INBOX) - 새 문서 기준 */
-        List<Long> receiverIds = lineRepository.findByDocId_DocIdOrderByLineStep(newDoc.getDocId())
-                .stream().map(ApprovalLine::getEmpId).toList();
+        /* 결재선 + 활성 위임 대리자 INBOX 자동분류 (새 문서 기준) */
+        List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(newDoc.getDocId());
+        List<Long> receiverIds = collectReceivers(companyId, savedLines);
         receiverIds.forEach(receiverId ->
                 autoClassifyExecutor.classify(companyId, receiverId, SourceBoxType.INBOX, newDoc));
 
-        /* 결재라인 전원에게 재기안 알림 */
+        /* 결재라인 + 대리자 전원에게 재기안 알림 */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(receiverIds)
@@ -515,7 +534,6 @@ public class ApprovalDocumentService {
                 .build());
 
         /* hr-service 에 docCreated 이벤트 발행 — 새 문서를 새 기안처럼 전파 */
-        List<ApprovalLine> savedLines = lineRepository.findByDocId_DocIdOrderByLineStep(newDoc.getDocId());
         approvalEventPublisher.publishDocCreated(newDoc, savedLines, request.getHtmlContent());
 
         /* 재기안 시 신규로 추가되는 첨부 업로드 (이전 첨부는 위에서 row 복제됨) */
@@ -576,8 +594,8 @@ public class ApprovalDocumentService {
         /* hr-service 에 회수 이벤트 발행 — 초과근무/휴가 양식에만 실제 발행 (Publisher 내부 formName 분기) */
         approvalEventPublisher.publishResult(document, "CANCELED", empId, null);
 
-        /*결재 라인 전원에게 알림 발행 */
-        List<Long> receiverIds = allLines.stream().map(ApprovalLine::getEmpId).toList();
+        /* 결재 라인 + 활성 위임 대리자 전원에게 회수 알림 */
+        List<Long> receiverIds = collectReceivers(companyId, allLines);
 
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)

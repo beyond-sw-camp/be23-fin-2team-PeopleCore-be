@@ -22,6 +22,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.support.PageableExecutionUtils;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -118,6 +119,26 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         return JPAExpressions.selectOne().from(attachment).where(attachment.docId.eq(doc)).exists();
     }
 
+    /* 본인 결재선 또는 본인이 대리자인 활성 위임자의 결재선 */
+    private BooleanExpression actorLineMatches(QApprovalLine actorLine, Long empId) {
+        QApprovalDelegation delegation = new QApprovalDelegation("activeDelegation");
+        LocalDate today = LocalDate.now();
+
+        return actorLine.empId.eq(empId).or(
+                JPAExpressions.selectOne()
+                        .from(delegation)
+                        .where(
+                                delegation.companyId.eq(actorLine.companyId),
+                                delegation.empId.eq(actorLine.empId),
+                                delegation.deleEmpId.eq(empId),
+                                delegation.isActive.eq(true),
+                                delegation.startAt.loe(today),
+                                delegation.endAt.goe(today)
+                        )
+                        .exists()
+        );
+    }
+
     /*헬퍼 3 : 페이징 실행
      * content 쿼리와 count 쿼리를 받아서 pageㄹ 반환
      * pageableExecutionUtils가 content 수 < pagesize면 couunt 쿼리 생략 */
@@ -159,7 +180,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         .from(line)
                         .where(
                                 line.docId.eq(doc),                                    // 같은 문서
-                                line.empId.eq(empId),                                  // 내 결재라인
+                                actorLineMatches(line, empId),                         // 내 결재라인 또는 대리 결재라인
                                 line.approvalRole.eq(ApprovalRole.APPROVER),           // 결재자 역할
                                 line.approvalLineStatus.eq(ApprovalLineStatus.PENDING),// 대기 상태
                                 line.lineStep.eq(                                      // 내 step = 최소 대기 step
@@ -245,7 +266,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         .from(line)
                         .where(
                                 line.docId.eq(doc),
-                                line.empId.eq(empId),
+                                actorLineMatches(line, empId),
                                 line.approvalRole.eq(ApprovalRole.APPROVER),
                                 line.approvalLineStatus.eq(ApprovalLineStatus.PENDING),
                                 line.lineStep.gt(                                      // 내 step > 최소 대기 step
@@ -366,7 +387,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                         .from(line)
                         .where(
                                 line.docId.eq(doc),
-                                line.empId.eq(empId),
+                                actorLineMatches(line, empId),
                                 line.approvalRole.eq(ApprovalRole.APPROVER),
                                 line.approvalLineStatus.in(ApprovalLineStatus.APPROVED, ApprovalLineStatus.REJECTED)
                         )
@@ -444,7 +465,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .from(doc)
                 .join(line).on(
                         line.docId.eq(doc),
-                        line.empId.eq(empId)
+                        actorLineMatches(line, empId)
                 )
                 .where(builder)
                 .orderBy(resolveOrderWithRead(searchDto));
@@ -454,7 +475,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 .from(doc)
                 .join(line).on(
                         line.docId.eq(doc),
-                        line.empId.eq(empId)
+                        actorLineMatches(line, empId)
                 )
                 .where(builder);
 
@@ -549,7 +570,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                                 .from(line)
                                 .where(
                                         line.docId.eq(doc),
-                                        line.empId.eq(empId),
+                                        actorLineMatches(line, empId),
                                         line.approvalRole.eq(ApprovalRole.APPROVER),
                                         line.approvalLineStatus.eq(ApprovalLineStatus.PENDING),
                                         line.lineStep.eq(
@@ -638,7 +659,7 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
                 )
                 .from(line)
                 .join(line.docId, doc)
-                .where(line.empId.eq(empId), doc.companyId.eq(companyId), notExpired())
+                .where(actorLineMatches(line, empId), doc.companyId.eq(companyId), notExpired())
                 .fetchOne();
 
         /* 기안자 기반: draft(!=DRAFT), temp(=DRAFT) — 별도 1회 */
