@@ -248,7 +248,8 @@ public class LeaveAllowanceService {
 
         for (LeaveAllowance la : allowances) {
             if (la.getStatus() == AllowanceStatus.APPLIED) continue;
-            if (la.getStatus() != AllowanceStatus.CALCULATED) {
+            // CALCULATED: 신규 반영 / SKIPPED: 이전 시도가 잠금으로 실패 → 재시도 허용
+            if (la.getStatus() != AllowanceStatus.CALCULATED && la.getStatus() != AllowanceStatus.SKIPPED) {
                 throw new CustomException(ErrorCode.LEAVE_ALLOWANCE_NOT_CALCULATED);
             }
 
@@ -262,6 +263,7 @@ public class LeaveAllowanceService {
             if (run.getPayrollStatus() == PayrollStatus.PAID) {
                 skippedCount++;
                 skippedAllowanceIds.add(la.getAllowanceId());
+                la.markSkipped();   // 카운트 잔존 방지 — CALCULATED → SKIPPED
                 log.warn("[연차수당 반영 skip] runId={}, 이미 지급완료", run.getPayrollRunId());
                 continue;
             }
@@ -275,6 +277,7 @@ public class LeaveAllowanceService {
             if (pes != null && pes.getStatus() != PayrollEmpStatusType.CALCULATING) {
                 skippedCount++;
                 skippedAllowanceIds.add(la.getAllowanceId());
+                la.markSkipped();   // 카운트 잔존 방지 — CALCULATED → SKIPPED
                 log.warn("[연차수당 반영 skip] empId={} 사원 상태={}, runId={}",
                         la.getEmployee().getEmpId(), pes.getStatus(), run.getPayrollRunId());
                 continue;
@@ -408,7 +411,8 @@ public class LeaveAllowanceService {
 //    "검토 대기 N명" — 지정한 yearMonth 급여대장에 반영될 CALCULATED 건의 distinct 사원수
     public long countPendingReviewForMonth(UUID companyId, String yearMonth) {
         List<LeaveAllowance> candidates = leaveAllowanceRepository
-                .findPendingReviewCandidates(companyId, AllowanceStatus.CALCULATED);
+                .findPendingReviewCandidates(companyId, AllowanceStatus.CALCULATED,
+                        List.of(AllowanceType.ANNIVERSARY, AllowanceType.RESIGNED));
         if (candidates.isEmpty()) return 0L;
 
         CompanyPaySettings settings = paySettingsRepository
