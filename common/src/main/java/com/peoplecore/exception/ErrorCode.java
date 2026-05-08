@@ -35,6 +35,9 @@ public enum ErrorCode {
     EMAIL_CODE_MISMATCH(400, "인증코드가 일치하지 않습니다."),
     EMAIL_NOT_VERIFIED(403, "이메일 인증이 완료되지 않았습니다."),
     EMAIL_SEND_FAILED(500, "이메일 발송에 실패했습니다."),
+    INVALID_EMAIL_FORMAT(400, "이메일 형식이 올바르지 않습니다."),
+    PERSONAL_EMAIL_DUPLICATE(409, "이미 다른 사원이 사용 중인 이메일입니다."),
+    PERSONAL_EMAIL_SAME_AS_CURRENT(400, "현재 등록된 이메일과 동일합니다."),
 
     // 비밀번호
     SAME_PASSWORD(400, "기존 비밀번호와 동일합니다."),

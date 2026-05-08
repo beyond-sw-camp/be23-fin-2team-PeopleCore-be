@@ -3,6 +3,7 @@ package com.peoplecore.calendar.dtos;
 
 import com.peoplecore.calendar.entity.EventAttendees;
 import com.peoplecore.calendar.enums.InviteStatus;
+import com.peoplecore.client.dto.EmployeeSimpleResDto;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -25,9 +26,15 @@ public class AttendeeResDto {
     private LocalDateTime respondedAt;
 
     public static AttendeeResDto fromEntity(EventAttendees a) {
+        return fromEntity(a, null);
+    }
+
+    public static AttendeeResDto fromEntity(EventAttendees a, EmployeeSimpleResDto emp) {
         return AttendeeResDto.builder()
                 .eventAttendeesId(a.getEvent_attendees_id())
                 .invitedEmpId(a.getInvitedEmpId())
+                .empName(emp != null ? emp.getEmpName() : null)
+                .departmentName(emp != null ? emp.getDeptName() : null)
                 .inviteStatus(a.getInviteStatus())
                 .rejectReason(a.getRejectReason())
                 .invitedAt(a.getInvitedAt())
