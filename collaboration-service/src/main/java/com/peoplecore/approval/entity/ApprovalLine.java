@@ -102,6 +102,9 @@ public class ApprovalLine extends BaseTimeEntity {
      */
     private Long lineDelegatedId;
 
+    /** 위임 처리 시 원 결재자(위임자) 이름 스냅샷 — 처리 시점 사원 정보 보존 */
+    private String lineDelegatedName;
+
     /**
      * 열람 여부 - default == false
      */
@@ -168,10 +171,11 @@ public class ApprovalLine extends BaseTimeEntity {
         this.lineProcessedAt = LocalDateTime.now();
     }
 
-    /** 대리자 결재 처리 시 라인 스냅샷 swap + 위임 표시 */
+    /** 위임받은자 결재 처리 시 라인 스냅샷 swap + 위임 표시 */
     public void markDelegatedBy(Long deleEmpId, String deleName,
                                 String deleDeptName, String deleGrade, String deleTitle) {
-        this.lineDelegatedId = this.empId;   // 원 결재자 empId 보존
+        this.lineDelegatedId = this.empId;       // 원 결재자 empId 보존
+        this.lineDelegatedName = this.empName;   // 원 결재자 이름 보존
         this.empId = deleEmpId;
         this.empName = deleName;
         this.empDeptName = deleDeptName;
