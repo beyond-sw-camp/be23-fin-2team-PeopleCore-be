@@ -34,12 +34,14 @@ public class OllamaClient {
     private final RestTemplate restTemplate;
     private final String baseUrl;
     private final String model;
+    private final int numCtx;
 
     public OllamaClient(
             RestTemplateBuilder builder,
             @Value("${ollama.base-url:http://localhost:11434}") String baseUrl,
             @Value("${ollama.model:exaone3.5:7.8b}") String model,
-            @Value("${ollama.read-timeout-seconds:120}") int readTimeoutSec
+            @Value("${ollama.read-timeout-seconds:120}") int readTimeoutSec,
+            @Value("${ollama.num-ctx:8192}") int numCtx
     ) {
         this.restTemplate = builder
                 .connectTimeout(Duration.ofSeconds(3))
@@ -47,6 +49,7 @@ public class OllamaClient {
                 .build();
         this.baseUrl = baseUrl;
         this.model = model;
+        this.numCtx = numCtx;
     }
 
     public String getModel() {
@@ -73,6 +76,7 @@ public class OllamaClient {
         body.put("model", model);
         body.put("messages", withSystem);
         body.put("stream", false);
+        body.put("options", Map.of("num_ctx", numCtx));
         if (tools != null && !tools.isEmpty()) body.put("tools", tools);
 
         HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, headers);
