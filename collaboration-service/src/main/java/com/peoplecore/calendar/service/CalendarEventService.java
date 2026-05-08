@@ -7,6 +7,8 @@ import com.peoplecore.calendar.entity.*;
 import com.peoplecore.calendar.enums.EventInstancesType;
 import com.peoplecore.calendar.enums.InviteStatus;
 import com.peoplecore.calendar.repository.*;
+import com.peoplecore.client.component.HrCacheService;
+import com.peoplecore.client.dto.EmployeeSimpleResDto;
 import com.peoplecore.entity.Holidays;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.CustomException;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 import static com.peoplecore.calendar.entity.QEvents.events;
 
@@ -36,10 +39,11 @@ public class CalendarEventService {
      private final HolidayRepository holidayRepository;
      private final EventInstancesRepository eventInstancesRepository;
      private final EventAttendeesRepository eventAttendeesRepository;
+     private final HrCacheService hrCacheService;
 
 
     @Autowired
-    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, InterestCalendarsRepository interestCalendarsRepository, AlarmEventPublisher alarmEventPublisher, HolidayRepository holidayRepository, EventInstancesRepository eventInstancesRepository, EventAttendeesRepository eventAttendeesRepository) {
+    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, InterestCalendarsRepository interestCalendarsRepository, AlarmEventPublisher alarmEventPublisher, HolidayRepository holidayRepository, EventInstancesRepository eventInstancesRepository, EventAttendeesRepository eventAttendeesRepository, HrCacheService hrCacheService) {
         this.myCalendarsRepository = myCalendarsRepository;
         this.eventsRepository = eventsRepository;
         this.repeatedRulesRepository = repeatedRulesRepository;
@@ -49,6 +53,7 @@ public class CalendarEventService {
         this.holidayRepository = holidayRepository;
         this.eventInstancesRepository = eventInstancesRepository;
         this.eventAttendeesRepository = eventAttendeesRepository;
+        this.hrCacheService = hrCacheService;
     }
 
 //    일정 등록
@@ -99,7 +104,8 @@ public class CalendarEventService {
 //        참석자에게 즉시알림발송
         sendAttendeeAlarm(companyId, event, reqDto.getAttendeeEmpIds());
 
-        return EventResDto.fromEntity(event, eventAttendeesRepository.findByEventInstances(instance));
+        List<EventAttendees> savedAttendees = eventAttendeesRepository.findByEventInstances(instance);
+        return EventResDto.fromEntity(event, savedAttendees, loadEmployeeMap(event, savedAttendees));
     }
 
 
@@ -136,7 +142,8 @@ public class CalendarEventService {
             sendAttendeeAlarm(companyId, event, reqDto.getAttendeeEmpIds());
         }
 
-        return EventResDto.fromEntity(event, eventAttendeesRepository.findByEventInstances_Events_EventsId(eventsId));
+        List<EventAttendees> currentAttendees = eventAttendeesRepository.findByEventInstances_Events_EventsId(eventsId);
+        return EventResDto.fromEntity(event, currentAttendees, loadEmployeeMap(event, currentAttendees));
     }
 
 
@@ -151,7 +158,8 @@ public class CalendarEventService {
 //  일정 상세 조회
     public EventResDto getEvent(UUID companyId, Long eventsId){
         Events event = findEventOrThrow(eventsId, companyId);
-        return EventResDto.fromEntity(event, eventAttendeesRepository.findByEventInstances_Events_EventsId(eventsId));
+        List<EventAttendees> attendees = eventAttendeesRepository.findByEventInstances_Events_EventsId(eventsId);
+        return EventResDto.fromEntity(event, attendees, loadEmployeeMap(event, attendees));
     }
 
 //    캘린더 뷰 일정조회 (월,주,일)
@@ -200,17 +208,36 @@ public class CalendarEventService {
 
 //        7. 참석자 일괄 조회 (eventId → 참석자 목록 매핑)
         Map<Long, List<EventAttendees>> attendeesByEventId = new HashMap<>();
+        List<EventAttendees> allAttendees = List.of();
         if (!merged.isEmpty()) {
-            List<EventAttendees> allAttendees = eventAttendeesRepository.findByEventIds(new ArrayList<>(merged.keySet()));
+            allAttendees = eventAttendeesRepository.findByEventIds(new ArrayList<>(merged.keySet()));
             for (EventAttendees a : allAttendees) {
                 Long eid = a.getEventInstances().getEvents().getEventsId();
                 attendeesByEventId.computeIfAbsent(eid, k -> new ArrayList<>()).add(a);
             }
         }
 
+//        7-1. 모든 일정의 작성자 + 참석자 empId 통합 후 사원 정보 1회 일괄 조회 (N+1 방지)
+        Set<Long> allEmpIds = new HashSet<>();
+        for (Events e : merged.values()) {
+            if (e.getEmpId() != null) allEmpIds.add(e.getEmpId());
+        }
+        for (EventAttendees a : allAttendees) {
+            if (a.getInvitedEmpId() != null) allEmpIds.add(a.getInvitedEmpId());
+        }
+        Map<Long, EmployeeSimpleResDto> empMap = Map.of();
+        if (!allEmpIds.isEmpty()) {
+            try {
+                empMap = hrCacheService.getEmployees(new ArrayList<>(allEmpIds)).stream()
+                        .collect(Collectors.toMap(EmployeeSimpleResDto::getEmpId, e -> e, (a, b) -> a));
+            } catch (Exception ex) {
+                log.warn("사원 정보 일괄 조회 실패 - 이름·부서 비워서 응답 empIds={}, error={}", allEmpIds, ex.getMessage());
+            }
+        }
+
         List<EventResDto> result = new ArrayList<>();
         for (Events e : merged.values()) {
-            result.add(EventResDto.fromEntity(e, attendeesByEventId.get(e.getEventsId())));
+            result.add(EventResDto.fromEntity(e, attendeesByEventId.get(e.getEventsId()), empMap));
         }
 
         // 6) 공휴일 머지 (NATIONAL + 회사의 COMPANY)
@@ -253,6 +280,26 @@ public class CalendarEventService {
 
     }
 
+
+    /** 작성자 + 참석자 empId 들을 일괄 조회해 Map<empId, dto> 반환. 단일 일정 조회/생성/수정용.
+     *  hr-service 가 일시적으로 응답하지 않아도 일정 저장 트랜잭션을 롤백시키지 않도록 예외는 흡수하고 빈 맵 반환. */
+    private Map<Long, EmployeeSimpleResDto> loadEmployeeMap(Events event, List<EventAttendees> attendees) {
+        Set<Long> empIds = new HashSet<>();
+        if (event.getEmpId() != null) empIds.add(event.getEmpId());
+        if (attendees != null) {
+            for (EventAttendees a : attendees) {
+                if (a.getInvitedEmpId() != null) empIds.add(a.getInvitedEmpId());
+            }
+        }
+        if (empIds.isEmpty()) return Map.of();
+        try {
+            return hrCacheService.getEmployees(new ArrayList<>(empIds)).stream()
+                    .collect(Collectors.toMap(EmployeeSimpleResDto::getEmpId, e -> e, (a, b) -> a));
+        } catch (Exception e) {
+            log.warn("사원 정보 일괄 조회 실패 - 이름·부서 비워서 응답 empIds={}, error={}", empIds, e.getMessage());
+            return Map.of();
+        }
+    }
 
     private void saveAttendees(UUID companyId, EventInstances instance, List<Long> attendeeEmpIds){
         if (attendeeEmpIds == null || attendeeEmpIds.isEmpty()) return;
@@ -334,6 +381,7 @@ public class CalendarEventService {
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .alarmType("Calendar")
+                .alarmTitle("일정 초대")
                 .alarmContent(event.getTitle() + " 일정에 초대되었습니다")
                 .alarmLink("/calendar?eventId=" + event.getEventsId())
                 .alarmRefType("EVENT")
