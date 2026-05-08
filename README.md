@@ -140,6 +140,22 @@ PeopleCore/
 </details>
 
 <details>
+<summary><h3>사원 관리 (Employee)</h3></summary>
+
+#### 핵심 기능
+
+- **사원 등록** — 인적사항 + 인사 서류 + 프로필 + 계좌 multipart 일괄 수신, 사번은 비관적 락 기반 자동 채번 (`yyMM` + 4자리 순번)
+- **동적 커스텀 필드** — HR 폼 설정에서 추가한 fieldKey 값을 JSON 컬럼에 저장, 스키마 변경 없이 회사별 확장
+- **목록 조회** — QueryDSL 다중 필터(키워드 / 부서 / 고용형태 / 재직상태) + enum 화이트리스트 정렬 + 페이징, `fetchJoin()` N+1 방지
+- **인력 현황 대시보드** — 요약 카드, 부서별 인원·직급 분포·평균 재직연수, 월별 입퇴사 추이, 30일 내 계약 만료 예정자
+- **파일 저장 (MinIO)** — 프로필 이미지 / 인사 서류 / 연봉계약서를 버킷별 분리 보관, 프록시 GET으로만 노출 (URL UUID 기반 강한 캐싱)
+- **인사 발령** — 부서 / 직급 / 직책 변경 → Kafka 이벤트 발행 → 알림 서비스 수신
+- **퇴직 처리** — 전자결재 승인 이벤트(Kafka) 수신 → 재직상태 전이 + 급여 정산 연동 + 소프트 삭제 2단계 (`RESIGNED` 후 `deleteAt`)
+- **계좌 검증** — 오픈뱅킹 토큰 + 회사 PensionType × 사원 선택값 매트릭스 검증
+
+</details>
+
+<details>
 <summary><h3>근태 관리 (Attendance)</h3></summary>
 
 #### 핵심 기능
@@ -163,6 +179,21 @@ PeopleCore/
 - **잔여 연차 관리** — `total / used / pending / expired` 구분, `Ledger` 테이블로 원장 추적
 - **만료 & 촉진 통지** — 만료일 도래 시 자동 소멸, 만료 7일 전 / 당일 2차 통지
 - **영업일 기준 휴가 일수 산정** — 주말 + 공휴일 제외
+
+</details>
+
+<details>
+<summary><h3>성과 평가 (Evaluation)</h3></summary>
+
+#### 핵심 기능
+
+- **계층 분리** — 피평가자(사원) / 평가자(직속상위자) / 관리자(HR) 화면·API 분리, `EmpEvaluatorGlobal` 매핑 기반 `EvaluatorRoleService` 가드로 진입 차단
+- **단계별 점진 노출 (Progressive Disclosure)** — 시즌 현재 단계(`StageType` + `Stage.status`)에 따라 사원·평가자·HR 화면이 모두 동기 분기, `MyResultStatus` enum 으로 진행 바 표시. 단계가 진행될수록 점수 → 자동등급 → `finalGrade` 까지 점진 노출
+- **시점 박제 + 수정 차단 게이트** — 시즌 OPEN 시점에 평가규칙(`Season.formSnapshot` JSON) / 평가자 매핑 / 부서·직급을 박제, `Goal` 등록 시점에 KPI 템플릿(name · unit · direction · baseline) 복사. 산정 엔진은 박제본만 참조 → 회사 규칙·평가자·KPI 옵션 사후 수정해도 진행 중 시즌엔 미반영. 최종 확정(`lockedAt`) 후 모든 수정 API 차단
+- **자동 산정 파이프라인** — 자동산정 → 편향보정(Z-score) → 강제배분(percentile cut) → HR 보정 → 최종 확정 단계별 분리, `autoGrade`(불변) / `finalGrade`(가변) 컬럼 분리로 자동 산정 재실행이 보정 결과 덮어쓰지 않음
+- **HR 보정 (Calibration)** — `finalGrade` 덮어쓰기 + `Calibration` append-only 이력(from / to / reason / actor), `EvalGrade.@Version` 낙관적 락으로 HR 다명 동시 보정 차단
+- **시즌·단계 자동 전이** — 자정 cron + `ApplicationReadyEvent` 부팅 보정, Redis 분산 락으로 멀티 파드 중복 fire 차단, `SeasonTransitionExecutor` 빈 분리로 건별 트랜잭션 격리(1건 실패가 다른 시즌으로 전파 안 됨)
+- **이벤트 기반 자동 처리** — 평가자 퇴사 시 `EmployeeRetiredEvent` → `@TransactionalEventListener(AFTER_COMMIT)` → 평가자 스냅샷 클리어 + HR 알림. 미산정자 잔여 시즌은 OPEN 유지 + Kafka → SSE 실시간 푸시 매일 알림, HR 수동 확정 시 중단
 
 </details>
 
