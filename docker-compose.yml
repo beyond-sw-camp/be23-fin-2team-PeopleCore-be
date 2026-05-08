@@ -115,7 +115,7 @@ services:
       /usr/bin/mc anonymous set download myminio/approval-form;
       /usr/bin/mc mb --ignore-existing myminio/peoplecore-profile;
       /usr/bin/mc anonymous set download myminio/peoplecore-profile;
-      for i in $$(seq -w 1 28); do
+      for i in $$(seq -w 1 128); do
         empNum=EMP-2025-0$$i;
         /usr/bin/mc cp /seed-images/$$empNum.jpg myminio/peoplecore-profile/seed/$$empNum.jpg || echo \"skip $$empNum\";
       done;
