@@ -115,7 +115,7 @@
         (@cid, @d_hr,    @g_cha, @t_mem,  @j_fin, '강시우', 'emp006@peoplecore.kr', '010-2006-4006', 'EMP-2025-006', '2018-02-26', 'FULL', 'ACTIVE', @pwd, 'HR_ADMIN', '1981-04-28', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_hr,    @g_gwa, @t_mem,  @j_fin, '윤하준', 'emp007@peoplecore.kr', '010-2007-4007', 'EMP-2025-007', '2020-04-15', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1985-07-15', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_hr,    @g_gwa, @t_mem,  @j_fin, '장지유', 'emp008@peoplecore.kr', '010-2008-4008', 'EMP-2025-008', '2021-07-22', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1986-12-03', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
-        (@cid, @d_hr,    @g_dae, @t_mem,  @j_fin, '임예준', 'emp009@peoplecore.kr', '010-2009-4009', 'EMP-2025-009', '2022-05-13', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1989-05-20', 'MALE',   NULL, '2027-12-31', 1, 100, 'DC', FALSE),
+        (@cid, @d_hr,    @g_dae, @t_mem,  @j_fin, '임예준', 'emp009@peoplecore.kr', '010-2009-4009', 'EMP-2025-009', '2022-05-13', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1989-05-20', 'MALE',   NULL, '2026-05-15', 1, 100, 'DC', FALSE),
         (@cid, @d_hr,    @g_dae, @t_mem,  @j_fin, '한서윤', 'emp010@peoplecore.kr', '010-2010-4010', 'EMP-2025-010', '2023-02-08', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1990-08-14', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_hr,    @g_emp, @t_mem,  @j_fin, '오현우', 'emp011@peoplecore.kr', '010-2011-4011', 'EMP-2025-011', '2023-05-26', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1996-02-09', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_hr,    @g_emp, @t_mem,  @j_fin, '신유진', 'emp012@peoplecore.kr', '010-2012-4012', 'EMP-2025-012', '2024-01-08', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1998-06-22', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
@@ -126,7 +126,7 @@
         (@cid, @d_fin,   @g_cha, @t_mem,  @j_fin, '송하은', 'emp016@peoplecore.kr', '010-2016-4016', 'EMP-2025-016', '2019-05-13', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1981-07-25', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_fin,   @g_gwa, @t_mem,  @j_fin, '노지원', 'emp017@peoplecore.kr', '010-2017-4017', 'EMP-2025-017', '2020-09-08', 'FULL', 'ON_LEAVE', @pwd, 'EMPLOYEE', '1986-04-13', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_fin,   @g_dae, @t_mem,  @j_fin, '홍시현', 'emp018@peoplecore.kr', '010-2018-4018', 'EMP-2025-018', '2022-09-26', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1990-09-30', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
-        (@cid, @d_fin,   @g_dae, @t_mem,  @j_fin, '안주원', 'emp019@peoplecore.kr', '010-2019-4019', 'EMP-2025-019', '2023-04-12', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1991-02-18', 'MALE',   NULL, '2027-12-31', 1, 100, 'DC', FALSE),
+        (@cid, @d_fin,   @g_dae, @t_mem,  @j_fin, '안주원', 'emp019@peoplecore.kr', '010-2019-4019', 'EMP-2025-019', '2023-04-12', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1991-02-18', 'MALE',   NULL, '2026-05-20', 1, 100, 'DC', FALSE),
         (@cid, @d_fin,   @g_emp, @t_mem,  @j_fin, '류다은', 'emp020@peoplecore.kr', '010-2020-4020', 'EMP-2025-020', '2023-07-13', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1996-12-07', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_fin,   @g_emp, @t_mem,  @j_fin, '배현준', 'emp021@peoplecore.kr', '010-2021-4021', 'EMP-2025-021', '2024-04-22', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1998-05-25', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_fin,   @g_emp, @t_mem,  @j_fin, '서지안', 'emp022@peoplecore.kr', '010-2022-4022', 'EMP-2025-022', '2025-01-15', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '2000-08-11', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
@@ -137,7 +137,7 @@
         (@cid, @d_dev,   @g_cha, @t_mem,  @j_it,  '진서영', 'emp026@peoplecore.kr', '010-2026-4026', 'EMP-2025-026', '2020-01-15', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1983-06-22', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_gwa, @t_mem,  @j_it,  '차예린', 'emp027@peoplecore.kr', '010-2027-4027', 'EMP-2025-027', '2019-08-26', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1984-02-14', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_gwa, @t_mem,  @j_it,  '구민서', 'emp028@peoplecore.kr', '010-2028-4028', 'EMP-2025-028', '2020-02-14', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1985-05-30', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
-        (@cid, @d_dev,   @g_gwa, @t_mem,  @j_it,  '표하윤', 'emp029@peoplecore.kr', '010-2029-4029', 'EMP-2025-029', '2020-06-30', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1985-11-08', 'FEMALE', NULL, '2027-12-31', 1, 100, 'DC', FALSE),
+        (@cid, @d_dev,   @g_gwa, @t_mem,  @j_it,  '표하윤', 'emp029@peoplecore.kr', '010-2029-4029', 'EMP-2025-029', '2020-06-30', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1985-11-08', 'FEMALE', NULL, '2026-05-25', 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_gwa, @t_mem,  @j_it,  '은지호', 'emp030@peoplecore.kr', '010-2030-4030', 'EMP-2025-030', '2020-11-19', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1986-08-19', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_gwa, @t_mem,  @j_it,  '원유나', 'emp031@peoplecore.kr', '010-2031-4031', 'EMP-2025-031', '2021-04-08', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1987-03-26', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_gwa, @t_mem,  @j_it,  '추서준', 'emp032@peoplecore.kr', '010-2032-4032', 'EMP-2025-032', '2021-09-15', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1987-10-12', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
@@ -147,7 +147,7 @@
         (@cid, @d_dev,   @g_dae, @t_mem,  @j_it,  '형지유', 'emp036@peoplecore.kr', '010-2036-4036', 'EMP-2025-036', '2022-06-22', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1990-04-08', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_dae, @t_mem,  @j_it,  '사하린', 'emp037@peoplecore.kr', '010-2037-4037', 'EMP-2025-037', '2022-09-30', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1990-11-19', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_dae, @t_mem,  @j_it,  '두민호', 'emp038@peoplecore.kr', '010-2038-4038', 'EMP-2025-038', '2023-01-18', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1991-02-26', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
-        (@cid, @d_dev,   @g_dae, @t_mem,  @j_it,  '황건우', 'emp039@peoplecore.kr', '010-2039-4039', 'EMP-2025-039', '2023-05-04', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1991-09-13', 'MALE',   NULL, '2027-12-31', 1, 100, 'DC', FALSE),
+        (@cid, @d_dev,   @g_dae, @t_mem,  @j_it,  '황건우', 'emp039@peoplecore.kr', '010-2039-4039', 'EMP-2025-039', '2023-05-04', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1991-09-13', 'MALE',   NULL, '2026-05-30', 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_dae, @t_mem,  @j_it,  '곽지수', 'emp040@peoplecore.kr', '010-2040-4040', 'EMP-2025-040', '2023-08-25', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1992-05-02', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_dae, @t_mem,  @j_it,  '탁윤서', 'emp041@peoplecore.kr', '010-2041-4041', 'EMP-2025-041', '2023-12-11', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1992-12-14', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_dae, @t_mem,  @j_it,  '위주아', 'emp042@peoplecore.kr', '010-2042-4042', 'EMP-2025-042', '2024-03-19', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1993-06-25', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
@@ -157,7 +157,7 @@
         (@cid, @d_dev,   @g_emp, @t_mem,  @j_it,  '부태민', 'emp046@peoplecore.kr', '010-2046-4046', 'EMP-2025-046', '2023-08-12', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1996-12-04', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_emp, @t_mem,  @j_it,  '호윤재', 'emp047@peoplecore.kr', '010-2047-4047', 'EMP-2025-047', '2023-11-25', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1997-05-29', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_emp, @t_mem,  @j_it,  '양수빈', 'emp048@peoplecore.kr', '010-2048-4048', 'EMP-2025-048', '2024-02-08', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1997-09-15', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
-        (@cid, @d_dev,   @g_emp, @t_mem,  @j_it,  '갈태양', 'emp049@peoplecore.kr', '010-2049-4049', 'EMP-2025-049', '2024-04-22', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1998-02-26', 'MALE',   NULL, '2027-12-31', 1, 100, 'DC', FALSE),
+        (@cid, @d_dev,   @g_emp, @t_mem,  @j_it,  '갈태양', 'emp049@peoplecore.kr', '010-2049-4049', 'EMP-2025-049', '2024-04-22', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1998-02-26', 'MALE',   NULL, '2026-06-03', 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_emp, @t_mem,  @j_it,  '용예성', 'emp050@peoplecore.kr', '010-2050-4050', 'EMP-2025-050', '2024-07-15', 'FULL', 'ON_LEAVE', @pwd, 'EMPLOYEE', '1998-08-11', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_emp, @t_mem,  @j_it,  '엄정민', 'emp051@peoplecore.kr', '010-2051-4051', 'EMP-2025-051', '2024-09-30', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1999-04-19', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_dev,   @g_emp, @t_mem,  @j_it,  '음하경', 'emp052@peoplecore.kr', '010-2052-4052', 'EMP-2025-052', '2024-12-18', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1999-10-08', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
@@ -168,7 +168,7 @@
         (@cid, @d_dev,   @g_emp, @t_mem,  @j_it,  '하태경', 'emp057@peoplecore.kr', '010-2057-4057', 'EMP-2025-057', '2025-08-22', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '2002-07-04', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         -- ───── 인프라팀 (INF) ─────
         (@cid, @d_inf,   @g_cha, @t_lead, @j_it,  '빈주영', 'emp058@peoplecore.kr', '010-2058-4058', 'EMP-2025-058', '2017-09-11', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1980-08-15', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
-        (@cid, @d_inf,   @g_cha, @t_mem,  @j_it,  '함채원', 'emp059@peoplecore.kr', '010-2059-4059', 'EMP-2025-059', '2019-10-08', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1982-12-22', 'FEMALE', NULL, '2027-12-31', 1, 100, 'DC', FALSE),
+        (@cid, @d_inf,   @g_cha, @t_mem,  @j_it,  '함채원', 'emp059@peoplecore.kr', '010-2059-4059', 'EMP-2025-059', '2019-10-08', 'CONTRACT', 'ACTIVE', @pwd, 'EMPLOYEE', '1982-12-22', 'FEMALE', NULL, '2026-06-07', 1, 100, 'DC', FALSE),
         (@cid, @d_inf,   @g_gwa, @t_mem,  @j_it,  '봉승호', 'emp060@peoplecore.kr', '010-2060-4060', 'EMP-2025-060', '2020-08-13', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1985-04-08', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_inf,   @g_gwa, @t_mem,  @j_it,  '방연우', 'emp061@peoplecore.kr', '010-2061-4061', 'EMP-2025-061', '2021-05-24', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1986-09-19', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_inf,   @g_gwa, @t_mem,  @j_it,  '라하늘', 'emp062@peoplecore.kr', '010-2062-4062', 'EMP-2025-062', '2022-02-07', 'FULL', 'ACTIVE',   @pwd, 'EMPLOYEE', '1987-12-30', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
@@ -576,6 +576,35 @@
         (@cid, @d_design, @g_dae, @t_mem, @j_etc, '윤은서', 'emp180@peoplecore.kr', '010-2180-4180', 'EMP-2025-180', '2024-03-15', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '1995-04-22', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_design, @g_emp, @t_mem, @j_etc, '오태성', 'emp181@peoplecore.kr', '010-2181-4181', 'EMP-2025-181', '2024-09-08', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2000-11-15', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
         (@cid, @d_design, @g_emp, @t_mem, @j_etc, '한가람', 'emp182@peoplecore.kr', '010-2182-4182', 'EMP-2025-182', '2025-02-20', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2001-08-03', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE);
+
+        -- =====================================================================
+        -- [추가 시드] 2026년 입사자 (월별 추이 차트용 — 2025년 1~5월 분포 미러링)
+        -- ---------------------------------------------------------------------
+        -- 1월 2 / 2월 3 / 3월 1 / 4월 2 / 5월 2 = 10명
+        -- =====================================================================
+        INSERT INTO employee (
+          company_id, dept_id, grade_id, title_id, insurance_job_types,
+          emp_name, emp_email, emp_phone, emp_num,
+          emp_hire_date, emp_type, emp_status, emp_password, emp_role,
+          emp_birth_date, emp_gender,
+          emp_resign, contract_end_date,
+          dependents_count, tax_rate_option, retirement_type, must_change_password
+        ) VALUES
+        -- 1월
+        (@cid, @d_dev,   @g_emp, @t_mem, @j_it,  '강민찬', 'emp183@peoplecore.kr', '010-2183-4183', 'EMP-2025-183', '2026-01-12', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2001-03-15', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+        (@cid, @d_sales, @g_emp, @t_mem, @j_dist,'박서연', 'emp184@peoplecore.kr', '010-2184-4184', 'EMP-2025-184', '2026-01-25', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2002-07-22', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+        -- 2월
+        (@cid, @d_hr,    @g_emp, @t_mem, @j_fin, '이지호', 'emp185@peoplecore.kr', '010-2185-4185', 'EMP-2025-185', '2026-02-05', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2001-10-08', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+        (@cid, @d_dev,   @g_emp, @t_mem, @j_it,  '최예원', 'emp186@peoplecore.kr', '010-2186-4186', 'EMP-2025-186', '2026-02-14', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2002-04-30', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+        (@cid, @d_inf,   @g_emp, @t_mem, @j_it,  '김도현', 'emp187@peoplecore.kr', '010-2187-4187', 'EMP-2025-187', '2026-02-26', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2001-11-12', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+        -- 3월
+        (@cid, @d_mkt,   @g_emp, @t_mem, @j_etc, '정유나', 'emp188@peoplecore.kr', '010-2188-4188', 'EMP-2025-188', '2026-03-19', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2002-09-05', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+        -- 4월
+        (@cid, @d_dev,   @g_emp, @t_mem, @j_it,  '오승민', 'emp189@peoplecore.kr', '010-2189-4189', 'EMP-2025-189', '2026-04-09', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2001-06-18', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+        (@cid, @d_fin,   @g_emp, @t_mem, @j_fin, '조서영', 'emp190@peoplecore.kr', '010-2190-4190', 'EMP-2025-190', '2026-04-22', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2002-12-30', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE),
+        -- 5월
+        (@cid, @d_sales, @g_emp, @t_mem, @j_dist,'윤지훈', 'emp191@peoplecore.kr', '010-2191-4191', 'EMP-2025-191', '2026-05-04', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2003-02-15', 'MALE',   NULL, NULL, 1, 100, 'DC', FALSE),
+        (@cid, @d_dev,   @g_emp, @t_mem, @j_it,  '한지원', 'emp192@peoplecore.kr', '010-2192-4192', 'EMP-2025-192', '2026-05-07', 'FULL', 'ACTIVE', @pwd, 'EMPLOYEE', '2002-08-25', 'FEMALE', NULL, NULL, 1, 100, 'DC', FALSE);
 
         -- =====================================================================
         -- [검증 쿼리] INSERT 결과 카운트

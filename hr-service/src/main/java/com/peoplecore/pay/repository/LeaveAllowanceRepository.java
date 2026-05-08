@@ -69,4 +69,16 @@ public interface LeaveAllowanceRepository extends JpaRepository<LeaveAllowance, 
     Optional<LeaveAllowance> findFirstByCompany_CompanyIdAndEmployee_EmpIdAndYearAndAllowanceType(
             UUID companyId, Long empId, Integer year, AllowanceType type);
 
+
+    @Query("SELECT la FROM LeaveAllowance la " +
+            "JOIN FETCH la.employee " +
+            "WHERE la.company.companyId = :companyId " +
+            "AND la.status = :status " +
+            "AND la.appliedMonth IS NULL " +
+            "AND la.allowanceType IN :types")
+    List<LeaveAllowance> findPendingReviewCandidates(
+            @Param("companyId") UUID companyId,
+            @Param("status") AllowanceStatus status,
+            @Param("types") List<AllowanceType> types);
+
 }
