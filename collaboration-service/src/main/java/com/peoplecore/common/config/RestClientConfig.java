@@ -1,15 +1,25 @@
 package com.peoplecore.common.config;
 
-// import org.springframework.cloud.client.loadbalancer.LoadBalanced; // EKS 전환으로 비활성 (Eureka 복귀 시 풀 것)
+import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.client.RestClient;
 
 @Configuration
 public class RestClientConfig {
 
+    /** local 프로필 — Eureka 디스커버리 기반 LB */
     @Bean
-//    @LoadBalanced // EKS 환경에선 K8s Service DNS 가 LB 처리 → 활성 시 디스커버리 조회 실패로 호출 막힘
+    @Profile("local")
+    @LoadBalanced
+    public RestClient.Builder restClientBuilderLocal() {
+        return RestClient.builder();
+    }
+
+    /** prod 프로필 — K8s Service DNS 직접 호출 */
+    @Bean
+    @Profile("prod")
     public RestClient.Builder restClientBuilder() {
         return RestClient.builder();
     }

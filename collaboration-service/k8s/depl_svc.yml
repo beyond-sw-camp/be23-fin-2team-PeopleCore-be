@@ -27,6 +27,8 @@ spec:
               cpu: "0.5"
               memory: "250Mi"
           env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: prod
             - name: TZ
               value: Asia/Seoul
             - name: DB_HOST
