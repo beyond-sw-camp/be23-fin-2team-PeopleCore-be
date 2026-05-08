@@ -2,7 +2,7 @@ spring:
   application:
     name: hr-service
   profiles:
-    active: prod
+    active: local
   jackson:
     # TODO 고도화: 외부 연동(파트너사/Kafka 컨슈머/외부 API) 중 ISO-8601 UTC(...Z) 포맷으로
     #   주고받는 엔드포인트가 있는지 점검. KST(+09:00) 로 응답 나가서 상대 파싱 어긋날 수 있음.
