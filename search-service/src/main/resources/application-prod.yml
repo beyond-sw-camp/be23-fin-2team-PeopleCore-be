@@ -25,6 +25,7 @@ ollama:
   base-url: http://ollama:11434
   model: exaone3.5:7.8b
   read-timeout-seconds: 120
+  num-ctx: 8192
 
 eureka:
   client:
