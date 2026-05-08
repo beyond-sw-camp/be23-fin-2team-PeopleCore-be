@@ -4,6 +4,7 @@ import com.peoplecore.alarm.publisher.AlarmEventPublisher;
 import com.peoplecore.approval.entity.*;
 import com.peoplecore.approval.handler.ApprovalFormHandlerRegistry;
 import com.peoplecore.approval.publisher.ApprovalEventPublisher;
+import com.peoplecore.approval.repository.ApprovalDelegationRepository;
 import com.peoplecore.approval.repository.ApprovalDocumentRepository;
 import com.peoplecore.approval.repository.ApprovalLineRepository;
 import com.peoplecore.approval.repository.ApprovalSignatureRepository;
@@ -21,9 +22,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -40,9 +46,10 @@ public class ApprovalLineService {
     private final ApprovalEventPublisher approvalEventPublisher;
     private final HrServiceClient hrServiceClient;
     private final ApprovalFormHandlerRegistry formHandlerRegistry;
+    private final ApprovalDelegationRepository delegationRepository;
 
     @Autowired
-    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalFormHandlerRegistry formHandlerRegistry) {
+    public ApprovalLineService(ApprovalDocumentRepository documentRepository, ApprovalLineRepository lineRepository, ApprovalStatusHistoryRepository historyRepository, ApprovalSignatureRepository signatureRepository, AlarmEventPublisher alarmEventPublisher, MinioService minioService, ApprovalEventPublisher approvalEventPublisher, HrServiceClient hrServiceClient, ApprovalFormHandlerRegistry formHandlerRegistry, ApprovalDelegationRepository delegationRepository) {
         this.documentRepository = documentRepository;
         this.lineRepository = lineRepository;
         this.historyRepository = historyRepository;
@@ -52,6 +59,44 @@ public class ApprovalLineService {
         this.approvalEventPublisher = approvalEventPublisher;
         this.hrServiceClient = hrServiceClient;
         this.formHandlerRegistry = formHandlerRegistry;
+        this.delegationRepository = delegationRepository;
+    }
+
+    /** 결재 권한 라인 조회 — 본인 라인 우선, 없으면 활성 위임의 대리 케이스(APPROVER 라인만)로 fallback */
+    private LineWithDelegation findActorLine(UUID companyId, Long docId, Long empId) {
+        Optional<ApprovalLine> direct = lineRepository.findByDocId_DocIdAndEmpId(docId, empId);
+        if (direct.isPresent()) return new LineWithDelegation(direct.get(), null);
+        /* 대리 케이스: 본인이 deleEmpId 인 활성 위임 목록을 돌며 그 위임자(empId)의 라인 탐색 */
+        List<ApprovalDelegation> deles = delegationRepository.findActiveByDelegate(companyId, empId, LocalDate.now());
+        for (ApprovalDelegation d : deles) {
+            Optional<ApprovalLine> lineOpt = lineRepository.findByDocId_DocIdAndEmpId(docId, d.getEmpId());
+            if (lineOpt.isPresent() && lineOpt.get().getApprovalRole() == ApprovalRole.APPROVER) {
+                return new LineWithDelegation(lineOpt.get(), d);
+            }
+        }
+        throw new BusinessException("결재 권한이 없습니다.", HttpStatus.FORBIDDEN);
+    }
+
+    private record LineWithDelegation(ApprovalLine line, ApprovalDelegation delegation) {
+        boolean isDelegateAction() { return delegation != null; }
+    }
+
+    /** 다음 결재자(또는 그 대리자) 알림 수신자 산출. APPROVER 한정 IN 절 1회 조회. */
+    private List<Long> nextReceivers(UUID companyId, List<ApprovalLine> approvalLines, int nextStep) {
+        List<ApprovalLine> nextLines = approvalLines.stream()
+                .filter(l -> l.getLineStep() == nextStep && l.getApprovalRole() == ApprovalRole.APPROVER)
+                .toList();
+        if (nextLines.isEmpty()) return List.of();
+        List<Long> empIds = nextLines.stream().map(ApprovalLine::getEmpId).toList();
+        Map<Long, Long> deleMap = delegationRepository.findActiveByEmps(companyId, empIds, LocalDate.now()).stream()
+                .collect(Collectors.toMap(ApprovalDelegation::getEmpId, ApprovalDelegation::getDeleEmpId, (a, b) -> a));
+        Set<Long> set = new LinkedHashSet<>();
+        for (ApprovalLine line : nextLines) {
+            set.add(line.getEmpId());
+            Long dele = deleMap.get(line.getEmpId());
+            if (dele != null) set.add(dele);
+        }
+        return new ArrayList<>(set);
     }
 
     /* 승인 처리 / 순차 처리(이전 단계가 approved여야만 승인 가능) / 마지막 결재자가 승인 해야만 문서상태 approved*/
@@ -59,37 +104,40 @@ public class ApprovalLineService {
     public void approvalDocument(UUID companyId, Long empId, Long docId, String comment) {
         ApprovalDocument document = findPendingDocument(companyId, docId);
 
-        /*결재선 조회 */
-        ApprovalLine myLine = lineRepository.findByDocId_DocIdAndEmpId(docId, empId).orElseThrow(() -> new BusinessException("결재 권한이 없습니다.", HttpStatus.FORBIDDEN));
+        /* 본인 라인 또는 대리 권한 라인 조회 */
+        LineWithDelegation found = findActorLine(companyId, docId, empId);
+        ApprovalLine myLine = found.line();
+        boolean delegated = found.isDelegateAction();
 
-        /*결재자만 승인 가능 */
         if (myLine.getApprovalRole() != ApprovalRole.APPROVER) {
             throw new BusinessException("결재자만 승인 가능합니다. ");
         }
-
-        /* 이미 처리된 결재선인지 확인*/
         if (myLine.getApprovalLineStatus() != ApprovalLineStatus.PENDING) {
             throw new BusinessException("이미 처리된 결재입니다. ");
         }
-
-        /*순차 합의 */
         validatePreviousStepApproved(docId, myLine.getLineStep());
 
-        /*결재선 승인 처리 + 읽음 처리 */
+        /* 대리 처리면 라인 스냅샷을 대리자 정보로 swap (원 결재자 empId 는 lineDelegatedId 에 보존) */
+        if (delegated) {
+            ApprovalDelegation d = found.delegation();
+            myLine.markDelegatedBy(d.getDeleEmpId(), d.getDeleName(), d.getDeleDeptName(), d.getDeleGrade(), d.getDeleTitle());
+        }
+
         myLine.approve(comment);
         myLine.markRead();
 
-        /*결재자 승인 이력*/
+        /* 이력 — 대리 처리 시 [대리결재] 라벨 prefix */
+        String reasonText = comment != null ? comment : myLine.getLineStep() + "단계 승인";
         historyRepository.save(ApprovalStatusHistory.builder()
                 .docId(docId)
                 .companyId(companyId)
                 .previousStatus(ApprovalStatus.PENDING)
                 .changedStatus(ApprovalStatus.PENDING)
                 .changedBy(empId)
-                .changeByName(myLine.getEmpName())
+                .changeByName(myLine.getEmpName())          // swap 후 이름 = 실제 처리자
                 .changeByDeptName(myLine.getEmpDeptName())
                 .changeByGrade(myLine.getEmpGrade())
-                .changeReason(comment != null ? comment : myLine.getLineStep() + "단계 승인")
+                .changeReason((delegated ? "[대리결재] " : "") + reasonText)
                 .changedAt(LocalDateTime.now())
                 .build());
 
@@ -98,17 +146,14 @@ public class ApprovalLineService {
         boolean allApproved = approvalLines.stream().allMatch(line -> line.getApprovalLineStatus() == ApprovalLineStatus.APPROVED);
 
         if (allApproved) {
-            /*상태 패턴 호출*/
             document.approve();
 
-            /* 완성 문서 HTML 생성 → MinIO 업로드 → docUrl 저장 */
             String docHtml = buildCompletedDocumentHtml(companyId, document, approvalLines);
             String objectName = String.format("completed/%s/%d/%s.html",
                     companyId, docId, document.getDocNum());
             minioService.uploadFormHtml(objectName, docHtml);
             document.assignDocUrl(objectName);
 
-            /* 상태 변경 이력 저장*/
             historyRepository.save(ApprovalStatusHistory.builder()
                     .docId(docId)
                     .companyId(companyId)
@@ -118,86 +163,81 @@ public class ApprovalLineService {
                     .changeByName(myLine.getEmpName())
                     .changeByDeptName(myLine.getEmpDeptName())
                     .changeByGrade(myLine.getEmpGrade())
-                    .changeReason(comment != null ? comment : "최종 승인")
+                    .changeReason((delegated ? "[대리결재] " : "") + (comment != null ? comment : "최종 승인"))
                     .changedAt(LocalDateTime.now())
                     .build());
 
-
-            /* 폼별 최종 승인 후처리 (휴가 캘린더, 사직 카프카 등) */
             formHandlerRegistry.find(document).ifPresent(h -> h.onApproved(document));
-
-            /* 폼별 최종 승인 결과 이벤트 발행 (Publisher → 핸들러 onResult) */
             approvalEventPublisher.publishResult(document, "APPROVED", empId, null);
         }
 
-
-
-        /*기안자에게 승인 알림 발행 */
+        /*기안자에게 승인 알림 발행 — 대리는 [대리] prefix */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(List.of(document.getEmpId()))
                 .alarmType("APPROVAL")
-                .alarmTitle(myLine.getEmpDeptName() + " " + myLine.getEmpName() + " " + myLine.getEmpGrade() + "이(가) 결재 문서를 승인하였습니다.")
+                .alarmTitle((delegated ? "[대리] " : "")
+                        + myLine.getEmpDeptName() + " " + myLine.getEmpName() + " " + myLine.getEmpGrade()
+                        + "이(가) 결재 문서를 승인하였습니다.")
                 .alarmContent("[" + document.getDocNum() + "] " + document.getDocTitle())
                 .alarmLink("/approval")
                 .alarmRefType("APPROVAL_DOCUMENT")
                 .alarmRefId(document.getDocId())
                 .build());
 
-        /* 다음 결재자에게 알림 (최종 승인이 아닌 경우) */
+        /* 다음 결재자 + 그 대리자에게 알림 (최종 승인이 아닌 경우) */
         if (!allApproved) {
-            List<Long> nextIds = approvalLines.stream()
-                    .filter(line -> line.getLineStep() == myLine.getLineStep() + 1)
-                    .map(ApprovalLine::getEmpId)
-                    .toList();
-            alarmEventPublisher.publisher(AlarmEvent.builder()
-                    .companyId(companyId)
-                    .empIds(nextIds)
-                    .alarmType("APPROVAL")
-                    .alarmTitle("결재할 문서가 도착하였습니다.")
-                    .alarmLink("/approval")
-                    .alarmRefType("APPROVAL_DOCUMENT")
-                    .alarmRefId(docId)
-                    .build());
+            List<Long> nextIds = nextReceivers(companyId, approvalLines, myLine.getLineStep() + 1);
+            if (!nextIds.isEmpty()) {
+                alarmEventPublisher.publisher(AlarmEvent.builder()
+                        .companyId(companyId)
+                        .empIds(nextIds)
+                        .alarmType("APPROVAL")
+                        .alarmTitle("결재할 문서가 도착하였습니다.")
+                        .alarmLink("/approval")
+                        .alarmRefType("APPROVAL_DOCUMENT")
+                        .alarmRefId(docId)
+                        .build());
+            }
         }
     }
 
     /* 결재 반려 처리 / 한명이라도 반려하면 전부 반려 */
     @Transactional
     public void rejectDocument(UUID companyId, Long empId, Long docId, String reason) {
-        /*문서 찾기 */
         ApprovalDocument document = findPendingDocument(companyId, docId);
-        /*내 결재 라인 찾기*/
-        ApprovalLine myLine = lineRepository.findByDocId_DocIdAndEmpId(docId, empId).orElseThrow(() -> new BusinessException("결재 권한이 없습니다.", HttpStatus.FORBIDDEN));
 
-        /*권한 있는지 확인 */
+        LineWithDelegation found = findActorLine(companyId, docId, empId);
+        ApprovalLine myLine = found.line();
+        boolean delegated = found.isDelegateAction();
+
         if (myLine.getApprovalRole() != ApprovalRole.APPROVER) {
             throw new BusinessException("결재자만 반려할 수 있습니다. ");
         }
-        /* 결재 문서 확인*/
         if (myLine.getApprovalLineStatus() != ApprovalLineStatus.PENDING) {
             throw new BusinessException("이미 처리된 문서입니다. ");
         }
-
-        /*순차 합의 */
         validatePreviousStepApproved(docId, myLine.getLineStep());
 
-        /*결재선 반려 처리 + 읽음 처리 */
+        /* 대리 처리면 라인 스냅샷을 대리자 정보로 swap */
+        if (delegated) {
+            ApprovalDelegation d = found.delegation();
+            myLine.markDelegatedBy(d.getDeleEmpId(), d.getDeleName(), d.getDeleDeptName(), d.getDeleGrade(), d.getDeleTitle());
+        }
+
         myLine.reject(reason);
         myLine.markRead();
         document.reject();
 
-        /* 내가 반려했으니 아직 PENDING 인 다른 결재자 라인들(같은 step 병렬합의자 + 뒷 step)은 모두 취소 처리 */
+        /* 다른 PENDING 결재자 라인(같은 step 병렬합의자 + 뒷 step) 일괄 취소 */
         lineRepository.findByDocId_DocIdOrderByLineStep(docId).stream()
                 .filter(l -> !l.getLineId().equals(myLine.getLineId())
                         && l.getApprovalRole() == ApprovalRole.APPROVER
                         && l.getApprovalLineStatus() == ApprovalLineStatus.PENDING)
                 .forEach(ApprovalLine::cancel);
 
-        /* 초과근무/휴가 반려 이벤트 발행 — Publisher 내부에서 formName 분기 */
         approvalEventPublisher.publishResult(document, "REJECTED", empId, reason);
 
-        /*상태 패턴 변경 이력 저장 */
         historyRepository.save(
                 ApprovalStatusHistory.builder()
                         .docId(docId)
@@ -208,16 +248,18 @@ public class ApprovalLineService {
                         .changeByName(myLine.getEmpName())
                         .changeByDeptName(myLine.getEmpDeptName())
                         .changeByGrade(myLine.getEmpGrade())
-                        .changeReason(reason)
+                        .changeReason((delegated ? "[대리반려] " : "") + reason)
                         .changedAt(LocalDateTime.now())
                         .build());
 
-        /*기안자한테 반려 알림 발성 */
+        /*기안자한테 반려 알림 발성 — 대리는 [대리] prefix */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(List.of(document.getEmpId()))
                 .alarmType("APPROVAL")
-                .alarmTitle(myLine.getEmpDeptName() + " " + myLine.getEmpName() + " " + myLine.getEmpGrade() + "이(가) 결재 문서를 반려하였습니다.")
+                .alarmTitle((delegated ? "[대리] " : "")
+                        + myLine.getEmpDeptName() + " " + myLine.getEmpName() + " " + myLine.getEmpGrade()
+                        + "이(가) 결재 문서를 반려하였습니다.")
                 .alarmContent(reason)
                 .alarmLink("/approval")
                 .alarmRefType("APPROVAL_DOCUMENT")
