@@ -168,4 +168,16 @@ public class ApprovalLine extends BaseTimeEntity {
         this.lineProcessedAt = LocalDateTime.now();
     }
 
+    /** 대리자 결재 처리 시 라인 스냅샷 swap + 위임 표시 */
+    public void markDelegatedBy(Long deleEmpId, String deleName,
+                                String deleDeptName, String deleGrade, String deleTitle) {
+        this.lineDelegatedId = this.empId;   // 원 결재자 empId 보존
+        this.empId = deleEmpId;
+        this.empName = deleName;
+        this.empDeptName = deleDeptName;
+        this.empGrade = deleGrade;
+        this.empTitle = deleTitle;
+        this.isDelegated = true;
+    }
+
 }
