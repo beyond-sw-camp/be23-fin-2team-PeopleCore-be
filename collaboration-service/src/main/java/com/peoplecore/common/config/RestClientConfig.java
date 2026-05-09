@@ -17,6 +17,7 @@ import org.springframework.web.client.RestClient;
 @Configuration
 public class RestClientConfig {
 
+    /** local 프로필 — Eureka 디스커버리 기반 LB */
     @Bean
     @Profile("local")
     @LoadBalanced
@@ -24,9 +25,10 @@ public class RestClientConfig {
         return RestClient.builder();
     }
 
+    /** prod 프로필 — K8s Service DNS 직접 호출 */
     @Bean
-    @Profile("!local")
-    public RestClient.Builder restClientBuilderProd() {
+    @Profile("prod")
+    public RestClient.Builder restClientBuilder() {
         return RestClient.builder();
     }
 

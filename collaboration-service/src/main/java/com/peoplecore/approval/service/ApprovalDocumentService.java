@@ -195,22 +195,35 @@ public class ApprovalDocumentService {
         return document.getDocId();
     }
 
-    /*문서 상세 조회 (열람 시 자동 읽음 처리) */
+    /*문서 상세 조회 (열람 시 자동 읽음 처리, 위임 인지) */
     @Transactional
     public DocumentDetailResponse getDocumentDetail(UUID companyId, Long empId, Long docId) {
         ApprovalDocument document = documentRepository.findWithFormById(companyId, docId).orElseThrow(() -> new BusinessException("문서를 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
         List<ApprovalLine> lines = lineRepository.findByDocId_DocIdOrderByLineStep(docId);
 
-        /* 비공개 문서 진입 가드 — 기안자 본인 또는 결재라인 본인만 통과, 그 외(HR_ADMIN 포함) 403 */
+        /* 현재 사용자가 위임받은 활성 위임의 원 결재자 empId 집합 */
+        Set<Long> delegatorEmpIdsForMe = delegationRepository
+                .findActiveByDelegate(companyId, empId, LocalDate.now())
+                .stream()
+                .map(ApprovalDelegation::getEmpId)
+                .collect(Collectors.toSet());
+
+        /* 비공개 문서 진입 가드 — 기안자 본인 / 본인 결재라인 / 위임받은 APPROVER 라인이면 통과 */
+        boolean inLines = lines.stream().anyMatch(l ->
+                l.getEmpId().equals(empId)
+                        || (l.getApprovalRole() == ApprovalRole.APPROVER && delegatorEmpIdsForMe.contains(l.getEmpId())));
         if (Boolean.FALSE.equals(document.getIsPublic())
                 && !document.getEmpId().equals(empId)
-                && lines.stream().noneMatch(l -> l.getEmpId().equals(empId))) {
+                && !inLines) {
             throw new BusinessException("비공개 문서입니다. 접근 권한이 없습니다.", HttpStatus.FORBIDDEN);
         }
 
-        /* 본인 결재선이 있으면 읽음 처리 */
+        /* 본인 라인 또는 위임받은 라인 markRead */
         lines.stream()
-                .filter(line -> line.getEmpId().equals(empId) && !line.getIsRead())
+                .filter(line -> !line.getIsRead()
+                        && (line.getEmpId().equals(empId)
+                                || (line.getApprovalRole() == ApprovalRole.APPROVER
+                                        && delegatorEmpIdsForMe.contains(line.getEmpId()))))
                 .findFirst()
                 .ifPresent(ApprovalLine::markRead);
 
@@ -227,6 +240,15 @@ public class ApprovalDocumentService {
                 ));
 
         DocumentDetailResponse response = DocumentDetailResponse.from(document, lines, signatureMap);
+
+        /* 라인별 actionableByCurrentUser — 본인 라인이거나 위임받은 APPROVER 라인 */
+        response.getApprovalLines().forEach(lr -> {
+            boolean own = empId.equals(lr.getEmpId());
+            boolean delegated = "APPROVER".equals(lr.getApprovalRole())
+                    && delegatorEmpIdsForMe.contains(lr.getEmpId());
+            lr.setActionableByCurrentUser(own || delegated);
+        });
+
         /* 첨부파일 목록 포함 (Pre-signed URL 포함) */
         response.setAttachments(attachmentService.getAttachments(docId));
         return response;

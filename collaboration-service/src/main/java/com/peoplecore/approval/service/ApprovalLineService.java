@@ -62,11 +62,11 @@ public class ApprovalLineService {
         this.delegationRepository = delegationRepository;
     }
 
-    /** 결재 권한 라인 조회 — 본인 라인 우선, 없으면 활성 위임의 대리 케이스(APPROVER 라인만)로 fallback */
+    /** 결재 권한 라인 조회 — 본인 라인 우선, 없으면 활성 위임 케이스(APPROVER 라인만)로 fallback */
     private LineWithDelegation findActorLine(UUID companyId, Long docId, Long empId) {
         Optional<ApprovalLine> direct = lineRepository.findByDocId_DocIdAndEmpId(docId, empId);
         if (direct.isPresent()) return new LineWithDelegation(direct.get(), null);
-        /* 대리 케이스: 본인이 deleEmpId 인 활성 위임 목록을 돌며 그 위임자(empId)의 라인 탐색 */
+        /* 위임 케이스: 본인이 deleEmpId 인 활성 위임 목록을 돌며 그 위임자(empId)의 라인 탐색 */
         List<ApprovalDelegation> deles = delegationRepository.findActiveByDelegate(companyId, empId, LocalDate.now());
         for (ApprovalDelegation d : deles) {
             Optional<ApprovalLine> lineOpt = lineRepository.findByDocId_DocIdAndEmpId(docId, d.getEmpId());
@@ -81,7 +81,7 @@ public class ApprovalLineService {
         boolean isDelegateAction() { return delegation != null; }
     }
 
-    /** 다음 결재자(또는 그 대리자) 알림 수신자 산출. APPROVER 한정 IN 절 1회 조회. */
+    /** 다음 결재자(또는 그 위임받은자) 알림 수신자 산출. APPROVER 한정 IN 절 1회 조회. */
     private List<Long> nextReceivers(UUID companyId, List<ApprovalLine> approvalLines, int nextStep) {
         List<ApprovalLine> nextLines = approvalLines.stream()
                 .filter(l -> l.getLineStep() == nextStep && l.getApprovalRole() == ApprovalRole.APPROVER)
@@ -104,7 +104,7 @@ public class ApprovalLineService {
     public void approvalDocument(UUID companyId, Long empId, Long docId, String comment) {
         ApprovalDocument document = findPendingDocument(companyId, docId);
 
-        /* 본인 라인 또는 대리 권한 라인 조회 */
+        /* 본인 라인 또는 위임 권한 라인 조회 */
         LineWithDelegation found = findActorLine(companyId, docId, empId);
         ApprovalLine myLine = found.line();
         boolean delegated = found.isDelegateAction();
@@ -117,7 +117,7 @@ public class ApprovalLineService {
         }
         validatePreviousStepApproved(docId, myLine.getLineStep());
 
-        /* 대리 처리면 라인 스냅샷을 대리자 정보로 swap (원 결재자 empId 는 lineDelegatedId 에 보존) */
+        /* 위임 처리면 라인 스냅샷을 위임받은자 정보로 swap (원 결재자 empId 는 lineDelegatedId 에 보존) */
         if (delegated) {
             ApprovalDelegation d = found.delegation();
             myLine.markDelegatedBy(d.getDeleEmpId(), d.getDeleName(), d.getDeleDeptName(), d.getDeleGrade(), d.getDeleTitle());
@@ -126,7 +126,7 @@ public class ApprovalLineService {
         myLine.approve(comment);
         myLine.markRead();
 
-        /* 이력 — 대리 처리 시 [대리결재] 라벨 prefix */
+        /* 이력 — 위임 처리 시 [위임결재] 라벨 prefix */
         String reasonText = comment != null ? comment : myLine.getLineStep() + "단계 승인";
         historyRepository.save(ApprovalStatusHistory.builder()
                 .docId(docId)
@@ -137,7 +137,7 @@ public class ApprovalLineService {
                 .changeByName(myLine.getEmpName())          // swap 후 이름 = 실제 처리자
                 .changeByDeptName(myLine.getEmpDeptName())
                 .changeByGrade(myLine.getEmpGrade())
-                .changeReason((delegated ? "[대리결재] " : "") + reasonText)
+                .changeReason((delegated ? "[위임결재] " : "") + reasonText)
                 .changedAt(LocalDateTime.now())
                 .build());
 
@@ -163,7 +163,7 @@ public class ApprovalLineService {
                     .changeByName(myLine.getEmpName())
                     .changeByDeptName(myLine.getEmpDeptName())
                     .changeByGrade(myLine.getEmpGrade())
-                    .changeReason((delegated ? "[대리결재] " : "") + (comment != null ? comment : "최종 승인"))
+                    .changeReason((delegated ? "[위임결재] " : "") + (comment != null ? comment : "최종 승인"))
                     .changedAt(LocalDateTime.now())
                     .build());
 
@@ -171,12 +171,12 @@ public class ApprovalLineService {
             approvalEventPublisher.publishResult(document, "APPROVED", empId, null);
         }
 
-        /*기안자에게 승인 알림 발행 — 대리는 [대리] prefix */
+        /*기안자에게 승인 알림 발행 — 위임은 [위임] prefix */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(List.of(document.getEmpId()))
                 .alarmType("APPROVAL")
-                .alarmTitle((delegated ? "[대리] " : "")
+                .alarmTitle((delegated ? "[위임] " : "")
                         + myLine.getEmpDeptName() + " " + myLine.getEmpName() + " " + myLine.getEmpGrade()
                         + "이(가) 결재 문서를 승인하였습니다.")
                 .alarmContent("[" + document.getDocNum() + "] " + document.getDocTitle())
@@ -185,7 +185,7 @@ public class ApprovalLineService {
                 .alarmRefId(document.getDocId())
                 .build());
 
-        /* 다음 결재자 + 그 대리자에게 알림 (최종 승인이 아닌 경우) */
+        /* 다음 결재자 + 그 위임받은자에게 알림 (최종 승인이 아닌 경우) */
         if (!allApproved) {
             List<Long> nextIds = nextReceivers(companyId, approvalLines, myLine.getLineStep() + 1);
             if (!nextIds.isEmpty()) {
@@ -219,7 +219,7 @@ public class ApprovalLineService {
         }
         validatePreviousStepApproved(docId, myLine.getLineStep());
 
-        /* 대리 처리면 라인 스냅샷을 대리자 정보로 swap */
+        /* 위임 처리면 라인 스냅샷을 위임받은자 정보로 swap */
         if (delegated) {
             ApprovalDelegation d = found.delegation();
             myLine.markDelegatedBy(d.getDeleEmpId(), d.getDeleName(), d.getDeleDeptName(), d.getDeleGrade(), d.getDeleTitle());
@@ -248,16 +248,16 @@ public class ApprovalLineService {
                         .changeByName(myLine.getEmpName())
                         .changeByDeptName(myLine.getEmpDeptName())
                         .changeByGrade(myLine.getEmpGrade())
-                        .changeReason((delegated ? "[대리반려] " : "") + reason)
+                        .changeReason((delegated ? "[위임반려] " : "") + reason)
                         .changedAt(LocalDateTime.now())
                         .build());
 
-        /*기안자한테 반려 알림 발성 — 대리는 [대리] prefix */
+        /*기안자한테 반려 알림 발성 — 위임은 [위임] prefix */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(List.of(document.getEmpId()))
                 .alarmType("APPROVAL")
-                .alarmTitle((delegated ? "[대리] " : "")
+                .alarmTitle((delegated ? "[위임] " : "")
                         + myLine.getEmpDeptName() + " " + myLine.getEmpName() + " " + myLine.getEmpGrade()
                         + "이(가) 결재 문서를 반려하였습니다.")
                 .alarmContent(reason)
@@ -422,40 +422,47 @@ public class ApprovalLineService {
         return html.toString();
     }
 
-    /*전결 처리 이후에 approvalLine이 있다면 전부 Approved로 */
+    /* 전결 처리 — 본인(또는 위임받은) 라인 + 이후 모든 PENDING 라인 일괄 승인 */
     @Transactional
     public void approvalDocumentAll(UUID companyId, Long empId, Long docId, String comment) {
-        /* 결재하는 사원 정보를 받아옴 */
+        /* 처리자 사원 정보 — 위임이면 위임받은자 정보가 들어옴 */
         EmployeeSimpleResDto myInfo = hrServiceClient.getEmployees(List.of(empId)).stream().findFirst().orElseThrow(() -> new CustomException(ErrorCode.EMPLOYEE_NOT_FOUND));
 
         ApprovalDocument document = findPendingDocument(companyId, docId);
 
-        /*본인 결재선 조회 + 권한 확인 + 전사람 완료 됐는지 검증  */
-        ApprovalLine approvalLine = lineRepository.findByDocId_DocIdAndEmpId(docId, empId).orElseThrow(() -> new CustomException(ErrorCode.APPROVAL_NOT_ROLE));
+        /* 본인 라인 또는 위임 권한 라인 조회 */
+        LineWithDelegation found = findActorLine(companyId, docId, empId);
+        ApprovalLine approvalLine = found.line();
+        boolean delegated = found.isDelegateAction();
 
         if (approvalLine.getApprovalRole() != ApprovalRole.APPROVER) {
             throw new CustomException(ErrorCode.APPROVAL_NOT_ROLE);
         }
-        /*이미 처리된 결재선인지 확인 */
         if (approvalLine.getApprovalLineStatus() != ApprovalLineStatus.PENDING) {
             throw new CustomException(ErrorCode.APPROVAL_ALREADY_APPROVED);
         }
-
         validatePreviousStepApproved(docId, approvalLine.getLineStep());
 
+        /* 위임 처리면 actor 라인 스냅샷을 위임받은자로 swap (원 결재자 empId/이름은 lineDelegated* 에 보존) */
+        if (delegated) {
+            ApprovalDelegation d = found.delegation();
+            approvalLine.markDelegatedBy(d.getDeleEmpId(), d.getDeleName(),
+                    d.getDeleDeptName(), d.getDeleGrade(), d.getDeleTitle());
+        }
 
         /*전체 결재선 조회 */
         List<ApprovalLine> approvalLines = lineRepository.findByDocId_DocIdOrderByLineStep(docId, ApprovalRole.APPROVER);
 
-        /*본인 포함 이후 모든 pending 결재선 일괄 승인
-         *  - 본인 결재선: 입력한 comment(미입력 시 "전결") 저장
-         *  - 이후 결재선: 본인 의견 복제 X, "전결 - N단계" 시스템 메시지만 기록 */
+        /* 본인 포함 이후 모든 pending 결재선 일괄 승인
+         *  - actor 라인: 입력 comment(미입력 시 "전결"), 위임이면 history reason 에 [위임전결] prefix
+         *  - 이후 라인: 자동 "전결 - N단계" */
         approvalLines.stream().filter(l -> l.getLineStep() >= approvalLine.getLineStep() && l.getApprovalLineStatus() == ApprovalLineStatus.PENDING).forEach(l -> {
             String lineComment = l.getLineId().equals(approvalLine.getLineId())
                     ? (comment != null ? comment : "전결")
                     : "전결 - " + l.getLineStep() + "단계";
             l.approve(lineComment);
             l.markRead();
+            boolean isActorLine = l.getLineId().equals(approvalLine.getLineId());
             historyRepository.save(ApprovalStatusHistory.builder()
                     .docId(docId)
                     .companyId(companyId)
@@ -465,25 +472,21 @@ public class ApprovalLineService {
                     .changeByName(myInfo.getEmpName())
                     .changeByDeptName(myInfo.getDeptName())
                     .changeByGrade(myInfo.getGradeName())
-                    .changeReason("전결 - " + l.getLineStep() + "단계")
+                    .changeReason((delegated && isActorLine ? "[위임전결] " : "") + "전결 - " + l.getLineStep() + "단계")
                     .changedAt(LocalDateTime.now())
                     .build());
         });
 
-        /* all approved인지 체크 */
         boolean allApproved = approvalLines.stream().allMatch(l -> l.getApprovalLineStatus() == ApprovalLineStatus.APPROVED);
 
         if (allApproved) {
-            /*상태 ㅍ패턴 호출 */
             document.approve();
 
-            /*완성 문서 HTML 생성 -> minio 업로드 -> docURL 저장 */
             String docHTML = buildCompletedDocumentHtml(companyId, document, approvalLines);
             String objectName = String.format("completed/%s/%d/%s.html", companyId, docId, document.getDocNum());
             minioService.uploadFormHtml(objectName, docHTML);
             document.assignDocUrl(objectName);
 
-            /*상태 변경 이력 저장 */
             historyRepository.save(ApprovalStatusHistory.builder()
                     .docId(docId)
                     .companyId(companyId)
@@ -493,23 +496,22 @@ public class ApprovalLineService {
                     .changeByName(myInfo.getEmpName())
                     .changeByDeptName(myInfo.getDeptName())
                     .changeByGrade(myInfo.getGradeName())
-                    .changeReason("전결 처리")
+                    .changeReason((delegated ? "[위임전결] " : "") + "전결 처리")
                     .changedAt(LocalDateTime.now())
                     .build());
 
-            /* 폼별 최종 승인 후처리 (휴가 캘린더, 사직 카프카 등) */
             formHandlerRegistry.find(document).ifPresent(h -> h.onApproved(document));
-
             approvalEventPublisher.publishResult(document, "APPROVED", empId, null);
         }
 
-        /*기안자한테 승인 알림 발행 */
+        /*기안자한테 승인 알림 발행 — 위임은 [위임] prefix */
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)
                 .empIds(List.of(document.getEmpId()))
                 .alarmType("APPROVAL")
-                .alarmTitle(myInfo.getDeptName() + " " + myInfo.getEmpName() + " " + myInfo.getGradeName() + "이(가) 결재 문서를 승인하였습니다.")
-
+                .alarmTitle((delegated ? "[위임] " : "")
+                        + myInfo.getDeptName() + " " + myInfo.getEmpName() + " " + myInfo.getGradeName()
+                        + "이(가) 결재 문서를 승인하였습니다.")
                 .alarmContent("[" + document.getDocNum() + "]" + document.getDocTitle())
                 .alarmLink("/approval")
                 .alarmRefId(docId)
