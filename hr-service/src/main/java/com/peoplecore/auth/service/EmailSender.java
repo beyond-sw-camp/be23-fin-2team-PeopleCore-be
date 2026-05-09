@@ -28,6 +28,21 @@ public class EmailSender {
         msg.setSubject("[PeopleCore] 비밀번호 재설정 인증코드");
         msg.setText("인증코드: " + code + "\n\n인증코드는 3분간 유효합니다.");
 
+        dispatch(msg, to);
+    }
+
+    public void sendPersonalEmailChangeCode(String to, String code) {
+        SimpleMailMessage msg = new SimpleMailMessage();
+        msg.setTo(to);
+        msg.setFrom(from);
+        msg.setSubject("[PeopleCore] 외부 이메일 변경 인증코드");
+        msg.setText("외부 이메일 변경 요청에 대한 인증코드입니다.\n\n인증코드: " + code
+                + "\n\n인증코드는 3분간 유효합니다.\n본인이 요청하지 않았다면 이 메일은 무시해 주세요.");
+
+        dispatch(msg, to);
+    }
+
+    private void dispatch(SimpleMailMessage msg, String to) {
         try {
             mailSender.send(msg);
             log.info("이메일 발송 성공 - 수신: {}", to);

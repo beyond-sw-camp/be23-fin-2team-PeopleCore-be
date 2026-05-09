@@ -70,7 +70,9 @@ public class DocumentDetailResponse {
         private LocalDateTime lineProcessedAt;
         private String lineComment;
         private Boolean isDelegated;
-        private Long lineDelegatedId;   // 대리 처리 시 원 결재자 empId, 그 외엔 null
+        private Long lineDelegatedId;          // 위임 처리 시 원 결재자 empId, 그 외엔 null
+        private String lineDelegatedName;      // 위임 처리 시 원 결재자 이름, 그 외엔 null
+        private Boolean actionableByCurrentUser; // 현재 요청자가 처리 가능한 라인인지 (본인 라인 or 위임받은 APPROVER 라인)
         private Boolean isRead;
         private String sigUrl;
     }
@@ -94,6 +96,8 @@ public class DocumentDetailResponse {
                 .lineComment(line.getLineComment())
                 .isDelegated(line.getIsDelegated())
                 .lineDelegatedId(line.getLineDelegatedId())
+                .lineDelegatedName(line.getLineDelegatedName())
+                .actionableByCurrentUser(false)   // 기본 false, 서비스에서 후처리 set
                 .isRead(line.getIsRead())
                 .sigUrl(signatureMap.get(line.getEmpId()))
                 .build()).toList();

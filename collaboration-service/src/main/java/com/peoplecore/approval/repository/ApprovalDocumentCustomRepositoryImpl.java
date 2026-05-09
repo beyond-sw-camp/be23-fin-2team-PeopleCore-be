@@ -119,24 +119,30 @@ public class ApprovalDocumentCustomRepositoryImpl implements ApprovalDocumentCus
         return JPAExpressions.selectOne().from(attachment).where(attachment.docId.eq(doc)).exists();
     }
 
-    /* 본인 결재선 또는 본인이 대리자인 활성 위임자의 결재선 */
+    /* 본인 결재선 OR 위임 처리된 라인의 원 결재자(나) OR 활성 위임의 대리자(나)
+     * - markDelegatedBy() 후 line.empId 가 위임받은자로 swap 되므로,
+     *   원래 결재자(위임자) 가 자기 문서함에서 못 보는 문제를 lineDelegatedId 매칭으로 보정 */
     private BooleanExpression actorLineMatches(QApprovalLine actorLine, Long empId) {
         QApprovalDelegation delegation = new QApprovalDelegation("activeDelegation");
         LocalDate today = LocalDate.now();
 
-        return actorLine.empId.eq(empId).or(
-                JPAExpressions.selectOne()
-                        .from(delegation)
-                        .where(
-                                delegation.companyId.eq(actorLine.companyId),
-                                delegation.empId.eq(actorLine.empId),
-                                delegation.deleEmpId.eq(empId),
-                                delegation.isActive.eq(true),
-                                delegation.startAt.loe(today),
-                                delegation.endAt.goe(today)
-                        )
-                        .exists()
-        );
+        return actorLine.empId.eq(empId)
+                // 위임 처리 완료 라인 — 원 결재자(나) 매칭 (empId 는 위임받은자로 swap 된 상태)
+                .or(actorLine.isDelegated.eq(true).and(actorLine.lineDelegatedId.eq(empId)))
+                // 활성 위임의 대리자 — 위임자 라인을 내 문서함에 노출
+                .or(
+                        JPAExpressions.selectOne()
+                                .from(delegation)
+                                .where(
+                                        delegation.companyId.eq(actorLine.companyId),
+                                        delegation.empId.eq(actorLine.empId),
+                                        delegation.deleEmpId.eq(empId),
+                                        delegation.isActive.eq(true),
+                                        delegation.startAt.loe(today),
+                                        delegation.endAt.goe(today)
+                                )
+                                .exists()
+                );
     }
 
     /*헬퍼 3 : 페이징 실행
