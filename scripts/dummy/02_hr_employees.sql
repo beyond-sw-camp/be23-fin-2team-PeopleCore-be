@@ -534,10 +534,10 @@
 
 
         -- =====================================================================
-        -- 더미 프로필 이미지 URL 매핑 — 앞 28명 (MinIO seed와 1:1 대응)
+        -- 더미 프로필 이미지 URL 매핑 — 앞 128명 (MinIO seed와 1:1 대응)
         -- ---------------------------------------------------------------------
         -- 선행 조건:
-        --   1) MinIO 버킷 'peoplecore-profile'에 28개 객체가 적재되어 있어야 함
+        --   1) MinIO 버킷 'peoplecore-profile'에 128개 객체가 적재되어 있어야 함
         --      (docker-compose의 minio-init 서비스가 처리)
         --   2) 객체 키 패턴: emp-{emp_id}/{emp_num}.jpg
         --   3) 본 SQL은 @cid 변수가 살아있는 같은 세션에서 실행되어야 함
@@ -557,7 +557,7 @@
         UPDATE employee
             SET emp_profile_image_url = CONCAT('/employee/profile-images/seed/', emp_num, '.jpg')
             WHERE company_id = @cid
-            AND emp_num BETWEEN 'EMP-2025-001' AND 'EMP-2025-028';
+            AND emp_num BETWEEN 'EMP-2025-001' AND 'EMP-2025-128';
 
 
         -- =====================================================================
