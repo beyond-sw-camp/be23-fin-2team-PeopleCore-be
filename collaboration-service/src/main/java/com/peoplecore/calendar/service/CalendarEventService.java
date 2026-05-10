@@ -96,13 +96,14 @@ public class CalendarEventService {
         eventInstancesRepository.save(instance);
 
 // 2) 참석자 저장
-        saveAttendees(companyId, instance, reqDto.getAttendeeEmpIds());
+        List<Long> attendeeEmpIds = sanitizeAttendeeEmpIds(reqDto.getAttendeeEmpIds(), empId);
+        saveAttendees(companyId, instance, attendeeEmpIds);
 
 //        알림설정 저장
         saveNotifications(event, reqDto.getNotifications());
 
 //        참석자에게 즉시알림발송
-        sendAttendeeAlarm(companyId, event, reqDto.getAttendeeEmpIds());
+        sendAttendeeAlarm(companyId, event, attendeeEmpIds);
 
         List<EventAttendees> savedAttendees = eventAttendeesRepository.findByEventInstances(instance);
         return EventResDto.fromEntity(event, savedAttendees, loadEmployeeMap(event, savedAttendees));
@@ -137,9 +138,10 @@ public class CalendarEventService {
         EventInstances instance = eventInstancesRepository.findFirstByEvents_EventsId(eventsId);
         if (instance != null) {
             eventAttendeesRepository.deleteByEventInstances(instance);
-            saveAttendees(companyId, instance, reqDto.getAttendeeEmpIds());
+            List<Long> attendeeEmpIds = sanitizeAttendeeEmpIds(reqDto.getAttendeeEmpIds(), empId);
+            saveAttendees(companyId, instance, attendeeEmpIds);
             // 새로 추가된 참석자에게만 초대 알림 발송
-            sendAttendeeAlarm(companyId, event, reqDto.getAttendeeEmpIds());
+            sendAttendeeAlarm(companyId, event, attendeeEmpIds);
         }
 
         List<EventAttendees> currentAttendees = eventAttendeesRepository.findByEventInstances_Events_EventsId(eventsId);
@@ -317,6 +319,15 @@ public class CalendarEventService {
         eventAttendeesRepository.saveAll(rows);
     }
 
+    private List<Long> sanitizeAttendeeEmpIds(List<Long> attendeeEmpIds, Long ownerEmpId) {
+        if (attendeeEmpIds == null || attendeeEmpIds.isEmpty()) return List.of();
+        return attendeeEmpIds.stream()
+                .filter(Objects::nonNull)
+                .filter(id -> !id.equals(ownerEmpId))
+                .distinct()
+                .toList();
+    }
+
     private Events findEventOrThrow(Long eventsId, UUID companyId){
         Events events = eventsRepository.findById(eventsId).orElseThrow(()-> new CustomException(ErrorCode.EVENT_NOT_FOUND));
 
@@ -390,6 +401,5 @@ public class CalendarEventService {
                 .build());
     }
 }
-
 
 

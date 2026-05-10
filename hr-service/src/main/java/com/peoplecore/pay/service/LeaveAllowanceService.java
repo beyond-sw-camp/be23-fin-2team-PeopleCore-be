@@ -332,6 +332,7 @@ public class LeaveAllowanceService {
 //        해당 월 입사일 대상자만 필터
         List<LeaveAllowance> filtered = list.stream()
                 .filter(la-> la.getEmployee().getEmpHireDate() != null
+                && !isCurrentYearMonthHire(la.getEmployee(), targetYear, targetMonth)
                 && la.getEmployee().getEmpHireDate().getMonthValue() == targetMonth)
                 .toList();
 
@@ -340,7 +341,9 @@ public class LeaveAllowanceService {
             createAnniversaryPendingRecords(companyId,targetYear, targetMonth);
             list = leaveAllowanceRepository.findAllByCompanyAndYearAndType(companyId, targetYear,AllowanceType.ANNIVERSARY);
             filtered = list.stream()
-                    .filter(la-> la.getEmployee().getEmpHireDate() != null && la.getEmployee().getEmpHireDate().getMonthValue() == targetMonth)
+                    .filter(la-> la.getEmployee().getEmpHireDate() != null
+                            && !isCurrentYearMonthHire(la.getEmployee(), targetYear, targetMonth)
+                            && la.getEmployee().getEmpHireDate().getMonthValue() == targetMonth)
                     .toList();
         }
         List<LeaveAllowanceResDto> employees = filtered.stream()
@@ -432,6 +435,7 @@ public class LeaveAllowanceService {
                 .filter(la -> {
                     try {
                         if (!yearMonth.equals(resolveTargetMonth(la, settings))) return false;
+                        if (isCurrentYearMonthHire(la.getEmployee(), yearMonth)) return false;
 
                         // 급여대장 미생성: 카운트 유지 (사용자에게 생성 필요 환기)
                         if (run == null) return true;
@@ -567,6 +571,7 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
                         companyId, List.of(EmpStatus.ACTIVE, EmpStatus.ON_LEAVE))
                 .stream()
                 .filter(e -> e.getEmpHireDate() != null
+                        && !isCurrentYearMonthHire(e, year, month)
                         && e.getEmpHireDate().getMonthValue() == month
                         && !resolveAnniversaryDateInYear(e.getEmpHireDate(), year)
                         .isAfter(today))
@@ -678,6 +683,21 @@ la -> la.getStatus() == AllowanceStatus.APPLIED)
         } catch (DateTimeException e) {
             return LocalDate.of(year, hireDate.getMonthValue(), 28);
         }
+    }
+
+    private boolean isCurrentYearMonthHire(Employee employee, String yearMonth) {
+        LocalDate hireDate = employee == null ? null : employee.getEmpHireDate();
+        if (hireDate == null || yearMonth == null || yearMonth.length() < 7) return false;
+        YearMonth targetMonth = YearMonth.parse(yearMonth.substring(0, 7));
+        return hireDate.getYear() == targetMonth.getYear()
+                && hireDate.getMonthValue() == targetMonth.getMonthValue();
+    }
+
+    private boolean isCurrentYearMonthHire(Employee employee, int year, int month) {
+        LocalDate hireDate = employee == null ? null : employee.getEmpHireDate();
+        return hireDate != null
+                && hireDate.getYear() == year
+                && hireDate.getMonthValue() == month;
     }
 
 
