@@ -49,11 +49,12 @@ SET @t_lead := (SELECT title_id FROM title WHERE company_id=@cid AND title_code=
 SET @t_head := (SELECT title_id FROM title WHERE company_id=@cid AND title_code='T-HEAD');
 SET @t_ceo  := (SELECT title_id FROM title WHERE company_id=@cid AND title_code='T-CEO');
 
--- ▼ 급여항목 ID lookup (회사 생성 시 자동 시드된 4개 고정 항목) ▼
+-- ▼ 급여항목 ID lookup (회사 생성 시 자동 시드된 4개 고정 항목 + 상여금) ▼
 SET @pi_basic := (SELECT pay_item_id FROM pay_items WHERE company_id=@cid AND pay_item_name='기본급');
 SET @pi_pos   := (SELECT pay_item_id FROM pay_items WHERE company_id=@cid AND pay_item_name='직책수당');
 SET @pi_meal  := (SELECT pay_item_id FROM pay_items WHERE company_id=@cid AND pay_item_name='식대');
 SET @pi_trans := (SELECT pay_item_id FROM pay_items WHERE company_id=@cid AND pay_item_name='교통비');
+SET @pi_bonus := (SELECT pay_item_id FROM pay_items WHERE company_id=@cid AND pay_item_name='상여금');
 
 -- ▼ 작성자 (HR_SUPER_ADMIN, EMP-2025-001 김민준) ▼
 SET @e_creator := (SELECT emp_id FROM employee WHERE company_id=@cid AND emp_num='EMP-2025-001');
@@ -218,6 +219,13 @@ INSERT INTO salary_contract_detail (contract_id, pay_item_id, amount)
 SELECT sc.contract_id, @pi_trans, 200000
   FROM salary_contract sc
  WHERE sc.company_id = @cid;
+
+-- 2-5. 상여금 (default 사용 — 모든 사원에 0원으로 항목 노출)
+INSERT INTO salary_contract_detail (contract_id, pay_item_id, amount)
+SELECT sc.contract_id, @pi_bonus, 0
+  FROM salary_contract sc
+ WHERE sc.company_id = @cid
+   AND @pi_bonus IS NOT NULL;
 
 
 -- =====================================================================
