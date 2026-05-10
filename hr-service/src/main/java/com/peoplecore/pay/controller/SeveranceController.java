@@ -9,11 +9,16 @@ import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -77,18 +82,22 @@ public class SeveranceController {
     }
 
 
-    /// /    이체파일 생성 (선택 건)
-//    @PostMapping("/transfer-file")
-//    public ResponseEntity<byte[]> transferFile(
-//            @RequestHeader("X-User-Company") UUID companyId,
-//            @RequestBody List<Long> sevIds) {
-//        TransferFileResDto file = severanceService.generateTransferFile(companyId, sevIds);
-//        return ResponseEntity.ok()
-//                .header("Content-Disposition",
-//                        "attachment; filename=\"" + file.getFileName() + "\"")
-//                .header("Content-Type", "text/csv; charset=UTF-8")
-//                .body(file.getFileBytes());
-//    }
+//    이체파일 생성 (선택 건)
+    @PostMapping("/transfer-file")
+    public ResponseEntity<byte[]> transferFile(
+            @RequestHeader("X-User-Company") UUID companyId,
+            @RequestBody List<Long> sevIds) {
+        TransferFileResDto file = severanceService.generateTransferFile(companyId, sevIds);
+        String fileName = URLEncoder.encode(file.getFileName(), StandardCharsets.UTF_8);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.set(HttpHeaders.CONTENT_DISPOSITION,
+                "attachment; filename*=UTF-8''" + fileName);
+
+        return new ResponseEntity<>(file.getFileBytes(), headers, HttpStatus.OK);
+    }
 
 //      퇴직금추계액 조회 (재직자 전원 기준)
     @GetMapping("/estimate")

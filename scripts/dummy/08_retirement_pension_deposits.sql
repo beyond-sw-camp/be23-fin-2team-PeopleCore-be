@@ -81,6 +81,17 @@ GROUP BY pes.emp_id, pes.payroll_run_id, pr.pay_year_month;
 -- [검증 쿼리]
 -- =====================================================================
 -- A) 월별 DC 적립 건수 + 합계
+SELECT pr.pay_year_month,
+       COUNT(*)                AS dc_emp_cnt,
+       SUM(rpd.base_amount)    AS sum_base,
+       SUM(rpd.deposit_amount) AS sum_deposit,
+       rpd.dep_status
+  FROM retirement_pension_deposits rpd
+  JOIN payroll_runs pr ON pr.payroll_run_id = rpd.payroll_run_id
+ WHERE rpd.company_id=@cid
+ GROUP BY pr.pay_year_month, rpd.dep_status
+ ORDER BY pr.pay_year_month;
+
 -- SELECT pr.pay_year_month,
 --        COUNT(*)          AS dc_emp_cnt,
 --        SUM(rpd.base_amount)    AS sum_base,

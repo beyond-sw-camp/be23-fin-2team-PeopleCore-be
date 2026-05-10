@@ -503,6 +503,8 @@ public class PayrollService {
                     .stream()
                     .filter(la -> la.getStatus() == AllowanceStatus.PENDING)
                     .filter(la -> la.getEmployee().getEmpHireDate() != null
+                            && !(la.getEmployee().getEmpHireDate().getYear() == year
+                            && la.getEmployee().getEmpHireDate().getMonthValue() == month)
                             && la.getEmployee().getEmpHireDate().getMonthValue() == month)
                     .map(la -> la.getEmployee().getEmpId())
                     .toList();

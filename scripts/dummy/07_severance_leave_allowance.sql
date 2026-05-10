@@ -27,8 +27,8 @@ use peoplecore;
 --   last3month_days= DATEDIFF(resign_date, resign_date - 3 MONTH)
 --   avg_daily_wage   = last3month_pay / last3month_days
 --   severance_amount = ROUND(avg_daily_wage × 30 × service_days / 365)
---   tax_amount       = ROUND(severance_amount × 5%)        (퇴직소득세 단순화)
---   local_income_tax = ROUND(tax_amount × 10%)             (지방소득세)
+--   tax_amount       = DB/DC(IRP 이전) 0, 직접지급은 ROUND(severance_amount × 5%) (퇴직소득세 단순화)
+--   local_income_tax = DB/DC(IRP 이전) 0, 직접지급은 ROUND(tax_amount × 10%)      (지방소득세)
 --   net_amount       = severance_amount - tax_amount - local_income_tax
 --   dc_deposited     = (DC형이면 severance × 70%, else 0)  (적립 시뮬)
 --   dc_diff_amount   = (DC형이면 severance - dc_deposited, else 0)
@@ -251,25 +251,34 @@ SELECT
     (FLOOR(sc.total_amount / 4) / DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)))
     * 30 * DATEDIFF(e.emp_resign, e.emp_hire_date) / 365
   ) AS severance_amount,
-  -- tax_amount = severance × 5%
-  ROUND(
-    (FLOOR(sc.total_amount / 4) / DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)))
-    * 30 * DATEDIFF(e.emp_resign, e.emp_hire_date) / 365 * 0.05
-  ) AS tax_amount,
-  -- local_income_tax = tax × 10%
-  ROUND(
-    (FLOOR(sc.total_amount / 4) / DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)))
-    * 30 * DATEDIFF(e.emp_resign, e.emp_hire_date) / 365 * 0.05 * 0.10
-  ) AS local_income_tax,
+  -- tax_amount = DB/DC(IRP 이전) 0, 직접지급은 severance × 5%
+  CASE WHEN e.retirement_type IN ('DC', 'DB') THEN 0 ELSE
+    ROUND(
+      (FLOOR(sc.total_amount / 4) / DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)))
+      * 30 * DATEDIFF(e.emp_resign, e.emp_hire_date) / 365 * 0.05
+    ) END AS tax_amount,
+  -- local_income_tax = DB/DC(IRP 이전) 0, 직접지급은 tax × 10%
+  CASE WHEN e.retirement_type IN ('DC', 'DB') THEN 0 ELSE
+    ROUND(
+      (FLOOR(sc.total_amount / 4) / DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)))
+      * 30 * DATEDIFF(e.emp_resign, e.emp_hire_date) / 365 * 0.05 * 0.10
+    ) END AS local_income_tax,
   YEAR(e.emp_resign) AS tax_year,
   -- irp_transfer = DC 또는 DB
   CASE WHEN e.retirement_type IN ('DC', 'DB') THEN TRUE ELSE FALSE END AS irp_transfer,
-  -- net_amount = severance - tax - local_tax
-  ROUND(
-    (FLOOR(sc.total_amount / 4) / DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)))
-    * 30 * DATEDIFF(e.emp_resign, e.emp_hire_date) / 365
-    * (1 - 0.05 - 0.05 * 0.10)
-  ) AS net_amount,
+  -- net_amount = DB/DC(IRP 이전)은 세액 차감 없음, 직접지급은 tax/local_tax 차감
+  CASE WHEN e.retirement_type IN ('DC', 'DB') THEN
+    ROUND(
+      (FLOOR(sc.total_amount / 4) / DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)))
+      * 30 * DATEDIFF(e.emp_resign, e.emp_hire_date) / 365
+    )
+  ELSE
+    ROUND(
+      (FLOOR(sc.total_amount / 4) / DATEDIFF(e.emp_resign, DATE_SUB(e.emp_resign, INTERVAL 3 MONTH)))
+      * 30 * DATEDIFF(e.emp_resign, e.emp_hire_date) / 365
+      * (1 - 0.05 - 0.05 * 0.10)
+    )
+  END AS net_amount,
   -- DC형: 70% 적립됐다 가정
   CASE WHEN e.retirement_type = 'DC' THEN
     ROUND(
