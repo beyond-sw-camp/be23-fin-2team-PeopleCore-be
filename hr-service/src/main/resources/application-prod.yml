@@ -17,6 +17,8 @@ spring:
     jdbc:
       # prod 에서는 never + 수동 DDL (schema-mysql.sql 적용 권장)
       initialize-schema: never
+      isolation-level-for-create: READ_COMMITTED
+
 
   quartz:
     job-store-type: jdbc
