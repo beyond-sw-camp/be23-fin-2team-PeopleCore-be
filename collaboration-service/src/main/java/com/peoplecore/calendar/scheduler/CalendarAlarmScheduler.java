@@ -50,7 +50,8 @@ public class CalendarAlarmScheduler {
                 alarmEventPublisher.publisher(AlarmEvent.builder()
                         .companyId(event.getCompanyId())
                         .alarmType("CalendarReminder")
-                        .alarmContent(event.getTitle() + " — " + n.getMinutesBefore() + "분 전")
+                        .alarmTitle(event.getTitle())
+                        .alarmContent(formatTimeBefore(n.getMinutesBefore()) + " 일정이 시작됩니다.")
                         .alarmLink("/calendar?eventId=" + event.getEventsId())
                         .alarmRefType("EVENT")
                         .alarmRefId(event.getEventsId())
@@ -74,5 +75,18 @@ public class CalendarAlarmScheduler {
             if (a.getInvitedEmpId() != null) targets.add(a.getInvitedEmpId());
         }
         return new ArrayList<>(targets);
+    }
+
+
+    /** 분 단위 minutesBefore 를 사용자 친화적 문자열로 역변환.
+     *  1440 의 배수 → "N일 후", 60 의 배수 → "N시간 후", 그 외 → "N분 후" */
+    private static String formatTimeBefore(int minutesBefore){
+        if (minutesBefore >= 1440 && minutesBefore % 1440 == 0) {
+            return (minutesBefore / 1440) + "일 후";
+        }
+        if (minutesBefore >= 60 && minutesBefore % 60 == 0) {
+            return (minutesBefore / 60) + "시간 후";
+        }
+        return minutesBefore + "분 후";
     }
 }
