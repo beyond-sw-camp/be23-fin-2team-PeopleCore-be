@@ -225,8 +225,10 @@ public class SeveranceService {
         Long retirementIncomeTax = taxResult.retirementIncomeTax();
         Long localIncomeTax =taxResult.localIncomeTax();
 
-//        실지급액 = (퇴직금 - 퇴직소득세 - 지방소득세) + 퇴직정산 연차수당 별도지급
-        Long netAmount = severanceAmount - retirementIncomeTax - localIncomeTax + annualLeaveOnRetirement;
+//        실지급액 = (실제 지급 대상 퇴직급여 - 퇴직소득세 - 지방소득세) + 퇴직정산 연차수당 별도지급
+//        DC형은 기적립 총액을 제외한 차액만 회사가 추가 지급한다.
+        Long payableSeveranceAmount = retirementType == RetirementType.DC ? dcDiffAmount : severanceAmount;
+        Long netAmount = payableSeveranceAmount - retirementIncomeTax - localIncomeTax + annualLeaveOnRetirement;
 
 //        스냅샷 데이터
         String empName = emp.getEmpName();
@@ -261,7 +263,7 @@ public class SeveranceService {
                     .localIncomeTax(localIncomeTax)
                     .taxYear(taxYear)
                     .irpTransfer(irpTransfer)
-                    //실지급액 = (퇴직금 - 세금 - 지방세) + 퇴직정산 연차수당 별도지급
+                    //실지급액 = (실제 지급 대상 퇴직급여 - 세금 - 지방세) + 퇴직정산 연차수당 별도지급
                     .netAmount(netAmount)
                     .dcDepositedTotal(dcDepositedTotal)
                     .dcDiffAmount(dcDiffAmount)
@@ -526,6 +528,8 @@ public class SeveranceService {
             sevs.forEach(s -> s.approve());
         } else if ("REJECTED".equals(event.getStatus())) {
             sevs.forEach(s -> s.rejectApproval());
+        } else if ("CANCELED".equals(event.getStatus())) {
+            sevs.forEach(s -> s.cancelApproval());
         }
         log.info("[Severance] applyApprovalResult - docId={}, status={}, count={}",
                 event.getApprovalDocId(), event.getStatus(), sevs.size());
