@@ -3,7 +3,7 @@ use peoplecore;
 -- C 방안 후처리 — payroll_runs/emp_status 를 PAID 로 일괄 변경 + pay_stubs 생성
 -- ---------------------------------------------------------------------
 -- 선행 조건:
---   - seed_payroll_via_api.sh 실행 완료 (CALCULATING 상태로 16개월 산정 끝)
+--   - seed_payroll_via_api.sh 실행 완료 (CALCULATING 상태로 15개월 산정 끝)
 --
 -- 처리 내용:
 --   1) payroll_runs.payroll_status     = PAID,  pay_date = 25일
@@ -15,9 +15,7 @@ use peoplecore;
 --   approval_doc_id 는 NULL 유지.
 --
 -- ※ 기간 = 2025-01 ~ 2026-03 (15개월) 만 PAID 처리.
---   마지막 1개월 (2026-04) 은 CALCULATING 상태로 남겨둠 →
---   시연 시 화면에서 [확정] → [전자결재 상신] → [결재 승인] → [지급처리]
---   단계를 직접 클릭해서 시연 가능.
+--   2026-04 는 더미 급여대장을 생성하지 않고 발표 시연에서 직접 생성.
 --
 -- [실행 방법]
 --   $ mysql -u <user> -p peoplecore < 06b_set_paid.sql
@@ -26,7 +24,7 @@ use peoplecore;
 SET @cid          := (SELECT company_id FROM company WHERE company_name='peoplecore');
 SET @actor_emp_id := (SELECT emp_id FROM employee WHERE company_id=@cid AND emp_num='EMP-2025-005');
 SET @start_ym     := '2025-01';
-SET @end_ym       := '2026-03';   -- 2026-04 는 CALCULATING 으로 남김 (시연용)
+SET @end_ym       := '2026-03';   -- 2026-04 는 시연에서 직접 생성
 
 SELECT
   IFNULL(BIN_TO_UUID(@cid), '❌ 회사 없음') AS company,

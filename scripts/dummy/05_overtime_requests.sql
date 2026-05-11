@@ -7,7 +7,8 @@ use peoplecore;
 --   2) 06_payroll_history.sql 보다 먼저 실행돼야 함 (변동수당 산정의 기초)
 --
 -- [기간]
---   2025-01-01 ~ 2026-04-30  (16개월 연속)
+--   2025-01-01 ~ 2026-03-31  (15개월 연속)
+--   ※ 2026-04 는 발표 시연에서 직접 추가근무 신청/승인 후 급여대장 생성
 --
 -- [3가지 카테고리 — 시간 패턴으로 분 수 결정 가능하게 고정]
 --   Cat A: 평일 19:00~22:00  → 180분 = 모두 연장근로 (야간 0)
@@ -32,7 +33,7 @@ use peoplecore;
 SET @company_name := 'peoplecore';
 SET @cid := (SELECT company_id FROM company WHERE company_name = @company_name);
 SET @start_date := DATE('2025-01-01');
-SET @end_date   := DATE('2026-04-30');
+SET @end_date   := DATE('2026-03-31');
 
 -- 승인자: 인사팀장 (EMP-2025-005, 최도윤)
 SET @manager_id := (SELECT emp_id FROM employee WHERE company_id=@cid AND emp_num='EMP-2025-005');
@@ -52,8 +53,8 @@ DELETE FROM overtime_request
 -- =====================================================================
 -- INSERT — 단일 INSERT-SELECT (derived 날짜 시퀀스 × 사원 × 카테고리 분기)
 -- ---------------------------------------------------------------------
---   숫자 시퀀스: 0~9, 0~9, 0~4 cross join → 0~499 (16개월 = 약 486일)
---   work_date  : @start_date + n DAY, BETWEEN 필터로 16개월 범위 정확히
+--   숫자 시퀀스: 0~9, 0~9, 0~4 cross join → 0~499
+--   work_date  : @start_date + n DAY, BETWEEN 필터로 15개월 범위 정확히
 --   사원       : 입사일 <= work_date AND (퇴직일 IS NULL OR work_date < 퇴직일)
 --                emp_status IN (ACTIVE, ON_LEAVE) 만 (RESIGNED 는 퇴직 후 신청 불가)
 -- =====================================================================

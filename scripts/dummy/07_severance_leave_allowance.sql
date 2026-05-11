@@ -9,7 +9,8 @@ use peoplecore;
 --
 -- [구성]
 --   1) vacation_balance       : 전 사원 × {2024, 2025, 2026} × type_code='ANNUAL'
---   2) leave_allowance        : 전 사원 × {2024, 2025} (회계년도) + 퇴직자 7명 (RESIGNED)
+--                                회사 정책(HIRE)에 맞춰 입사기념일 기준 유효기간
+--   2) leave_allowance        : 전 사원 2025년 입사기념일분 + 퇴직자 7명 (RESIGNED)
 --   3) severance_pays         : 퇴직자 7명 (기존 035, 076 + 신규 116~120)
 --
 -- [근속연수별 연차 부여 (근로기준법)]
@@ -57,7 +58,7 @@ SELECT
 -- =====================================================================
 -- ▼ 기존 시드 정리 (회사 한정) ▼
 -- =====================================================================
-DELETE FROM leave_allowance WHERE company_id = @cid AND year IN (2024, 2025);
+DELETE FROM leave_allowance WHERE company_id = @cid AND year IN (2024, 2025, 2026);
 DELETE FROM severance_pays  WHERE company_id = @cid;
 DELETE FROM vacation_balance
  WHERE company_id = @cid AND type_id = @annual_type_id
@@ -68,9 +69,11 @@ DELETE FROM vacation_balance
 -- 1) vacation_balance — 전 사원 × {2024, 2025, 2026} × ANNUAL
 -- ---------------------------------------------------------------------
 --   total_days : 근속연수 기준 (근기법 15~25일)
+--                입사연도분은 첫 1년 월차 소멸/수당 데모용으로 11일
 --   used_days  : CRC32 결정론적 0 ~ total 까지 분포
 --   pending/expired : 0
---   granted_at = balance_year-01-01, expires_at = balance_year-12-31
+--   granted_at = balance_year의 입사기념일
+--   expires_at = 다음 입사기념일 전날
 --   version = 0
 -- =====================================================================
 
@@ -84,11 +87,14 @@ SELECT
   @cid, @annual_type_id, e.emp_id, y.yr,
   -- total_days (근로기준법 누진)
   CASE
+    WHEN y.yr = YEAR(e.emp_hire_date) THEN 11.00
     WHEN (y.yr - YEAR(e.emp_hire_date)) < 1 THEN 0.00
     ELSE LEAST(25.00, 15 + GREATEST(0, FLOOR((y.yr - YEAR(e.emp_hire_date) - 1) / 2)))
   END AS total_days,
   -- used_days: total 의 30~80% 결정론적
   CASE
+    WHEN y.yr = YEAR(e.emp_hire_date) THEN
+      ROUND(11 * ((CRC32(CONCAT(e.emp_id, y.yr)) % 50 + 30) / 100.0), 1)
     WHEN (y.yr - YEAR(e.emp_hire_date)) < 1 THEN 0.00
     ELSE ROUND(
            LEAST(25, 15 + GREATEST(0, FLOOR((y.yr - YEAR(e.emp_hire_date) - 1) / 2)))
@@ -96,8 +102,8 @@ SELECT
            1)
   END AS used_days,
   0.00, 0.00,
-  DATE(CONCAT(y.yr, '-01-01')),
-  DATE(CONCAT(y.yr, '-12-31')),
+  DATE(CONCAT(y.yr, '-', DATE_FORMAT(e.emp_hire_date, '%m-%d'))),
+  DATE_SUB(DATE_ADD(DATE(CONCAT(y.yr, '-', DATE_FORMAT(e.emp_hire_date, '%m-%d'))), INTERVAL 1 YEAR), INTERVAL 1 DAY),
   0,
   NOW(), NOW()
 FROM employee e
@@ -111,16 +117,17 @@ WHERE e.company_id = @cid
 
 
 -- =====================================================================
--- 2) leave_allowance — 회계년도 미사용 연차수당 (재직자)
+-- 2) leave_allowance — 입사기념일 기준 미사용 연차수당 (재직자)
 -- ---------------------------------------------------------------------
---   FISCAL_YEAR 타입.
---   2024년분: status=APPLIED, applied_payroll_run_id=2025-01 payroll_run, applied_month='2025-01'
---   2025년분: status=CALCULATED (산정완료, 미반영) — applied_*는 NULL
+--   ANNIVERSARY 타입.
+--   2024 balance 만료분: allowance.year=2025, status=APPLIED
+--   2026년분은 seed 하지 않고 화면 조회 시 LeaveAllowanceService 가
+--   입사월별 PENDING 을 생성한다. 예: 2026-04 조회 → 갈태양/강민서 모두 대상
 --
 --   amount = unused × daily_wage = (total - used) × ROUND(monthly_salary / 209 × 8)
 -- =====================================================================
 
--- 2024년분 (APPLIED) — 재직자만
+-- 2024 balance 만료분 (APPLIED) — 재직자만
 INSERT INTO leave_allowance (
   company_id, emp_id, year, allowance_type,
   normal_monthly_salary, daily_wage,
@@ -129,7 +136,7 @@ INSERT INTO leave_allowance (
   created_at, updated_at
 )
 SELECT
-  @cid, e.emp_id, 2024, 'FISCAL_YEAR',
+  @cid, e.emp_id, 2025, 'ANNIVERSARY',
   FLOOR(sc.total_amount / 12) AS normal_monthly_salary,
   ROUND(FLOOR(sc.total_amount / 12) / 209 * 8) AS daily_wage,
   vb.total_days,
@@ -138,8 +145,8 @@ SELECT
   ROUND((vb.total_days - vb.used_days) * ROUND(FLOOR(sc.total_amount / 12) / 209 * 8)) AS allowance_amount,
   'APPLIED',
   (SELECT payroll_run_id FROM payroll_runs
-    WHERE company_id=@cid AND pay_year_month='2025-01' LIMIT 1),
-  '2025-01',
+    WHERE company_id=@cid AND pay_year_month=DATE_FORMAT(DATE_ADD(vb.expires_at, INTERVAL 1 DAY), '%Y-%m') LIMIT 1),
+  DATE_FORMAT(DATE_ADD(vb.expires_at, INTERVAL 1 DAY), '%Y-%m'),
   NULL,
   NOW(), NOW()
 FROM employee e
@@ -149,33 +156,6 @@ JOIN salary_contract sc ON sc.emp_id = e.emp_id AND sc.company_id = @cid
 WHERE e.company_id = @cid
   AND e.emp_status <> 'RESIGNED'                  -- 퇴직자는 RESIGNED 타입으로 별도
   AND vb.total_days > vb.used_days;               -- 미사용 있을 때만
-
--- 2025년분 (CALCULATED) — 재직자만
-INSERT INTO leave_allowance (
-  company_id, emp_id, year, allowance_type,
-  normal_monthly_salary, daily_wage,
-  total_leave_days, used_leave_days, unused_leave_days, allowance_amount,
-  status, applied_payroll_run_id, applied_month, resign_date,
-  created_at, updated_at
-)
-SELECT
-  @cid, e.emp_id, 2025, 'FISCAL_YEAR',
-  FLOOR(sc.total_amount / 12),
-  ROUND(FLOOR(sc.total_amount / 12) / 209 * 8),
-  vb.total_days,
-  vb.used_days,
-  (vb.total_days - vb.used_days),
-  ROUND((vb.total_days - vb.used_days) * ROUND(FLOOR(sc.total_amount / 12) / 209 * 8)),
-  'CALCULATED',
-  NULL, NULL, NULL,
-  NOW(), NOW()
-FROM employee e
-JOIN vacation_balance vb
-  ON vb.emp_id = e.emp_id AND vb.balance_year = 2025 AND vb.type_id = @annual_type_id
-JOIN salary_contract sc ON sc.emp_id = e.emp_id AND sc.company_id = @cid
-WHERE e.company_id = @cid
-  AND e.emp_status <> 'RESIGNED'
-  AND vb.total_days > vb.used_days;
 
 -- 퇴직자분 (RESIGNED 타입) — 퇴직년도 기준 미사용 연차 정산
 INSERT INTO leave_allowance (
