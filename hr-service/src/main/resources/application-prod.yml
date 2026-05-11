@@ -117,7 +117,7 @@ jwt:
 coolsms:
   api-key: ${COOLSMS_API_KEY}
   api-secret: ${COOLSMS_API_SECRET}
-  from-number: "01041707056"
+  from-number: "01000000000"
 
 logging:
   level:
