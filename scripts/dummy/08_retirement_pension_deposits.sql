@@ -3,7 +3,7 @@ USE peoplecore;
 -- DC형 퇴직연금 월별 적립 시드 (2025-01 ~ 2026-03)
 -- ---------------------------------------------------------------------
 -- 선행 조건:
---   1) seed_payroll_via_api.sh : payroll_runs/payroll_details 16개월 생성
+--   1) seed_payroll_via_api.sh : payroll_runs/payroll_details 15개월 생성
 --   2) 06b_set_paid.sql        : 2025-01 ~ 2026-03 PAID 처리
 --
 -- 계산식 (PensionDepositService.createMonthlyDeposits 동일):
@@ -19,7 +19,7 @@ USE peoplecore;
 --   is_manual     = 0
 --
 -- ※ 재실행 멱등: 기존 시드 행을 먼저 DELETE.
--- ※ 2026-04 는 PAID 가 아니라서 자연스럽게 적립 대상에서 제외됨.
+-- ※ 2026-04 는 발표 시연용으로 급여대장을 미리 생성하지 않아 적립 대상에서 제외됨.
 --
 -- [실행 방법]
 --   $ mysql -u <user> -p peoplecore < 08_retirement_pension_deposits.sql

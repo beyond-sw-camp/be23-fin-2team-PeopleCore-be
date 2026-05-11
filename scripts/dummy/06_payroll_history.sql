@@ -1,6 +1,6 @@
 use peoplecore;
 -- =====================================================================
--- HR Service 더미 급여이력 (PayrollRuns × 16 + EmpStatus + Details + PayStubs)
+-- HR Service 더미 급여이력 (PayrollRuns × 15 + EmpStatus + Details + PayStubs)
 -- ---------------------------------------------------------------------
 -- 선행 조건:
 --   1) 02_hr_employees.sql      (사원 + resign)
@@ -8,7 +8,8 @@ use peoplecore;
 --   3) 05_overtime_requests.sql  (변동수당 산정의 기초)
 --
 -- [기간]
---   2025-01 ~ 2026-04  (16개월)
+--   2025-01 ~ 2026-03  (15개월)
+--   ※ 2026-04 는 발표 시연에서 추가근무 신청/승인 후 급여대장을 직접 생성
 --
 -- [상태]
 --   모두 PAID 로 박음 (지급완료 이력).
@@ -21,6 +22,8 @@ use peoplecore;
 --
 -- [지급 항목 — 사원당 매월]
 --   고정: 기본급, 직책수당, 식대, 교통비   (salary_contract_detail 그대로 복사)
+--         단, 퇴직월이면 PayrollService 와 동일하게 정액 항목 일할계산
+--         = 월 금액 × (퇴직일까지 재직일수 / 해당월 일수)
 --   변동: 연장근로수당, 야간근로수당, 휴일근로수당  (overtime_request 분 합산 × 시급 가산)
 --
 -- [공제 항목 — 단순 정률]
@@ -38,7 +41,7 @@ use peoplecore;
 SET @company_name := 'peoplecore';
 SET @cid := (SELECT company_id FROM company WHERE company_name = @company_name);
 SET @start_ym := '2025-01';   -- 시작 yyyy-MM
-SET @end_ym   := '2026-04';   -- 종료 yyyy-MM (포함)
+SET @end_ym   := '2026-03';   -- 종료 yyyy-MM (포함)
 
 -- 확정/지급 처리자: 인사팀장 (EMP-2025-005, 최도윤)
 SET @actor_emp_id := (SELECT emp_id FROM employee WHERE company_id=@cid AND emp_num='EMP-2025-005');
@@ -92,7 +95,7 @@ DELETE FROM payroll_runs
 
 
 -- =====================================================================
--- 1) payroll_runs × 16건 (2025-01 ~ 2026-04)
+-- 1) payroll_runs × 15건 (2025-01 ~ 2026-03)
 -- ---------------------------------------------------------------------
 --   pay_date = 해당월 25일 (회사 일반 지급일 가정)
 --   합계 컬럼은 0 으로 박았다가 마지막 단계에서 UPDATE
@@ -153,6 +156,7 @@ WHERE pr.company_id = @cid
 -- ---------------------------------------------------------------------
 --   pay_item_name 은 NOT NULL 스냅샷 컬럼이라 pay_items 에서 가져옴
 --   is_overtime_pay = FALSE
+--   퇴직월: 정액 항목 일할계산 (예: 2025-03-15 퇴직 → 15/31)
 -- =====================================================================
 
 INSERT INTO payroll_details (
@@ -161,9 +165,19 @@ INSERT INTO payroll_details (
 )
 SELECT
   pes.payroll_run_id, pes.emp_id, @cid, scd.pay_item_id,
-  scd.amount, pi.pay_item_name, 'PAYMENT', FALSE
+  ROUND(
+    scd.amount *
+    CASE
+      WHEN e.emp_resign IS NOT NULL
+       AND DATE_FORMAT(e.emp_resign, '%Y-%m') = pr.pay_year_month
+      THEN DAY(e.emp_resign) / DAY(LAST_DAY(STR_TO_DATE(CONCAT(pr.pay_year_month, '-01'), '%Y-%m-%d')))
+      ELSE 1
+    END
+  ),
+  pi.pay_item_name, 'PAYMENT', FALSE
 FROM payroll_emp_status pes
 JOIN payroll_runs pr ON pr.payroll_run_id = pes.payroll_run_id
+JOIN employee e ON e.emp_id = pes.emp_id AND e.company_id = @cid
 JOIN salary_contract sc ON sc.emp_id = pes.emp_id AND sc.company_id = @cid
 JOIN salary_contract_detail scd ON scd.contract_id = sc.contract_id
 JOIN pay_items pi ON pi.pay_item_id = scd.pay_item_id
@@ -276,6 +290,7 @@ HAVING SUM(CASE WHEN HOUR(ot.ot_plan_start) = 9 THEN 1 ELSE 0 END) > 0;
 -- 5) payroll_details — 공제 6항목 (정률 단순화)
 -- ---------------------------------------------------------------------
 --   기준: 기본급 + 직책수당 (식대/교통비 비과세, 변동수당은 단순화 위해 제외)
+--   퇴직월: 일할계산된 기본급+직책수당을 기준으로 공제 산정
 -- =====================================================================
 
 -- 사원별 (기본급+직책수당) 합 임시 view (각 INSERT 마다 동일하므로 Subquery 로 처리)
@@ -287,10 +302,20 @@ INSERT INTO payroll_details (
 )
 SELECT
   pes.payroll_run_id, pes.emp_id, @cid, @pi_pension,
-  ROUND((scd_b.amount + scd_p.amount) * 0.045),
+  ROUND(
+    (scd_b.amount + scd_p.amount) *
+    CASE
+      WHEN e.emp_resign IS NOT NULL
+       AND DATE_FORMAT(e.emp_resign, '%Y-%m') = pr.pay_year_month
+      THEN DAY(e.emp_resign) / DAY(LAST_DAY(STR_TO_DATE(CONCAT(pr.pay_year_month, '-01'), '%Y-%m-%d')))
+      ELSE 1
+    END *
+    0.045
+  ),
   '국민연금', 'DEDUCTION', FALSE
 FROM payroll_emp_status pes
 JOIN payroll_runs pr ON pr.payroll_run_id = pes.payroll_run_id
+JOIN employee e ON e.emp_id = pes.emp_id AND e.company_id = @cid
 JOIN salary_contract sc ON sc.emp_id = pes.emp_id AND sc.company_id = @cid
 JOIN salary_contract_detail scd_b ON scd_b.contract_id = sc.contract_id AND scd_b.pay_item_id = @pi_basic
 JOIN salary_contract_detail scd_p ON scd_p.contract_id = sc.contract_id AND scd_p.pay_item_id = @pi_pos
@@ -303,10 +328,20 @@ INSERT INTO payroll_details (
 )
 SELECT
   pes.payroll_run_id, pes.emp_id, @cid, @pi_health,
-  ROUND((scd_b.amount + scd_p.amount) * 0.03545),
+  ROUND(
+    (scd_b.amount + scd_p.amount) *
+    CASE
+      WHEN e.emp_resign IS NOT NULL
+       AND DATE_FORMAT(e.emp_resign, '%Y-%m') = pr.pay_year_month
+      THEN DAY(e.emp_resign) / DAY(LAST_DAY(STR_TO_DATE(CONCAT(pr.pay_year_month, '-01'), '%Y-%m-%d')))
+      ELSE 1
+    END *
+    0.03545
+  ),
   '건강보험', 'DEDUCTION', FALSE
 FROM payroll_emp_status pes
 JOIN payroll_runs pr ON pr.payroll_run_id = pes.payroll_run_id
+JOIN employee e ON e.emp_id = pes.emp_id AND e.company_id = @cid
 JOIN salary_contract sc ON sc.emp_id = pes.emp_id AND sc.company_id = @cid
 JOIN salary_contract_detail scd_b ON scd_b.contract_id = sc.contract_id AND scd_b.pay_item_id = @pi_basic
 JOIN salary_contract_detail scd_p ON scd_p.contract_id = sc.contract_id AND scd_p.pay_item_id = @pi_pos
@@ -319,10 +354,20 @@ INSERT INTO payroll_details (
 )
 SELECT
   pes.payroll_run_id, pes.emp_id, @cid, @pi_longterm,
-  ROUND((scd_b.amount + scd_p.amount) * 0.03545 * 0.1295),
+  ROUND(
+    (scd_b.amount + scd_p.amount) *
+    CASE
+      WHEN e.emp_resign IS NOT NULL
+       AND DATE_FORMAT(e.emp_resign, '%Y-%m') = pr.pay_year_month
+      THEN DAY(e.emp_resign) / DAY(LAST_DAY(STR_TO_DATE(CONCAT(pr.pay_year_month, '-01'), '%Y-%m-%d')))
+      ELSE 1
+    END *
+    0.03545 * 0.1295
+  ),
   '장기요양보험', 'DEDUCTION', FALSE
 FROM payroll_emp_status pes
 JOIN payroll_runs pr ON pr.payroll_run_id = pes.payroll_run_id
+JOIN employee e ON e.emp_id = pes.emp_id AND e.company_id = @cid
 JOIN salary_contract sc ON sc.emp_id = pes.emp_id AND sc.company_id = @cid
 JOIN salary_contract_detail scd_b ON scd_b.contract_id = sc.contract_id AND scd_b.pay_item_id = @pi_basic
 JOIN salary_contract_detail scd_p ON scd_p.contract_id = sc.contract_id AND scd_p.pay_item_id = @pi_pos
@@ -335,10 +380,20 @@ INSERT INTO payroll_details (
 )
 SELECT
   pes.payroll_run_id, pes.emp_id, @cid, @pi_employ,
-  ROUND((scd_b.amount + scd_p.amount) * 0.009),
+  ROUND(
+    (scd_b.amount + scd_p.amount) *
+    CASE
+      WHEN e.emp_resign IS NOT NULL
+       AND DATE_FORMAT(e.emp_resign, '%Y-%m') = pr.pay_year_month
+      THEN DAY(e.emp_resign) / DAY(LAST_DAY(STR_TO_DATE(CONCAT(pr.pay_year_month, '-01'), '%Y-%m-%d')))
+      ELSE 1
+    END *
+    0.009
+  ),
   '고용보험', 'DEDUCTION', FALSE
 FROM payroll_emp_status pes
 JOIN payroll_runs pr ON pr.payroll_run_id = pes.payroll_run_id
+JOIN employee e ON e.emp_id = pes.emp_id AND e.company_id = @cid
 JOIN salary_contract sc ON sc.emp_id = pes.emp_id AND sc.company_id = @cid
 JOIN salary_contract_detail scd_b ON scd_b.contract_id = sc.contract_id AND scd_b.pay_item_id = @pi_basic
 JOIN salary_contract_detail scd_p ON scd_p.contract_id = sc.contract_id AND scd_p.pay_item_id = @pi_pos
@@ -351,10 +406,20 @@ INSERT INTO payroll_details (
 )
 SELECT
   pes.payroll_run_id, pes.emp_id, @cid, @pi_inc_tax,
-  ROUND((scd_b.amount + scd_p.amount) * 0.05),
+  ROUND(
+    (scd_b.amount + scd_p.amount) *
+    CASE
+      WHEN e.emp_resign IS NOT NULL
+       AND DATE_FORMAT(e.emp_resign, '%Y-%m') = pr.pay_year_month
+      THEN DAY(e.emp_resign) / DAY(LAST_DAY(STR_TO_DATE(CONCAT(pr.pay_year_month, '-01'), '%Y-%m-%d')))
+      ELSE 1
+    END *
+    0.05
+  ),
   '근로소득세', 'DEDUCTION', FALSE
 FROM payroll_emp_status pes
 JOIN payroll_runs pr ON pr.payroll_run_id = pes.payroll_run_id
+JOIN employee e ON e.emp_id = pes.emp_id AND e.company_id = @cid
 JOIN salary_contract sc ON sc.emp_id = pes.emp_id AND sc.company_id = @cid
 JOIN salary_contract_detail scd_b ON scd_b.contract_id = sc.contract_id AND scd_b.pay_item_id = @pi_basic
 JOIN salary_contract_detail scd_p ON scd_p.contract_id = sc.contract_id AND scd_p.pay_item_id = @pi_pos
@@ -367,10 +432,20 @@ INSERT INTO payroll_details (
 )
 SELECT
   pes.payroll_run_id, pes.emp_id, @cid, @pi_loc_tax,
-  ROUND((scd_b.amount + scd_p.amount) * 0.05 * 0.10),
+  ROUND(
+    (scd_b.amount + scd_p.amount) *
+    CASE
+      WHEN e.emp_resign IS NOT NULL
+       AND DATE_FORMAT(e.emp_resign, '%Y-%m') = pr.pay_year_month
+      THEN DAY(e.emp_resign) / DAY(LAST_DAY(STR_TO_DATE(CONCAT(pr.pay_year_month, '-01'), '%Y-%m-%d')))
+      ELSE 1
+    END *
+    0.05 * 0.10
+  ),
   '근로지방소득세', 'DEDUCTION', FALSE
 FROM payroll_emp_status pes
 JOIN payroll_runs pr ON pr.payroll_run_id = pes.payroll_run_id
+JOIN employee e ON e.emp_id = pes.emp_id AND e.company_id = @cid
 JOIN salary_contract sc ON sc.emp_id = pes.emp_id AND sc.company_id = @cid
 JOIN salary_contract_detail scd_b ON scd_b.contract_id = sc.contract_id AND scd_b.pay_item_id = @pi_basic
 JOIN salary_contract_detail scd_p ON scd_p.contract_id = sc.contract_id AND scd_p.pay_item_id = @pi_pos

@@ -256,8 +256,17 @@ public class LeaveAllowanceService {
 //            반영 대상 월 결정
             String targetMonth = resolveTargetMonth(la);
 
-//            해당 월 급여대장 조회(없으면 에러)
-            PayrollRuns run = payrollRunsRepository.findByCompany_CompanyIdAndPayYearMonth(companyId, targetMonth).orElseThrow(() -> new CustomException(ErrorCode.PAYROLL_NOT_FOUND));
+//            해당 월 급여대장 조회
+//            선택 반영 시 다른 반영월의 산정건이 섞일 수 있으므로, 급여대장이 없으면 전체 실패가 아니라 해당 건만 skip.
+            PayrollRuns run = payrollRunsRepository.findByCompany_CompanyIdAndPayYearMonth(companyId, targetMonth)
+                    .orElse(null);
+            if (run == null) {
+                skippedCount++;
+                skippedAllowanceIds.add(la.getAllowanceId());
+                log.warn("[연차수당 반영 skip] allowanceId={}, empId={}, targetMonth={}, 급여대장 없음",
+                        la.getAllowanceId(), la.getEmployee().getEmpId(), targetMonth);
+                continue;
+            }
 
 // run-level 은 PAID 만 차단
             if (run.getPayrollStatus() == PayrollStatus.PAID) {
@@ -274,7 +283,15 @@ public class LeaveAllowanceService {
                             run.getPayrollRunId(), la.getEmployee().getEmpId())
                     .orElse(null);
 
-            if (pes != null && pes.getStatus() != PayrollEmpStatusType.CALCULATING) {
+            if (pes == null) {
+                skippedCount++;
+                skippedAllowanceIds.add(la.getAllowanceId());
+                log.warn("[연차수당 반영 skip] allowanceId={}, empId={} 사원 급여행 없음, runId={}",
+                        la.getAllowanceId(), la.getEmployee().getEmpId(), run.getPayrollRunId());
+                continue;
+            }
+
+            if (pes.getStatus() != PayrollEmpStatusType.CALCULATING) {
                 skippedCount++;
                 skippedAllowanceIds.add(la.getAllowanceId());
                 la.markSkipped();   // 카운트 잔존 방지 — CALCULATED → SKIPPED
@@ -323,9 +340,14 @@ public class LeaveAllowanceService {
     }
 
 ///    입사일 기준 연차수당 목록
+    @Transactional
     public LeaveAllowanceSummaryResDto getAnniversaryList(UUID companyId, String yearMonth){
         int targetYear = Integer.parseInt(yearMonth.substring(0,4));
         int targetMonth = Integer.parseInt(yearMonth.substring(5,7));
+
+//        조회 시마다 누락된 입사기념월 대상자를 보강한다.
+//        기존 로직은 해당 월에 1명이라도 있으면 신규/누락 사원이 생성되지 않았다.
+        createAnniversaryPendingRecords(companyId,targetYear, targetMonth);
 
         List<LeaveAllowance> list = leaveAllowanceRepository.findAllByCompanyAndYearAndType(companyId, targetYear, AllowanceType.ANNIVERSARY);
 
@@ -336,16 +358,6 @@ public class LeaveAllowanceService {
                 && la.getEmployee().getEmpHireDate().getMonthValue() == targetMonth)
                 .toList();
 
-//        최초 조회시 PENDING 레코드 자동 생성
-        if(filtered.isEmpty()) {
-            createAnniversaryPendingRecords(companyId,targetYear, targetMonth);
-            list = leaveAllowanceRepository.findAllByCompanyAndYearAndType(companyId, targetYear,AllowanceType.ANNIVERSARY);
-            filtered = list.stream()
-                    .filter(la-> la.getEmployee().getEmpHireDate() != null
-                            && !isCurrentYearMonthHire(la.getEmployee(), targetYear, targetMonth)
-                            && la.getEmployee().getEmpHireDate().getMonthValue() == targetMonth)
-                    .toList();
-        }
         List<LeaveAllowanceResDto> employees = filtered.stream()
                 .map(LeaveAllowanceResDto::fromEntity)
                 .toList();
