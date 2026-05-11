@@ -82,10 +82,73 @@ public class ApprovalClient {
         }
     }
 
+    /**
+     * formCode → 결재 양식 메타데이터(formId/formName/folderName/retentionYear) 해소.
+     * <p>
+     * Copilot 의 prefill_approval_form 흐름이 FE 에 OPEN_APPROVAL_FORM 액션을 보낼 때
+     * formId 까지 미리 채워주기 위함. FE 가 추가로 /approval/form 전체 목록을 받아
+     * formCode 로 매칭하는 단계를 건너뛰게 해 모달 진입을 즉시 보장한다.
+     * <p>
+     * 1차로 내부 API GET /approval/forms/by-code 로 formId 만 빠르게 얻고,
+     * 2차로 GET /approval/forms/{formId} 로 formName/folderName/retentionYear 까지 채운다.
+     * 둘 중 어디서든 실패하면 null 반환 — 호출자는 formCode-only 폴백으로 동작.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> resolveFormByCode(UUID companyId, Long empId, String formCode) {
+        if (formCode == null || formCode.isBlank()) return null;
+        try {
+            HttpHeaders headers = headers(companyId, empId);
+
+            // 1) formCode → formId (collaboration-service 내부 API)
+            String byCodeUrl = BASE + "/approval/forms/by-code?formCode=" + formCode;
+            ResponseEntity<Long> idResp = restTemplate.exchange(
+                    byCodeUrl, HttpMethod.GET, new HttpEntity<>(headers), Long.class);
+            Long formId = idResp.getBody();
+            if (formId == null) {
+                log.info("resolveFormByCode: formCode={} not found", formCode);
+                return null;
+            }
+
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("formId", formId);
+            out.put("formCode", formCode);
+
+            // 2) 양식 상세 — formName/folder/retention 채움. 실패해도 formId 만이라도 반환.
+            try {
+                String detailUrl = BASE + "/approval/forms/" + formId;
+                ResponseEntity<Map> detailResp = restTemplate.exchange(
+                        detailUrl, HttpMethod.GET, new HttpEntity<>(headers), Map.class);
+                Map<String, Object> detail = detailResp.getBody();
+                if (detail != null) {
+                    if (detail.get("formName") != null) out.put("formName", detail.get("formName"));
+                    if (detail.get("folderName") != null) out.put("folderName", detail.get("folderName"));
+                    if (detail.get("formRetentionYear") != null) {
+                        out.put("formRetentionYear", detail.get("formRetentionYear"));
+                    }
+                }
+            } catch (Exception detailErr) {
+                log.warn("resolveFormByCode: detail fetch failed formId={}, err={}", formId, detailErr.getMessage());
+            }
+            return out;
+        } catch (RestClientResponseException e) {
+            // 404 (양식 미등록) 는 정상 시나리오 — info 로 로깅하고 null 반환
+            if (e.getStatusCode().value() == 404) {
+                log.info("resolveFormByCode: formCode={} returns 404", formCode);
+            } else {
+                log.warn("resolveFormByCode http error: formCode={}, status={}, body={}",
+                        formCode, e.getStatusCode(), e.getResponseBodyAsString());
+            }
+            return null;
+        } catch (Exception e) {
+            log.warn("resolveFormByCode failed: formCode={}, err={}", formCode, e.getMessage());
+            return null;
+        }
+    }
+
     private HttpHeaders headers(UUID companyId, Long empId) {
         HttpHeaders h = new HttpHeaders();
         h.set("X-User-Company", companyId.toString());
-        h.set("X-User-Id", String.valueOf(empId));
+        if (empId != null) h.set("X-User-Id", String.valueOf(empId));
         h.set("Content-Type", "application/json");
         return h;
     }

@@ -398,6 +398,62 @@ public class HrSelfServiceClient {
         }
     }
 
+    /**
+     * 본인 보유 휴가 유형 목록 — Copilot prefill_approval_form 의 vacationTypeName → infoId 해소용.
+     * GET /vacation/requests/my-vacation-types. Balance 보유 + 활성 유형만 반환됨.
+     * <p>
+     * 실패 시 빈 리스트 반환 — 호출자는 infoId 미해소 상태로 폴백(FE 가 다시 lookup 시도).
+     * VACATION_REQUEST 양식이 BE 검증 단계에서 infoId null 로 차단되는 경우를 줄이기 위한 사전 해소 경로.
+     */
+    @SuppressWarnings("unchecked")
+    public List<Map<String, Object>> getMyVacationTypes(UUID companyId, Long empId, String role) {
+        try {
+            HttpHeaders headers = headers(companyId, empId, role);
+            ResponseEntity<List> resp = restTemplate.exchange(
+                    BASE + "/vacation/requests/my-vacation-types",
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    List.class
+            );
+            return resp.getBody() == null ? List.of() : (List<Map<String, Object>>) resp.getBody();
+        } catch (RestClientResponseException e) {
+            log.warn("getMyVacationTypes http error: empId={}, status={}, body={}",
+                    empId, e.getStatusCode(), e.getResponseBodyAsString());
+            return List.of();
+        } catch (Exception e) {
+            log.warn("getMyVacationTypes failed: empId={}, err={}", empId, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * 본인 근무그룹(시간표/근무요일) — Copilot prefill_approval_form 의 dayOption 기반
+     * 시간 슬롯 계산용. GET /workgroup/me.
+     * <p>
+     * 실패 시 null — 호출자는 표준 09:00~18:00 / 12:00~13:00 점심 폴백 사용. 한국 기본 9-to-6 가정.
+     * VacationPrefillCalculator 가 이 응답을 그대로 받아 옵션별 [startAt, endAt] 윈도우를 계산.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getMyWorkGroup(UUID companyId, Long empId, String role) {
+        try {
+            HttpHeaders headers = headers(companyId, empId, role);
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    BASE + "/workgroup/me",
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    Map.class
+            );
+            return resp.getBody();
+        } catch (RestClientResponseException e) {
+            log.warn("getMyWorkGroup http error: empId={}, status={}, body={}",
+                    empId, e.getStatusCode(), e.getResponseBodyAsString());
+            return null;
+        } catch (Exception e) {
+            log.warn("getMyWorkGroup failed: empId={}, err={}", empId, e.getMessage());
+            return null;
+        }
+    }
+
     /** ISO LocalDate 문자열 비교. null 은 가장 작은 값 취급 — 정렬에서 뒤로 밀림. */
     private int compareDateString(String a, String b) {
         if (a == null && b == null) return 0;
