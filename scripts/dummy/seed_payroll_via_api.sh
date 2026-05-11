@@ -1,9 +1,9 @@
 #!/bin/bash
 # =====================================================================
-# C 방안 — hr-service API 호출로 16개월 급여 정확히 산정
+# C 방안 — hr-service API 호출로 15개월 급여 정확히 산정
 # ---------------------------------------------------------------------
 # 흐름:
-#   1) /pay/admin/payroll/create  × 16개월
+#   1) /pay/admin/payroll/create  × 15개월
 #      → PayrollService.createPayroll() 가 사원별 detail (변동수당+공제)
 #        모두 백엔드 정확한 식으로 INSERT. status = CALCULATING.
 #   2) /pay/admin/payroll/{runId}/employees/{empId}/apply-overtime
@@ -23,7 +23,8 @@
 #   COMPANY_NAME  (기본 peoplecore)
 #   ADMIN_EMP_NUM (기본 EMP-2025-001 — HR_SUPER_ADMIN)
 #   START_YM      (기본 2025-01)
-#   END_YM        (기본 2026-04)
+#   END_YM        (기본 2026-03)
+#                 ※ 2026-04 는 발표 시연에서 추가근무 신청/승인 후 직접 생성
 #
 # 사용 예:
 #   DB_PASS=mypass bash scripts/dummy/seed_payroll_via_api.sh
@@ -40,7 +41,7 @@ HR_HOST=${HR_HOST:-http://localhost:8080}
 COMPANY_NAME=${COMPANY_NAME:-peoplecore}
 ADMIN_EMP_NUM=${ADMIN_EMP_NUM:-EMP-2025-001}
 START_YM=${START_YM:-2025-01}
-END_YM=${END_YM:-2026-04}
+END_YM=${END_YM:-2026-03}
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 MYSQL_SSL_OPT=${MYSQL_SSL_OPT:---skip-ssl}

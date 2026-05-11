@@ -7,6 +7,7 @@ import com.peoplecore.dto.SearchResponse;
 import com.peoplecore.dto.SearchResultItem;
 import com.peoplecore.llm.client.CalendarClient;
 import com.peoplecore.llm.client.HrSelfServiceClient;
+import com.peoplecore.llm.client.VacationPrefillCalculator;
 import com.peoplecore.service.SearchService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -53,6 +54,11 @@ public class CopilotService {
                - 초과근무/잔업/야근 → OVERTIME_REQUEST
                결재선에 보낼 사람 이름이 발화에 있으면 approverNames 배열에 그대로 넣습니다.
                이름 미명시 시 절대 임의로 채우지 마세요 — 사용자가 모달에서 직접 선택합니다.
+               휴가 요청에서 단위 표현(오전 반차/오후 반차/반반차) 이 있으면 vacationType 에 섞지 말고
+               dayOption 필드(종일/오전반차/오후반차/반반차1~4) 에 분리해 넣습니다. vacationType 에는
+               기본 휴가 유형(연차/월차/공가 등) 만 넣어야 FE 가 typeName 매칭에 성공합니다.
+               예: "5/18 오전 반차로 연차" → vacationType='연차', dayOption='오전반차'.
+               제목을 발화에 명시하면 docTitle 에 그대로 넣어 모달 상단 제목 입력란이 채워지게 합니다.
                이 도구는 모달을 열기만 합니다 — 실제 상신은 사용자가 모달에서 직접 누릅니다.
             4) "내일", "다음 주 월요일", "오후 3시" 같은 상대 표현은 오늘 날짜 기준으로
                ISO 8601 LocalDateTime(YYYY-MM-DDTHH:mm:ss) 으로 변환해 startAt/endAt 에 넣습니다.
@@ -61,7 +67,8 @@ public class CopilotService {
                keyword 를 한 번만 바꾸어 재시도하고, 그래도 없으면 솔직히 "검색 결과가 없다" 고 답합니다.
             6) 답변은 한국어, 3~6문장 이내로 간결하게 작성합니다. 일정/결재 등록 성공 시
                핵심 정보(제목·시간·결재선)를 명시해 사용자에게 확인시킵니다.
-               결재 양식이 열렸을 때는 "잔여 일정/날짜는 모달에서 선택해주세요" 라고 안내합니다.
+               결재 양식이 열렸을 때는 "양식이 자동 입력되어 모달이 열렸습니다. 결재선과 첨부파일을 확인하시고
+               결재요청 버튼을 눌러주세요" 라고 안내합니다. (휴가 양식은 유형/일자/일수까지 BE 가 채워줍니다.)
             7) 사용자 권한·회사 컨텍스트는 서버가 자동 적용합니다. 도구 input 에 회사/사번/캘린더 ID 를
                명시하지 마세요.
             8) 사용자가 "오늘 할 일", "오늘 다이제스트", "출근하면 뭐부터", "내 오늘 일정과 결재",
@@ -812,12 +819,75 @@ public class CopilotService {
         payload.put("formCode", formCode);
         payload.put("formName", formNameOf(formCode));
 
+        // collaboration-service 에서 formId/folder/retention 을 미리 해소해 액션 페이로드에 동봉.
+        // 안 그러면 FE 의 ApprovalModalHost 가 /approval/form 전체 목록을 다시 조회해
+        // formCode 매칭을 시도하는데, 해당 양식이 비활성/숨김 폴더에 있거나 lookup 자체가
+        // 실패하면 모달이 "양식을 불러오는 중..." 상태로 멈춰 결재 화면으로 넘어가지 못함.
+        // 서버에서 미리 채워 보내면 FE 는 lookup 없이 즉시 모달 본문을 렌더한다.
+        UUID companyUuidForResolve = null;
+        try {
+            companyUuidForResolve = UUID.fromString(companyId);
+        } catch (Exception ignored) { /* invalid → null 유지, 폴백 */ }
+        if (companyUuidForResolve != null) {
+            Map<String, Object> resolved = approvalClient.resolveFormByCode(companyUuidForResolve, empId, formCode);
+            if (resolved != null && resolved.get("formId") != null) {
+                payload.put("formId", resolved.get("formId"));
+                if (resolved.get("formName") != null) payload.put("formName", resolved.get("formName"));
+                if (resolved.get("folderName") != null) payload.put("folderName", resolved.get("folderName"));
+                if (resolved.get("formRetentionYear") != null) {
+                    payload.put("formRetentionYear", resolved.get("formRetentionYear"));
+                }
+            } else {
+                // formId 해소 실패는 차단 사유가 아님 — formCode 만으로도 FE 가 폴백 lookup 가능.
+                // 다만 운영 가시성을 위해 한 줄 남긴다.
+                log.warn("[Copilot] prefill_approval_form: formId resolve failed (formCode={}). " +
+                        "FE 가 양식 목록 lookup 으로 폴백합니다.", formCode);
+            }
+        }
+
         // 양식 HTML 의 input name 과 1:1 매칭되어야 ApprovalDocumentPage 의 querySelector(`[name=...]`) 가
         // 값을 주입한다. formCode 마다 사유 필드명이 다르므로(휴가=vacReqReason, 초과근무=otReason) 분기.
         String reasonKey = "VACATION_REQUEST".equals(formCode) ? "vacReqReason" : "otReason";
         Map<String, Object> prefill = new LinkedHashMap<>();
         if (input.get("docTitle") instanceof String s && !s.isBlank()) prefill.put("docTitle", s);
         if (input.get("reason") instanceof String s && !s.isBlank()) prefill.put(reasonKey, s);
+        
+        // 추가 필드 (휴가 등)
+        if (input.get("startDate") instanceof String s && !s.isBlank()) prefill.put("vacReqStartat", s);
+        if (input.get("endDate") instanceof String s && !s.isBlank()) prefill.put("vacReqEndat", s);
+        
+        // 휴가 종류 기본값 처리 (연차) — LLM 이 "오전 반차" 같이 단위까지 섞어 보내면 dayOption 으로 옮기고
+        // 휴가 종류 자체는 표준 코드(연차/월차/공가 등) 로 정규화한다. FE 의 typeName 매칭이 실패하지 않도록.
+        String vTypeRaw = (input.get("vacationType") instanceof String s) ? s : "연차";
+        String vTypeNorm = vTypeRaw;
+        String inferredDayOption = null;
+        if (vTypeNorm.contains("오전") || vTypeNorm.contains("전반")) inferredDayOption = "오전반차";
+        else if (vTypeNorm.contains("오후") || vTypeNorm.contains("후반")) inferredDayOption = "오후반차";
+        // 단위 표현이 vacationType 에 섞여 있으면 제거하고 기본 휴가 유형으로 환원.
+        vTypeNorm = vTypeNorm.replaceAll("오전\\s*반차|오후\\s*반차|반반차|반차|전반|후반", "").trim();
+        if (vTypeNorm.isEmpty() || vTypeNorm.equals("휴가")) vTypeNorm = "연차";
+        prefill.put("vacationTypeName", vTypeNorm);
+
+        // 휴가 단위 (종일/오전반차/오후반차/반반차N) — FE 의 AI Prefill effect 가 워크그룹 시간표와 결합해
+        // vacReqItems 슬롯의 startAt/endAt/useDay 를 자동 계산. 미명시 시 FE 는 '종일' 로 폴백한다.
+        Object rawDayOption = input.get("dayOption");
+        if (rawDayOption instanceof String s && !s.isBlank()) prefill.put("dayOption", s);
+        else if (inferredDayOption != null) prefill.put("dayOption", inferredDayOption);
+
+        if (input.get("useDay") instanceof Number n) prefill.put("vacReqUseDay", n);
+
+        // 신청일 (오늘)
+        prefill.put("request_date", LocalDate.now().toString());
+
+        // VACATION_REQUEST 한정 — BE 가 infoId/vacReqItems 까지 해소해 prefill 에 동봉.
+        // 안 그러면 FE 의 AI Prefill effect 가 async 로 채우는데, 사용자가 그 사이에 결재요청을 누르면
+        // collaboration-service 의 VacationUseFormHandler.preCreate 가 infoId/items null 로 400 차단.
+        // 여기서 미리 채워 두면 FE 는 idempotent 가드(initialDocData.infoId/vacReqItems 존재 시 skip)로
+        // async 호출 자체를 건너뛴다.
+        if ("VACATION_REQUEST".equals(formCode) && companyUuidForResolve != null) {
+            resolveVacationPrefill(companyUuidForResolve, empId, role, input, vTypeNorm, prefill);
+        }
+
         payload.put("prefill", prefill);
 
         // 결재선 자동 해결 — 검색 인덱스에서 EMPLOYEE 한 명만 골라 OrgMember 형태로 변환
@@ -866,6 +936,91 @@ public class CopilotService {
         }
         sb.append("}");
         return Map.of("content", sb.toString());
+    }
+
+    /**
+     * VACATION_REQUEST prefill 의 회사·사용자 의존 필드(infoId/vacReqItems/vacReqDatesText/vacReqUseDay) 해소.
+     * <p>
+     * 분리된 이유 — executePrefillApprovalForm 본문이 폼별 prefill 조립으로 충분히 크고,
+     * 휴가 양식만의 외부 API 호출(hr-service my-vacation-types / workgroup/me) 책임을 한 곳에 모으기 위해.
+     * <p>
+     * 동작 원칙:
+     * <ul>
+     *   <li>infoId: 회사 보유 휴가 유형에서 typeName/typeCode 매칭. 못 찾으면 prefill 에 안 넣음 →
+     *       FE 의 AI Prefill effect 가 async lookup 으로 폴백(현행 동작 유지).</li>
+     *   <li>vacReqItems: startDate (+ endDate) 가 있고 날짜 포맷이 유효할 때만 슬롯 펼침. 빈 리스트면 미동봉.</li>
+     *   <li>vacReqDatesText/vacReqUseDay: 슬롯이 만들어졌을 때만 UI 표시용으로 같이 채움. lockForm 잠금 상태에서도
+     *       사용자가 일자/일수를 즉시 확인할 수 있게.</li>
+     *   <li>실패는 무해(silent) — 하나라도 빠지면 그 키만 빼고 나머지 prefill 은 정상 진행.</li>
+     * </ul>
+     */
+    @SuppressWarnings("unchecked")
+    private void resolveVacationPrefill(UUID companyUuid, Long empId, String role,
+                                        Map<String, Object> input, String vTypeNorm,
+                                        Map<String, Object> prefill) {
+        // 1) infoId 해소: 회사 보유 휴가 유형에서 typeName/typeCode 매칭.
+        //    매칭 규칙은 FE 의 vacationApi.getMyVacationTypes 결과 매칭과 동일하게 — 정확/포함 양방향.
+        try {
+            List<Map<String, Object>> types = hrSelfServiceClient.getMyVacationTypes(companyUuid, empId, role);
+            Long resolvedInfoId = null;
+            String resolvedTypeName = null;
+            for (Map<String, Object> t : types) {
+                Object tnObj = t.get("typeName");
+                Object tcObj = t.get("typeCode");
+                String tn = tnObj instanceof String ? (String) tnObj : null;
+                String tc = tcObj instanceof String ? (String) tcObj : null;
+                boolean match = (tn != null && tn.equals(vTypeNorm))
+                        || (tc != null && tc.equals(vTypeNorm))
+                        || (tn != null && !tn.isBlank() && vTypeNorm.contains(tn));
+                if (!match) continue;
+                if (t.get("typeId") instanceof Number n) {
+                    resolvedInfoId = n.longValue();
+                    resolvedTypeName = (tn != null && !tn.isBlank()) ? tn : vTypeNorm;
+                    break;
+                }
+            }
+            if (resolvedInfoId != null) {
+                prefill.put("infoId", resolvedInfoId);
+                // 회사 보유 유형의 실제 표기로 정규화 (예: "연차"→"정기연차" 처럼 회사가 커스터마이즈했을 수 있음).
+                prefill.put("vacationTypeName", resolvedTypeName);
+            } else {
+                log.info("[Copilot] prefill_approval_form: vacationType={} 매칭 실패 — " +
+                        "FE 가 async 폴백으로 재시도합니다.", vTypeNorm);
+            }
+        } catch (Exception e) {
+            log.warn("[Copilot] resolveVacationPrefill infoId 단계 실패 - empId={}, err={}", empId, e.getMessage());
+        }
+
+        // 2) vacReqItems 슬롯 펼침: 시작일이 있고 포맷이 유효해야 함.
+        //    endDate 미지정 시 startDate 와 동일(단일일 휴가). dayOption 미명시면 종일 폴백.
+        String startDateStr = input.get("startDate") instanceof String s ? s : null;
+        if (startDateStr == null || startDateStr.isBlank()) {
+            return; // 날짜 미명시 — vacReqItems 없이 prefill 종료. FE 가 모달에서 직접 입력받음.
+        }
+        String endDateStr = input.get("endDate") instanceof String s ? s : startDateStr;
+
+        try {
+            Map<String, Object> workGroup = hrSelfServiceClient.getMyWorkGroup(companyUuid, empId, role);
+            VacationPrefillCalculator.DayOption parsedOption = VacationPrefillCalculator.parseDayOption(
+                    prefill.get("dayOption") instanceof String s ? s : null);
+            List<Map<String, Object>> slots = VacationPrefillCalculator.expandSlots(
+                    startDateStr, endDateStr, parsedOption, workGroup);
+            if (slots.isEmpty()) {
+                log.info("[Copilot] prefill_approval_form: vacReqItems 슬롯 생성 실패 " +
+                        "startDate={} endDate={} (날짜 포맷 오류 가능) — FE 가 async 폴백.",
+                        startDateStr, endDateStr);
+                return;
+            }
+            prefill.put("vacReqItems", slots);
+            // UI 표시용 — lockForm 상태에서도 사용자가 일자/일수를 즉시 확인 가능.
+            // BE 상신 시점에 vacReqUseDay 는 FE 가 명시적으로 삭제하므로 표시 전용이고,
+            // vacReqDatesText 는 textarea 표시 + 리스트 렌더 인풋이라 채워두면 모달이 예쁘게 나옴.
+            prefill.put("vacReqDatesText", VacationPrefillCalculator.buildDatesText(slots, parsedOption));
+            prefill.put("vacReqUseDay", VacationPrefillCalculator.sumUseDay(slots));
+        } catch (Exception e) {
+            log.warn("[Copilot] resolveVacationPrefill vacReqItems 단계 실패 - empId={}, err={}",
+                    empId, e.getMessage());
+        }
     }
 
     /**
@@ -1055,7 +1210,7 @@ public class CopilotService {
         Map<String, Object> properties = new LinkedHashMap<>();
         properties.put("formCode", Map.of(
                 "type", "string",
-                "enum", List.of("VACATION_REQUEST", "OVERTIME_REQUEST"),
+                "enum", List.of("VACATION_REQUEST", "OVERTIME_REQUEST", "GRANT_VACATION_REQUEST", "ATTENDANCE_MODIFY_REQUEST"),
                 "description", "양식 코드. VACATION_REQUEST=휴가신청, OVERTIME_REQUEST=초과근무신청. " +
                         "사용자 발화에 '휴가/연차/반차/병가' → VACATION_REQUEST, '초과근무/잔업/야근' → OVERTIME_REQUEST."
         ));
@@ -1073,6 +1228,33 @@ public class CopilotService {
                 "description", "결재선에 자동으로 채울 결재자 이름 목록. 사용자가 '김영희 부장이랑 박철수 과장한테 올려줘' " +
                         "처럼 명시한 경우만 넣는다. 서버가 EMPLOYEE 검색으로 한 명을 찾아 결재선에 채움. " +
                         "사용자가 명시하지 않으면 절대 넣지 말 것 — 모달에서 사용자가 직접 선택."
+        ));
+        properties.put("startDate", Map.of(
+                "type", "string",
+                "description", "휴가 시작일 (YYYY-MM-DD 또는 ISO8601). 발화에 '내일', '다음주' 등이 있으면 오늘 날짜 기준 계산하여 기입."
+        ));
+        properties.put("endDate", Map.of(
+                "type", "string",
+                "description", "휴가 종료일. 시작일과 같으면 생략 가능."
+        ));
+        properties.put("vacationType", Map.of(
+                "type", "string",
+                "description", "휴가 종류 표시명 (예: 연차, 월차, 병가, 경조사, 공가 등). " +
+                        "단위(오전/오후/반차/반반차) 는 vacationType 이 아닌 dayOption 에 분리해 넣을 것. " +
+                        "예: '오전 반차' 발화 → vacationType='연차', dayOption='오전반차'."
+        ));
+        properties.put("dayOption", Map.of(
+                "type", "string",
+                "enum", List.of("종일", "오전반차", "오후반차", "반반차1", "반반차2", "반반차3", "반반차4"),
+                "description", "휴가 사용 단위. 매핑: '하루/종일/풀로' → 종일, " +
+                        "'오전 반차/전반/오전만' → 오전반차, '오후 반차/후반/오후만' → 오후반차, " +
+                        "'반반차' 4분할(1=오전 첫 구간, 2=오전 두번째, 3=오후 첫 구간, 4=오후 두번째) → 반반차1~반반차4. " +
+                        "미명시 시 생략 (FE 는 종일로 처리). 시작·종료 시각은 사용자 워크그룹 시간표 기준으로 자동 계산되므로 별도 시간 입력 불필요."
+        ));
+        properties.put("useDay", Map.of(
+                "type", "number",
+                "description", "일자당 사용 일수 (예: 1.0=종일, 0.5=반차, 0.25=반반차). " +
+                        "dayOption 을 채웠다면 useDay 는 보통 생략 — FE 가 dayOption 으로부터 자동 계산."
         ));
 
         Map<String, Object> schema = new LinkedHashMap<>();

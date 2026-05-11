@@ -214,14 +214,15 @@ public class SeverancePays extends BaseTimeEntity {
     }
 
 //    세금 설정
-// netAmount = (퇴직금 산정액 − 퇴직소득세 − 지방소득세) + 퇴직정산 연차수당 별도지급분
+//    netAmount = (실제 지급 대상 퇴직급여 − 퇴직소득세 − 지방소득세) + 퇴직정산 연차수당 별도지급분
 //    별도지급 연차수당은 근로소득으로 처리되므로 여기서 과세 X
     public void applyTax(Long taxAmount, Long localIncomeTax, Integer taxYear, Boolean irpTransfer){
         this.taxAmount = taxAmount;
         this.localIncomeTax = localIncomeTax;
         this.taxYear = taxYear;
         this.irpTransfer = irpTransfer;
-        this.netAmount = this.severanceAmount - taxAmount - localIncomeTax + this.annualLeaveOnRetirement;
+        Long payableSeveranceAmount = this.retirementType == RetirementType.DC ? this.dcDiffAmount : this.severanceAmount;
+        this.netAmount = payableSeveranceAmount - taxAmount - localIncomeTax + this.annualLeaveOnRetirement;
     }
 
 //    재산정 (CALCULATING)
@@ -236,10 +237,11 @@ public class SeverancePays extends BaseTimeEntity {
         this.last3MonthDays = last3MonthDays;
         this.avgDailyWage = avgDailyWage;
         this.severanceAmount = severanceAmount;
-//        실지급 netAmount = (퇴직금 - 세금) + 퇴직정산 연차수당 별도지급분
-        this.netAmount = severanceAmount - this.taxAmount + annualLeaveOnRetirement;
         this.dcDepositedTotal = dcDepositedTotal;
         this.dcDiffAmount = dcDiffAmount;
+//        실지급 netAmount = (실제 지급 대상 퇴직급여 - 세금 - 지방세) + 퇴직정산 연차수당 별도지급분
+        Long payableSeveranceAmount = this.retirementType == RetirementType.DC ? dcDiffAmount : severanceAmount;
+        this.netAmount = payableSeveranceAmount - this.taxAmount - this.localIncomeTax + annualLeaveOnRetirement;
     }
 
 

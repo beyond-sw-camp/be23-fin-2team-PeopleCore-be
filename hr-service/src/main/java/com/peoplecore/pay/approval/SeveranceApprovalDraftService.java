@@ -91,8 +91,10 @@ public class SeveranceApprovalDraftService {
 
         // 합계 계산
         long totalSev = sevs.stream().mapToLong(SeverancePays::getSeveranceAmount).sum();
-        long totalTax = sevs.stream().mapToLong(s -> s.getTaxAmount() + s.getLocalIncomeTax()).sum();
-        long totalNet = sevs.stream().mapToLong(SeverancePays::getNetAmount).sum();
+        long totalDeposited = sevs.stream().mapToLong(this::dcDepositedAmount).sum();
+        long totalPayable = sevs.stream().mapToLong(this::payableSeveranceAmount).sum();
+        long totalTax = sevs.stream().mapToLong(this::taxAmount).sum();
+        long totalNet = sevs.stream().mapToLong(this::netPayAmount).sum();
 
         // 헤더/합계 텍스트 치환
         Map<String, String> m = new HashMap<>();
@@ -105,6 +107,10 @@ public class SeveranceApprovalDraftService {
         m.put("payHeadcount",   sevs.size() + "명");
         m.put("payDescription", String.format("%d명 퇴직금 일괄 지급", sevs.size()));
         m.put("totalSeverance", currency(totalSev));
+        m.put("totalDcDeposited", currency(totalDeposited));
+        m.put("totalDepositedAmount", currency(totalDeposited));
+        m.put("totalDcDiffAmount", currency(totalPayable));
+        m.put("totalPayableAmount", currency(totalPayable));
         m.put("totalTaxAmount", currency(totalTax));
         m.put("totalNetAmount", currency(totalNet));
         m.forEach((key, value) -> {
@@ -117,24 +123,108 @@ public class SeveranceApprovalDraftService {
         if (tbody == null) {
             throw new CustomException(ErrorCode.APPROVAL_FORM_INVALID);
         }
+        ensureEmployeeTableColumns(tbody);
         tbody.empty();
         int idx = 1;
         for (SeverancePays s : sevs) {
             Element tr = tbody.appendElement("tr");
-            tr.appendElement("td").text(String.valueOf(idx++));
-            tr.appendElement("td").text(nullSafe(s.getDeptName()));
-            tr.appendElement("td").text(s.getEmpName());
-            tr.appendElement("td").text(s.getRetirementType().name());
-            tr.appendElement("td").text(s.getHireDate().format(YMD));
-            tr.appendElement("td").text(s.getResignDate().format(YMD));
-            tr.appendElement("td").text(formatServicePeriod(s.getServiceDays()));
-            tr.appendElement("td").addClass("currency").text(currency(s.getSeveranceAmount()));
-            tr.appendElement("td").addClass("currency")
-                    .text(currency(s.getTaxAmount() + s.getLocalIncomeTax()));
-            tr.appendElement("td").addClass("currency").text(currency(s.getNetAmount()));
+            appendCenterCell(tr, String.valueOf(idx++));
+            appendCenterCell(tr, nullSafe(s.getDeptName()));
+            appendCenterCell(tr, s.getEmpName());
+            appendCenterCell(tr, s.getRetirementType().name());
+            appendCenterCell(tr, s.getHireDate().format(YMD));
+            appendCenterCell(tr, s.getResignDate().format(YMD));
+            appendCenterCell(tr, formatServicePeriod(s.getServiceDays()));
+            appendAmountCell(tr, s.getSeveranceAmount());
+            appendAmountCell(tr, dcDepositedAmount(s));
+            appendAmountCell(tr, payableSeveranceAmount(s));
+            appendAmountCell(tr, taxAmount(s));
+            appendAmountCell(tr, netPayAmount(s));
         }
+        injectEmployeeTotalRow(tbody, sevs);
 
         return doc.outerHtml();
+    }
+
+    private void ensureEmployeeTableColumns(Element tbody) {
+        Element table = tbody.parent();
+        if (table == null || !"table".equals(table.tagName())) {
+            return;
+        }
+        table.attr("style", appendStyle(table.attr("style"), "width:1141px;min-width:1141px;max-width:1141px;table-layout:fixed;font-size:11px;"));
+        ensureColumnGroup(table);
+        Element headerRow = table.selectFirst("thead tr");
+        if (headerRow == null) {
+            return;
+        }
+
+        if (!table.text().contains("기적립액") && !table.text().contains("기지급액") && headerRow.childrenSize() >= 8) {
+            Element severanceHeader = headerRow.child(7);
+            severanceHeader.after("<th>기적립액</th><th>차액</th>");
+        }
+        applyColumnStyles(headerRow);
+
+        Element tfoot = table.selectFirst("tfoot");
+        if (tfoot != null) {
+            tfoot.remove();
+        }
+    }
+
+    private void appendCenterCell(Element tr, String text) {
+        tr.appendElement("td")
+                .attr("style", "white-space:nowrap;text-align:center;padding:6px 4px;")
+                .text(text);
+    }
+
+    private void appendAmountCell(Element tr, Long amount) {
+        tr.appendElement("td")
+                .addClass("currency")
+                .attr("style", "white-space:nowrap;text-align:right;padding:6px 4px;")
+                .text(currency(amount));
+    }
+
+    private void injectEmployeeTotalRow(Element tbody, List<SeverancePays> sevs) {
+        long totalSev = sevs.stream().mapToLong(SeverancePays::getSeveranceAmount).sum();
+        long totalDeposited = sevs.stream().mapToLong(this::dcDepositedAmount).sum();
+        long totalPayable = sevs.stream().mapToLong(this::payableSeveranceAmount).sum();
+        long totalTax = sevs.stream().mapToLong(this::taxAmount).sum();
+        long totalNet = sevs.stream().mapToLong(this::netPayAmount).sum();
+
+        Element tr = tbody.appendElement("tr");
+        tr.attr("style", "font-weight:bold;background:#fafafa;");
+        tr.appendElement("td")
+                .attr("colspan", "7")
+                .attr("style", "text-align:right;padding:6px 4px;")
+                .text("합계");
+        appendAmountCell(tr, totalSev);
+        appendAmountCell(tr, totalDeposited);
+        appendAmountCell(tr, totalPayable);
+        appendAmountCell(tr, totalTax);
+        appendAmountCell(tr, totalNet);
+    }
+
+    private void applyColumnStyles(Element headerRow) {
+        String[] widths = {"44px", "72px", "72px", "48px", "100px", "100px", "120px", "125px", "120px", "135px", "55px", "150px"};
+        for (int i = 0; i < headerRow.childrenSize() && i < widths.length; i++) {
+            Element cell = headerRow.child(i);
+            cell.attr("style", appendStyle(cell.attr("style"), "width:" + widths[i] + ";white-space:nowrap;text-align:center;padding:6px 4px;"));
+        }
+    }
+
+    private void ensureColumnGroup(Element table) {
+        Element oldColgroup = table.selectFirst("colgroup");
+        if (oldColgroup != null) {
+            oldColgroup.remove();
+        }
+        String[] widths = {"40px", "72px", "72px", "48px", "100px", "100px", "110px", "110px", "110px", "110px", "55px", "110px"};
+        Element colgroup = table.prependElement("colgroup");
+        for (String width : widths) {
+            colgroup.appendElement("col").attr("style", "width:" + width + ";");
+        }
+    }
+
+    private String appendStyle(String current, String addition) {
+        return current == null || current.isBlank() ? addition : current + ";" + addition;
     }
 
     private String generateBatchDocNo(List<SeverancePays> sevs) {
@@ -145,4 +235,28 @@ public class SeveranceApprovalDraftService {
     }
 
     private static String nullSafe(String s) { return s == null ? "" : s; }
+
+    private boolean isDc(SeverancePays s) {
+        return s.getRetirementType() != null && "DC".equals(s.getRetirementType().name());
+    }
+
+    private long dcDepositedAmount(SeverancePays s) {
+        return isDc(s) ? nz(s.getDcDepositedTotal()) : 0L;
+    }
+
+    private long payableSeveranceAmount(SeverancePays s) {
+        return isDc(s) ? nz(s.getDcDiffAmount()) : nz(s.getSeveranceAmount());
+    }
+
+    private long taxAmount(SeverancePays s) {
+        return nz(s.getTaxAmount()) + nz(s.getLocalIncomeTax());
+    }
+
+    private long netPayAmount(SeverancePays s) {
+        return payableSeveranceAmount(s) - taxAmount(s) + nz(s.getAnnualLeaveOnRetirement());
+    }
+
+    private long nz(Long value) {
+        return value == null ? 0L : value;
+    }
 }
