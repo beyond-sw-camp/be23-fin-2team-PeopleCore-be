@@ -132,7 +132,6 @@
 <details>
 <summary><h3>로그인</h3></summary>
 
-![AI Architecture](picture/Pasted%20Graphic.png)
 
 </details>
 
@@ -218,175 +217,14 @@
 <br>
 
 ## 5. 기술 문서
-<details>
-<summary><h3>Phase 0 PoC (Proof of Concept) 결과</h3></summary>
 
-### Phase 0 PoC — 하이브리드 검색 벤치마크
-골든 데이터셋 20문항(검색 18 + 멀티테넌트 격리 2) × 3사 × 500건 색인 환경에서 측정.
+각 기술 영역의 상세 설계·운영 문서는 아래 표에서 해당 페이지로 이동합니다.
 
-![Hybrid Search Bench](picture/poc-hybrid-search-bench.png)
+| 영역 | 문서 | 핵심 내용 |
+|------|------|-----------|
+| 통합검색 | [Elasticsearch](docs_md/elasticsearch.md) | `unified_search` 인덱스 설계 · Nori/n-gram 분석기 · BM25+kNN 하이브리드(RRF) · Debezium CDC 색인 · 멀티테넌트/권한 필터 |
+| AI Copilot | [AI Copilot](docs_md/ai-copilot.md) | 민감도 분류 → Anthropic / 사내 sLLM(EXAONE) 이중 라우팅 · Tool-Use 루프 · Prompt Caching(input -79%) · 응답 인용·액션 스키마 |
 
-| 방식 | Recall@5 | p50 latency |
-|:---|:---|:---|
-| BM25 단독 | 90% | 5ms |
-| kNN 단독 | 95% | 12ms |
-| **BM25 + kNN + RRF** | **95%** | **17ms** ← 채택 |
-
-**검증된 가설**
-- **하이브리드의 가치** : Q13 "영업팀 회의 일정" — BM25 실패 / kNN·RRF 성공
-- **격리 보장** : I01·I02 — A사에서 B사 용어 검색 시 0 hits
-- **데이터 정책 보완점** : Q03 "반려된 결재" — content 가 영문 REJECTED 라 한국어 "반려" 미매칭. 색인 시 한국어 상태값 동시 저장 필요 (Phase 1 반영)
-- **합격선** — Recall@5 ≥ 70% → 95% ✅, latency ≤ 100ms → 17ms ✅
-
-### Phase 0 PoC — LLM 모델 선정
-#### 듀얼 LLM 구조 (보안 우선)
-\`\`\`
-[비민감 경로]   사용자 → Claude Haiku 4.5 → Tool Use → ES / MinIO / 메일
-                          (검색 + 작성 모두 가능)
-
-[민감 경로]    사용자 → SDK 가 ES 검색해 RAG 컨텍스트 주입 → EXAONE 3.5 (로컬)
-                          (Read-only, 외부 호출 차단)
-\`\`\`
-
-#### EXAONE 3.5 vs Qwen 2.5 비교 (둘 다 ~7B, Apple Silicon Ollama)
-- **EXAONE 3.5 7.8B 성능 테스트 결과** (아래 표 참고)
-
-
-![EXAONE Bench](picture/poc-exaone-bench.png)
-- **Qwen 2.5 7B 성능 테스트 결과** (아래 표 참고)
-
-![Qwen Bench](picture/poc-qwen-bench.png)
-
-| 항목 | EXAONE 3.5 7.8B | Qwen 2.5 7B |
-|:---|:---|:---|
-| **평균 tok/s** | 52.0 | 54.8 |
-| **평균 TTFT** | 182ms | 169ms |
-| **한국어 자연스러움** | 평가 답변·요약·금액 추출·RAG 모두 자연스러움 | 결재 요약을 중국어로 답변 (한국어 약점) |
-| **Tool Use (Ollama)** | ❌ 미지원 | ✅ 지원 |
-
-#### EXAONE 채택 근거
-- **한국어 품질 우위** — 결재·평가 도메인 답변 자연스러움
-- **Tool Use 미지원은 영향 없음** — 민감 경로는 Read-only(SDK 가 검색 후 컨텍스트 전달, EXAONE 은 답변 생성만 담당)이므로 무관
-- **보안 스토리 강화** — 민감 데이터의 외부 API/Tool 호출 원천 차단
-
-#### 임베딩 모델 — text-embedding-3-small (1536 dims)
-| 후보 | 차원 | 1M 토큰당 비용 | 특성 |
-|:---|:---|:---|:---|
-| **text-embedding-3-small** | 1536 (가변) | $0.02 | **선정** — 비용/정확도 균형 |
-| text-embedding-3-large | 3072 (가변) | $0.13 | 비용 6.5배, 정확도 소폭 우위 |
-| text-embedding-ada-002 | 1536 (고정) | $0.10 | 구세대, 비용 5배 |
-
----
-</details>
-
-<details>
-<summary><h3>PeopleCore AI (LLM / sLLM Dual Routing & Hybrid Search)</h3></summary>
-
-### 1. 개요
-#### 시스템 구성
-| 컴포넌트 | 기술 | 역할 |
-|:---|:---|:---|
-| **LLM** | Anthropic Claude Haiku | 외부 노출에 문제없는 작업 (검색, 일정 생성, 결재 신청) |
-| **sLLM** | Ollama EXAONE 3.5 7.8B | 외부 노출에 민감한 작업 (개인정보, 급여, 평가, 휴가) |
-| **Vector DB** | Elasticsearch (dense_vector + BM25 통합) | 하이브리드 검색 인덱스 (\`unified_search\`) |
-| **CDC** | Debezium MySQL Connector + Kafka | MySQL 변경 → ES 자동 색인 |
-| **Embedding** | OpenAI \`text-embedding-3-small\` (1536d) | 검색용 벡터 생성 |
-| **Routing Gate** | SensitiveDetector (Java 툴) | LLM/sLLM 분기 결정 (LLM 미사용) |
-
-
-### 2. 동작 흐름
-#### 라이프사이클
-![Lifecycle](picture/ai_workflow.png)
-
-#### 2.1 분기 직전까지 공통 흐름
-- **Step 1 — Controller 진입 + 입력 검증**
-  - 요청 도착 시 \`CopilotController.chat()\` 호출
-  - 토큰의 헤더 \`X-User-Company\`, \`X-User-Id\`, \`X-User-Role\` 추출, 없으면 400 에러
-  - 본문 진입 후 빈 메시지인지 검증 (토큰 비용 최소화)
-- **Step 2 — Service 진입 + SensitiveDetector 분류**
-  - \`sensitiveDetector.classify()\` 호출: \`ROUTE\` → \`RRN\` → \`KEYWORD\` 순서로 OR 평가하여 하나라도 hit하면 즉시 SENSITIVE 판정
-  - **ROUTE**: \`pageContext.route\`가 민감 화면 prefix(8종, 예: \`/payroll\`, \`/eval\`)에 매칭되는지
-  - **RRN**: 발화에 주민번호 정규식이 있는지
-  - **KEYWORD**: 정규화된 발화(공백 제거 + 소문자)가 사전(~40개)의 키워드를 포함하는지
-  - 분류 결과는 \`Verdict\` 레코드로 변환하여 로깅 및 분기(Claude / EXAONE) 결정
-
-#### 2.2 SAFE 분기 (Anthropic Claude) 흐름
-*시나리오: "김영희 부장 어디 부서야?" + pageContext.route="/dashboard"*
-- **Step 3-1 — API 키 확인 + 입력 준비**
-  - API 키 검사 및 전체 대화 이력(History) 구성 (Stateless API 대응)
-  - 도구 카탈로그 + 시스템 프롬프트 빌드
-- **Step 3-2 — tool_use 루프 (Iteration 0)**
-  - \`anthropicClient.messages()\` 호출
-  - Claude가 발화를 분석해 도구 호출이 필요하다고 판단하면 \`stop_reason="tool_use"\`와 \`tool_use\` 블록 응답
-  - 서버는 \`executeTool\`을 통해 \`searchService.searchHybrid()\` 실행 (BM25 + OpenAI 임베딩 + kNN + RRF 융합)
-  - 도구 결과는 \`tool_result\` 블록으로 감싸 messages에 assistant 응답과 함께 추가
-- **Step 3-3 — tool_use 루프 (Iteration 1, 종료)**
-  - 확장된 messages로 2차 API 호출, Claude가 결과를 바탕으로 자연어 답변 생성 (\`stop_reason="end_turn"\`)
-  - 최대 Iteration(=4) 도달 시 "도구 호출 한도 도달" 안내와 함께 graceful 종료
-- **Step 3-4 — 응답 빌드**
-  - \`CopilotResponse\` 최종 응답 빌드
-
-#### 2.3 SENSITIVE 분기 (EXAONE) 흐름
-*시나리오: "내 인사평가 알려줘" + pageContext.route="/dashboard"*
-- **Step 4-1 — 시스템 프롬프트 + 입력 준비**
-  - \`EXAONE_SYSTEM_PROMPT_TEMPLATE\` 기반 프롬프트 및 메시지 빌드
-  - EXAONE은 Ollama Native Tools를 지원하지 않으므로 텍스트 마커 기반 약속 사용
-- **Step 4-2 — Manual Tool-Loop (Iteration 0)**
-  - \`ollamaClient.chat()\` 1차 호출
-  - 모델이 도구 호출이 필요하면 \`[[CALL]]{\"name\":\"...\",\"args\":{...}}[[/CALL]]\` 형식의 텍스트 출력
-  - \`executeExaoneTool\`이 분기하여 \`HrSelfServiceClient.getMyEvaluation()\` 등 호출 (평가 시즌/결과/목표/자기평가 등 합성)
-  - 결과를 \`[[RESULT]]{...}[[/RESULT]]\`로 감싸 "위 결과를 참고해 한국어로 답변" 가이드를 더해 user 메시지로 주입
-- **Step 4-3 — Manual Tool-Loop (Iteration 1, 종료)**
-  - 확장된 messages로 2차 호출, 모델이 자연어 답변 합성 및 루프 종료
-- **Step 4-4 — 응답 빌드**
-  - SAFE 흐름과 동일한 구조의 응답 반환
-
-#### 2.5 Tool Use Loop의 본질
-- **왜 루프인가?**: LLM은 텍스트 생성만 가능하며 DB 쿼리나 HTTP 호출을 직접 할 수 없음. 모델이 도구 호출 요청을 보내면 서버가 이를 실행하고 결과를 다시 모델에 전달해야 하므로 결과가 나올 때까지 순회함.
-- **Stateless API의 함의**: Anthropic/Ollama 모두 대화 상태를 보관하지 않으므로, 매 호출마다 시스템 프롬프트 + 전체 History + 도구 카탈로그를 다시 전송해야 함.
-
-### 3. 핵심 설계 결정
-#### 3.1 LLM/sLLM 듀얼 라우팅 — 컴플라이언스 우선
-- 민감 정보 외부 송출 금지를 위해 발화 단위로 경로 분리
-- 컴플라이언스(필수) + 비용 및 가용성(부수) 이점 확보
-- 규칙 기반 분류기로 LLM 호출 전 빠른 판정 (LLM 미사용으로 지연 최소화)
-
-#### 3.2 ES 하이브리드 검색 (BM25 + 벡터 + RRF)
-- **BM25**: 사번, 결재 번호 등 정확 매칭
-- **dense_vector (kNN)**: 동의어 및 의미 유사 유사 매칭
-- **RRF (Reciprocal Rank Fusion)**: 서로 다른 스케일의 점수를 순위 기반으로 통합하여 운영 부담 제거 및 정확도 향상
-
-#### 3.3 EXAONE Manual Prompting — Ollama tools 미지원 우회
-- 한국어 성능이 우수한 EXAONE 3.5를 유지하기 위해 자체 텍스트 마커 프로토콜 설계
-- "보안 모드"가 아닌 "본인 데이터 조회 모드" 리프레이밍과 Anti-pattern 블록으로 PII 거부 패턴 회피
-
-#### 3.4 Default-deny 화이트리스트 — 보안 경계
-- **메타데이터 화이트리스트**: ES 문서 중 11개 필드(empName 등)만 노출, 권한 필드 차단
-- **도구 카탈로그 allowlist**: 명시된 도구(7종) 외 호출 시 dispatcher 단에서 차단
-- **ES 쿼리 단 권한 필터**: 회사/개인 권한 필터를 쿼리에 내장하여 데이터 누설 원천 차단
-
-### 4. 핵심 트러블슈팅
-#### 4.1 EXAONE Tool Calling 미지원 → Manual Prompting 설계
-- **문제**: Ollama에서 EXAONE 사용 시 Native Tools 미지원 (400 Error)
-- **해결**: 시스템 프롬프트 내 도구 카탈로그 정의 및 \`[[CALL]]\`/\`[[RESULT]]\` 마커 기반 프로토콜 자체 설계하여 한국어 정확도와 도구 호출 기능 양립
-
-#### 4.2 검색 임계값 운영 부담 → RRF Rank-based 융합 채택
-- **문제**: 벡터 검색의 Score Threshold 튜닝 부담 및 BM25와의 점수 단위 불일치
-- **해결**: 점수가 아닌 순위(Rank)를 합산하는 RRF 채택으로 튜닝 부담 제거 및 운영 확장성 확보
-
-#### 4.3 멀티 도구 Chain 안정성 → BE Composite 패턴 도입
-- **문제**: 작은 모델(EXAONE)이 여러 도구를 순차적으로 호출할 때 파싱 오류 및 환각 발생 가능성 증가
-- **해결**: 백엔드에서 여러 엔드포인트를 묶어 단일 도구로 제공하는 **Composite 패턴**(\`get_my_overview\` 등) 도입하여 호출 안정성 확보
-
-#### 4.4 Prompt Injection 방어 → 인증 컨텍스트 강제 주입
-- **문제**: 사용자가 도구 인자(args)를 조작하여 타인의 정보를 조회하려는 시도 가능성
-- **해결**: 도구 호출 시 인자의 \`empId\`, \`companyId\` 등을 무시하고 **HTTP 인증 헤더(X-User-Id 등)의 컨텍스트를 강제로 주입**하여 권한 우회 차단
-
-#### 4.5 결재 환각 방어 → 서버 무저장 클라이언트 사이드 액션
-- **문제**: LLM이 결재 문서를 직접 생성할 경우 데이터 환각(잔여 연차 등) 위험 존재
-- **해결**: LLM은 **결재 양식 Prefill(내용 채우기) directive**만 응답하고, 실제 저장은 사용자가 화면에서 검토 후 상신 버튼을 누를 때 수행되도록 설계
-
-</details>
 
 ---
 
