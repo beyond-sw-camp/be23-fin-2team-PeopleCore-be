@@ -595,63 +595,40 @@ SELECT
   -- self_score: 60~99 분산
   60 + ((e.emp_id * 7 + s.season_id * 3) % 40),
   60 + ((e.emp_id * 7 + s.season_id * 3) % 40),
-  -- manager_score: 등급 매핑 (S+1 A+1 B-2 분포)
-  CASE WHEN ((e.emp_id + s.season_id) % 100) < 11 THEN 95
-       WHEN ((e.emp_id + s.season_id) % 100) < 32 THEN 85
-       WHEN ((e.emp_id + s.season_id) % 100) < 70 THEN 75
-       WHEN ((e.emp_id + s.season_id) % 100) < 90 THEN 65
-       ELSE 50 END,
+  -- manager_score: 등급 매핑
+  CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
+    WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
+  END,
   -- manager_score_adjusted: 일반 케이스는 ±3 변동(Z-score 모방), 보정 스킵 케이스는 원점수 유지
   --   ▷ 감사실(@d_audit): 소규모 팀 (3명 < minTeamSize=5) → 보정 스킵
   --   ▷ emp_id % 11 = 0: 팀 평균과 일치 가정 (z=0 시연용) → 보정 결과 0
-  CASE WHEN ((e.emp_id + s.season_id) % 100) < 11 THEN 95
-       WHEN ((e.emp_id + s.season_id) % 100) < 32 THEN 85
-       WHEN ((e.emp_id + s.season_id) % 100) < 70 THEN 75
-       WHEN ((e.emp_id + s.season_id) % 100) < 90 THEN 65
-       ELSE 50 END
-  + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END),
+  CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
+    WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
+  END + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END),
   -- total_score: self*0.3 + mgr_adj*0.7
   ROUND(
     (60 + ((e.emp_id * 7 + s.season_id * 3) % 40)) * 0.3 +
-    (CASE WHEN ((e.emp_id + s.season_id) % 100) < 11 THEN 95
-          WHEN ((e.emp_id + s.season_id) % 100) < 32 THEN 85
-          WHEN ((e.emp_id + s.season_id) % 100) < 70 THEN 75
-          WHEN ((e.emp_id + s.season_id) % 100) < 90 THEN 65
-          ELSE 50 END
-     + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END)) * 0.7
+    (CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
+       WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
+     END + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END)) * 0.7
   , 2),
   -- weighted_score: total_score 와 동일
   ROUND(
     (60 + ((e.emp_id * 7 + s.season_id * 3) % 40)) * 0.3 +
-    (CASE WHEN ((e.emp_id + s.season_id) % 100) < 11 THEN 95
-          WHEN ((e.emp_id + s.season_id) % 100) < 32 THEN 85
-          WHEN ((e.emp_id + s.season_id) % 100) < 70 THEN 75
-          WHEN ((e.emp_id + s.season_id) % 100) < 90 THEN 65
-          ELSE 50 END
-     + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END)) * 0.7
+    (CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
+       WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
+     END + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END)) * 0.7
   , 2),
   -- bias_adjusted_score: total + ±2
   ROUND(
     (60 + ((e.emp_id * 7 + s.season_id * 3) % 40)) * 0.3 +
-    (CASE WHEN ((e.emp_id + s.season_id) % 100) < 11 THEN 95
-          WHEN ((e.emp_id + s.season_id) % 100) < 32 THEN 85
-          WHEN ((e.emp_id + s.season_id) % 100) < 70 THEN 75
-          WHEN ((e.emp_id + s.season_id) % 100) < 90 THEN 65
-          ELSE 50 END
-     + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END)) * 0.7
+    (CASE ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D')
+       WHEN 'S' THEN 95 WHEN 'A' THEN 85 WHEN 'B' THEN 75 WHEN 'C' THEN 65 WHEN 'D' THEN 50
+     END + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + s.season_id) % 7) - 3 END)) * 0.7
     + (((e.emp_id * 13) % 5) - 2)
   , 2),
-  -- auto_grade / final_grade
-  CASE WHEN ((e.emp_id + s.season_id) % 100) < 11 THEN 'S'
-       WHEN ((e.emp_id + s.season_id) % 100) < 32 THEN 'A'
-       WHEN ((e.emp_id + s.season_id) % 100) < 70 THEN 'B'
-       WHEN ((e.emp_id + s.season_id) % 100) < 90 THEN 'C'
-       ELSE 'D' END,
-  CASE WHEN ((e.emp_id + s.season_id) % 100) < 11 THEN 'S'
-       WHEN ((e.emp_id + s.season_id) % 100) < 32 THEN 'A'
-       WHEN ((e.emp_id + s.season_id) % 100) < 70 THEN 'B'
-       WHEN ((e.emp_id + s.season_id) % 100) < 90 THEN 'C'
-       ELSE 'D' END,
+  ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D'),
+  ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D'),
   false,
   s.finalized_at,
   e.dept_id,
@@ -726,63 +703,15 @@ SET
                                    END, 2)
 WHERE eg.season_id IN (@s_2024h1, @s_2024h2, @s_2025h1, @s_2025h2);
 
--- 8-2. OPEN 시즌 (2026H1) — 보정 화면 시연용으로 자동산정 결과 포함
+-- 8-2. OPEN 시즌 (snapshot only — 자동산정 단계에서 점수/등급 채워짐)
 INSERT INTO eval_grade
-  (emp_id, season_id, version,
-   self_score, raw_self_score, manager_score, manager_score_adjusted,
-   total_score, weighted_score, bias_adjusted_score,
-   auto_grade, final_grade, is_calibrated,
+  (emp_id, season_id, version, is_calibrated,
    dept_id_snapshot, dept_name_snapshot, position_snapshot,
    evaluator_id_snapshot, evaluator_name_snapshot)
 SELECT
   e.emp_id,
   @s_2026h1,
   0,
-  60 + ((e.emp_id * 7 + @s_2026h1 * 3) % 40),
-  60 + ((e.emp_id * 7 + @s_2026h1 * 3) % 40),
-  CASE WHEN ((e.emp_id + @s_2026h1) % 100) < 11 THEN 95
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 32 THEN 85
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 70 THEN 75
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 90 THEN 65
-       ELSE 50 END,
-  CASE WHEN ((e.emp_id + @s_2026h1) % 100) < 11 THEN 95
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 32 THEN 85
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 70 THEN 75
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 90 THEN 65
-       ELSE 50 END
-  + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + @s_2026h1) % 7) - 3 END),
-  ROUND((60 + ((e.emp_id * 7 + @s_2026h1 * 3) % 40)) * 0.3 +
-    (CASE WHEN ((e.emp_id + @s_2026h1) % 100) < 11 THEN 95
-          WHEN ((e.emp_id + @s_2026h1) % 100) < 32 THEN 85
-          WHEN ((e.emp_id + @s_2026h1) % 100) < 70 THEN 75
-          WHEN ((e.emp_id + @s_2026h1) % 100) < 90 THEN 65
-          ELSE 50 END
-     + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + @s_2026h1) % 7) - 3 END)) * 0.7, 2),
-  ROUND((60 + ((e.emp_id * 7 + @s_2026h1 * 3) % 40)) * 0.3 +
-    (CASE WHEN ((e.emp_id + @s_2026h1) % 100) < 11 THEN 95
-          WHEN ((e.emp_id + @s_2026h1) % 100) < 32 THEN 85
-          WHEN ((e.emp_id + @s_2026h1) % 100) < 70 THEN 75
-          WHEN ((e.emp_id + @s_2026h1) % 100) < 90 THEN 65
-          ELSE 50 END
-     + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + @s_2026h1) % 7) - 3 END)) * 0.7, 2),
-  ROUND((60 + ((e.emp_id * 7 + @s_2026h1 * 3) % 40)) * 0.3 +
-    (CASE WHEN ((e.emp_id + @s_2026h1) % 100) < 11 THEN 95
-          WHEN ((e.emp_id + @s_2026h1) % 100) < 32 THEN 85
-          WHEN ((e.emp_id + @s_2026h1) % 100) < 70 THEN 75
-          WHEN ((e.emp_id + @s_2026h1) % 100) < 90 THEN 65
-          ELSE 50 END
-     + (CASE WHEN e.dept_id = @d_audit OR e.emp_id % 11 = 0 THEN 0 ELSE ((e.emp_id * 11 + @s_2026h1) % 7) - 3 END)) * 0.7
-    + (((e.emp_id * 13) % 5) - 2), 2),
-  CASE WHEN ((e.emp_id + @s_2026h1) % 100) < 11 THEN 'S'
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 32 THEN 'A'
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 70 THEN 'B'
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 90 THEN 'C'
-       ELSE 'D' END,
-  CASE WHEN ((e.emp_id + @s_2026h1) % 100) < 11 THEN 'S'
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 32 THEN 'A'
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 70 THEN 'B'
-       WHEN ((e.emp_id + @s_2026h1) % 100) < 90 THEN 'C'
-       ELSE 'D' END,
   false,
   e.dept_id,
   d.dept_name,
@@ -903,16 +832,16 @@ ORDER BY FIELD(eg.final_grade, 'S','A','B','C','D');
 
 
 -- =====================================================================
--- [화면용] 인사팀 전원 동점 — 보정 참고사항 zeroStdDevTeams 시연
+-- [화면용] 개발팀 전원 동점 — 보정 참고사항 zeroStdDevTeams 시연
 -- ---------------------------------------------------------------------
--- 인사팀 박제된 EvalGrade 의 manager_score 를 동일값으로 고정.
+-- 개발팀 박제된 EvalGrade 의 manager_score 를 동일값으로 고정.
 -- team_std_dev=0 으로 박아 백엔드 getCalibrationReview 에서 zeroStdDevTeams 에 잡히게.
 -- =====================================================================
 UPDATE eval_grade eg
 SET eg.manager_score          = 80,
     eg.manager_score_adjusted = 80,
     eg.team_std_dev           = 0
-WHERE eg.dept_id_snapshot = (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='HR');
+WHERE eg.dept_id_snapshot = (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='DEV');
 
 
 COMMIT;
