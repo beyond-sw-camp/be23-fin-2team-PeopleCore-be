@@ -23,10 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 // 평가시즌 - 시즌 생성/조회/수정/삭제
@@ -116,13 +114,16 @@ public class SeasonService {
         // 평가자 매핑 가드 — 그 시점 active 사원 중 매핑/제외 결정 안 된 사람 있으면 차단 (HR 즉시 인지)
         // (DRAFT~OPEN 사이 신규 입사자는 OPEN 시 미지정 처리 + 알림 발송)
         List<Employee> activeEmployees = employeeRepository.findEvalTargetsByCompany(companyId);
-        Set<Long> mappedEmpIds = new HashSet<>();
+        Map<Long, EmpEvaluatorGlobal> mappingByEmp = new HashMap<>();
         for (EmpEvaluatorGlobal m : empEvaluatorGlobalRepository.findByCompanyId(companyId)) {
-            mappedEmpIds.add(m.getEvaluatee().getEmpId());
+            mappingByEmp.put(m.getEvaluatee().getEmpId(), m);
         }
         List<String> undecided = new ArrayList<>();
         for (Employee emp : activeEmployees) {
-            if (!mappedEmpIds.contains(emp.getEmpId())) {
+            EmpEvaluatorGlobal mapping = mappingByEmp.get(emp.getEmpId());
+            boolean assignedOrExcluded = mapping != null
+                && (mapping.isExcluded() || mapping.getEvaluator() != null);
+            if (!assignedOrExcluded) {
                 undecided.add(emp.getEmpName() + "(" + emp.getEmpNum() + ")");
             }
         }
