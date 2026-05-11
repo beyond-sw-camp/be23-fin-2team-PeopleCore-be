@@ -219,20 +219,23 @@ public class VacationBalanceService {
                 .findByEmpAndYearFetchType(companyId, empId, year);
 
         MyVacationStatusResponseDto.AnnualSummary annual = null;
-        VacationBalance monthly = null; // 폴백 후보 (입사 1년 미만)
+        List<VacationBalance> monthlyRows = new ArrayList<>(); // 입사 1년차 사이클 - calendar year 분할로 다중 가능
         List<MyVacationStatusResponseDto.OtherBalance> others = new ArrayList<>();
 
         for (VacationBalance b : balances) {
             String code = b.getVacationType().getTypeCode();
             if (VacationType.CODE_ANNUAL.equals(code)) {
-                /* UNIQUE (company, emp, type, year) → ANNUAL 은 최대 1건 */
+                /* UNIQUE (company, emp, type, year) + year-range overlap 매칭 → 한 year 에 ANNUAL 최대 1건 */
                 annual = toAnnualSummary(b);
             } else if (VacationType.CODE_MONTHLY.equals(code)) {
-                monthly = b; // ANNUAL 없을 때만 annual 로 승격, 있으면 others 로 내림
+                monthlyRows.add(b); // 같은 1주년 사이클 row 들 모았다가 합산
             } else {
                 others.add(MyVacationStatusResponseDto.OtherBalance.from(b));
             }
         }
+
+        /* MONTHLY 다중 row 합산 - 입사 1년 미만 사원의 calendar year 분할 row 처리 */
+        VacationBalance monthly = monthlyRows.isEmpty() ? null : mergeSameCycle(monthlyRows);
 
         /* 입사 1년 미만 - ANNUAL 미생성 상태면 MONTHLY 를 연차 카드 자리에 노출 */
         if (annual == null && monthly != null) {
@@ -302,6 +305,41 @@ public class VacationBalanceService {
         return vacationRequestQueryRepository
                 .findPastPage(companyId, empId, yearStart, yearEnd, now, pageable)
                 .map(MyVacationStatusResponseDto.RequestItem::from);
+    }
+
+    /* MONTHLY 다중 balance row 를 1건으로 합산 - 같은 1주년 사이클(같은 expiresAt) 가정 */
+    /* total/used/pending/expired 산술합. grantedAt 은 가장 이른 적립일, expiresAt 은 공통값 */
+    /* 반환 row 는 화면 표시용 view-object - 영속화 X (version=0L) */
+    private VacationBalance mergeSameCycle(List<VacationBalance> rows) {
+        if (rows.size() == 1) return rows.get(0);
+
+        BigDecimal total   = BigDecimal.ZERO;
+        BigDecimal used    = BigDecimal.ZERO;
+        BigDecimal pending = BigDecimal.ZERO;
+        BigDecimal expired = BigDecimal.ZERO;
+        LocalDate firstGranted = null;
+        for (VacationBalance r : rows) {
+            total   = total.add(r.getTotalDays());
+            used    = used.add(r.getUsedDays());
+            pending = pending.add(r.getPendingDays());
+            expired = expired.add(r.getExpiredDays());
+            LocalDate g = r.getGrantedAt();
+            if (g != null && (firstGranted == null || g.isBefore(firstGranted))) firstGranted = g;
+        }
+        VacationBalance head = rows.get(0);
+        return VacationBalance.builder()
+                .companyId(head.getCompanyId())
+                .vacationType(head.getVacationType())
+                .employee(head.getEmployee())
+                .balanceYear(head.getBalanceYear())
+                .totalDays(total)
+                .usedDays(used)
+                .pendingDays(pending)
+                .expiredDays(expired)
+                .grantedAt(firstGranted)
+                .expiresAt(head.getExpiresAt())
+                .version(0L)
+                .build();
     }
 
     /* VacationBalance → AnnualSummary 매핑 (ANNUAL/MONTHLY 공용) */

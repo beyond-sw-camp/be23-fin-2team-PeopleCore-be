@@ -64,14 +64,24 @@ public class VacationDashboardService {
         this.vacationTypeRepository = vacationTypeRepository;
     }
 
+    /* year(연도) → 집계 쿼리에 넘길 기준일(LocalDate) 변환 - 올해면 오늘, 과거면 그해 말일 스냅샷 */
+    /* HIRE 정책 기념일 미경과 사원도 직전 grant 잔여가 매칭되도록 today 기반 필터로 통일 */
+    private LocalDate resolveReferenceDate(Integer year) {
+        LocalDate today = LocalDate.now();
+        if (year == null || year == today.getYear()) return today;
+        return LocalDate.of(year, 12, 31);
+    }
+
     /* 부서별 요약 카드 목록 - 부서명 가나다순 */
     public List<DepartmentVacationSummaryResponseDto> getDepartmentSummaries(
             UUID companyId, Integer year, Integer lowUsageThreshold) {
         int threshold = (lowUsageThreshold != null) ? lowUsageThreshold : DEFAULT_LOW_USAGE_THRESHOLD;
 
         // 전체 사원 집계 1회 - balance 없는 사원도 0 으로 포함
+        // year 가 올해면 오늘, 과거면 그해 말일을 스냅샷으로 사용 (HIRE/FISCAL 무관 유효 grant 매칭)
+        LocalDate referenceDate = resolveReferenceDate(year);
         List<EmployeeVacationAggregationQueryDto> aggs =
-                balanceQueryRepository.aggregateAllForCompany(companyId, year);
+                balanceQueryRepository.aggregateAllForCompany(companyId, referenceDate);
 
         // 메모리 grouping
         Map<Long, List<EmployeeVacationAggregationQueryDto>> byDept = aggs.stream()
@@ -96,8 +106,10 @@ public class VacationDashboardService {
                 .orElseThrow(() -> new CustomException(ErrorCode.VACATION_TYPE_NOT_FOUND));
 
         // 페이지 단위 집계 (count + content)
+        // year → 조회 기준일 (올해=오늘, 과거=그해 말일)
+        LocalDate referenceDate = resolveReferenceDate(year);
         Page<EmployeeVacationAggregationQueryDto> page =
-                balanceQueryRepository.aggregateByDeptPageable(companyId, year, deptId, pageable);
+                balanceQueryRepository.aggregateByDeptPageable(companyId, referenceDate, deptId, pageable);
         if (page.isEmpty()) {
             return page.map(a -> null);
         }
