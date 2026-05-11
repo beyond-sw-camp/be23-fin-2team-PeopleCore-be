@@ -164,7 +164,7 @@ UPDATE company_pay_settings
 INSERT INTO retirement_settings
   (company_id, pension_type, pension_provider, pension_account)
 VALUES
-  (@cid, 'DB_DC', '미래에셋증권', '123-456-789012');
+  (@cid, 'DB_DC', '신한은행', '123-456-789012');
 
 
 -- =====================================================================

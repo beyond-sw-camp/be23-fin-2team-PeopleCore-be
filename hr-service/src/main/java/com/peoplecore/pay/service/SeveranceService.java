@@ -7,6 +7,7 @@ import com.peoplecore.employee.repository.EmployeeRepository;
 import com.peoplecore.event.SeveranceApprovalResultEvent;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
+import com.peoplecore.pay.domain.CompanyPaySettings;
 import com.peoplecore.pay.domain.EmpRetirementAccount;
 import com.peoplecore.pay.domain.LeaveAllowance;
 import com.peoplecore.pay.domain.RetirementSettings;
@@ -15,6 +16,8 @@ import com.peoplecore.pay.dtos.*;
 import com.peoplecore.pay.enums.*;
 import com.peoplecore.pay.repository.*;
 import com.peoplecore.pay.tax.RetirementIncomeTaxCalculator;
+import com.peoplecore.pay.transfer.BankTransferFileFactory;
+import com.peoplecore.pay.transfer.BankTransferFileGenerator;
 import com.peoplecore.resign.domain.Resign;
 import com.peoplecore.resign.repository.ResignRepository;
 import com.peoplecore.vacation.entity.VacationPolicy;
@@ -50,9 +53,11 @@ public class SeveranceService {
     private final LeaveAllowanceRepository leaveAllowanceRepository;
     private final RetirementIncomeTaxCalculator retirementIncomeTaxCalculator;
     private final ResignRepository resignRepository;
+    private final PaySettingsRepository paySettingsRepository;
+    private final BankTransferFileFactory bankTransferFileFactory;
 
     @Autowired
-    public SeveranceService(SeverancePaysRepository severanceRepository, CompanyRepository companyRepository, EmployeeRepository employeeRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, SeverancePaysRepositoryImpl severanceRepositoryImpl, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceRepository leaveAllowanceRepository, RetirementIncomeTaxCalculator retirementIncomeTaxCalculator, SeverancePaysRepository severancePaysRepository, ResignRepository resignRepository) {
+    public SeveranceService(SeverancePaysRepository severanceRepository, CompanyRepository companyRepository, EmployeeRepository employeeRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, SeverancePaysRepositoryImpl severanceRepositoryImpl, VacationPolicyRepository vacationPolicyRepository, LeaveAllowanceRepository leaveAllowanceRepository, RetirementIncomeTaxCalculator retirementIncomeTaxCalculator, SeverancePaysRepository severancePaysRepository, ResignRepository resignRepository, PaySettingsRepository paySettingsRepository, BankTransferFileFactory bankTransferFileFactory) {
         this.companyRepository = companyRepository;
         this.employeeRepository = employeeRepository;
         this.empRetirementAccountRepository = empRetirementAccountRepository;
@@ -63,6 +68,8 @@ public class SeveranceService {
         this.retirementIncomeTaxCalculator = retirementIncomeTaxCalculator;
         this.severancePaysRepository = severancePaysRepository;
         this.resignRepository = resignRepository;
+        this.paySettingsRepository = paySettingsRepository;
+        this.bankTransferFileFactory = bankTransferFileFactory;
     }
 
 //    사원 퇴직 이벤트 발생시 퇴직금 자동산정용 메서드
@@ -281,13 +288,74 @@ public class SeveranceService {
                 .orElseThrow(()-> new CustomException(ErrorCode.RETIREMENT_ACCOUNT_NOT_FOUND));
 
         Long transferAmount = sev.getRetirementType() == RetirementType.DC ? sev.getDcDiffAmount() : sev.getNetAmount();
+        String accountNumber = account.getAccountNumber() == null ? "" : account.getAccountNumber().replace("-","");
 
         return PayrollTransferDto.builder()
                 .empName(sev.getEmpName())
-                .bankCode(null)     //퇴직연금 계좌는 bankCode 별도관리 필요시 추가
-                .accountNumber(account.getAccountNumber().replace("-",""))
+                .bankCode("")     //퇴직연금 계좌는 bankCode 별도관리 필요시 추가
+                .bankName(account.getPensionProvider())
+                .accountNumber(accountNumber)
                 .netPay(transferAmount)
                 .memo("퇴직금 "+ sev.getResignDate())
+                .build();
+    }
+
+    public TransferFileResDto generateTransferFile(UUID companyId, List<Long> sevIds) {
+        if (sevIds == null || sevIds.isEmpty()) {
+            throw new CustomException(ErrorCode.NO_TRANSFER_TARGETS);
+        }
+
+        CompanyPaySettings settings = paySettingsRepository.findByCompany_CompanyId(companyId)
+                .orElseThrow(() -> new CustomException(ErrorCode.PAY_SETTINGS_NOT_FOUND));
+
+        List<SeverancePays> sevs = severancePaysRepository.findAllBySevIdInAndCompany_CompanyId(sevIds, companyId);
+        if (sevs.isEmpty()) {
+            throw new CustomException(ErrorCode.NO_TRANSFER_TARGETS);
+        }
+
+        List<String> skippedEmployees = new ArrayList<>();
+        List<PayrollTransferDto> transfer = sevs.stream()
+                .map(sev -> {
+                    if (sev.getSevStatus() != SevStatus.APPROVED && sev.getSevStatus() != SevStatus.PAID) {
+                        skippedEmployees.add(sev.getEmpName() + "(승인완료 아님)");
+                        return null;
+                    }
+                    try {
+                        PayrollTransferDto dto = buildTransferDto(sev, companyId);
+                        if (dto.getNetPay() == null || dto.getNetPay() <= 0) {
+                            skippedEmployees.add(sev.getEmpName() + "(미지급)");
+                            return null;
+                        }
+                        if (dto.getAccountNumber() == null || dto.getAccountNumber().isBlank()) {
+                            skippedEmployees.add(sev.getEmpName() + "(퇴직연금 계좌번호 누락)");
+                            return null;
+                        }
+                        return dto;
+                    } catch (CustomException e) {
+                        skippedEmployees.add(sev.getEmpName() + "(퇴직연금 계좌 미등록)");
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .toList();
+
+        if (transfer.isEmpty()) {
+            throw new CustomException(ErrorCode.NO_TRANSFER_TARGETS);
+        }
+
+        BankTransferFileGenerator generator = bankTransferFileFactory.getGenerator(settings.getMainBankCode());
+        byte[] fileBytes;
+        try {
+            fileBytes = generator.generate(transfer, "퇴직금");
+        } catch (java.io.IOException e) {
+            log.error("[Severance transfer-file] 엑셀 생성 실패 - bank={}", settings.getMainBankCode(), e);
+            throw new CustomException(ErrorCode.TRANSFER_FILE_GENERATION_FAILED);
+        }
+
+        return TransferFileResDto.builder()
+                .fileName(generator.getFileName("퇴직금").replace("급여이체", "퇴직금이체"))
+                .fileBytes(fileBytes)
+                .skippedEmployees(skippedEmployees)
                 .build();
     }
 
@@ -486,5 +554,3 @@ public class SeveranceService {
 
 
     }
-
-
