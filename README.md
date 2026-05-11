@@ -57,11 +57,6 @@
 </details>
 
 <details>
-<summary><h3>공통 테이블 설계</h3></summary>
-
-</details>
-
-<details>
 <summary><h3>사원 관리 (Employee)</h3></summary>
 
 </details>
@@ -82,17 +77,7 @@
 </details>
 
 <details>
-<summary><h3>배치 / 스케줄러 (Batch)</h3></summary>
-
-</details>
-
-<details>
 <summary><h3>급여 관리 (Payroll)</h3></summary>
-
-</details>
-
-<details>
-<summary><h3>캘린더 (Calendar)</h3></summary>
 
 </details>
 
@@ -104,15 +89,15 @@
 
 | 분류 | 기술 |
 |------|------|
-| **백엔드** | Java 17 · Spring Boot 3.5.13 · Spring Cloud 2025.0.1 · JPA · QueryDSL 5.1 |
-| **프론트엔드** | React 19.2.4 · TinyMCE 8.4.0 · xlsx 0.18.5 · mammoth 1.12.0 · hwp.js 0.0.3 |
-| **데이터 저장소** | MySQL · Redis · Elasticsearch · MinIO 8.5.7 |
-| **메시징** | Kafka · Spring Cloud Stream |
-| **MSA 인프라** | Cloud Gateway · Eureka · Resilience4j |
-| **인증 / 보안** | JWT(JJWT 0.11.5) · Spring Security Crypto · CoolSMS 4.3.0 |
-| **빌드 / 코드 생성** | Gradle · Lombok · MapStruct |
-| **배치 / 스케줄러** | Spring Batch · Spring `@Scheduled` |
-
+| **프론트엔드** | ![React](https://img.shields.io/badge/React-20232A?logo=react) ![Vue.js](https://img.shields.io/badge/Vue.js-4FC08D?logo=vuedotjs&logoColor=white) ![Vuera](https://img.shields.io/badge/Vuera-42B883) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white) ![TinyMCE](https://img.shields.io/badge/TinyMCE-3776AB) ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white) ![Ant Design](https://img.shields.io/badge/Ant_Design-0170FE?logo=antdesign&logoColor=white) ![Zustand](https://img.shields.io/badge/Zustand-443E38) ![TanStack Query](https://img.shields.io/badge/TanStack_Query-FF4154) ![TanStack Router](https://img.shields.io/badge/TanStack_Router-FF4154) ![React Hook Form](https://img.shields.io/badge/React_Hook_Form-EC5990?logo=reacthookform&logoColor=white) ![Axios](https://img.shields.io/badge/Axios-5A29E4) ![Chart.js](https://img.shields.io/badge/Chart.js-FF6384?logo=chartdotjs&logoColor=white) ![xlsx](https://img.shields.io/badge/xlsx-217346) ![mammoth](https://img.shields.io/badge/mammoth-7A3E1D) ![hwp.js](https://img.shields.io/badge/hwp.js-009688) |
+| **백엔드 (Java / Spring)** | ![Java](https://img.shields.io/badge/Java-007396?logo=openjdk&logoColor=white) ![Spring Boot](https://img.shields.io/badge/Spring_Boot-6DB33F?logo=springboot&logoColor=white) ![Spring Cloud](https://img.shields.io/badge/Spring_Cloud-6DB33F?logo=spring&logoColor=white) ![Spring Security](https://img.shields.io/badge/Spring_Security-6DB33F?logo=springsecurity&logoColor=white) ![JPA](https://img.shields.io/badge/JPA-59666C) ![QueryDSL](https://img.shields.io/badge/QueryDSL-0769AD) ![Spring Batch](https://img.shields.io/badge/Spring_Batch-6DB33F) ![Quartz](https://img.shields.io/badge/Quartz-D24939) ![Scheduled](https://img.shields.io/badge/@Scheduled-6DB33F) ![WebSocket](https://img.shields.io/badge/WebSocket-010101?logo=socketdotio&logoColor=white) ![SSE](https://img.shields.io/badge/SSE-1E88E5) ![Cloud Gateway](https://img.shields.io/badge/Cloud_Gateway-6DB33F) ![Eureka](https://img.shields.io/badge/Eureka-6DB33F) ![Resilience4j](https://img.shields.io/badge/Resilience4j-6DB33F) ![JWT](https://img.shields.io/badge/JWT-000000?logo=jsonwebtokens) ![Swagger](https://img.shields.io/badge/Swagger-85EA2D?logo=swagger&logoColor=black) |
+| **백엔드 (Python / AI)** | ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white) ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white) ![OpenAI](https://img.shields.io/badge/OpenAI-412991?logo=openai&logoColor=white) ![ChromaDB](https://img.shields.io/badge/ChromaDB-FCC624) |
+| **AI** | ![EXAONE](https://img.shields.io/badge/EXAONE-7B61FF) ![Claude](https://img.shields.io/badge/Claude-D97706) |
+| **메시징** | ![Kafka](https://img.shields.io/badge/Kafka-231F20?logo=apachekafka&logoColor=white) ![STOMP](https://img.shields.io/badge/STOMP-E91E63) |
+| **데이터베이스** | ![MySQL](https://img.shields.io/badge/MySQL-4479A1?logo=mysql&logoColor=white) ![Redis](https://img.shields.io/badge/Redis-DC382D?logo=redis&logoColor=white) ![Elasticsearch](https://img.shields.io/badge/Elasticsearch-005571?logo=elasticsearch&logoColor=white) ![MinIO](https://img.shields.io/badge/MinIO-C72E49?logo=minio&logoColor=white) |
+| **인프라 / 클라우드** | ![AWS RDS](https://img.shields.io/badge/AWS_RDS-527FFF?logo=amazonrds&logoColor=white) ![AWS Route 53](https://img.shields.io/badge/Route_53-8C4FFF?logo=amazonroute53&logoColor=white) ![AWS EKS](https://img.shields.io/badge/AWS_EKS-FF9900?logo=amazoneks&logoColor=white) ![AWS ECR](https://img.shields.io/badge/AWS_ECR-FF9900?logo=amazonecr&logoColor=white) ![Docker](https://img.shields.io/badge/Docker-2496ED?logo=docker&logoColor=white) ![CloudFront](https://img.shields.io/badge/CloudFront-8C4FFF?logo=amazoncloudfront&logoColor=white) ![AWS IAM](https://img.shields.io/badge/AWS_IAM-DD344C?logo=amazoniam&logoColor=white) |
+| **CI / CD** | ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-2088FF?logo=githubactions&logoColor=white) ![GitHub Packages](https://img.shields.io/badge/GitHub_Packages-181717?logo=github&logoColor=white) |
+| **협업 도구** | ![Git](https://img.shields.io/badge/Git-F05032?logo=git&logoColor=white) ![GitHub](https://img.shields.io/badge/GitHub-181717?logo=github&logoColor=white) ![Notion](https://img.shields.io/badge/Notion-000000?logo=notion&logoColor=white) ![Discord](https://img.shields.io/badge/Discord-5865F2?logo=discord&logoColor=white) ![Figma](https://img.shields.io/badge/Figma-F24E1E?logo=figma&logoColor=white) |
 ---
 
 <br>
@@ -218,25 +203,37 @@
 
 ## 5. 기술 문서
 
-각 기술 영역의 상세 설계·운영 문서는 아래 표에서 해당 페이지로 이동합니다.
+각 카테고리를 펼치면 관련 설계·운영 문서로 이동합니다.
 
-| 영역 | 문서 | 핵심 내용 |
-|------|------|-----------|
-| 통합검색 | [Elasticsearch](docs_md/elasticsearch.md) | `unified_search` 인덱스 설계 · Nori/n-gram 분석기 · BM25+kNN 하이브리드(RRF) · Debezium CDC 색인 · 멀티테넌트/권한 필터 |
-| AI Copilot | [AI Copilot](docs_md/ai-copilot.md) | 민감도 분류 → Anthropic / 사내 sLLM(EXAONE) 이중 라우팅 · Tool-Use 루프 · Prompt Caching(input -79%) · 응답 인용·액션 스키마 |
+<details>
+<summary><h3>AI</h3></summary>
 
+| 문서 | 핵심 내용 |
+|------|-----------|
+| [통합검색 (Elasticsearch)](docs_md/elasticsearch.md) | `unified_search` 인덱스 설계 · Nori/n-gram 분석기 · BM25+kNN 하이브리드(RRF) · Debezium CDC 색인 · 멀티테넌트/권한 필터 |
+| [AI Copilot](docs_md/ai-copilot.md) | 민감도 분류 → Anthropic / 사내 sLLM(EXAONE) 이중 라우팅 · Tool-Use 루프 · Prompt Caching(input -79%) · 응답 인용·액션 스키마 |
 
----
+</details>
 
-<br>
+<details>
+<summary><h3>배치 / 스케줄러</h3></summary>
 
-### 인증 및 보안 처리
+| 문서 | 핵심 내용 |
+|------|-----------|
+| [Quartz + Spring Batch 마이그레이션](docs_md/batch-scheduler-migration.md) | EKS 다중 파드 분산 스케줄링 + 멱등 배치 잡 운영 |
 
-- **Gateway 단일 인증 진입점** : API Gateway에서 JWT를 검증하고 사용자 컨텍스트를 내부 서비스로 전달합니다.
-- **서비스 간 결합 최소화** : 핵심 트랜잭션은 각 서비스 내부에서 처리하고, 후행 작업은 Kafka 이벤트로 분리합니다.
-- **멀티테넌트 격리** : 검색 색인과 쿼리에 `companyId`를 강제 주입하고, 사용자 접근 가능 범위를 한 번 더 필터링합니다.
-- **민감 데이터 AI 경로 분리** : 개인정보·평가·급여 등 민감 업무는 로컬 LLM 경로로 처리해 외부 API 전송을 차단합니다.
-- **파일 접근 제어** : 첨부파일은 MinIO에 저장하고, 도메인 권한 검증을 거친 요청만 접근하도록 설계했습니다.
+</details>
+
+<details>
+<summary><h3>근태</h3></summary>
+
+| 문서 | 핵심 내용 |
+|------|-----------|
+| [MySQL 월별 파티셔닝](docs_md/mysql-partitioning.md) | 수천만 행 근태 테이블 월별 파티셔닝 + 더티체킹 함정 해결 |
+| [출퇴근 IP 정책](docs_md/commute-ip-policy.md) | 멀티 홉 환경에서 클라이언트 공인 IP 정확 추출 + CIDR 매칭 |
+
+</details>
+
 
 ---
 
@@ -244,73 +241,109 @@
 
 ## 6. 성능 테스트
 
-성능 테스트는 AI 검색 품질, 동시성 처리, 프롬프트 비용 절감 효과를 중심으로 검증했습니다.
-
-### AI sLLM 성능 테스트
-
-민감 데이터 처리를 위한 로컬 sLLM 모델 선정을 위해 **EXAONE 3.5**와 **Qwen 2.5**의 성능 및 추론 품질을 Apple Silicon 환경에서 비교 측정했습니다.
-
-#### 1. 모델별 추론 성능 및 품질 비교
-
-| 항목 | EXAONE 3.5 7.8B | Qwen 2.5 7B |
-|:---|:---|:---|
-| **평균 추론 속도 (tok/s)** | 52.0 | **54.8** |
-| **평균 TTFT (ms)** | 182ms | **169ms** |
-| **한국어 자연스러움** | **우수** (평가/요약/RAG 모두 자연스러움) | 보통 (중국어 답변 환각 발생 - 한국어 약점) |
-| **Tool Use (Ollama)** | ❌ 미지원 | ✅ 지원 |
-
-#### 2. 성능 테스트 시각화 데이터
-- **EXAONE 3.5 7.8B 테스트 결과**
-![EXAONE Bench](picture/poc-exaone-bench.png)
-
-- **Qwen 2.5 7B 테스트 결과**
-![Qwen Bench](picture/poc-qwen-bench.png)
-
-#### 3. 결론: EXAONE 3.5 채택
-- **한국어 품질 우위:** 도메인 특성상 한국어 발화 이해 및 자연스러운 문장 생성이 최우선 순위입니다.
-- **제약 사항 해결:** Ollama Native Tool Use 미지원은 민감 경로를 Read-only(RAG 기반 컨텍스트 주입)로 설계하여 기술적으로 보완했습니다.
-- **보안성:** 온프레미스(로컬) 환경에서 초당 50토큰 이상의 빠른 속도로 민감 데이터를 안전하게 처리 가능함을 확인했습니다.
-
-
-### 전자결재 / 출퇴근 동시성 JMeter 테스트
-
-동시 승인·회수, 동시 기안 채번, 체크인 중복 호출 같은 충돌 시나리오를 기준으로 낙관적 락, 비관적 락, UNIQUE 제약, 자동 재시도 전략을 검증했습니다.
-
-### 프롬프트 캐싱 토큰 성능 비교
-
-Anthropic Claude Haiku 4.5의 **Prompt Caching** 기술을 적용하여, 반복되는 시스템 프롬프트와 도구 카탈로그(약 5.7k 토큰)에 대한 비용 및 속도 최적화 성능을 측정했습니다.
-
-#### 1. 런타임 동작 흐름 (Sequence Diagram)
-
-| 시나리오 | 동작 방식 (Spring ↔ Anthropic) | 결과 |
-|:---|:---|:---|
-| **1차 호출 (Cold)** | 전체 컨텍스트(Tools + System) 직렬화 → 해시 계산 → **Cache MISS** → 전체 추론 및 캐시 저장(5분 TTL) | 캐시 생성 비용 발생 |
-| **2차 호출 (Warm)** | 동일한 Tools/System 전송 → 해시 매칭 → **Cache HIT 🎯** → 고정 컨텍스트 인코딩 SKIP → 신규 메시지만 추론 | **비용/속도 대폭 절감** |
-
-#### 2. 성능 및 비용 상세 비교 (Haiku 4.5 단가 기준)
-
-> **Context Size:** 도구 카탈로그 + 시스템 프롬프트 (5,697 tokens)
-
-| 구분 | 1차 호출 (Cold/Write) | 2차 호출 (Warm/Read) | 캐싱 미사용 시 (정액) |
-|:---|:---|:---|:---|
-| **일반 입력 (25토큰)** | $0.0000250 | $0.0000250 | $0.0000250 |
-| **캐시 쓰기/읽기** | $0.0071213 (Write) | **$0.0005697 (Read)** | $0.0056970 (Input) |
-| **출력 (약 95토큰)** | $0.0004750 | $0.0004800 | $0.0004750 |
-| **최종 합계** | **$0.0076213** | **$0.0010747** | **$0.0062020** |
-| **성능 지표** | OFF 대비 22% 비용 증가 | **OFF 대비 83% 절감** | - |
-
-#### 3. 결과 요약
-- **비용 효율성:** 첫 호출에서 캐시 생성 비용(1.25x)이 발생하지만, 5분 이내 재호출 시 **입력 비용의 90%가 할인($1.00 → $0.10)**되어 전체 비용의 약 **83%를 절감**할 수 있습니다.
-- **활용 전략:** 대화가 빈번한 업무 시간대나 복잡한 도구 카탈로그를 사용하는 챗봇 환경에서 극적인 TCO(총 소유 비용) 감소 효과를 제공합니다.
+| 영역 | 문서 | 핵심 내용 |
+|------|------|-----------|
+| AI sLLM 벤치마크 | [sLLM Benchmark](docs_md/sllm-benchmark.md) | EXAONE 3.5 vs Qwen 2.5 비교 · 한국어 품질 우위 채택 · 온프레미스 50 tok/s |
+| 프롬프트 캐싱 | [Prompt Caching](docs_md/prompt-caching.md) | Prompt Caching 83% 비용 절감 · 5분 TTL · Haiku 4.5 단가 기준 |
 
 ---
 
 <br>
 
-## 7. 실행 방법
-
 <details>
-<summary><h3>통합 검색 (Elasticsearch + Debezium CDC) 로컬 세팅</h3></summary>
+<summary><h2>7. 실행 방법</h2></summary>
+
+### 로컬 실행 가이드 (git clone → 실행)
+
+`git clone` 부터 로컬 실행까지 한 번에 따라할 수 있는 가이드입니다.
+
+#### 준비물
+
+| 항목 | 비고 |
+|------|------|
+| JDK 17 | |
+| Node.js 18+ | |
+| Docker Desktop | |
+| MySQL 8.0 | binlog 활성화 + 팀에서 받은 SQL 4종 import |
+| IntelliJ IDEA | 권장 |
+
+> **MySQL binlog** — `[mysqld]` 섹션에 `log_bin = mysql-bin` / `binlog_format = ROW` / `binlog_row_image = FULL` / `server_id = 1` 추가 후 서비스 재시작. (OS별 설정 파일 경로는 아래 통합검색 상세 참고)
+> **SQL import 순서** — `peoplecore-common` → `peoplecore-hr-1` → `peoplecore-hr-2` → `peoplecore-collab`.
+
+#### 1) 레포 클론
+
+```bash
+git clone https://github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-be.git
+git clone https://github.com/beyond-sw-camp/be23-fin-2team-PeopleCore-fe.git
+```
+
+#### 2) 비밀 파일 배치 (팀 메신저 수령)
+
+| 파일 | 위치 |
+|------|------|
+| `application-local.yml` | [search-service/src/main/resources/](search-service/src/main/resources/) |
+| `debezium-connector.json` | [scripts/search/](scripts/search/) |
+
+> `debezium-connector.json`의 `database.password`는 본인 로컬 MySQL 비번으로 수정.
+
+#### 3) 인프라 기동
+
+백엔드 루트에서:
+```bash
+docker-compose up -d
+```
+
+| 컨테이너 | 포트 | 역할 |
+|----------|------|------|
+| `redis1` / `redis2` | 6379 / 6380 | 캐시 · 분산락 |
+| `kafka` + `kafka-connect` | 9092 / 8083 | 메시징 + Debezium |
+| `elasticsearch` + `kibana` | 9200 / 5601 | 통합검색 |
+| `minio` | 9000 / 9001 | 파일 스토리지 |
+| `face-api` | 8001 | 얼굴인식 (Python) |
+
+> `search-init` · `minio-init` 컨테이너가 ES 인덱스 · Debezium 커넥터 · MinIO 버킷을 자동 세팅.
+
+#### 4) 백엔드 기동 (IntelliJ)
+
+각 모듈 메인 클래스를 **순서대로** Run:
+
+1. `eureka-server` (8761)
+2. `api-gateway` (8000)
+3. `hr-service`
+4. `collaboration-service`
+5. `search-service`
+
+> 모든 서비스 `profiles.active: local` 기본 — 추가 VM 옵션 불필요.
+
+#### 5) 프론트엔드 기동
+
+```bash
+cd be23-fin-2team-PeopleCore-fe
+npm install
+npm run dev
+```
+
+브라우저에서 `http://localhost:5173` 접속.
+
+#### 6) 동작 확인
+
+```bash
+curl http://localhost:8761                                              # Eureka
+curl http://localhost:9200/unified_search                               # ES 인덱스
+curl http://localhost:8083/connectors/peoplecore-mysql-connector/status # Debezium RUNNING
+```
+
+#### 트러블슈팅
+
+| 증상 | 해결 |
+|------|------|
+| Debezium `state: FAILED` | `debezium-connector.json` DB 비번 확인 → 커넥터 DELETE → `docker-compose restart search-init` |
+| search-service 기동 실패 | `application-local.yml` 배치 누락 |
+| 검색 500 / 결과 0건 | `./scripts/search/reindex.sh` 로 재색인 |
+
+---
+
+### 통합 검색 (Elasticsearch + Debezium CDC) 로컬 세팅 상세
 
 MySQL의 변경 이벤트를 Debezium이 binlog 기반으로 감지하여 Kafka → search-service → Elasticsearch로 전파합니다. hr-service 코드는 MySQL에만 저장하면 되고, 검색 색인은 완전히 분리되어 있습니다.
 
@@ -608,30 +641,7 @@ Search API (/search-service/search)
 <summary><h3>근태 관리</h3></summary>
 
 <details>
-<summary>1. 대용량 근태 데이터 - MySQL 월별 파티셔닝</summary>
-
-**문제 사항**
-- `commute_record`, `attendance` 는 전 사원 × 매일 누적 → 수년 내 수천만 행 적재
-- 단일 테이블 운영 시 인덱스 깊이 증가로 월별/주간 집계 응답 지연 → 사용자 체감 UX 악화
-
-**원인 분석**
-- 근태 조회의 90% 이상이 월 범위(`work_date BETWEEN`) 조건임에도 단일 테이블 + B-Tree 만으로는 전체 스캔이 불가피해 시간 흐름에 따라 비용이 선형 누적
-- 오래된 월 데이터를 별도 관리(아카이빙·삭제)하기 어려워 운영 비용 우상향
-
-**시도 방법**
-- 단일 테이블 + 인덱스 강화 : 단순하나 누적 데이터에 한계, 핫/콜드 분리 불가
-- HASH 파티셔닝(`empId` 기준) : 범위 조건 쿼리 불리(전 파티션 스캔), 동적 삭제/추가 불가, 일부 쿼리에만 최적화
-- 애플리케이션 레벨 샤딩(월별 테이블 분리) : 프루닝 효과 동일하나 JPA·QueryDSL 매핑 복잡도 폭증
-
-**해결 방법**
-- `RANGE COLUMNS(work_date)` 월별 파티셔닝 + `(com_rec_id, work_date)` 복합 PK 적용 → 해당 월 파티션만 스캔으로 집계 응답 단축, UX 개선
-- JPA 엔티티는 단일 `id` 만 매핑하여 읽기 단순화, UPDATE 는 native + `work_date` 조건 포함 규칙으로 프루닝 보장
-- `PartitionScheduler` 가 매월 다음 달 파티션 자동 증설 → 운영 효율 향상
-
-</details>
-
-<details>
-<summary>2. 체크인 동시 호출 - Race Condition 방어</summary>
+<summary>1. 체크인 동시 호출 - Race Condition 방어</summary>
 
 **문제 사항**
 - 출근 버튼 연타·네트워크 재전송으로 같은 `(companyId, empId, workDate)` 에 체크인 중복 생성
@@ -654,7 +664,7 @@ Search API (/search-service/search)
 </details>
 
 <details>
-<summary>3. 주간 집계 N+1 - 메모리 인덱싱으로 해결</summary>
+<summary>2. 주간 집계 N+1 - 메모리 인덱싱으로 해결</summary>
 
 **문제 사항**
 - 주간 근태 집계는 사원 × 7일 × 상태(정상/지각/결근/휴가) 매트릭스 + 주간 누적 근무시간 + 종일휴가 분모 제외 동시 산출 필요
@@ -675,57 +685,14 @@ Search API (/search-service/search)
 
 </details>
 
-<details>
-<summary>4. IP 기반 근무지 판정 - 단일 진입점 + CIDR 매칭</summary>
-
-**문제 사항**
-- 출퇴근 IP 정책 : 회사가 등록한 공인 IP 대역에서만 체크인 허용 → NLB/Ingress 거쳐 사설 IP 만 도달 시 CIDR 매칭 전부 실패 → 전사 출퇴근 차단 사고 가능
-- "내 현재 IP" 표시(등록 모달)와 출퇴근 검증이 서로 다른 IP 추출 로직을 쓰면 사용자가 등록한 IP 가 매칭에서 누락되는 무한 루프 사고
-
-**원인 분석**
-- 멀티 홉 환경(NLB → Ingress → API Gateway → hr-service)에서 `request.getRemoteAddr()` 는 직전 홉의 사설 IP 만 보여줌 → 클라이언트 공인 IP 는 `X-Forwarded-For` 헤더에 누적
-- IPv4-매핑 IPv6(`::ffff:1.2.3.4`), loopback 토큰(`::1`, `127.0.0.1`) 혼입 등 헤더 형태가 환경별로 달라 단일 정규화 부재 시 매칭 산발 실패
-
-**시도 방법**
-- `getRemoteAddr()` 단독 : NLB 뒤에서는 사설 IP 만 도달, 정책 무력화
-- XFF 첫 토큰만 사용 : loopback 토큰이 앞에 끼면 오판정, 다양한 인프라 케이스에 취약
-- 외부 IP 라이브러리(`ipaddress`) 의존 : 정규화 일관성 보장은 되나 의존성 추가 + 검증/매칭 로직이 분산
-
-**해결 방법**
-- `ClientIpExtractor` 단일 진입점 → 출퇴근 검증과 등록 모달이 동일 IP 를 보도록 강제, XFF 순회 + loopback 스킵 + IPv4-매핑 IPv6 정규화로 환경별 헤더 형태 통일
-- CIDR 매칭은 `InetAddress` + 비트연산으로 외부 의존성 0, prefix=0(전체 허용) edge case 명시 처리
-- 클라이언트 IP 보존을 위한 인프라 설정 가이드 + 배포 직후 디버그 로그 검증 프로토콜 정착 → 사고 사전 차단, 운영 효율 향상
-
-</details>
-
-<details>
-<summary>5. 파티션 테이블 더티체킹</summary>
-
-**문제 사항**
-- 근태 정정 승인·체크아웃·자동마감 등 분 컬럼 업데이트 로직 실행 시 DB CPU 점유율 90% 이상으로 튀는 현상 발견
-- 사용자 응답 지연 · 동시 트랜잭션 롤백 위험으로 출퇴근 화면 전반 UX 악화
-- 월별 파티셔닝을 적용했음에도 파티셔닝 효과가 사실상 무력화
-
-**원인 분석**
-- 복합 PK 중 파티션 키가 JPA 매핑에서 빠져 더티체킹 UPDATE 에 파티션 키 누락
-- WHERE 에 파티션 키가 없으면 MySQL 옵티마이저가 파티션을 좁히지 못해 **모든 월별 파티션 풀스캔** → CPU 폭증
-- 분 컬럼은 정정·퇴근·배치 등 다수 경로에서 빈번히 갱신되는 핫 컬럼 → 누적 부하
-
-**시도 방법**
-- 더티체킹 유지 + 인덱스 보강 : 인덱스로도 파티션 프루닝은 못 살림 (파티션 키가 WHERE 에 없으면 옵티마이저가 파티션을 좁히지 못함)
-- `@IdClass` / `@EmbeddedId` 로 복합 PK 매핑 : JPA 가 파티션 키를 PK 일부로 인식하나, 다른 모듈 연관관계 매핑 연쇄 변경 + 코드 복잡도 폭증
-
-**해결 방법**
-- 분 컬럼 갱신을 native UPDATE 로 일원화 → WHERE 에 파티션 키 명시로 프루닝 강제 → DB CPU 정상 수준 회복, 운영 효율 향상
-- `@Modifying(clearAutomatically=true)` + 후속 로직 전 엔티티 재로드로 영속성 컨텍스트 동기화
-- 영향행 수 검증으로 atomic check-and-update 보장 → 가드 위반(이미 처리됨/체크인 부재 등) 즉시 감지
-
 </details>
 
 </details>
 
 <details>
 <summary><h3>휴가 관리</h3></summary>
+
+> 잔여 정합성(상태별 분리 + Ledger 원장) 은 별도 문서 → [잔여 정합성 + Ledger 원장](docs_md/vacation-balance-ledger.md)
 
 <details>
 <summary>1. 공휴일 조회 - 월 단위 벌크 조회 + 저장 구조 분리</summary>
@@ -750,28 +717,6 @@ Search API (/search-service/search)
 
 </details>
 
-<details>
-<summary>2. 잔여 정합성 - 상태별 분리 + Ledger 원장 추적</summary>
-
-**문제 사항**
-- 잔여를 "적립 - 사용" 단일 모델로 짜면 결재 상태 전이 중간에 잔여가 일시적으로 잘못 계산 → 사용자에게 잘못된 가용 잔여 노출, UX 악화
-- 만료된 잔여와 실제 사용된 잔여가 한 값에 뭉쳐 있으면 미사용 수당 계산 시 만료분까지 보상되어 회계 오류
-- 변동 이력 부재 시 정합성이 깨졌을 때 디버깅·감사·복구 수단 전무
-
-**원인 분석**
-- 잔여는 다양한 결재 상태 트리거에 의해 변경 → 단일 값은 어떤 트리거가 어떤 변동을 일으켰는지 표현 불가
-- 단일 row mutation 만으로는 변동 시점·사유·전후값을 사후 검증할 수단이 없음 → 사고 발생 시 원인 추적 비용 누적
-
-**시도 방법**
-- 단일 값 모델 : 결재 대기 단계 표현 불가, 만료·사용 구분 불가로 수당 계산 부정확
-- 변동 종류마다 별도 테이블 : 의미는 분리되나 테이블 수 폭증, 조인 복잡도 누적
-
-**해결 방법**
-- 잔여를 결재 상태별로 분리 보관 + 가용 잔여 = 적립 - (사용 + 대기 + 만료) 로 명확 정의 → 상태 전이 중간에도 의미 일관 유지
-- 결재 상태 전이별로 변동 메서드 책임 분리 → 결재 흐름과 코드가 일대일 대응
-- Ledger append-only 원장 + 변동 전후값 + 사유·참조·처리자 동시 기록 → 감사 추적성·정합성 사후 검증 가능, 운영 효율 향상
-- `@PrePersist` 부호 검증(증가 이벤트 ≥ 0, 차감 이벤트 ≤ 0)으로 팩토리 우회 직접 빌드 시에도 비정상 row 진입 차단
-
 </details>
 
 </details>
@@ -779,124 +724,7 @@ Search API (/search-service/search)
 <details>
 <summary><h3>배치 / 스케줄러</h3></summary>
 
-<details>
-<summary>1. @Scheduled + Redis 분산 락 → Quartz JDBC 클러스터링</summary>
-
-**문제사항**
-- EKS 다중 파드에서 `@Scheduled` 가 파드마다 동시 fire
-- WorkGroup 동적 스케줄이 CRUD 받은 1대에만 반영 → 나머지 파드는 옛 cron / 삭제 그룹에 계속 fire
-- 같은 잡 N번 실행 → 데이터 중복 처리 / DDL 메타락 충돌
-
-**원인분석**
-- `@Scheduled` = JVM 단위 스케줄러 → 파드별 독립 fire
-- 동적 스케줄 핸들이 JVM 인메모리 → 파드 간 공유 불가
-- Redis 분산락은 "두번째 파드 skip" 만 보장 (N번 fire 자체는 못 막음) + Redis 가 SPOF 로 격상
-
-**시도방법**
-- (1차) Redis 분산락 핫픽스 → Quartz 마이그레이션 시 폐기 대상 → 보류
-- (2차) ShedLock → 새 의존성 + 기존 락 패턴과 갈림 → 보류
-- (3차) Quartz JDBC 클러스터링 단일 마이그레이션 채택
-
-**해결방법**
-- Quartz JDBC 클러스터링(`isClustered: true`) + 동적 스케줄 DB 영속 + Redis 락 코드 일괄 제거를 해서, 효과는 한 노드만 fire / 모든 파드 자동 동기화 / SPOF 1 제거(Redis 디커플링) / 노드 장애 시 자동 인계로 회차 누락 0
-
-</details>
-
-<details>
-<summary>2. Service 직접 호출 → Spring Batch JobLauncher 전환</summary>
-
-**문제사항**
-- vacation 4잡: `Quartz Job → Scheduler.run() → Service` 직접 호출 구조
-- 처리 결과 INFO 로그만 → "어느 회사 몇 명 처리/실패" grep 으로만 확인
-- 멱등 가드 = Service 마다 `existsByXxx` SELECT 중복 구현
-
-**원인분석**
-- Service 직접 호출 → BATCH_JOB_INSTANCE / EXECUTION 메타 영속성 0
-- read / write / skip / rollback 카운트 자동 집계 X
-
-**시도방법**
-- Service 별 멱등 가드 추가 → 4잡 × 코드 중복 → 보류
-- JobParameters 키: `(targetDate)` 전사 통합 vs `(companyId, targetDate)` 회사별 → 후자 채택
-
-**해결방법**
-- 4잡에 `XxxJobConfig` 추가, `Scheduler.run()` = "회사 순회 + `jobLauncher.run()`" 슬림화 (Service 시그니처 변경 0)
-- JobParameters = `(companyId, targetDate)` → BATCH_JOB_INSTANCE UNIQUE 가 같은 회사·같은 날 두번째 호출 자체 차단
-- BatchFailureListener → FAILED / skipCount > 0 자동 감지 → Discord (4잡 코드 변경 0)
-- **효과**: 회사 1 처리 = 1 row + read/write 카운트로 즉시 파악, 4잡 + 기존 4잡 = 8잡 단일 매트릭스
-
-</details>
-
-<details>
-<summary>3. JobExecutionException throw 여부 — JobListener 알림 vs misfire 일관</summary>
-
-**문제사항**
-- AutoCloseJob 예외 발생 시 처리 방향 결정 필요
-- catch + 로깅만 → 알림 누락
-- 단순 throw → 즉시 refire → 비멱등 잡 중복 처리
-
-**원인분석**
-- catch + 로깅 → JobListener 입장에서 잡 정상 종료 → `getException()` 감지 X → Discord 알림 누락
-- 단순 throw → Quartz 즉시 refire → 자동마감 같은 비멱등 잡은 데이터 중복 처리
-
-**시도방법**
-- 1차 catch + `log.error` → 알림 누락 발견
-- Quartz API 검토 → `JobExecutionException(Throwable, boolean refireImmediately)` 발견. `false` 면 refire 차단
-
-**해결방법**
-- `throw new JobExecutionException(e, false)` 채택 → 알림 발사 + refire 차단 동시 달성
-- misfire `DO_NOTHING` 정책과 일관 (refire X)
-- **효과**: 실패 즉시 Discord 알림 + 자동마감 중복 처리 위험 0. vacation 6 스케줄러 동일 패턴
-
-</details>
-
-<details>
-<summary>4. AutoClose 도메인 이중성 — 2-Step + Reader 가드</summary>
-
-**문제사항**
-- vacation 4잡 = 단일 도메인 (Reader → Writer → Service 위임)
-- AutoClose 는 한 잡에 두 도메인 (`CommuteRecord` 미체크아웃 + `Employee` 결근) → ItemReader 단일 타입 제약으로 한 Step 처리 X
-- 기존 `autoCloseForWorkGroup` 전체 `@Transactional` → 사원 1건 실패 시 WorkGroup 전체 롤백
-
-**원인분석**
-- ItemReader 다형성 우회 (`Object` + instanceof, JobStep, Flow Split) 모두 타입 안전성 / 청크 commit 의미 / race 문제로 부적합
-- AutoCloseBatchService 만 회사 단위 트랜잭션 → vacation 사원 1건당 + REQUIRES_NEW 패턴과 갈림
-
-**시도방법**
-- Tasklet 1개로 Service 통째 호출 → vacation 패턴과 갈림, 가시성 0
-- 2-Step + Reader 가드 → vacation PromotionNotice stage 분기와 동일 → 채택
-
-**해결방법**
-- 2-Step 분리:
-  - Step 1 `autoCloseStep`: `Reader<CommuteRecord>` → `closeOne` 위임
-  - Step 2 `absentStep`: `Reader<Employee>` → `markAbsentOne` 위임
-- Step 2 가드 (소정근무요일 / 공휴일 / 휴가자) 는 Reader 안 처리. 미충족 시 `ListItemReader<>(List.of())` → 자연 종료 (Decider 빈 X)
-- Service 회사 단위 → 사원 1건당 `@Transactional(REQUIRES_NEW)` 분해. 의존성 7개 → 2개
-- **운영 효율**: 8잡 동일 매트릭스 (Reader / Writer / REQUIRES_NEW / JobParameters)
-- **데이터 정합성**: 사원 1건 실패가 전체 안 막음. `skip + skipLimit` item 단위 집계
-
-</details>
-
-<details>
-<summary>5. misfire 정책 매트릭스 — 잡별 멱등성 분기</summary>
-
-**문제사항**
-- 노드 다운 / 스레드풀 포화로 fire 시각 놓침 시 정책 결정 필요
-- `FIRE_NOW` / `DO_NOTHING` 중 잘못 선택 시 중복 처리 / 누락
-
-**원인분석**
-- 멱등성 보장 여부 (자동마감·결근·휴가 이월·만료 X / 파티션·Spring Batch O) + 알림 UX 영향 (vacation 만회 안전 / AutoClose cron 외 fire 시 사원·HR 알림 깨짐) 으로 정책 갈림
-
-**시도방법**
-- Phase 1: 멱등화 비용 vs 정책 회피 비용 → 정책 회피 채택
-- Phase 2: 4잡 JobInstance UNIQUE 확보 → `DO_NOTHING` → `FIRE_NOW` 안전 상향
-- Phase 3 (AutoClose): UNIQUE 있어도 알림 UX 측면 → `DO_NOTHING` 유지
-
-**해결방법**
-- 8잡 = 6 × `FIRE_NOW` (멱등 + 만회 안전) / 2 × `DO_NOTHING` (BalanceExpiry 만료 두 번 위험, AutoClose 알림 UX)
-- `JobExecutionException(e, false)` 로 throw 흐름과 일관 (3번)
-- 누락 시 `AdminAttendanceJobController` 수동 트리거 복구
-
-</details>
+> 분산 배치 스케줄러 마이그레이션(Quartz JDBC + Spring Batch) 전체는 별도 문서 → [Quartz + Spring Batch 마이그레이션](docs_md/batch-scheduler-migration.md)
 
 </details>
 
