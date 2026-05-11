@@ -68,6 +68,16 @@ public class VacationUseFormHandler implements ApprovalFormHandler {
             log.warn("[VacationUseForm] docData 파싱 실패 - empId={}, err={}", empId, e.getMessage());
             throw new BusinessException("휴가 신청서 docData 형식이 올바르지 않습니다.", HttpStatus.BAD_REQUEST);
         }
+
+        // 필독: infoId 가 없거나 items 가 비어있으면 hr-service 호출 전 즉시 차단.
+        // Copilot 등이 불완전한 상태로 상신을 시도할 때 백엔드 타임아웃(502) 유발 방지.
+        if (data.getInfoId() == null) {
+            throw new BusinessException("휴가 종류가 선택되지 않았습니다.", HttpStatus.BAD_REQUEST);
+        }
+        if (data.getVacReqItems() == null || data.getVacReqItems().isEmpty()) {
+            throw new BusinessException("휴가 일정이 입력되지 않았습니다.", HttpStatus.BAD_REQUEST);
+        }
+
         hrServiceClient.validateVacationRequest(
                 companyId, empId, data.getInfoId(), data.getVacReqItems());
     }
