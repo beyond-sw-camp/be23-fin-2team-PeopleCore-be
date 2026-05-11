@@ -45,25 +45,27 @@ public class VacationBalanceQueryRepository {
     /*
      * 전사 휴가 관리 - 회사 전체 사원 휴가 집계 (페이지 없음)
      * 용도: 부서 카드의 평균 소진율/낮은 소진자 수 산정. 전체 사원 집계 후 서비스에서 deptId 그룹핑
+     * today: 조회 기준일. HIRE 정책 기념일 미경과 사원도 직전 grant 잔여 매칭
      * balance 없는 사원도 포함 - LEFT JOIN 으로 0 row 반환
      * 대상: ACTIVE + delete_at IS NULL
      */
-    public List<EmployeeVacationAggregationQueryDto> aggregateAllForCompany(UUID companyId, Integer year) {
-        return buildAggregationQuery(companyId, year, null).fetch();
+    public List<EmployeeVacationAggregationQueryDto> aggregateAllForCompany(UUID companyId, LocalDate today) {
+        return buildAggregationQuery(companyId, today, null).fetch();
     }
 
     /*
      * 전사 휴가 관리 - 특정 부서 사원 휴가 집계 (페이지네이션)
      * 용도: 부서 선택 후 사원 상세 테이블
+     * today: 조회 기준일
      * content + count 2회 쿼리 (QueryDSL Page 관용 구조)
      * 정렬: Pageable.sort 를 일부만 지원 (현재는 empId 오름차순 고정 - 복잡한 Sort 매핑 비용 회피)
      */
     public Page<EmployeeVacationAggregationQueryDto> aggregateByDeptPageable(
-            UUID companyId, Integer year, Long deptId, Pageable pageable) {
+            UUID companyId, LocalDate today, Long deptId, Pageable pageable) {
         QEmployee e = QEmployee.employee;
 
         // 입사일 오름차순 - 오래된 사원부터. hireDate 동점 시 empId 로 결정적 정렬
-        List<EmployeeVacationAggregationQueryDto> content = buildAggregationQuery(companyId, year, deptId)
+        List<EmployeeVacationAggregationQueryDto> content = buildAggregationQuery(companyId, today, deptId)
                 .orderBy(e.empHireDate.asc(), e.empId.asc())
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
@@ -86,13 +88,16 @@ public class VacationBalanceQueryRepository {
 
     /*
      * 공통 집계 쿼리 빌더 - aggregateAllForCompany / aggregateByDeptPageable 공용
+     * 유효 balance 매칭 기준 (findActiveByEmpFetchType 와 동일 철학):
+     *   granted_at <= today AND (expires_at IS NULL OR expires_at >= today)
+     *   → HIRE/FISCAL 정책 무관하게 today 시점 살아있는 grant 만 집계
      * 법정/특별 분기: VacationType.typeCode IN STATUTORY_BASIC_CODES 여부로 CASE WHEN
      * available = total - used - pending - expired (잔여 공식)
      * deptIdOrNull null 이면 부서 필터 제외 (전체 사원)
      * COALESCE(sum, 0) 로 balance 없는 사원도 0 으로 반환 (LEFT JOIN 후 NULL 방어)
      */
     private JPAQuery<EmployeeVacationAggregationQueryDto> buildAggregationQuery(
-            UUID companyId, Integer year, Long deptIdOrNull) {
+            UUID companyId, LocalDate today, Long deptIdOrNull) {
         QVacationBalance b = QVacationBalance.vacationBalance;
         QVacationType t = QVacationType.vacationType;
         QEmployee e = QEmployee.employee;
@@ -124,7 +129,9 @@ public class VacationBalanceQueryRepository {
                 .leftJoin(b).on(
                         b.employee.empId.eq(e.empId),
                         b.companyId.eq(companyId),
-                        b.balanceYear.eq(year))
+                        b.grantedAt.loe(today),                                  // 이미 발생한 적립만
+                        b.expiresAt.isNull().or(b.expiresAt.goe(today))          // 만료 전 OR 무기한
+                )
                 .leftJoin(b.vacationType, t)
                 .where(
                         e.company.companyId.eq(companyId),
@@ -142,11 +149,14 @@ public class VacationBalanceQueryRepository {
 
     /*
      * 사원 특정 연도 Balance + VacationType fetch join
-     * 용도: 내 휴가 현황 페이지 (연차 카드 + 기타 휴가 리스트)
-     * 조건: balance_year = year
-     *   - FISCAL: grant 시점 달력연도 = year 와 정확히 일치
-     *   - HIRE:   grant 시점 달력연도 (AnnualGrantService.grantAndRecord 에서 today.getYear())
-     *     → 발생 연도로 조회한다는 의미. expires 는 balance.expiresAt 원본 그대로 사용
+     * 용도: 내 휴가 현황 페이지 / 관리자 사원별 잔여 조회
+     * 매칭 기준: year 범위 [year-01-01, year-12-31] 와 balance 의 [granted_at, expires_at] 가 겹침
+     *   - granted_at <= year-12-31 : year 안에 이미 발생
+     *   - expires_at IS NULL OR expires_at >= year-01-01 : year 안에 만료 전 (무기한 포함)
+     *   → HIRE 정책 기념일 미경과 사원의 직전 grant 도 매칭됨
+     *   → 입사 1년 미만 사원의 MONTHLY 다중 row (calendar year 분할) 도 함께 매칭됨
+     *     - listEmployeeBalances: List 그대로 노출 (이력 확인)
+     *     - getMyVacationStatus: 같은 사이클(같은 expires_at) 끼리 합산 후 카드화
      * N+1 방지: VacationType fetch join
      * 정렬: sortOrder ASC
      */
@@ -154,13 +164,17 @@ public class VacationBalanceQueryRepository {
         QVacationBalance b = QVacationBalance.vacationBalance;
         QVacationType t = QVacationType.vacationType;
 
+        LocalDate yearStart = LocalDate.of(year, 1, 1);
+        LocalDate yearEnd   = LocalDate.of(year, 12, 31);
+
         return queryFactory
                 .selectFrom(b)
                 .join(b.vacationType, t).fetchJoin()
                 .where(
                         b.companyId.eq(companyId),
                         b.employee.empId.eq(empId),
-                        b.balanceYear.eq(year)
+                        b.grantedAt.loe(yearEnd),                                  // year 안에 이미 발생
+                        b.expiresAt.isNull().or(b.expiresAt.goe(yearStart))        // year 안에 만료 전 OR 무기한
                 )
                 .orderBy(t.sortOrder.asc())
                 .fetch();

@@ -20,6 +20,7 @@ import com.peoplecore.approval.slot.SlotContextDto;
 import com.peoplecore.client.component.HrCacheService;
 import com.peoplecore.client.dto.CompanyInfoResponse;
 import com.peoplecore.client.dto.DeptInfoResponse;
+import com.peoplecore.client.dto.EmployeeSimpleResDto;
 import com.peoplecore.event.AlarmEvent;
 import com.peoplecore.exception.BusinessException;
 import lombok.extern.slf4j.Slf4j;
@@ -111,6 +112,11 @@ public class ApprovalDocumentService {
                 .ifPresent(h -> h.preCreate(companyId, empId, request));
         CompanyInfoResponse companyInfoResponse = hrCacheService.getCompany(companyId);
         DeptInfoResponse deptInfoResponse = hrCacheService.getDept(deptId);
+        /* 기안자 직급/직책명 조회 — X-User-Grade 헤더는 gradeId라 이름으로 변환 */
+        EmployeeSimpleResDto drafterInfo = hrCacheService.getEmployees(List.of(empId)).stream()
+                .findFirst().orElseThrow(() -> new BusinessException("기안자 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        String gradeName = drafterInfo.getGradeName();
+        String titleName = drafterInfo.getTitleName();
         /*slotContext 조립*/
         SlotContextDto contextDto = SlotContextDto.builder()
                 .companyName(companyInfoResponse.getCompanyName())
@@ -130,8 +136,8 @@ public class ApprovalDocumentService {
                 .empName(empName)
                 .empDeptId(deptId)
                 .empDeptName(deptInfoResponse.getDeptName())
-                .empGrade(empGrade)
-                .empTitle(empTitle)
+                .empGrade(gradeName)
+                .empTitle(titleName)
                 .docType(request.getDocType())
                 .docData(request.getDocData())
                 .docTitle(request.getDocTitle())
@@ -155,7 +161,7 @@ public class ApprovalDocumentService {
                 .changedStatus(ApprovalStatus.PENDING)
                 .changeByName(empName)
                 .changeByDeptName(deptInfoResponse.getDeptName())
-                .changeByGrade(empGrade)
+                .changeByGrade(gradeName)
                 .changeReason("문서 기안")
                 .changedAt(LocalDateTime.now())
                 .build());
@@ -177,7 +183,7 @@ public class ApprovalDocumentService {
                 .companyId(companyId)
                 .empIds(receiverIds)
                 .alarmType("APPROVAL")
-                .alarmTitle(document.getEmpDeptName() + " " + empName + " " + empGrade + "이(가) 결재 문서를 상신하였습니다. ")
+                .alarmTitle(document.getEmpDeptName() + " " + empName + " " + gradeName + "이(가) 결재 문서를 상신하였습니다. ")
                 .alarmContent("[" + document.getDocNum() + "] " + document.getDocTitle())
                 .alarmLink("/approval")
                 .alarmRefType("APPROVAL_DOCUMENT")
@@ -292,6 +298,11 @@ public class ApprovalDocumentService {
         ApprovalForm form = formRepository.findDetailById(request.getFormId(), companyId).orElseThrow(() -> new BusinessException("양식을 찾을 수 없습니다. ", HttpStatus.NOT_FOUND));
         /*동기 요청*/
         DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
+        /* 기안자 직급/직책명 조회 — X-User-Grade 헤더는 gradeId라 이름으로 변환 */
+        EmployeeSimpleResDto drafterInfo = hrCacheService.getEmployees(List.of(empId)).stream()
+                .findFirst().orElseThrow(() -> new BusinessException("기안자 정보를 찾을 수 없습니다.", HttpStatus.NOT_FOUND));
+        String gradeName = drafterInfo.getGradeName();
+        String titleName = drafterInfo.getTitleName();
 
         ApprovalDocument document = ApprovalDocument.builder()
                 .companyId(companyId)
@@ -300,8 +311,8 @@ public class ApprovalDocumentService {
                 .empName(empName)
                 .empDeptId(deptId)
                 .empDeptName(deptInfo.getDeptName())
-                .empGrade(empGrade)
-                .empTitle(empTitle)
+                .empGrade(gradeName)
+                .empTitle(titleName)
                 .docType(request.getDocType())
                 .docData(request.getDocData())
                 .docTitle(request.getDocTitle())
