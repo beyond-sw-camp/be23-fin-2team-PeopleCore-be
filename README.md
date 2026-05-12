@@ -172,7 +172,7 @@
 ## 4. 상세 서비스 화면
 
 <details>
-<summary><h3>로그인</h3></summary>
+<summary><font size="5"><strong>로그인</strong></font></summary>
 <p align="center">
   <img src="picture/gifs/login.gif" width="800" />
 </p>
@@ -180,7 +180,7 @@
 </details>
 
 <details>
-<summary><h3>안면인식 로그인</h3></summary>
+<summary><font size="5"><strong>안면인식 로그인</strong></font></summary>
 <p align="center">
   <img src="picture/gifs/face_login.gif" width="800" />
 </p>
@@ -188,14 +188,25 @@
 </details>
 
 <details>
-<summary><h3>사원 관리</h3></summary>
+<summary><font size="5"><strong>사원 관리</strong></font></summary>
 
 **인력 현황**
 <video src="picture/gifs/인력 현황.mp4" controls width="800"></video>
 
 **인사발령 및 이력확인**
 <video src="picture/gifs/인사발령.mp4" controls width="800"></video>
+
+</details>
+
+<details>
+<summary><font size="5"><strong>전자결재</strong></font></summary>
+
+<details>
+<summary>전자결재 환경설정화면</summary>
+
 <img src="picture/approval-settings.png" alt="전자결재 - 설정" />
+</details>
+
 <details>
 <summary>양식 일괄 설정</summary>
 
@@ -316,7 +327,6 @@
 
 <!-- 통합검색 서비스 화면 자료를 여기에 추가하세요. -->
 
-<summary><h3>통합검색</h3></summary>
 <p align="center">
   <img src="picture/gifs/search.gif" width="800" />
 </p>
@@ -377,7 +387,7 @@
 </details>
 
 <details>
-<summary><h3>메신저</h3></summary>
+<summary><font size="5"><strong>메신저</strong></font></summary>
 
 - 1대1 채팅방 생성
 <p align="center">
