@@ -3,6 +3,7 @@ package com.peoplecore.client.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.peoplecore.client.component.HrCacheService;
 import com.peoplecore.event.DeptUpdatedEvent;
+import com.peoplecore.event.EmpUpdatedEvent;
 import com.peoplecore.event.TitleUpdatedEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +43,18 @@ public class HrEventConsumer {
             log.info("직책 캐시 무효화 완료 titleId = {}", event.getTitleId());
         } catch (Exception e) {
             log.error("직책 변경 이벤트 처리 실패 error = {}", e.getMessage());
+        }
+    }
+
+    /* hr-service 의 사원 정보 변경(EmployeeService.updateEmployee) 이벤트 수신 → emp 캐시 무효화 */
+    @KafkaListener(topics = "hr-emp-updated", groupId = "collaboration-service")
+    public void handleEmpUpdated(String message) {
+        try {
+            EmpUpdatedEvent event = objectMapper.readValue(message, EmpUpdatedEvent.class);
+            hrCacheService.evictEmployee(event.getEmpId());
+            log.info("사원 캐시 무효화 완료 empId = {}", event.getEmpId());
+        } catch (Exception e) {
+            log.error("사원 변경 이벤트 처리 실패 error = {}", e.getMessage());
         }
     }
 }

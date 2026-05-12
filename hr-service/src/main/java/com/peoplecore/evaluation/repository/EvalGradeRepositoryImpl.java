@@ -76,7 +76,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
                     .name(g.getEmp().getEmpName())
                     .deptName(g.getDeptNameSnapshot())    // 시즌 오픈 시 스냅샷
                     .position(g.getPositionSnapshot())    // 스냅샷
-                    .totalScore(g.getTotalScore())        // null -> 미산정
+                    .totalScore(g.getBiasAdjustedScore()) // Z-score 보정 후 점수 (= 등급 배분 기준)
                     .autoGrade(g.getAutoGrade())          // null -> 미산정
                     .build();
             dtos.add(dto);
@@ -134,7 +134,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
 //  정렬 기준 매핑 Enum사용 (direction 이 null 이면 필드별 기본 방향 사용)
     private OrderSpecifier<?> getOrderSpecifier(EvalGradeSortField sortField, Sort.Direction direction) {
         if (sortField == null) {
-            return qGrade.totalScore.desc();           // 기본: 점수 높은순
+            return qGrade.biasAdjustedScore.desc();    // 기본: 보정후 점수 높은순 (등급 배분 기준)
         }
         switch (sortField) {
             case EMP_NUM:
@@ -144,13 +144,13 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
             case DEPT_NAME:
                 return isDesc(direction, false) ? qGrade.deptNameSnapshot.desc() : qGrade.deptNameSnapshot.asc(); // 부서 (스냅샷)
             case TOTAL_SCORE:
-                return isDesc(direction, true) ? qGrade.totalScore.desc() : qGrade.totalScore.asc();              // 점수 (기본 높은순)
+                return isDesc(direction, true) ? qGrade.biasAdjustedScore.desc() : qGrade.biasAdjustedScore.asc(); // 점수 (보정후 기준)
             case AUTO_GRADE:
                 return isDesc(direction, false) ? qGrade.autoGrade.desc() : qGrade.autoGrade.asc();               // 예정등급
             case FINAL_GRADE:
                 return isDesc(direction, false) ? qGrade.finalGrade.desc() : qGrade.finalGrade.asc();             // 확정/보정등급
             default:
-                return qGrade.totalScore.desc();        // 기본값
+                return qGrade.biasAdjustedScore.desc();    // 기본값 (보정후 기준)
         }
     }
 
@@ -310,7 +310,7 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
                     .empName(g.getEmp().getEmpName())
                     .deptName(g.getDeptNameSnapshot())    // 시즌 오픈 시 스냅샷
                     .position(g.getPositionSnapshot())    // 스냅샷
-                    .totalScore(g.getTotalScore())        // null -> 미산정
+                    .totalScore(g.getBiasAdjustedScore()) // Z-score 보정 후 점수 (= 등급 배분 기준)
                     .autoGrade(g.getAutoGrade())          // null -> 미산정자 (프론트 배지 분기)
                     .finalGrade(g.getFinalGrade())        // 보정 반영 / 확정 후 박제값
                     .isCalibrated(Boolean.TRUE.equals(g.getIsCalibrated()))

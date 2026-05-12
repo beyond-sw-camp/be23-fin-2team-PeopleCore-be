@@ -27,7 +27,7 @@ public class HrCacheService {
     private static final String DEPT_KEY = "hr:dept:";
     private static final String COMPANY_KEY = "hr:company:";
     private static final String TITLE_KEY = "hr:title:";
-    private static final Duration TTL = Duration.ofHours(1);
+    private static final Duration TTL = Duration.ofDays(7);
     private static final String EMP_KEY = "hr:emp:";
     private static final int MAX_DEPT_DEPTH = 64;
 

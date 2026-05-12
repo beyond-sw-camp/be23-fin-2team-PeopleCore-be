@@ -1010,7 +1010,7 @@ public class EvalGradeService {
                     .name(g.getEmp().getEmpName())
                     .deptName(g.getDeptNameSnapshot())
                     .position(g.getPositionSnapshot())
-                    .totalScore(g.getTotalScore())
+                    .totalScore(g.getBiasAdjustedScore()) // Z-score 보정 후 점수 (= 등급 배분 기준)
                     .autoGrade(originalGrade)
                     .adjustedGrade(adjustedGrade)
                     .reason(reason)
@@ -1632,6 +1632,7 @@ public class EvalGradeService {
                         .actualValue(actual)
                         .achievementRate(rate)
                         .selfLevel(se != null ? se.getAchievementLevel() : null)
+                        .direction(go.getKpiDirection())
                         .build());
             }
         }

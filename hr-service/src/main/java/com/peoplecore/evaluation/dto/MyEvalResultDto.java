@@ -2,6 +2,7 @@ package com.peoplecore.evaluation.dto;
 
 import com.peoplecore.evaluation.domain.AchievementLevel;
 import com.peoplecore.evaluation.domain.GoalType;
+import com.peoplecore.evaluation.domain.KpiDirection;
 import com.peoplecore.evaluation.domain.MyResultStatus;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -42,5 +43,6 @@ public class MyEvalResultDto {
         private BigDecimal actualValue;
         private BigDecimal achievementRate;     // KPI 만 - 서버가 direction 반영해 계산
         private AchievementLevel selfLevel;     // OKR 만
+        private KpiDirection direction;         // KPI 방향(UP/DOWN/MAINTAIN), OKR 은 null
     }
 }
