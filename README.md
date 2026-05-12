@@ -318,7 +318,125 @@
 <details>
 <summary><h3>휴가</h3></summary>
 
-<!-- 휴가 서비스 화면 자료를 여기에 추가하세요. -->
+<details>
+<summary>휴가 정책 설정</summary>
+<br/>
+<p align="center">
+관리자가 회사의 휴가 종류·연차 부여 규칙·소진 정책 등을 설정하는 화면
+<br/>
+  <img src="picture/gifs/vacation-settings.gif" alt="휴가 - 정책 설정" />
+</p>
+</details>
+
+<details>
+<summary>전사 휴가 현황</summary>
+<br/>
+<p align="center">
+부서별 휴가 소진율과 사원별 잔여/사용 일수를 한눈에 확인하는 관리자용 대시보드
+<br/>
+  <img src="picture/admin-vacation-dasboard-all.png" alt="휴가 - 전사 휴가 현황" />
+</p>
+</details>
+
+<details>
+<summary>전사 휴가 현황 - 사원 보유 휴가</summary>
+<br/>
+<p align="center">
+사원 클릭 시 해당 사원의 휴가 유형별 잔여·사용·만료 내역을 팝업으로 조회하는 화면
+<br/>
+  <img src="picture/admin-vacation-emp-balance.png" alt="휴가 - 사원 보유 휴가" />
+</p>
+</details>
+
+<details>
+<summary>기간별 휴가 현황</summary>
+<br/>
+<p align="center">
+지정 기간 동안의 휴가자·총 사용 일수·신청 건수를 사원 단위로 조회하는 화면
+<br/>
+  <img src="picture/admin-vacation-day.png" alt="휴가 - 기간별 휴가 현황" />
+</p>
+</details>
+
+<details>
+<summary>휴가 결재 (신청 현황)</summary>
+<br/>
+<p align="center">
+사원의 휴가 신청·부여 요청 결재 진행 상태를 관리자가 확인하는 화면
+<br/>
+  <img src="picture/admin-vacation-request.png" alt="휴가 - 휴가 결재" />
+</p>
+</details>
+
+<details>
+<summary>연차 촉진 이력</summary>
+<br/>
+<p align="center">
+연차 사용 촉진 1·2차 통지 발송 이력과 사원 응답 결과를 관리하는 화면
+<br/>
+  <img src="picture/admin-vacation-vacation-ledger.png" alt="휴가 - 연차 촉진 이력" />
+</p>
+</details>
+
+<details>
+<summary>사원 휴가 조정</summary>
+<br/>
+<p align="center">
+관리자가 일반 사원의 보유 휴가를 직접 가감 조정하는 화면
+<br/>
+  <img src="picture/gifs/vacaion-Grant.gif" alt="휴가 - 사원 휴가 조정" />
+</p>
+</details>
+
+<details>
+<summary>내 휴가현황</summary>
+<br/>
+<p align="center">
+사원 본인의 연차 잔여·사용·결재 대기 일수와 예정/지난 휴가를 확인하는 화면
+<br/>
+  <img src="picture/emp-vacation-dashboard.png" alt="휴가 - 내 휴가현황" />
+</p>
+</details>
+
+<details>
+<summary>휴가 신청</summary>
+<br/>
+<p align="center">
+휴가 유형·일자·반차 옵션을 선택해 전자결재로 상신하는 신청 화면
+<br/>
+  <img src="picture/emp-vacation-request.png" alt="휴가 - 신청" />
+</p>
+</details>
+
+<details>
+<summary>휴가 부여 요청</summary>
+<br/>
+<p align="center">
+법정휴가·회사 제공 휴가의 부여를 사원이 요청하고 HR_ADMIN 결재로 부여받는 화면
+<br/>
+  <img src="picture/emp-vacation-grantRequest.png" alt="휴가 - 부여 요청" />
+</p>
+</details>
+
+<details>
+<summary>휴가 신청서 (결재 양식)</summary>
+<br/>
+<p align="center">
+휴가 신청이 전자결재 양식으로 자동 변환되어 결재선을 따라 진행되는 화면
+<br/>
+  <img src="picture/emp-vacation-approval.png" alt="휴가 - 신청서 결재 양식" />
+</p>
+</details>
+
+<details>
+<summary>휴가 승인 후 캘린더 자동 반영</summary>
+<br/>
+<p align="center">
+승인된 휴가가 본인 캘린더에 자동으로 반영되어 일정에 노출되는 화면
+<br/>
+  <img src="picture/gifs/vacaion-request-calander.gif" alt="휴가 - 캘린더 자동 반영" />
+</p>
+</details>
 
 </details>
 
