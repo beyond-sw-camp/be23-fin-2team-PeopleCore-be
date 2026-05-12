@@ -76,6 +76,12 @@
 <details>
 <summary><font size="5"><strong>사원 관리 (Employee)</strong></font></summary>
 
+**사원등록 폼 수정**
+![사원등록 폼 수정](picture/gifs/사원등록%20폼수정.gif)
+
+**사원 등록**
+![사원 등록](picture/gifs/사원등록.gif)
+
 </details>
 
 <details>
@@ -124,6 +130,11 @@
 <details>
 <summary><font size="5"><strong>급여 관리 (Payroll)</strong></font></summary>
 
+<video src="picture/gifs/급여플로우.mp4" controls width="900"></video>
+
+**급여 플로우** \
+[인사팀] 급여대장 생성 -> 초과근무수당 적용 -> 확정 -> 전자결재 상신/승인 -> 지급처리 -> [사원] 급여명세서 확인
+
 </details>
 
 ---
@@ -161,22 +172,30 @@
 ## 4. 상세 서비스 화면
 
 <details>
-<summary><font size="5"><strong>로그인</strong></font></summary>
-
+<summary><h3>로그인</h3></summary>
+<p align="center">
+  <img src="picture/gifs/login.gif" width="800" />
+</p>
 
 </details>
 
 <details>
-<summary><font size="5"><strong>전자결재</strong></font></summary>
+<summary><h3>안면인식 로그인</h3></summary>
+<p align="center">
+  <img src="picture/gifs/face_login.gif" width="800" />
+</p>
+
+</details>
 
 <details>
-<summary>전자결재 설정</summary>
+<summary><h3>사원 관리</h3></summary>
 
-- 전자결재 설정화면
+**인력 현황**
+<video src="picture/gifs/인력 현황.mp4" controls width="800"></video>
 
+**인사발령 및 이력확인**
+<video src="picture/gifs/인사발령.mp4" controls width="800"></video>
 <img src="picture/approval-settings.png" alt="전자결재 - 설정" />
-</details>
-
 <details>
 <summary>양식 일괄 설정</summary>
 
@@ -254,7 +273,9 @@
 <details>
 <summary><font size="5"><strong>캘린더</strong></font></summary>
 
-<!-- 캘린더 서비스 화면 자료를 여기에 추가하세요. -->
+<p align="center">
+  <img src="picture/calendar.png" alt="캘린더 서비스 화면" width="900" />
+</p>
 
 </details>
 
@@ -268,7 +289,25 @@
 <details>
 <summary><font size="5"><strong>파일함</strong></font></summary>
 
-<!-- 파일함 서비스 화면 자료를 여기에 추가하세요. -->
+- 파일 및 폴더 생성 / 삭제
+<p align="center">
+  <img src="picture/gifs/file_create.gif" width="800" />
+</p>
+
+- 파일 및 폴더 즐겨찾기
+<p align="center">
+  <img src="picture/gifs/file_star.gif" width="800" />
+</p>
+
+- 공용 파일함 생성 권한 설정
+<p align="center">
+  <img src="picture/gifs/file_permission.gif" width="800" />
+</p>
+
+- 공용 파일함 멤버 초대 및 멤버별 권한 설정
+<p align="center">
+  <img src="picture/gifs/file_member_permission.gif" width="800" />
+</p>
 
 </details>
 
@@ -277,20 +316,108 @@
 
 <!-- 통합검색 서비스 화면 자료를 여기에 추가하세요. -->
 
+<summary><h3>통합검색</h3></summary>
+<p align="center">
+  <img src="picture/gifs/search.gif" width="800" />
+</p>
 </details>
 
 <details>
 <summary><font size="5"><strong>AI</strong></font></summary>
 
-<!-- AI 서비스 화면 자료를 여기에 추가하세요. -->
+- 캘린더에 일정 생성하기
+<p align="center">
+  <img src="picture/gifs/ai_calendar.gif" width="800" />
+</p>
+
+- 휴가신청 젅자결재 생성하기
+<p align="center">
+  <img src="picture/gifs/search.gif" width="800" />
+</p>
+
+- 오늘 할 일(다이제스트) 조회
+<p align="center">
+  <img src="picture/gifs/ai_digest.gif" width="800" />
+</p>
+
+- 자신의 민감 정보 조회 
+<p align="center">
+  <img src="picture/gifs/ai_my_info.gif" width="800" />
+</p>
+
+- 타인의 민감 정보 조회
+<p align="center">
+  <img src="picture/gifs/ai_other_info.gif" width="800" />
+</p>
+
+- 이전 대화 이력 보존
+<p align="center">
+  <img src="picture/gifs/ai_log.gif" width="800" />
+</p>
 
 </details>
 
 <details>
 <summary><font size="5"><strong>조직도</strong></font></summary>
 
-<!-- 조직도 서비스 화면 자료를 여기에 추가하세요. -->
+- 부서 생성 및 순서 편집
+<p align="center">
+  <img src="picture/gifs/org_create.gif" width="800" />
+</p>
 
+- 직급 생성 및 순서 편집
+<p align="center">
+  <img src="picture/gifs/grade.gif" width="800" />
+</p>
+
+- 직책 생성 및 순서 편집
+<p align="center">
+  <img src="picture/gifs/title.gif" width="800" />
+</p>
+</details>
+
+<details>
+<summary><h3>메신저</h3></summary>
+
+- 1대1 채팅방 생성
+<p align="center">
+  <img src="picture/gifs/chat_room_create.gif" width="800" />
+</p>
+
+- 그룹 채팅방 생성
+<p align="center">
+  <img src="picture/gifs/chat_room_create.gif" width="800" />
+</p>
+
+- 조직도를 통한 채팅 시작
+<p align="center">
+  <img src="picture/gifs/org_chart_chat.gif" width="800" />
+</p>
+
+- 메시지 송/수신
+<p align="center">
+  <img src="picture/gifs/messaging.gif" width="800" />
+</p>
+
+- 메시지 삭제
+<p align="center">
+  <img src="picture/gifs/message_delete.gif" width="800" />
+</p>
+
+- 파일 전송
+<p align="center">
+  <img src="picture/gifs/file_send2.gif" width="800" />
+</p>
+
+- 채팅방, 메시지 검색
+<p align="center">
+  <img src="picture/gifs/chat_search.gif" width="800" />
+</p>
+
+- 채팅방 나가기
+<p align="center">
+  <img src="picture/gifs/chat_del.gif" width="800" />
+</p>
 </details>
 
 <details>
@@ -465,7 +592,29 @@
 <details>
 <summary><font size="5"><strong>성과</strong></font></summary>
 
-<!-- 성과 서비스 화면 자료를 여기에 추가하세요. -->
+**평가자 맵핑**
+<video src="picture/gifs/평가자 맵핑.mp4" controls width="800"></video>
+
+**성과평가 규칙 설정**
+![성과평가 규칙 설정](picture/gifs/성과평가%20규칙%20설정.gif)
+
+**KPI 지표 생성**
+![KPI 지표 생성](picture/gifs/kp지표%20생성.gif)
+
+**평가 시즌 생성**
+![평가 시즌 생성](picture/gifs/평가생성.gif)
+
+**단계 개폐 및 기간 연장**
+<video src="picture/gifs/단계 계폐 및 기간연장.mp4" controls width="800"></video>
+
+**피평가자 목표 작성**
+![피평가자 목표 작성](picture/gifs/피평가자목표작성,%20평가자검토.gif)
+
+**평가자 검토**
+![평가자 검토](picture/gifs/피평가자목표작성,%20평가자검토.gif)
+
+**상위자 평가**
+<video src="picture/gifs/상위자평가.mp4" controls width="800"></video>
 
 </details>
 
@@ -476,6 +625,15 @@
 ## 5. 기술 문서
 
 각 카테고리를 펼치면 관련 설계·운영 문서로 이동합니다.
+
+<details>
+<summary><h3>통합검색</h3></summary>
+
+| 문서 | 핵심 내용 |
+|------|-----------|
+| [통합검색 (Elasticsearch)](docs_md/elasticsearch.md) | `unified_search` 인덱스 설계 · Nori/n-gram 분석기 · BM25+kNN 하이브리드(RRF) · Debezium CDC 색인 · 멀티테넌트/권한 필터 |
+
+</details>
 
 <details>
 <summary><font size="5"><strong>전자결재</strong></font></summary>
@@ -492,10 +650,9 @@
 <details>
 <summary><font size="5"><strong>AI</strong></font></summary>
 
-| 문서                                               | 핵심 내용                                                                                                 |
-|--------------------------------------------------|-------------------------------------------------------------------------------------------------------|
-| [통합검색 (Elasticsearch)](docs_md/elasticsearch.md) | `unified_search` 인덱스 설계 · Nori/n-gram 분석기 · BM25+kNN 하이브리드(RRF) · Debezium CDC 색인 · 멀티테넌트/권한 필터       |
-| [AI Copilot](docs_md/ai-copilot.md)              | 민감도 분류 → Anthropic / 사내 sLLM(EXAONE) 이중 라우팅 · Tool-Use 루프 · Prompt Caching(input -79%) · 응답 인용·액션 스키마 |
+| 문서 | 핵심 내용 |
+|------|-----------|
+| [AI Copilot](docs_md/ai-copilot.md) | 민감도 분류 → Anthropic / 사내 sLLM(EXAONE) 이중 라우팅 · Tool-Use 루프 · Prompt Caching(input -79%) · 응답 인용·액션 스키마 |
 
 </details>
 
