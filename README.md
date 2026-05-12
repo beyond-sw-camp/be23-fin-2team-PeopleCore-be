@@ -585,7 +585,93 @@
 <details>
 <summary><font size="5"><strong>급여</strong></font></summary>
 
-<!-- 급여 서비스 화면 자료를 여기에 추가하세요. -->
+<details>
+<summary>급여정책설정 - 지급항목 관리</summary>
+<br/>
+<p align="center">
+  <img src="picture/2.급여정책설정-지급항목관리.png" alt="급여 - 지급항목 관리" width="900" />
+</p>
+</details>
+
+<details>
+<summary>급여정책설정 - 공제항목 관리</summary>
+<br/>
+<p align="center">
+  <img src="picture/3.급여정책설정-공제항목관리.png" alt="급여 - 공제항목 관리" width="900" />
+</p>
+</details>
+
+<details>
+<summary>급여정책설정 - 퇴직연금 설정</summary>
+<br/>
+<p align="center">
+  <img src="picture/7.급여정책설정-퇴직연금설정.png" alt="급여 - 퇴직연금 설정" width="900" />
+</p>
+</details>
+
+<details>
+<summary>급여대장</summary>
+<br/>
+<p align="center">
+  <img src="picture/8.급여관리-급여대장.png" alt="급여 - 급여대장" width="900" />
+</p>
+</details>
+
+<details>
+<summary>사원별 급여관리 - 연봉</summary>
+<br/>
+<p align="center">
+  <img src="picture/8.급여관리-사원별급여관리-연봉.png" alt="급여 - 사원별 급여관리 연봉" width="900" />
+</p>
+</details>
+
+<details>
+<summary>사원별 급여관리 - 월급여 예상 지급공제</summary>
+<br/>
+<p align="center">
+  <img src="picture/9.급여관리-사원별급여관리-월급여예상지급공제.png" alt="급여 - 월급여 예상 지급공제" width="900" />
+</p>
+</details>
+
+<details>
+<summary>연차수당 산정 - 입사기념일 도래 사원</summary>
+<br/>
+<p align="center">
+  <img src="picture/10.급여관리-연차수당산정-입사기념일도래사원.png" alt="급여 - 입사기념일 도래 사원" width="900" />
+</p>
+</details>
+
+<details>
+<summary>연차수당 산정 - 퇴직자 연차정산</summary>
+<br/>
+<p align="center">
+  <img src="picture/11.급여관리-연차수당산정-퇴직자연차정산.png" alt="급여 - 퇴직자 연차정산" width="900" />
+</p>
+</details>
+
+<details>
+<summary>퇴직금대장</summary>
+<br/>
+<p align="center">
+  <img src="picture/12.급여관리-퇴직금대장.png" alt="급여 - 퇴직금대장" width="900" />
+</p>
+</details>
+
+<details>
+<summary>퇴직금 추계액</summary>
+<br/>
+<p align="center">
+  <img src="picture/13.급여관리-퇴직금추계액.png" alt="급여 - 퇴직금 추계액" width="900" />
+</p>
+</details>
+
+<details>
+<summary>퇴직연금 적립 내역</summary>
+<br/>
+<p align="center">
+  <img src="picture/14.급여관리-퇴직연금적립내역.png" alt="급여 - 퇴직연금 적립 내역" width="900" />
+</p>
+</details>
 
 </details>
 
