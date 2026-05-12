@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: payroll-seed-job
+  namespace: default
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    spec:
+      restartPolicy: Never
+      initContainers:
+        - name: install-tools
+          image: mysql:8.0
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              microdnf install -y curl
+              cp /usr/bin/curl /shared/curl
+          volumeMounts:
+            - { name: shared,  mountPath: /shared }
+      containers:
+        - name: seeder
+          image: mysql:8.0
+          command:
+            - bash
+            - -c
+            - |
+              set -e
+              cp /shared/curl /usr/bin/curl
+              cp /scripts/* /tmp/
+              chmod +x /tmp/run_all_seed.sh /tmp/seed_payroll_via_api.sh
+              bash /tmp/run_all_seed.sh
+          env:
+            - { name: DB_HOST,        valueFrom: { secretKeyRef: { name: peoplecore-secrets, key: DB_HOST } } }
+            - { name: DB_USER,        valueFrom: { secretKeyRef: { name: peoplecore-secrets, key: DB_USERNAME } } }
+            - { name: DB_PASS,        valueFrom: { secretKeyRef: { name: peoplecore-secrets, key: DB_PASSWORD } } }
+            - { name: DB_PORT,        value: "3306" }
+            - { name: DB_NAME,        value: "peoplecore" }
+            - { name: HR_HOST,        value: "http://hr-service.default.svc.cluster.local" }
+            - { name: COMPANY_NAME,   value: "peoplecore" }
+            - { name: ADMIN_EMP_NUM,  value: "EMP-2025-001" }
+            - { name: START_YM,       value: "2025-01" }
+            - { name: END_YM,         value: "2026-03" }
+            - { name: MYSQL_SSL_OPT,  value: "--ssl-mode=REQUIRED" }
+          volumeMounts:
+            - { name: shared,  mountPath: /shared }
+            - { name: scripts, mountPath: /scripts }
+      volumes:
+        - { name: shared,  emptyDir: {} }
+        - name: scripts
+          configMap:
+            name: payroll-seed-scripts
+            defaultMode: 0755

@@ -34,7 +34,11 @@ public class WorkGroupService {
     private final AutoCloseSchedulerManager autoCloseSchedulerManager;
 
     @Autowired
-    public WorkGroupService(WorkGroupRepository workGroupRepository, WorkGroupSearchRepository workGroupSearchRepository, EmployeeRepository employeeRepository, CompanyRepository companyRepository, AutoCloseSchedulerManager autoCloseSchedulerManager) {
+    public WorkGroupService(WorkGroupRepository workGroupRepository,
+                            WorkGroupSearchRepository workGroupSearchRepository,
+                            EmployeeRepository employeeRepository,
+                            CompanyRepository companyRepository,
+                            AutoCloseSchedulerManager autoCloseSchedulerManager) {
         this.workGroupRepository = workGroupRepository;
         this.workGroupSearchRepository = workGroupSearchRepository;
         this.employeeRepository = employeeRepository;
@@ -77,7 +81,7 @@ public class WorkGroupService {
         return employeeRepository.findByWorkGroup_WorkGroupId(workGroupId, pageable).map(WorkGroupMemberResDto::from);
     }
 
-    /* 근무 그룹 생성 */
+    /* 근무 그룹 생성 — 저장 후 자동마감 Trigger 등록 */
     public WorkGroupDetailResDto createWorkGroup(UUID companyId, Long managerId, String managerName, WorkGroupReqDto dto) {
         /* 근무 그룹 코드 중복 체크 */
         if (workGroupRepository.existsByCompany_CompanyIdAndGroupCodeAndGroupDeleteAtIsNull(companyId, dto.getGroupCode())) {
@@ -105,20 +109,20 @@ public class WorkGroupService {
 
         /*저장 */
         workGroupRepository.save(workGroup);
-        autoCloseSchedulerManager.register(workGroup);
+        autoCloseSchedulerManager.register(workGroup);  // wg 별 Trigger 신규 등록
         return WorkGroupDetailResDto.from(workGroup);
     }
 
 
-    /* 근무 그룹 수정 */
+    /* 근무 그룹 수정 — startTime 변경 시 Trigger reschedule */
     public WorkGroupDetailResDto updateWorkGroup(Long workGroupId, WorkGroupReqDto dto) {
         WorkGroup workGroup = workGroupRepository.findByWorkGroupIdAndGroupDeleteAtIsNull(workGroupId).orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
         workGroup.update(dto);
-        autoCloseSchedulerManager.register(workGroup);
+        autoCloseSchedulerManager.register(workGroup);  // cron 동일하면 skip, 다르면 reschedule
         return WorkGroupDetailResDto.from(workGroup);
     }
 
-    /*근무 그룹 삭제*/
+    /* 근무 그룹 삭제 — softDelete + Trigger 해제 */
     public void deleteWorkGroup(Long workGroupId) {
         WorkGroup workGroup = workGroupRepository.findByWorkGroupIdAndGroupDeleteAtIsNull(workGroupId).orElseThrow(() -> new CustomException(ErrorCode.WORK_GROUP_NOT_FOUND));
 
