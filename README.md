@@ -247,42 +247,65 @@
 <details>
 <summary><h3>근태</h3></summary>
 
-<p align="center">
-초과 근로 신청 화면 
+<details>
+<summary>전사 근태현황 (일자별)</summary>
 <br/>
-  <img src="picture/attendance-overRequest.png" alt="근태 - 초과근로 신청" />
-</p>
-
 <p align="center">
 관리자용 전사 근태 현황 대쉬보드(일자별로 조회하는 화면)
 <br/>
   <img src="picture/admin-attendance.png" alt="근태 - 전사 근태현황 (일자별)" />
 </p>
+</details>
 
+<details>
+<summary>전사 근태현황 (집계)</summary>
+<br/>
 <p align="center">
 관리자용 전사 근태 현황 대쉬보드 (집계 화면)
-
 <br/>
   <img src="picture/admin-attendance-all.png" alt="근태 - 전사 근태현황 (집계)" />
 </p>
+</details>
 
+<details>
+<summary>전사 근태현황 (기간별)</summary>
+<br/>
 <p align="center">
 관리자용 전사 근태 현황 대쉬보드 (기간별 조회하는 화면)
 <br/>
   <img src="picture/admin-attendance-day.png" alt="근태 - 전사 근태현황 (기간별)" />
 </p>
+</details>
 
+<details>
+<summary>초과근로 신청</summary>
+<br/>
 <p align="center">
-사원이 자신의 근태 기록을 정정 신청하는 화면 
+초과 근로 신청 화면
+<br/>
+  <img src="picture/attendance-overRequest.png" alt="근태 - 초과근로 신청" />
+</p>
+</details>
+
+<details>
+<summary>근태 정정 신청</summary>
+<br/>
+<p align="center">
+사원이 자신의 근태 기록을 정정 신청하는 화면
 <br/>
   <img src="picture/attendance-modify.png" alt="근태 - 근태 정정 신청" />
 </p>
+</details>
 
+<details>
+<summary>내 근태현황</summary>
+<br/>
 <p align="center">
-사원 본인의 근태 현황을 볼 수 있는 화면 
+사원 본인의 근태 현황을 볼 수 있는 화면
 <br/>
   <img src="picture/attendance-my.png" alt="근태 - 내 근태현황" />
 </p>
+</details>
 
 </details>
 
