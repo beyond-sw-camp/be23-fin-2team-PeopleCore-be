@@ -39,6 +39,24 @@ public interface SeverancePaysRepository extends JpaRepository<SeverancePays, Lo
             "GROUP BY s.sevStatus")
     List<Object[]> countBySevStatus(@Param("companyId") UUID companyId);
 
+    // 회사별 퇴직금 총액 집계 (상태 필터 적용 시 해당 상태 전체 기준)
+    @Query("SELECT COALESCE(SUM(s.severanceAmount), 0) FROM SeverancePays s " +
+            "WHERE s.company.companyId = :companyId " +
+            "AND (:sevStatus IS NULL OR s.sevStatus = :sevStatus)")
+    Long sumSeveranceAmountByCompanyAndStatus(
+            @Param("companyId") UUID companyId,
+            @Param("sevStatus") SevStatus sevStatus
+    );
+
+    // 회사별 실지급 총액 집계 (DC형은 netAmount에 기적립액 차감 후 금액이 저장됨)
+    @Query("SELECT COALESCE(SUM(s.netAmount), 0) FROM SeverancePays s " +
+            "WHERE s.company.companyId = :companyId " +
+            "AND (:sevStatus IS NULL OR s.sevStatus = :sevStatus)")
+    Long sumNetAmountByCompanyAndStatus(
+            @Param("companyId") UUID companyId,
+            @Param("sevStatus") SevStatus sevStatus
+    );
+
 //    approvalDocId 로 단건 조회 (kafka consumer용)  - 단건 없애고 다건으로 변경.
     Optional<SeverancePays> findByApprovalDocIdAndCompany_CompanyId(Long approvalDocId, UUID companyId);
 
@@ -51,4 +69,3 @@ public interface SeverancePaysRepository extends JpaRepository<SeverancePays, Lo
     List<SeverancePays> findAllByCompany_CompanyIdAndApprovalDocId(UUID companyId, Long approvalDocId);
 
 }
-

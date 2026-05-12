@@ -479,11 +479,13 @@ public class SeveranceService {
             countMap.put((SevStatus) row[0],(Long) row[1]);
         }
 
-//        합계
-        long totalSevAmount = page.getContent().stream()
-                .mapToLong(SeverancePays::getSeveranceAmount).sum();
-        long totalNet = page.getContent().stream()
-                .mapToLong(SeverancePays::getNetAmount).sum();
+//        합계 - 현재 페이지가 아니라 필터 조건에 맞는 전체 퇴직금대장 기준
+        long totalSevAmount = Optional.ofNullable(
+                severancePaysRepository.sumSeveranceAmountByCompanyAndStatus(companyId, statusFilter)
+        ).orElse(0L);
+        long totalNet = Optional.ofNullable(
+                severancePaysRepository.sumNetAmountByCompanyAndStatus(companyId, statusFilter)
+        ).orElse(0L);
 
         return SeveranceListResDto.builder()
                 .totalCount(page.getTotalElements())
