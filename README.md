@@ -53,36 +53,28 @@
 ## 1. 주요 기능
 
 <details>
-<summary><h3>전자결재</h3></summary>
+<summary><font size="5"><strong>전자결재</strong></font></summary>
 
-<p align="center">
-양식 수정 및 버전관리
-<br/>
-  <img src="picture/gifs/approval-settings.gif" alt="전자결재 - 설정" />
-</p>
+- 양식 수정 및 버전관리
 
-<p align="center">
-결재 문서번호 규칙 설정
-<br/>
-  <img src="picture/gifs/approval-num-setting.gif" alt="전자결재 - 문서번호 설정" />
-</p>
+<img src="picture/gifs/approval-settings.gif" alt="전자결재 - 설정" />
 
-<p align="center">
-결재 상신
-<br/>
-  <img src="picture/gifs/approval-pay-up.gif" alt="전자결재 - 결재 상신" />
-</p>
+- 결재 문서번호 규칙 설정
 
-<p align="center">
-결재 최종 승인
-<br/>
-  <img src="picture/gifs/approval-pay-ok2.gif" alt="전자결재 - 결재 승인" />
-</p>
+<img src="picture/gifs/approval-num-setting.gif" alt="전자결재 - 문서번호 설정" />
+
+- 결재 상신
+
+<img src="picture/gifs/approval-pay-up.gif" alt="전자결재 - 결재 상신" />
+
+- 결재 최종 승인
+
+<img src="picture/gifs/approval-pay-ok2.gif" alt="전자결재 - 결재 승인" />
 
 </details>
 
 <details>
-<summary><h3>사원 관리 (Employee)</h3></summary>
+<summary><font size="5"><strong>사원 관리 (Employee)</strong></font></summary>
 
 **사원등록 폼 수정**
 ![사원등록 폼 수정](picture/gifs/사원등록%20폼수정.gif)
@@ -93,64 +85,50 @@
 </details>
 
 <details>
-<summary><h3>근태 (Attendance)</h3></summary>
+<summary><font size="5"><strong>근태 (Attendance)</strong></font></summary>
 
-<p align="center">
-회사의 근태 관련 정책 설정
-<br/>
-  <img src="picture/gifs/attendance-settings.gif" alt="근태 - 설정" />
-</p>
+- 회사의 근태 관련 정책 설정
 
-<p align="center">
-사원의 초과근무 신청
-<br/>
-  <img src="picture/gifs/attendance-overRequest.gif" alt="근태 - 초과근무 신청" />
-</p>
+<img src="picture/gifs/attendance-settings.gif" alt="근태 - 설정" />
 
-<p align="center">
-사원의 근태 정정 신청
-<br/>
-  <img src="picture/gifs/attendance-edit.gif" alt="근태 - 정정 신청" />
-</p>
+- 사원의 초과근무 신청
+
+<img src="picture/gifs/attendance-overRequest.gif" alt="근태 - 초과근무 신청" />
+
+- 사원의 근태 정정 신청
+
+<img src="picture/gifs/attendance-edit.gif" alt="근태 - 정정 신청" />
 
 </details>
 
 <details>
-<summary><h3>휴가 (Vacation)</h3></summary>
+<summary><font size="5"><strong>휴가 (Vacation)</strong></font></summary>
 
-<p align="center">
-회사 내 휴가 정책과 회사가 만들 휴가 화면
-<br/>
-  <img src="picture/gifs/vacation-settings.gif" alt="휴가 - 설정" />
-</p>
+- 회사 내 휴가 정책과 회사가 만들 휴가 화면
 
-<p align="center">
-휴가 신청 후 승인시 자신의 캘린더에 자동 반영
-<br/>
-  <img src="picture/gifs/vacaion-request-calander.gif" alt="휴가 - 신청 캘린더" />
-</p>
+<img src="picture/gifs/vacation-settings.gif" alt="휴가 - 설정" />
 
-<p align="center">
-자신이 필요한 휴가 부여 신청
-<br/>
-  <img src="picture/gifs/vacaion-Grant-Request.gif" alt="휴가 - 부여 요청" />
-</p>
+- 휴가 신청 후 승인시 자신의 캘린더에 자동 반영
 
-<p align="center">
-관리자가 일반 사원의 휴가를 조정할 수 있는 화면 
-<br/>
-  <img src="picture/gifs/vacaion-Grant.gif" alt="휴가조정" />
-</p>
+<img src="picture/gifs/vacaion-request-calander.gif" alt="휴가 - 신청 캘린더" />
+
+- 자신이 필요한 휴가 부여 신청
+
+<img src="picture/gifs/vacaion-Grant-Request.gif" alt="휴가 - 부여 요청" />
+
+- 관리자가 일반 사원의 휴가를 조정할 수 있는 화면 
+
+<img src="picture/gifs/vacaion-Grant.gif" alt="휴가조정" />
 
 </details>
 
 <details>
-<summary><h3>성과 평가 (Evaluation)</h3></summary>
+<summary><font size="5"><strong>성과 평가 (Evaluation)</strong></font></summary>
 
 </details>
 
 <details>
-<summary><h3>급여 관리 (Payroll)</h3></summary>
+<summary><font size="5"><strong>급여 관리 (Payroll)</strong></font></summary>
 
 <video src="picture/gifs/급여플로우.mp4" controls width="900"></video>
 
@@ -194,7 +172,7 @@
 ## 4. 상세 서비스 화면
 
 <details>
-<summary><h3>로그인</h3></summary>
+<summary><font size="5"><strong>로그인</strong></font></summary>
 <p align="center">
   <img src="picture/gifs/login.gif" width="800" />
 </p>
@@ -202,16 +180,15 @@
 </details>
 
 <details>
-<summary><h3>안면인식 로그인</h3></summary>
+<summary><font size="5"><strong>안면인식 로그인</strong></font></summary>
 <p align="center">
   <img src="picture/gifs/face_login.gif" width="800" />
 </p>
 
 </details>
 
-
 <details>
-<summary><h3>사원 관리</h3></summary>
+<summary><font size="5"><strong>사원 관리</strong></font></summary>
 
 **인력 현황**
 <video src="picture/gifs/인력 현황.mp4" controls width="800"></video>
@@ -222,92 +199,90 @@
 </details>
 
 <details>
-<summary><h3>전자결재</h3></summary>
+<summary><font size="5"><strong>전자결재</strong></font></summary>
+
+<details>
+<summary>전자결재 환경설정화면</summary>
+
+<img src="picture/approval-settings.png" alt="전자결재 - 설정" />
+</details>
+
+<details>
+<summary>양식 일괄 설정</summary>
+
+- 결재문서의 설정을 일괄적으로 설정할 수 있는 화면이다
+
+<img src="picture/approvalForm-settings-all.png" alt="전자결재 - 양식 일괄 설정" />
+</details>
 
 <details>
 <summary>양식 수정 및 버전관리</summary>
-<br/>
-<p align="center">
-관리자가 결재 양식을 등록·수정하고 버전 이력을 관리하는 화면
-<br/>
-  <img src="picture/gifs/approval-settings.gif" alt="전자결재 - 양식 설정" />
-</p>
+
+- 관리자가 결재 양식을 등록·수정하고 버전 이력을 관리하는 화면
+
+<img src="picture/gifs/approval-settings.gif" alt="전자결재 - 양식 설정" />
 </details>
 
 <details>
 <summary>결재 문서번호 규칙 설정</summary>
-<br/>
-<p align="center">
-부서·양식·날짜·순번 조합으로 회사별 문서번호 규칙을 정의하는 화면
-<br/>
-  <img src="picture/gifs/approval-num-setting.gif" alt="전자결재 - 문서번호 설정" />
-</p>
+
+- 부서·양식·날짜·순번 조합으로 회사별 문서번호 규칙을 정의하는 화면
+
+<img src="picture/gifs/approval-num-setting.gif" alt="전자결재 - 문서번호 설정" />
 </details>
 
 <details>
 <summary>결재 상신</summary>
-<br/>
-<p align="center">
-사원이 양식을 선택하고 결재선·참조·열람자를 지정해 문서를 상신하는 화면
-<br/>
-  <img src="picture/gifs/approval-pay-up.gif" alt="전자결재 - 결재 상신" />
-</p>
+
+- 사원이 양식을 선택하고 결재선·참조·열람자를 지정해 문서를 상신하는 화면
+
+<img src="picture/gifs/approval-pay-up.gif" alt="전자결재 - 결재 상신" />
 </details>
 
 <details>
 <summary>결재 최종 승인</summary>
-<br/>
-<p align="center">
-결재자가 문서를 검토 후 승인·반려 처리하고 마지막 결재 시 문서가 완료되는 화면
-<br/>
-  <img src="picture/gifs/approval-pay-ok2.gif" alt="전자결재 - 결재 승인" />
-</p>
+
+- 결재자가 문서를 검토 후 승인·반려 처리하고 마지막 결재 시 문서가 완료되는 화면
+
+<img src="picture/gifs/approval-pay-ok2.gif" alt="전자결재 - 결재 승인" />
 </details>
 
 <details>
 <summary>결재환경설정 - 기본 설정 (서명관리)</summary>
-<br/>
-<p align="center">
-사원 본인의 서명 이미지를 업로드·삭제하고 결재 작성 방식을 설정하는 화면
-<br/>
-  <img src="picture/my-signuture.png" alt="전자결재 - 결재환경설정 기본" />
-</p>
+
+- 사원 본인의 서명 이미지를 업로드·삭제하고 결재 작성 방식을 설정하는 화면
+
+<img src="picture/my-signuture.png" alt="전자결재 - 결재환경설정 기본" />
 </details>
 
 <details>
 <summary>결재환경설정 - 부재/위임 설정</summary>
-<br/>
-<p align="center">
-부재 기간 동안 본인에게 온 결재를 대결자에게 자동 위임하도록 설정하는 화면
-<br/>
-  <img src="picture/approval-delegated.png" alt="전자결재 - 부재/위임 설정" />
-</p>
+
+- 부재 기간 동안 본인에게 온 결재를 대결자에게 자동 위임하도록 설정하는 화면
+
+<img src="picture/approval-delegated.png" alt="전자결재 - 부재/위임 설정" />
 </details>
 
 <details>
 <summary>개인 문서함 관리</summary>
-<br/>
-<p align="center">
-사원이 본인 문서함을 추가·삭제·이관하고 순서를 조정하는 화면
-<br/>
-  <img src="picture/my-folder.png" alt="전자결재 - 개인 문서함 관리" />
-</p>
+
+- 사원이 본인 문서함을 추가·삭제·이관하고 순서를 조정하는 화면
+
+<img src="picture/my-folder.png" alt="전자결재 - 개인 문서함 관리" />
 </details>
 
 <details>
 <summary>개인 문서함 - 자동분류 규칙</summary>
-<br/>
-<p align="center">
-제목·양식명·기안자 등 조건을 만족하는 완료 문서를 지정 문서함으로 자동 분류하는 규칙 설정 화면
-<br/>
-  <img src="picture/my-folder-rule.png" alt="전자결재 - 자동분류 규칙" />
-</p>
+
+- 제목·양식명·기안자 등 조건을 만족하는 완료 문서를 지정 문서함으로 자동 분류하는 규칙 설정 화면
+
+<img src="picture/my-folder-rule.png" alt="전자결재 - 자동분류 규칙" />
 </details>
 
 </details>
 
 <details>
-<summary><h3>캘린더</h3></summary>
+<summary><font size="5"><strong>캘린더</strong></font></summary>
 
 <p align="center">
   <img src="picture/calendar.png" alt="캘린더 서비스 화면" width="900" />
@@ -316,14 +291,14 @@
 </details>
 
 <details>
-<summary><h3>내 설정</h3></summary>
+<summary><font size="5"><strong>내 설정</strong></font></summary>
 
 <!-- 내 설정 서비스 화면 자료를 여기에 추가하세요. -->
 
 </details>
 
 <details>
-<summary><h3>파일함</h3></summary>
+<summary><font size="5"><strong>파일함</strong></font></summary>
 
 - 파일 및 폴더 생성 / 삭제
 <p align="center">
@@ -348,14 +323,17 @@
 </details>
 
 <details>
-<summary><h3>통합검색</h3></summary>
+<summary><font size="5"><strong>통합검색</strong></font></summary>
+
+<!-- 통합검색 서비스 화면 자료를 여기에 추가하세요. -->
+
 <p align="center">
   <img src="picture/gifs/search.gif" width="800" />
 </p>
 </details>
 
 <details>
-<summary><h3>AI</h3></summary>
+<summary><font size="5"><strong>AI</strong></font></summary>
 
 - 캘린더에 일정 생성하기
 <p align="center">
@@ -390,7 +368,7 @@
 </details>
 
 <details>
-<summary><h3>조직도</h3></summary>
+<summary><font size="5"><strong>조직도</strong></font></summary>
 
 - 부서 생성 및 순서 편집
 <p align="center">
@@ -409,7 +387,7 @@
 </details>
 
 <details>
-<summary><h3>메신저</h3></summary>
+<summary><font size="5"><strong>메신저</strong></font></summary>
 
 - 1대1 채팅방 생성
 <p align="center">
@@ -453,207 +431,169 @@
 </details>
 
 <details>
-<summary><h3>휴가</h3></summary>
+<summary><font size="5"><strong>휴가</strong></font></summary>
 
 <details>
 <summary>휴가 정책 설정</summary>
-<br/>
-<p align="center">
-관리자가 회사의 휴가 종류·연차 부여 규칙·소진 정책 등을 설정하는 화면
-<br/>
-  <img src="picture/gifs/vacation-settings.gif" alt="휴가 - 정책 설정" />
-</p>
+
+- 관리자가 회사의 휴가 종류·연차 부여 규칙·소진 정책 등을 설정하는 화면
+
+<img src="picture/gifs/vacation-settings.gif" alt="휴가 - 정책 설정" />
 </details>
 
 <details>
 <summary>전사 휴가 현황</summary>
-<br/>
-<p align="center">
-부서별 휴가 소진율과 사원별 잔여/사용 일수를 한눈에 확인하는 관리자용 대시보드
-<br/>
-  <img src="picture/admin-vacation-dasboard-all.png" alt="휴가 - 전사 휴가 현황" />
-</p>
+
+- 부서별 휴가 소진율과 사원별 잔여/사용 일수를 한눈에 확인하는 관리자용 대시보드
+
+<img src="picture/admin-vacation-dasboard-all.png" alt="휴가 - 전사 휴가 현황" />
 </details>
 
 <details>
 <summary>전사 휴가 현황 - 사원 보유 휴가</summary>
-<br/>
-<p align="center">
-사원 클릭 시 해당 사원의 휴가 유형별 잔여·사용·만료 내역을 팝업으로 조회하는 화면
-<br/>
-  <img src="picture/admin-vacation-emp-balance.png" alt="휴가 - 사원 보유 휴가" />
-</p>
+
+- 사원 클릭 시 해당 사원의 휴가 유형별 잔여·사용·만료 내역을 팝업으로 조회하는 화면
+
+<img src="picture/admin-vacation-emp-balance.png" alt="휴가 - 사원 보유 휴가" />
 </details>
 
 <details>
 <summary>기간별 휴가 현황</summary>
-<br/>
-<p align="center">
-지정 기간 동안의 휴가자·총 사용 일수·신청 건수를 사원 단위로 조회하는 화면
-<br/>
-  <img src="picture/admin-vacation-day.png" alt="휴가 - 기간별 휴가 현황" />
-</p>
+
+- 지정 기간 동안의 휴가자·총 사용 일수·신청 건수를 사원 단위로 조회하는 화면
+
+<img src="picture/admin-vacation-day.png" alt="휴가 - 기간별 휴가 현황" />
 </details>
 
 <details>
 <summary>휴가 결재 (신청 현황)</summary>
-<br/>
-<p align="center">
-사원의 휴가 신청·부여 요청 결재 진행 상태를 관리자가 확인하는 화면
-<br/>
-  <img src="picture/admin-vacation-request.png" alt="휴가 - 휴가 결재" />
-</p>
+
+- 사원의 휴가 신청·부여 요청 결재 진행 상태를 관리자가 확인하는 화면
+
+<img src="picture/admin-vacation-request.png" alt="휴가 - 휴가 결재" />
 </details>
 
 <details>
 <summary>연차 촉진 이력</summary>
-<br/>
-<p align="center">
-연차 사용 촉진 1·2차 통지 발송 이력과 사원 응답 결과를 관리하는 화면
-<br/>
-  <img src="picture/admin-vacation-vacation-ledger.png" alt="휴가 - 연차 촉진 이력" />
-</p>
+
+- 연차 사용 촉진 1·2차 통지 발송 이력과 사원 응답 결과를 관리하는 화면
+
+<img src="picture/admin-vacation-vacation-ledger.png" alt="휴가 - 연차 촉진 이력" />
 </details>
 
 <details>
 <summary>사원 휴가 조정</summary>
-<br/>
-<p align="center">
-관리자가 일반 사원의 보유 휴가를 직접 가감 조정하는 화면
-<br/>
-  <img src="picture/gifs/vacaion-Grant.gif" alt="휴가 - 사원 휴가 조정" />
-</p>
+
+- 관리자가 일반 사원의 보유 휴가를 직접 가감 조정하는 화면
+
+<img src="picture/gifs/vacaion-Grant.gif" alt="휴가 - 사원 휴가 조정" />
 </details>
 
 <details>
 <summary>내 휴가현황</summary>
-<br/>
-<p align="center">
-사원 본인의 연차 잔여·사용·결재 대기 일수와 예정/지난 휴가를 확인하는 화면
-<br/>
-  <img src="picture/emp-vacation-dashboard.png" alt="휴가 - 내 휴가현황" />
-</p>
+
+- 사원 본인의 연차 잔여·사용·결재 대기 일수와 예정/지난 휴가를 확인하는 화면
+
+<img src="picture/emp-vacation-dashboard.png" alt="휴가 - 내 휴가현황" />
 </details>
 
 <details>
 <summary>휴가 신청</summary>
-<br/>
-<p align="center">
-휴가 유형·일자·반차 옵션을 선택해 전자결재로 상신하는 신청 화면
-<br/>
-  <img src="picture/emp-vacation-request.png" alt="휴가 - 신청" />
-</p>
+
+- 휴가 유형·일자·반차 옵션을 선택해 전자결재로 상신하는 신청 화면
+
+<img src="picture/emp-vacation-request.png" alt="휴가 - 신청" />
 </details>
 
 <details>
 <summary>휴가 부여 요청</summary>
-<br/>
-<p align="center">
-법정휴가·회사 제공 휴가의 부여를 사원이 요청하고 HR_ADMIN 결재로 부여받는 화면
-<br/>
-  <img src="picture/emp-vacation-grantRequest.png" alt="휴가 - 부여 요청" />
-</p>
+
+- 법정휴가·회사 제공 휴가의 부여를 사원이 요청하고 HR_ADMIN 결재로 부여받는 화면
+
+<img src="picture/emp-vacation-grantRequest.png" alt="휴가 - 부여 요청" />
 </details>
 
 <details>
 <summary>휴가 신청서 (결재 양식)</summary>
-<br/>
-<p align="center">
-휴가 신청이 전자결재 양식으로 자동 변환되어 결재선을 따라 진행되는 화면
-<br/>
-  <img src="picture/emp-vacation-approval.png" alt="휴가 - 신청서 결재 양식" />
-</p>
+
+- 휴가 신청이 전자결재 양식으로 자동 변환되어 결재선을 따라 진행되는 화면
+
+<img src="picture/emp-vacation-approval.png" alt="휴가 - 신청서 결재 양식" />
 </details>
 
 <details>
 <summary>휴가 승인 후 캘린더 자동 반영</summary>
-<br/>
-<p align="center">
-승인된 휴가가 본인 캘린더에 자동으로 반영되어 일정에 노출되는 화면
-<br/>
-  <img src="picture/gifs/vacaion-request-calander.gif" alt="휴가 - 캘린더 자동 반영" />
-</p>
+
+- 승인된 휴가가 본인 캘린더에 자동으로 반영되어 일정에 노출되는 화면
+
+<img src="picture/gifs/vacaion-request-calander.gif" alt="휴가 - 캘린더 자동 반영" />
 </details>
 
 </details>
 
 <details>
-<summary><h3>근태</h3></summary>
+<summary><font size="5"><strong>근태</strong></font></summary>
 
 <details>
 <summary>근태 정책 설정</summary>
-<br/>
-<p align="center">
-관리자가 회사의 근태 관련 정책(근무시간·지각·조퇴·초과근무 등)을 설정하는 화면
-<br/>
-  <img src="picture/gifs/attendance-settings.gif" alt="근태 - 정책 설정" />
-</p>
+
+- 관리자가 회사의 근태 관련 정책(근무시간·지각·조퇴·초과근무 등)을 설정하는 화면
+
+<img src="picture/gifs/attendance-settings.gif" alt="근태 - 정책 설정" />
 </details>
 
 <details>
 <summary>전사 근태현황 (일자별)</summary>
-<br/>
-<p align="center">
-관리자용 전사 근태 현황 대쉬보드(일자별로 조회하는 화면)
-<br/>
-  <img src="picture/admin-attendance.png" alt="근태 - 전사 근태현황 (일자별)" />
-</p>
+
+- 관리자용 전사 근태 현황 대쉬보드(일자별로 조회하는 화면)
+
+<img src="picture/admin-attendance.png" alt="근태 - 전사 근태현황 (일자별)" />
 </details>
 
 <details>
 <summary>전사 근태현황 (집계)</summary>
-<br/>
-<p align="center">
-관리자용 전사 근태 현황 대쉬보드 (집계 화면)
-<br/>
-  <img src="picture/admin-attendance-all.png" alt="근태 - 전사 근태현황 (집계)" />
-</p>
+
+- 관리자용 전사 근태 현황 대쉬보드 (집계 화면)
+
+<img src="picture/admin-attendance-all.png" alt="근태 - 전사 근태현황 (집계)" />
 </details>
 
 <details>
 <summary>전사 근태현황 (기간별)</summary>
-<br/>
-<p align="center">
-관리자용 전사 근태 현황 대쉬보드 (기간별 조회하는 화면)
-<br/>
-  <img src="picture/admin-attendance-day.png" alt="근태 - 전사 근태현황 (기간별)" />
-</p>
+
+- 관리자용 전사 근태 현황 대쉬보드 (기간별 조회하는 화면)
+
+<img src="picture/admin-attendance-day.png" alt="근태 - 전사 근태현황 (기간별)" />
 </details>
 
 <details>
 <summary>초과근로 신청</summary>
-<br/>
-<p align="center">
-초과 근로 신청 화면
-<br/>
-  <img src="picture/attendance-overRequest.png" alt="근태 - 초과근로 신청" />
-</p>
+
+- 초과 근로 신청 화면
+
+<img src="picture/attendance-overRequest.png" alt="근태 - 초과근로 신청" />
 </details>
 
 <details>
 <summary>근태 정정 신청</summary>
-<br/>
-<p align="center">
-사원이 자신의 근태 기록을 정정 신청하는 화면
-<br/>
-  <img src="picture/attendance-modify.png" alt="근태 - 근태 정정 신청" />
-</p>
+
+- 사원이 자신의 근태 기록을 정정 신청하는 화면
+
+<img src="picture/attendance-modify.png" alt="근태 - 근태 정정 신청" />
 </details>
 
 <details>
 <summary>내 근태현황</summary>
-<br/>
-<p align="center">
-사원 본인의 근태 현황을 볼 수 있는 화면
-<br/>
-  <img src="picture/attendance-my.png" alt="근태 - 내 근태현황" />
-</p>
+
+- 사원 본인의 근태 현황을 볼 수 있는 화면
+
+<img src="picture/attendance-my.png" alt="근태 - 내 근태현황" />
 </details>
 
 </details>
 
 <details>
-<summary><h3>급여</h3></summary>
+<summary><font size="5"><strong>급여</strong></font></summary>
 
 <details>
 <summary>급여정책설정 - 지급항목 관리</summary>
@@ -746,7 +686,7 @@
 </details>
 
 <details>
-<summary><h3>성과</h3></summary>
+<summary><font size="5"><strong>성과</strong></font></summary>
 
 **평가자 맵핑**
 <video src="picture/gifs/평가자 맵핑.mp4" controls width="800"></video>
@@ -792,7 +732,19 @@
 </details>
 
 <details>
-<summary><h3>AI</h3></summary>
+<summary><font size="5"><strong>전자결재</strong></font></summary>
+
+| 문서                                                                       | 핵심 내용                                                                          |
+|--------------------------------------------------------------------------|--------------------------------------------------------------------------------|
+| [결재 상태 관리 - State Pattern](docs_md/approval-state-pattern.md)             | 5개 상태(`DRAFT/PENDING/APPROVED/REJECTED/CANCELED`) × 허용 동작을 State 구현체에 캡슐화, OCP |
+| [문서함 동적 검색 - QueryDSL](docs_md/approval-querydsl-search.md)              | 9개 문서함 공통 필터 헬퍼 · 위임까지 포함한 결재선 매칭 · `CaseBuilder` 로 카운트 9쿼리 → 2쿼리             |
+| [Kafka 비동기 이벤트 - 결합도 분리](docs_md/kafka-event-driven.md)                  | 결재/HR/근태 동기 결합 제거 · 보상 트랜잭션 · `@RetryableTopic` + DLT 인프라                     |
+| [Redis 분산 캐싱 - HR 데이터 Cache-Aside](docs_md/redis-distributed-cache.md)   | fail-soft + Kafka 이벤트 무효화 + TTL 안전망 3중 구조                                      |
+
+</details>
+
+<details>
+<summary><font size="5"><strong>AI</strong></font></summary>
 
 | 문서 | 핵심 내용 |
 |------|-----------|
@@ -801,7 +753,7 @@
 </details>
 
 <details>
-<summary><h3>배치 / 스케줄러</h3></summary>
+<summary><font size="5"><strong>배치 / 스케줄러</strong></font></summary>
 
 | 문서                                                                   | 핵심 내용                          |
 |----------------------------------------------------------------------|--------------------------------|
@@ -810,7 +762,7 @@
 </details>
 
 <details>
-<summary><h3>근태</h3></summary>
+<summary><font size="5"><strong>근태</strong></font></summary>
 
 | 문서                                             | 핵심 내용                                 |
 |------------------------------------------------|---------------------------------------|
@@ -1066,7 +1018,7 @@ Search API (/search-service/search)
 ## 8. 트러블 슈팅
 
 <details>
-<summary><h3>전자결재</h3></summary>
+<summary><font size="5"><strong>전자결재</strong></font></summary>
 
 <details>
 <summary>1. 동시성 충돌 - 결재 승인과 기안자 회수</summary>
@@ -1129,140 +1081,39 @@ Search API (/search-service/search)
 </details>
 
 <details>
-<summary>3. 상태 전이 복잡도 - State Pattern 적용</summary>
+<summary>3. EKS 환경에서 @LoadBalanced 가 호스트명을 service-id 로 잘못 해석</summary>
 
 **문제 사항**
 
-- 결재 문서는 임시저장 / 진행중 / 승인 / 반려 / 회수 등 다수 상태를 가짐
-- 각 상태별 다른 행동(승인/반려/회수/재기안 허용 여부)에 대한 if-else 체인으로 비즈니스 로직 곳곳에 분기 반복
+- 결재 기안 중 일부 요청에서 `SERVICE_UNAVAILABLE` "HR 서비스 연결 실패" 노출
+- 직전 요청은 성공, 일정 시간 후·신규 회사 ID 첫 조회 때만 재현되는 산발적 장애
+- collaboration / hr / search 3개 모듈의 사내 호출에 동일 패턴 잠복 → 결재 기안 자체 중단
 
 **원인 분석**
 
-- 상태 전이 규칙이 곳곳에 흩어지면 OCP 위반 → 신규 상태 추가 시 회귀 위험
-- 분기 누락 시 잘못된 전이가 통과 → 데이터 무결성 직결
+- 사내 호출이 Redis 캐시 → 미스 시 RestClient 2단 구조 → 캐시 만료·재배포·신규 ID 순간에만 RestClient 실제 호출되어 산발 장애로 인지
+- `RestClient.Builder` 에 `@LoadBalanced` 부착 → `http://hr-service` 호스트명을 DNS 가 아닌 Spring Cloud LoadBalancer 의 service-id 로 해석 시도
+- prod 환경은 `eureka.client.enabled: false` → `DiscoveryClient.getInstances("hr-service")` 가 빈 리스트 반환 → 네트워크 호출 자체가 발생하지 않고 실패
+- `@CircuitBreaker` fallback 이 원인을 일반 메시지로 덮어 근본 원인이 가려짐
 
 **시도 방법**
 
-- if-else / switch 분기 : 단순하나 상태 추가마다 모든 메서드 분기 수정 → 누락 위험
-- enum 메서드 내부 분기 : 한 곳에 모이지만 메서드별 거대한 switch 누적, 가독성 ↓
+- `@LoadBalanced` 일괄 제거 검토 : 로컬 개발은 여전히 Eureka 디스커버리 필요 → 통째 제거 시 로컬 흐름 단절
+- 정상 호출(face-api·redis·kafka)과 비교 : K8s Service 가 이미 서버사이드 LB 수행 → 클라이언트 LB 중복 확인
 
 **해결 방법**
 
-- State Pattern 적용 → `ApprovalState` 인터페이스 + 상태별 구현체(`DraftState`, `PendingState`, `ApprovedState`, `RejectedState`,
-  `CanceledState`)
-- 각 State 가 자기 자신의 허용 동작을 캡슐화 → 호출부 분기 제거, 신규 상태는 클래스 추가만으로 확장
-- 잘못된 전이 즉시 차단 → 데이터 정합성 보장으로 운영 효율 향상, 일관된 에러 응답으로 UX 개선
-
-</details>
-
-<details>
-<summary>4. 동적 검색 조건 - QueryDSL 활용</summary>
-
-**문제 사항**
-
-- 문서함 조회는 제목·기안자·날짜·양식·상태 등 다수 조건이 선택적으로 조합
-- 정적 쿼리로는 모든 조합 대응 불가
-- 결재선 기반 필터(대기함·참조함)와 다중 문서함 카운트가 겹쳐 N+1·중복 쿼리 우려
-
-**원인 분석**
-
-- 문서함은 사용자 첫 진입 화면 → 응답 지연 시 체감 UX 직접 악화
-- 조건 분기를 코드로 풀면 메서드/쿼리 폭증, 유지보수 비용 누적
-
-**시도 방법**
-
-- JPQL 문자열 concat : 단순하나 타입 검증 불가, 런타임 오류 위험
-- Specification (Criteria API) : 타입 안전하나 verbose, 가독성·작성성 ↓
-
-**해결 방법**
-
-- QueryDSL + `BooleanBuilder` 로 동적 WHERE 조립 → 타입 안전 + 입력 조건만 반영
-- 다중 문서함 카운트는 단일 쿼리로 통합 → 첫 진입 응답 단축으로 UX 개선
-- N+1 제거 + 불필요 JOIN 차단 → DB 호출 감소로 운영 효율 향상
-
-</details>
-
-<details>
-<summary>5. 문서번호 유연성 - Strategy Pattern 적용</summary>
-
-**문제 사항**
-
-- 회사마다 문서번호 형식이 상이 (부서코드/양식명/커스텀 텍스트 등 조합 다양)
-- 단일 빌더에 분기로 처리하면 신규 회사 온보딩마다 코드 수정 필요
-
-**원인 분석**
-
-- 문서번호는 회사별 정책에 종속되는 가변 영역 → 핵심 결재 로직과 분리 필요
-- 분기형 구현은 OCP 위반 → 회사 추가가 곧 회귀 위험
-
-**시도 방법**
-
-- 단일 빌더 내부 분기 : 단순하나 회사 추가 시 분기 폭증
-- 설정값 기반 템플릿 문자열 치환 : 유연하나 문자열 의존, 검증 약함
-
-**해결 방법**
-
-- Strategy Pattern + Registry 적용 → 슬롯 타입별 독립 객체로 분리, `SlotTypeRegistry` 가 런타임에 선택
-- 신규 슬롯은 구현체 추가만으로 확장 → 코드 수정 없이 회사 정책 대응으로 운영 효율 향상
-- 회사 정책에 맞는 문서번호 노출 → UX 개선
-
-</details>
-
-<details>
-<summary>6. Kafka - 비동기 이벤트 기반 알림 및 캐시 무효화</summary>
-
-**문제 사항**
-
-- 결재 도메인이 알림·HR·근태 등 타 서비스 모듈과 직접 동기 통신 → 한쪽 장애가 결재 전체 실패로 전파되고 응답 지연 누적
-- HR 부서 변경 시 Collaboration 캐시 무효화·결재 반영 후 정합성 위반 발견 등, 동기 호출만으로는 다룰 수 없는 후행 처리 다수
-
-**원인 분석**
-
-- MSA 환경에서 동기 결합은 장애·지연을 그대로 전파 → 핵심 트랜잭션과 부수/후행 작업 분리 필요
-- 분산 트랜잭션(2PC)은 도입 비용 과다 → 메시지 기반 비동기·보상 모델이 현실적
-
-**시도 방법**
-
-- 동기 HTTP 호출 : 강결합, 알림/HR 장애가 결재 실패로 전파
-- 인메모리 이벤트(Spring `ApplicationEventPublisher`) : 단일 JVM 한정 → 타 서비스 전파 불가
-
-**해결 방법**
-
-- Kafka 토픽으로 결재 트랜잭션과 부수 작업(알림/캐시 무효화) 분리 → 부수 장애가 결재로 전파되지 않아 운영 효율 향상, 응답 지연 제거로 UX 개선
-- 보상 트랜잭션 : 후행 서비스가 정합성 위반 감지 시 역방향 이벤트 발행 → 선행 서비스가 결재 자동 반려로 상태 복구
-- 일시 장애는 자동 재시도, 반복 실패 메시지는 별도 DLT 로 분리해 운영 가시성 확보
-
-</details>
-
-<details>
-<summary>7. Redis 분산 캐싱 - 서비스 간 동기 호출 최소화</summary>
-
-**문제 사항**
-
-- 결재 문서 조회마다 HR 데이터(부서·직급) 필요 → 매 요청 HR 호출 시 서비스 의존도·응답 지연 누적
-- 멀티 파드 환경에서 파드별 캐시 상태가 달라져 정합성 문제 발생
-
-**원인 분석**
-
-- HR 데이터는 조회 빈도 ↑·변경 빈도 ↓ → 캐싱 적합
-- 멀티 파드에서 일관된 캐시 상태를 유지하려면 외부 공유 저장소 필요
-
-**시도 방법**
-
-- HR 매번 호출 : 일관성은 강하나 호출 비용·지연 누적
-- 로컬 캐시(Caffeine) : 빠르나 파드별 상태 상이, 멀티 파드 공유 불가
-
-**해결 방법**
-
-- Redis 분산 캐시 + Cache-Aside → 결재 조회 응답 단축으로 UX 개선
-- Kafka(`hr-dept-updated`) 연동 무효화 → HR 변경 즉시 반영으로 정합성 유지, HR 호출 횟수 감소로 운영 효율 향상
+- 3개 모듈의 사내 호출 빈을 `@Profile("local")` / `@Profile("prod")` 두 개로 분리, 하나만 활성화되어 단일 후보로 주입
+- `local` 빈만 `@LoadBalanced` 유지 (Eureka 디스커버리), `prod` 빈은 제거 → kube-dns 가 호스트명 해석, K8s Service 가 파드 분산
+- 캐시 미스·재배포·신규 ID 케이스에서도 결재 기안 즉시 성공 → 체감 장애 0건으로 UX 개선
+- 산발적 알림 제거로 운영팀 가짜 알람 대응 비용 0, 클라이언트 ↔ 서버 LB 이중화를 EKS 단일 경로로 단순화하여 운영 효율 향상
 
 </details>
 
 </details>
 
 <details>
-<summary><h3>근태 관리</h3></summary>
+<summary><font size="5"><strong>근태 관리</strong></font></summary>
 
 <details>
 <summary>1. 출근이 두 번 찍히는 문제 - 동시 체크인 중복 INSERT</summary>
