@@ -541,22 +541,17 @@ WHERE approval_status = 'REJECTED' AND reject_reason IS NULL;
 --     - 부서장 본인 → 대표가 평가
 --     - 대표(admin) 본인 → evaluator NULL (최상위, 자기평가만 인정)
 --   본부장(T-HEAD = 임원) 제외
---   grade_label 분포 강제: S 10/A 20/B 40/C 20/D 10 (emp_id+season_id 시드)
 -- =====================================================================
+-- 7-1. CLOSED 시즌 (grade_label 은 EvalGrade 에 직접 박혀 있어 보정화면 영향 없음)
 INSERT INTO manager_evaluation (employee_id, evaluator_id, season_id, grade_label, comment, feedback, submitted_at)
 SELECT
   e.emp_id,
   CASE
-    WHEN e.emp_id = de.evaluator_emp_id THEN de.evaluator_for_evaluator   -- 부서장 → 같은 부서 차순위가 평가
-    ELSE de.evaluator_emp_id                                              -- 일반 사원 → 부서장이 평가
+    WHEN e.emp_id = de.evaluator_emp_id THEN de.evaluator_for_evaluator
+    ELSE de.evaluator_emp_id
   END AS evaluator_id,
   s.season_id,
-  -- grade: S≈11% A≈21% B≈38% C≈20% D≈10% → 목표 대비 S+1 A+1 B-2 (보정 화면 시연용)
-  CASE WHEN ((e.emp_id + s.season_id) % 100) < 11 THEN 'S'
-       WHEN ((e.emp_id + s.season_id) % 100) < 32 THEN 'A'
-       WHEN ((e.emp_id + s.season_id) % 100) < 70 THEN 'B'
-       WHEN ((e.emp_id + s.season_id) % 100) < 90 THEN 'C'
-       ELSE 'D' END,
+  ELT(1 + ((e.emp_id + s.season_id) % 10), 'S','A','A','B','B','B','B','C','C','D'),
   '시즌 종합 평가 의견 — 목표 달성 수준 및 협업·태도 종합',
   '다음 시즌 성장 포인트 — 강점 유지, 약점 보완 방향 제시',
   DATE_ADD(s.end_date, INTERVAL -5 DAY)
@@ -565,9 +560,44 @@ LEFT JOIN tmp_dept_evaluator de ON de.dept_id = e.dept_id
 CROSS JOIN season s
 WHERE e.company_id = @cid
   AND e.emp_status = 'ACTIVE'
-  AND e.title_id NOT IN (@t_head, @t_ceo)                                  -- 본부장(임원) 제외
+  AND e.title_id NOT IN (@t_head, @t_ceo)
   AND e.emp_hire_date < s.start_date
-  AND s.season_id IN (@s_2024h1, @s_2024h2, @s_2025h1, @s_2025h2, @s_2026h1);
+  AND s.season_id IN (@s_2024h1, @s_2024h2, @s_2025h1, @s_2025h2);
+
+-- 7-2. OPEN 시즌 (2026H1) — ROW_NUMBER 기반 정확한 분포 보장
+--   103명 기준: S=11(+1) A=22(+1) B=40(-1) C=21(=) D=9(-1)
+--   ROUND(total_cnt * 비율) 로 인원 변동 시에도 비율 유지
+INSERT INTO manager_evaluation (employee_id, evaluator_id, season_id, grade_label, comment, feedback, submitted_at)
+SELECT
+  sub.emp_id,
+  sub.evaluator_id,
+  @s_2026h1,
+  CASE
+    WHEN sub.rn <= ROUND(sub.total_cnt * 0.1068) THEN 'S'
+    WHEN sub.rn <= ROUND(sub.total_cnt * 0.3204) THEN 'A'
+    WHEN sub.rn <= ROUND(sub.total_cnt * 0.7087) THEN 'B'
+    WHEN sub.rn <= ROUND(sub.total_cnt * 0.9126) THEN 'C'
+    ELSE 'D'
+  END,
+  '시즌 종합 평가 의견 — 목표 달성 수준 및 협업·태도 종합',
+  '다음 시즌 성장 포인트 — 강점 유지, 약점 보완 방향 제시',
+  DATE_ADD((SELECT end_date FROM season WHERE season_id = @s_2026h1), INTERVAL -5 DAY)
+FROM (
+  SELECT
+    e.emp_id,
+    CASE
+      WHEN e.emp_id = de.evaluator_emp_id THEN de.evaluator_for_evaluator
+      ELSE de.evaluator_emp_id
+    END AS evaluator_id,
+    ROW_NUMBER() OVER (ORDER BY (e.emp_id * 7 + 13) % 997) AS rn,
+    COUNT(*)     OVER ()                                    AS total_cnt
+  FROM employee e
+  LEFT JOIN tmp_dept_evaluator de ON de.dept_id = e.dept_id
+  WHERE e.company_id = @cid
+    AND e.emp_status = 'ACTIVE'
+    AND e.title_id NOT IN (@t_head, @t_ceo)
+    AND e.emp_hire_date < '2026-01-01'
+) sub;
 
 -- =====================================================================
 -- STEP 8. EvalGrade
@@ -741,6 +771,7 @@ WHERE e.company_id = @cid
   AND e.title_id NOT IN (@t_head, @t_ceo)
   AND e.emp_hire_date < '2026-01-01';
 
+
 -- =====================================================================
 -- STEP 9. Calibration — CLOSED 시즌 일부 사원에 등급 보정 이력 추가
 --   대상: emp_id % 17 = 0 사원 중 auto_grade ∈ {C, D}
@@ -838,10 +869,10 @@ ORDER BY FIELD(eg.final_grade, 'S','A','B','C','D');
 -- team_std_dev=0 으로 박아 백엔드 getCalibrationReview 에서 zeroStdDevTeams 에 잡히게.
 -- =====================================================================
 UPDATE eval_grade eg
-SET eg.manager_score          = 80,
-    eg.manager_score_adjusted = 80,
-    eg.team_std_dev           = 0
-WHERE eg.dept_id_snapshot = (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='DEV');
+SET manager_score          = 80,
+    manager_score_adjusted = 80,
+    team_std_dev           = 0
+WHERE dept_id_snapshot = (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='DEV');
 
 
 COMMIT;

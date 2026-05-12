@@ -59,6 +59,12 @@
 <details>
 <summary><h3>사원 관리 (Employee)</h3></summary>
 
+**사원등록 폼 수정**
+![사원등록 폼 수정](picture/gifs/사원등록%20폼수정.gif)
+
+**사원 등록**
+![사원 등록](picture/gifs/사원등록.gif)
+
 </details>
 
 <details>
@@ -117,6 +123,17 @@
 <details>
 <summary><h3>로그인</h3></summary>
 
+
+</details>
+
+<details>
+<summary><h3>사원 관리</h3></summary>
+
+**인력 현황**
+<video src="picture/gifs/인력 현황.mp4" controls width="800"></video>
+
+**인사발령 및 이력확인**
+<video src="picture/gifs/인사발령.mp4" controls width="800"></video>
 
 </details>
 
@@ -193,7 +210,29 @@
 <details>
 <summary><h3>성과</h3></summary>
 
-<!-- 성과 서비스 화면 자료를 여기에 추가하세요. -->
+**평가자 맵핑**
+<video src="picture/gifs/평가자 맵핑.mp4" controls width="800"></video>
+
+**성과평가 규칙 설정**
+![성과평가 규칙 설정](picture/gifs/성과평가%20규칙%20설정.gif)
+
+**KPI 지표 생성**
+![KPI 지표 생성](picture/gifs/kp지표%20생성.gif)
+
+**평가 시즌 생성**
+![평가 시즌 생성](picture/gifs/평가생성.gif)
+
+**단계 개폐 및 기간 연장**
+<video src="picture/gifs/단계 계폐 및 기간연장.mp4" controls width="800"></video>
+
+**피평가자 목표 작성**
+![피평가자 목표 작성](picture/gifs/피평가자목표작성,%20평가자검토.gif)
+
+**평가자 검토**
+![평가자 검토](picture/gifs/피평가자목표작성,%20평가자검토.gif)
+
+**상위자 평가**
+<video src="picture/gifs/상위자평가.mp4" controls width="800"></video>
 
 </details>
 
