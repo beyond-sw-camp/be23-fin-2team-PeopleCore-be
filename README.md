@@ -146,6 +146,11 @@
 <details>
 <summary><h3>급여 관리 (Payroll)</h3></summary>
 
+<video src="picture/gifs/급여플로우.mp4" controls width="900"></video>
+
+**급여 플로우** \
+[인사팀] 급여대장 생성 -> 초과근무수당 적용 -> 확정 -> 전자결재 상신/승인 -> 지급처리 -> [사원] 급여명세서 확인
+
 </details>
 
 ---
@@ -276,7 +281,9 @@
 <details>
 <summary><h3>캘린더</h3></summary>
 
-<!-- 캘린더 서비스 화면 자료를 여기에 추가하세요. -->
+<p align="center">
+  <img src="picture/calendar.png" alt="캘린더 서비스 화면" width="900" />
+</p>
 
 </details>
 
