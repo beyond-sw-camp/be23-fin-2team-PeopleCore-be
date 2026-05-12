@@ -19,6 +19,7 @@ import com.peoplecore.employee.dto.EmployeeListDto;
 import com.peoplecore.employee.dto.EmployeeUpdateRequestDto;
 import com.peoplecore.employee.repository.EmployeeFileRepository;
 import com.peoplecore.employee.repository.EmployeeRepository;
+import com.peoplecore.event.EmpUpdatedEvent;
 import com.peoplecore.exception.BusinessException;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
@@ -49,9 +50,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
@@ -68,6 +71,7 @@ import java.util.UUID;
 
 @Service
 @Transactional
+@Slf4j
 public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
@@ -87,11 +91,13 @@ public class EmployeeService {
     private final RetirementSettingsRepository retirementSettingsRepository;
     private final ObjectMapper objectMapper;
     private final ProfileImageService profileImageService;
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
+    private static final String TOPIC_EMP_UPDATED = "hr-emp-updated";
     public static final String DEFAULT_CODE = "DEFAULT";
 
     @Autowired
-    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService, InsuranceJobTypesRepository insuranceJobTypesRepository, AccountVerifyService accountVerifyService, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, ObjectMapper objectMapper, ProfileImageService profileImageService) {
+    public EmployeeService(EmployeeRepository employeeRepository, CompanyRepository companyRepository, DepartmentRepository departmentRepository, GradeRepository gradeRepository, TitleRepository titleRepository, PasswordEncoder passwordEncoder, MinioService minioService, EmployeeFileRepository employeeFileRepository, WorkGroupRepository workGroupRepository, FaceAuthService faceAuthService, InsuranceJobTypesRepository insuranceJobTypesRepository, AccountVerifyService accountVerifyService, EmpAccountsRepository empAccountsRepository, EmpRetirementAccountRepository empRetirementAccountRepository, RetirementSettingsRepository retirementSettingsRepository, ObjectMapper objectMapper, ProfileImageService profileImageService, KafkaTemplate<String, String> kafkaTemplate) {
         this.employeeRepository = employeeRepository;
         this.companyRepository = companyRepository;
         this.departmentRepository = departmentRepository;
@@ -109,6 +115,7 @@ public class EmployeeService {
         this.retirementSettingsRepository = retirementSettingsRepository;
         this.objectMapper = objectMapper;
         this.profileImageService = profileImageService;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     private static final String EMAIL_DOMAIN = "@peoplecore.com";
@@ -491,7 +498,23 @@ public class EmployeeService {
             fileDtos.add(EmployeeFileResDto.from(f));
         }
         dto.setFiles(fileDtos);
+
+        // 캐시 무효화 이벤트 발행 (collaboration-service Redis hr:emp:{empId} 키 삭제 트리거)
+        publishEmpUpdatedEvent(empId);
         return dto;
+    }
+
+    /* 사원 변경 이벤트 kafka 발행 (실패해도 메인 트랜잭션에 영향 없음 - 캐시는 TTL 로 자연 만료) */
+    private void publishEmpUpdatedEvent(Long empId) {
+        try {
+            String message = objectMapper.writeValueAsString(new EmpUpdatedEvent(empId));
+            kafkaTemplate.send(TOPIC_EMP_UPDATED, String.valueOf(empId), message);
+            log.info("사원 변경 이벤트 발행 완료 topic={}, empId={}", TOPIC_EMP_UPDATED, empId);
+        } catch (JsonProcessingException e) {
+            log.error("사원 변경 이벤트 직렬화 실패 empId={}, error={}", empId, e.getMessage());
+        } catch (Exception e) {
+            log.error("사원 변경 이벤트 발행 실패 empId={}, error={}", empId, e.getMessage());
+        }
     }
 
     //    5-1. 인사 서류 다운로드 (minio 스트리밍)
