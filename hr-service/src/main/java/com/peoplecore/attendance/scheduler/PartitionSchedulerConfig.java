@@ -55,7 +55,7 @@ public class PartitionSchedulerConfig {
     }
 
     /*
-     * 부팅 시 1회 register. AutoCloseStartupLoader 와 동일 패턴.
+     * 부팅 시 1회 register — 멱등 (동일 cron 이면 skip).
      * Spring Boot Quartz Scheduler 는 standby 상태(아직 start 전)라도 addJob/scheduleJob 등록 가능.
      */
     @PostConstruct
