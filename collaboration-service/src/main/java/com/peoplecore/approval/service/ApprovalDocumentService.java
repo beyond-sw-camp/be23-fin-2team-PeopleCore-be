@@ -356,6 +356,22 @@ public class ApprovalDocumentService {
             throw new BusinessException("결재자가 지정되지 않은 문서는 상신할 수 없습니다.");
         }
 
+        /* 폼별 사전 검증(휴가 잔여 등) — 임시저장 → 상신 우회 경로에서도 createDocument 와 동일한 게이트를 강제.
+         * 이 호출이 없으면 사용자가 "임시저장 후 다시 열어 결재요청" 으로 잔액 부족 같은 거부를 우회할 수 있고,
+         * 승인 후 hr-service Kafka 컨슈머(원장 차감) 와 정합성이 깨진다.
+         * preCreate 구현은 DocumentCreateRequest.docData 만 읽으므로 docData 한 필드만 채운 pseudo request 로 충분.
+         * 채번/상태 전환 전에 차단해야 docNum 시퀀스 낭비/롤백 부담을 피할 수 있어 이 시점에 배치. */
+        ApprovalForm form = document.getFormId();
+        DocumentCreateRequest pseudoRequest = DocumentCreateRequest.builder()
+                .formId(form.getFormId())
+                .docTitle(document.getDocTitle())
+                .docType(document.getDocType())
+                .docData(document.getDocData())
+                .isEmergency(document.getIsEmergency())
+                .build();
+        formHandlerRegistry.findByForm(form)
+                .ifPresent(h -> h.preCreate(companyId, empId, pseudoRequest));
+
         document.changeVisibility(isPublic); // 상신 시점에 공개여부 확정 (null 이면 기존 값 유지)
 
         DeptInfoResponse deptInfo = hrCacheService.getDept(deptId);
@@ -430,6 +446,19 @@ public class ApprovalDocumentService {
         }
         /* REJECTED 외 상태는 State 가 throw */
         prev.requireResubmittable();
+
+        /* 폼별 사전 검증(휴가 잔여 등) — 재기안 경로에서도 createDocument 와 동일한 게이트를 강제.
+         * 사용자가 docData 를 수정해 제출하므로 잔액 부족 같은 비즈니스 규칙을 다시 검증해야 한다.
+         * 이 호출이 없으면 "일부러 반려 받고 재기안" 으로 우회 가능. submitDocument 와 같은 정책. */
+        DocumentCreateRequest pseudoRequest = DocumentCreateRequest.builder()
+                .formId(prev.getFormId().getFormId())
+                .docTitle(request.getDocTitle())
+                .docType(prev.getDocType())
+                .docData(request.getDocData())
+                .isEmergency(request.getIsEmergency())
+                .build();
+        formHandlerRegistry.findByForm(prev.getFormId())
+                .ifPresent(h -> h.preCreate(companyId, empId, pseudoRequest));
 
         /* 이전 문서는 손대지 않음 - REJECTED/docNum/docCompleteAt 그대로 보존 */
 
