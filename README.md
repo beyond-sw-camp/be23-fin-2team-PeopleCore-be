@@ -130,12 +130,14 @@
 <details>
 <summary><font size="5"><strong>급여 관리 (Payroll)</strong></font></summary>
 
-<video src="picture/gifs/급여플로우.mp4" controls width="900"></video>
+- **급여 플로우** <br>
+[인사팀] 급여대장 생성 -> 초과근무수당 적용 -> 확정 -> 전자결재 상신/승인 -> 지급처리 -> [사원] 급여명세서 확인 
 
-**급여 플로우** \
-[인사팀] 급여대장 생성 -> 초과근무수당 적용 -> 확정 -> 전자결재 상신/승인 -> 지급처리 -> [사원] 급여명세서 확인
+<img src="picture/gifs/급여플로우.gif"  alt="급여 업무 플로우" width="900">
+ 
 
 </details>
+
 
 ---
 
@@ -284,9 +286,20 @@
 <details>
 <summary><font size="5"><strong>캘린더</strong></font></summary>
 
-<p align="center">
-  <img src="picture/calendar.png" alt="캘린더 서비스 화면" width="900" />
-</p>
+- 캘린더 조회     
+<p align="center">  
+  <img src="picture/calendar.png" alt="캘린더 서비스 화면" width="900" /> 
+</p>  
+
+- 캘린더 일정 등록  
+<p align="center"> 
+  <img src="picture/캘린더일정등록.png" alt="캘린더 일정등록 화면" width="900" /> 
+</p> 
+
+- 캘린더 관리(환경설정) 
+<p align="center"> 
+  <img src="picture/캘린더관리.png" alt="캘린더 관리 화면" width="900" /> 
+</p> 
 
 </details>
 
@@ -595,97 +608,54 @@
 <details>
 <summary><font size="5"><strong>급여</strong></font></summary>
 
-<details>
-<summary>급여정책설정 - 지급항목 관리</summary>
-<br/>
-<p align="center">
-  <img src="picture/2.급여정책설정-지급항목관리.png" alt="급여 - 지급항목 관리" width="900" />
-</p>
-</details>
 
-<details>
-<summary>급여정책설정 - 공제항목 관리</summary>
-<br/>
-<p align="center">
-  <img src="picture/3.급여정책설정-공제항목관리.png" alt="급여 - 공제항목 관리" width="900" />
-</p>
-</details>
+- 급여정책 설정 (최고권한자 설정 화면) 
+  - 지급/공제 항목 관리 
+  <img src="picture/2.급여정책설정-지급항목관리.png" alt="지급항목관리 화면" width="900" /> 
+  <img src="picture/3.급여정책설정-공제항목관리.png" alt="공제항목관리 화면" width="900" /> 
+ 
+  - 퇴직연금 설정 관리 
+  <img src="picture/7.급여정책설정-퇴직연금설정.png" alt="퇴직연금설정 화면" width="900" /> 
 
-<details>
-<summary>급여정책설정 - 퇴직연금 설정</summary>
-<br/>
-<p align="center">
-  <img src="picture/7.급여정책설정-퇴직연금설정.png" alt="급여 - 퇴직연금 설정" width="900" />
-</p>
-</details>
+- 급여관리 (HR담당자 업무 화면) 
+  - 사원별 급여관리-연봉 확인 
+  <img src="picture/8.급여관리-사원별급여관리-연봉.png" alt="사원별급여관리 연봉 조회 화면" width="900" /> 
 
-<details>
-<summary>급여대장</summary>
-<br/>
-<p align="center">
-  <img src="picture/8.급여관리-급여대장.png" alt="급여 - 급여대장" width="900" />
-</p>
-</details>
+  - 사원별 급여관리-월급여예상지급공제액 확인 
+  <img src="picture/9.급여관리-사원별급여관리-월급여예상지급공제.png" alt="월급여예상지급공제액 조회 화면" width="900" /> 
 
-<details>
-<summary>사원별 급여관리 - 연봉</summary>
-<br/>
-<p align="center">
-  <img src="picture/8.급여관리-사원별급여관리-연봉.png" alt="급여 - 사원별 급여관리 연봉" width="900" />
-</p>
-</details>
+  - 급여대장 
+  <img src="picture/8.급여관리-급여대장.png" alt="급여대장 조회 화면" width="900" /> 
 
-<details>
-<summary>사원별 급여관리 - 월급여 예상 지급공제</summary>
-<br/>
-<p align="center">
-  <img src="picture/9.급여관리-사원별급여관리-월급여예상지급공제.png" alt="급여 - 월급여 예상 지급공제" width="900" />
-</p>
-</details>
+  - 입사기념일도래사원 연차 수당 조회 및 정산 
+  <img src="picture/10.급여관리-연차수당산정-입사기념일도래사원.png" alt="연차수당조회 화면" width="900" /> 
 
-<details>
-<summary>연차수당 산정 - 입사기념일 도래 사원</summary>
-<br/>
-<p align="center">
-  <img src="picture/10.급여관리-연차수당산정-입사기념일도래사원.png" alt="급여 - 입사기념일 도래 사원" width="900" />
-</p>
-</details>
+  - 퇴직자 연차 수당 조회 및 정산 
+  <img src="picture/11.급여관리-연차수당산정-퇴직자연차정산.png" alt="연차수당조회 조회 화면" width="900" /> 
+ 
+  - 퇴직금대장 
+  <img src="picture/12.급여관리-퇴직금대장.png" alt="퇴직금대장 조회 화면" width="900" /> 
 
-<details>
-<summary>연차수당 산정 - 퇴직자 연차정산</summary>
-<br/>
-<p align="center">
-  <img src="picture/11.급여관리-연차수당산정-퇴직자연차정산.png" alt="급여 - 퇴직자 연차정산" width="900" />
-</p>
-</details>
+  - 퇴직금추계액 
+  <img src="picture/13.급여관리-퇴직금추계액.png" alt="퇴직금추계액 조회 화면" width="900" /> 
 
-<details>
-<summary>퇴직금대장</summary>
-<br/>
-<p align="center">
-  <img src="picture/12.급여관리-퇴직금대장.png" alt="급여 - 퇴직금대장" width="900" />
-</p>
-</details>
+  - 퇴직연금적립내역 
+  <img src="picture/14.급여관리-퇴직연금적립내역.png" alt="퇴직연금 적립내역 조회 화면" width="900" /> 
 
-<details>
-<summary>퇴직금 추계액</summary>
-<br/>
-<p align="center">
-  <img src="picture/13.급여관리-퇴직금추계액.png" alt="급여 - 퇴직금 추계액" width="900" />
-</p>
-</details>
+- 급여관리 (사원 개인 조회 화면) 
+  - 내 급여 확인 
+  <img src="picture/15.내급여조회.png" alt="개인 급여 조회 화면" width="900" /> 
 
-<details>
-<summary>퇴직연금 적립 내역</summary>
-<br/>
-<p align="center">
-  <img src="picture/14.급여관리-퇴직연금적립내역.png" alt="급여 - 퇴직연금 적립 내역" width="900" />
-</p>
-</details>
+  - 예상퇴직금조회-근속기준 퇴직금 예상액 조회(날짜지정) 
+  <img src="picture/16.근속기준퇴직금예상액.png" alt="예상퇴직금 조회 화면" width="900" /> 
+
+  - 예상퇴직금조회-퇴직연금적립금액(DC형) 조회 
+  <img src="picture/17.DC형퇴직연금적립금액.png" alt="퇴직연금적립금액 조회 화면" width="900" /> 
 
 </details>
 
 <details>
+
 <summary><font size="5"><strong>성과</strong></font></summary>
 
 **평가자 맵핑**
