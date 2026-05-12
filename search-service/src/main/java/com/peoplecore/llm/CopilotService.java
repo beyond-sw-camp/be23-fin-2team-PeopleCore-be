@@ -60,6 +60,10 @@ public class CopilotService {
                예: "5/18 오전 반차로 연차" → vacationType='연차', dayOption='오전반차'.
                제목을 발화에 명시하면 docTitle 에 그대로 넣어 모달 상단 제목 입력란이 채워지게 합니다.
                이 도구는 모달을 열기만 합니다 — 실제 상신은 사용자가 모달에서 직접 누릅니다.
+               도구 응답이 ok:false 로 오면(예: 잔액 부족) 모달은 열리지 않은 상태이므로 reason 필드를
+               그대로 사용자에게 자연어로 안내하고, 가능하다면 신청 일수를 줄이거나 다른 유형을 사용하는
+               대안을 함께 제시합니다. 이때는 prefill_approval_form 을 같은 발화로 재호출하지 마세요 —
+               사용자의 새 발화(예: 일자 변경)를 기다립니다.
             4) "내일", "다음 주 월요일", "오후 3시" 같은 상대 표현은 오늘 날짜 기준으로
                ISO 8601 LocalDateTime(YYYY-MM-DDTHH:mm:ss) 으로 변환해 startAt/endAt 에 넣습니다.
                시간 미지정 시 09:00~10:00 을 기본으로 가정하되, 답변에서 사용자에게 알려줍니다.
@@ -884,37 +888,57 @@ public class CopilotService {
         // collaboration-service 의 VacationUseFormHandler.preCreate 가 infoId/items null 로 400 차단.
         // 여기서 미리 채워 두면 FE 는 idempotent 가드(initialDocData.infoId/vacReqItems 존재 시 skip)로
         // async 호출 자체를 건너뛴다.
+        // <p>
+        // 잔액 사전 검증 (B안) — 매칭된 휴가 유형의 remainingDays 가 신청 일수보다 작고 미리쓰기 비허용이면
+        // OPEN_APPROVAL_FORM 액션을 발행하지 않고 LLM 에게 차단 사유를 전달해 사용자에게 자연어로 안내한다.
+        // collaboration-service.submitDocument 의 preCreate 가 어차피 잔액 부족을 막지만(A안),
+        // 사전 차단하면 사용자가 잔액 초과 모달을 클릭한 뒤에야 거부 메시지를 보는 회귀를 피할 수 있다.
+        java.util.Optional<String> blockReason = java.util.Optional.empty();
         if ("VACATION_REQUEST".equals(formCode) && companyUuidForResolve != null) {
-            resolveVacationPrefill(companyUuidForResolve, empId, role, input, vTypeNorm, prefill);
+            blockReason = resolveVacationPrefill(companyUuidForResolve, empId, role, input, vTypeNorm, prefill);
         }
 
         payload.put("prefill", prefill);
 
         // 결재선 자동 해결 — 검색 인덱스에서 EMPLOYEE 한 명만 골라 OrgMember 형태로 변환
+        // 잔액 부족 차단 시에도 결재선 해소는 의미가 없으므로 건너뜀.
         List<Map<String, Object>> resolvedApprovers = new ArrayList<>();
         List<String> unresolvedNames = new ArrayList<>();
-        Object rawApprovers = input.get("approverNames");
-        if (rawApprovers instanceof List<?> names) {
-            for (Object n : names) {
-                if (!(n instanceof String name) || name.isBlank()) continue;
-                Map<String, Object> resolved = resolveApprover(name, companyId, empId, role);
-                if (resolved != null) resolvedApprovers.add(resolved);
-                else unresolvedNames.add(name);
+        if (blockReason.isEmpty()) {
+            Object rawApprovers = input.get("approverNames");
+            if (rawApprovers instanceof List<?> names) {
+                for (Object n : names) {
+                    if (!(n instanceof String name) || name.isBlank()) continue;
+                    Map<String, Object> resolved = resolveApprover(name, companyId, empId, role);
+                    if (resolved != null) resolvedApprovers.add(resolved);
+                    else unresolvedNames.add(name);
+                }
             }
+            if (!resolvedApprovers.isEmpty()) payload.put("initialApprovers", resolvedApprovers);
         }
-        if (!resolvedApprovers.isEmpty()) payload.put("initialApprovers", resolvedApprovers);
 
-        actions.add(CopilotResponse.Action.builder()
-                .type("OPEN_APPROVAL_FORM")
-                .payload(payload)
-                .build());
+        // 차단 사유가 없을 때만 모달 자동 오픈 액션을 발행한다.
+        // 차단 사유가 있으면 LLM 이 자연어로 사용자에게 안내하고 사용자가 다시 시도하도록 한다.
+        if (blockReason.isEmpty()) {
+            actions.add(CopilotResponse.Action.builder()
+                    .type("OPEN_APPROVAL_FORM")
+                    .payload(payload)
+                    .build());
+        }
 
         toolCalls.add(CopilotResponse.ToolCall.builder()
                 .name("prefill_approval_form")
                 .input(input == null ? Map.of() : input)
-                .resultCount(1).build());
+                .resultCount(blockReason.isEmpty() ? 1 : 0).build());
 
-        // LLM 이 답변에 무엇이 채워졌고 못 찾은 이름이 무엇인지 자연어로 안내할 수 있도록 회신
+        // LLM tool result — 차단 사유가 있으면 ok:false + reason, 없으면 기존 ok:true 페이로드.
+        if (blockReason.isPresent()) {
+            StringBuilder sb = new StringBuilder("{\"ok\":false,\"formCode\":\"").append(formCode).append("\"");
+            sb.append(",\"reason\":\"").append(escape(blockReason.get())).append("\"");
+            sb.append(",\"action\":\"none\"}");
+            return Map.of("content", sb.toString());
+        }
+
         StringBuilder sb = new StringBuilder("{\"ok\":true,\"formCode\":\"").append(formCode).append("\"");
         sb.append(",\"prefilledFields\":[");
         boolean first = true;
@@ -951,19 +975,26 @@ public class CopilotService {
      *   <li>vacReqItems: startDate (+ endDate) 가 있고 날짜 포맷이 유효할 때만 슬롯 펼침. 빈 리스트면 미동봉.</li>
      *   <li>vacReqDatesText/vacReqUseDay: 슬롯이 만들어졌을 때만 UI 표시용으로 같이 채움. lockForm 잠금 상태에서도
      *       사용자가 일자/일수를 즉시 확인할 수 있게.</li>
+     *   <li>잔액 사전 검증: 매칭된 유형의 remainingDays + allowAdvance 와 신청 일수를 비교해 부족하면
+     *       prefill 에 vacReqItems/infoId 미동봉 + Optional 차단 사유 반환 → caller 가 모달 발행 차단.</li>
      *   <li>실패는 무해(silent) — 하나라도 빠지면 그 키만 빼고 나머지 prefill 은 정상 진행.</li>
      * </ul>
+     *
+     * @return 차단 사유 문자열(잔액 부족 등). Optional.empty 면 정상 prefill 완료 — caller 가 모달 발행 진행.
      */
     @SuppressWarnings("unchecked")
-    private void resolveVacationPrefill(UUID companyUuid, Long empId, String role,
-                                        Map<String, Object> input, String vTypeNorm,
-                                        Map<String, Object> prefill) {
-        // 1) infoId 해소: 회사 보유 휴가 유형에서 typeName/typeCode 매칭.
+    private java.util.Optional<String> resolveVacationPrefill(
+            UUID companyUuid, Long empId, String role,
+            Map<String, Object> input, String vTypeNorm,
+            Map<String, Object> prefill) {
+        // 1) infoId 해소 + 매칭된 유형의 잔액/선사용 메타 함께 추출.
         //    매칭 규칙은 FE 의 vacationApi.getMyVacationTypes 결과 매칭과 동일하게 — 정확/포함 양방향.
+        Long resolvedInfoId = null;
+        String resolvedTypeName = null;
+        java.math.BigDecimal remainingDays = null;   // 매칭된 유형의 잔여 일수 (null=메타 못 받음)
+        boolean allowAdvance = false;                 // 회사 정책 + 유형 종류 동시 만족 시 true (음수 차감 허용)
         try {
             List<Map<String, Object>> types = hrSelfServiceClient.getMyVacationTypes(companyUuid, empId, role);
-            Long resolvedInfoId = null;
-            String resolvedTypeName = null;
             for (Map<String, Object> t : types) {
                 Object tnObj = t.get("typeName");
                 Object tcObj = t.get("typeCode");
@@ -976,6 +1007,13 @@ public class CopilotService {
                 if (t.get("typeId") instanceof Number n) {
                     resolvedInfoId = n.longValue();
                     resolvedTypeName = (tn != null && !tn.isBlank()) ? tn : vTypeNorm;
+                    // remainingDays 는 BigDecimal/Number 어느 쪽으로든 직렬화될 수 있음.
+                    Object rd = t.get("remainingDays");
+                    if (rd instanceof Number rn) remainingDays = java.math.BigDecimal.valueOf(rn.doubleValue());
+                    else if (rd instanceof String rs) {
+                        try { remainingDays = new java.math.BigDecimal(rs); } catch (Exception ignored) {}
+                    }
+                    if (t.get("allowAdvance") instanceof Boolean ad) allowAdvance = ad;
                     break;
                 }
             }
@@ -995,32 +1033,60 @@ public class CopilotService {
         //    endDate 미지정 시 startDate 와 동일(단일일 휴가). dayOption 미명시면 종일 폴백.
         String startDateStr = input.get("startDate") instanceof String s ? s : null;
         if (startDateStr == null || startDateStr.isBlank()) {
-            return; // 날짜 미명시 — vacReqItems 없이 prefill 종료. FE 가 모달에서 직접 입력받음.
+            return java.util.Optional.empty(); // 날짜 미명시 — vacReqItems 없이 prefill 종료. FE 가 모달에서 직접 입력받음.
         }
         String endDateStr = input.get("endDate") instanceof String s ? s : startDateStr;
 
+        List<Map<String, Object>> slots;
+        VacationPrefillCalculator.DayOption parsedOption;
         try {
             Map<String, Object> workGroup = hrSelfServiceClient.getMyWorkGroup(companyUuid, empId, role);
-            VacationPrefillCalculator.DayOption parsedOption = VacationPrefillCalculator.parseDayOption(
+            parsedOption = VacationPrefillCalculator.parseDayOption(
                     prefill.get("dayOption") instanceof String s ? s : null);
-            List<Map<String, Object>> slots = VacationPrefillCalculator.expandSlots(
+            slots = VacationPrefillCalculator.expandSlots(
                     startDateStr, endDateStr, parsedOption, workGroup);
-            if (slots.isEmpty()) {
-                log.info("[Copilot] prefill_approval_form: vacReqItems 슬롯 생성 실패 " +
-                        "startDate={} endDate={} (날짜 포맷 오류 가능) — FE 가 async 폴백.",
-                        startDateStr, endDateStr);
-                return;
-            }
-            prefill.put("vacReqItems", slots);
-            // UI 표시용 — lockForm 상태에서도 사용자가 일자/일수를 즉시 확인 가능.
-            // BE 상신 시점에 vacReqUseDay 는 FE 가 명시적으로 삭제하므로 표시 전용이고,
-            // vacReqDatesText 는 textarea 표시 + 리스트 렌더 인풋이라 채워두면 모달이 예쁘게 나옴.
-            prefill.put("vacReqDatesText", VacationPrefillCalculator.buildDatesText(slots, parsedOption));
-            prefill.put("vacReqUseDay", VacationPrefillCalculator.sumUseDay(slots));
         } catch (Exception e) {
             log.warn("[Copilot] resolveVacationPrefill vacReqItems 단계 실패 - empId={}, err={}",
                     empId, e.getMessage());
+            return java.util.Optional.empty();
         }
+
+        if (slots.isEmpty()) {
+            log.info("[Copilot] prefill_approval_form: vacReqItems 슬롯 생성 실패 " +
+                    "startDate={} endDate={} (날짜 포맷 오류 가능) — FE 가 async 폴백.",
+                    startDateStr, endDateStr);
+            return java.util.Optional.empty();
+        }
+
+        // 3) 잔액 사전 검증 (B안) — 잔여가 신청 일수보다 작고 미리쓰기 비허용이면 차단.
+        //    hr-service.validateForCreate 와 동일한 정책 (allowNegative=true 면 잔액 검증 스킵).
+        //    잔액 메타를 못 받았다면(remainingDays==null) 사전 검증 스킵 — collab.preCreate 가 최종 게이트.
+        java.math.BigDecimal requestedDays = VacationPrefillCalculator.sumUseDay(slots);
+        if (resolvedInfoId != null && remainingDays != null && !allowAdvance
+                && requestedDays.compareTo(remainingDays) > 0) {
+            log.info("[Copilot] prefill_approval_form: 잔액 사전 차단 - empId={}, type={}, remaining={}, requested={}",
+                    empId, resolvedTypeName, remainingDays.toPlainString(), requestedDays.toPlainString());
+            // 차단 사유 명시 시점에는 prefill 에 infoId 만 남기고 가변 필드(vacReqItems/Dates/UseDay) 는 빼서
+            // 모달이 (만약 다른 경로로) 열리더라도 잔액 초과 슬롯이 자동 채워지지 않도록 함.
+            prefill.remove("vacReqItems");
+            prefill.remove("vacReqDatesText");
+            prefill.remove("vacReqUseDay");
+            return java.util.Optional.of(String.format(
+                    "%s 잔여 %s일로는 %s일 신청을 진행할 수 없습니다.",
+                    resolvedTypeName,
+                    remainingDays.stripTrailingZeros().toPlainString(),
+                    requestedDays.stripTrailingZeros().toPlainString()
+            ));
+        }
+
+        // 4) 잔액 충분 — 슬롯과 표시용 필드 모두 동봉.
+        prefill.put("vacReqItems", slots);
+        // UI 표시용 — lockForm 상태에서도 사용자가 일자/일수를 즉시 확인 가능.
+        // BE 상신 시점에 vacReqUseDay 는 FE 가 명시적으로 삭제하므로 표시 전용이고,
+        // vacReqDatesText 는 textarea 표시 + 리스트 렌더 인풋이라 채워두면 모달이 예쁘게 나옴.
+        prefill.put("vacReqDatesText", VacationPrefillCalculator.buildDatesText(slots, parsedOption));
+        prefill.put("vacReqUseDay", requestedDays);
+        return java.util.Optional.empty();
     }
 
     /**
