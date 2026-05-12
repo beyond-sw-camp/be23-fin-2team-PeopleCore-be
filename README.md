@@ -191,7 +191,85 @@
 <details>
 <summary><h3>전자결재</h3></summary>
 
-<!-- 전자결재 서비스 화면 자료를 여기에 추가하세요. -->
+<details>
+<summary>양식 수정 및 버전관리</summary>
+<br/>
+<p align="center">
+관리자가 결재 양식을 등록·수정하고 버전 이력을 관리하는 화면
+<br/>
+  <img src="picture/gifs/approval-settings.gif" alt="전자결재 - 양식 설정" />
+</p>
+</details>
+
+<details>
+<summary>결재 문서번호 규칙 설정</summary>
+<br/>
+<p align="center">
+부서·양식·날짜·순번 조합으로 회사별 문서번호 규칙을 정의하는 화면
+<br/>
+  <img src="picture/gifs/approval-num-setting.gif" alt="전자결재 - 문서번호 설정" />
+</p>
+</details>
+
+<details>
+<summary>결재 상신</summary>
+<br/>
+<p align="center">
+사원이 양식을 선택하고 결재선·참조·열람자를 지정해 문서를 상신하는 화면
+<br/>
+  <img src="picture/gifs/approval-pay-up.gif" alt="전자결재 - 결재 상신" />
+</p>
+</details>
+
+<details>
+<summary>결재 최종 승인</summary>
+<br/>
+<p align="center">
+결재자가 문서를 검토 후 승인·반려 처리하고 마지막 결재 시 문서가 완료되는 화면
+<br/>
+  <img src="picture/gifs/approval-pay-ok2.gif" alt="전자결재 - 결재 승인" />
+</p>
+</details>
+
+<details>
+<summary>결재환경설정 - 기본 설정 (서명관리)</summary>
+<br/>
+<p align="center">
+사원 본인의 서명 이미지를 업로드·삭제하고 결재 작성 방식을 설정하는 화면
+<br/>
+  <img src="picture/my-signuture.png" alt="전자결재 - 결재환경설정 기본" />
+</p>
+</details>
+
+<details>
+<summary>결재환경설정 - 부재/위임 설정</summary>
+<br/>
+<p align="center">
+부재 기간 동안 본인에게 온 결재를 대결자에게 자동 위임하도록 설정하는 화면
+<br/>
+  <img src="picture/approval-delegated.png" alt="전자결재 - 부재/위임 설정" />
+</p>
+</details>
+
+<details>
+<summary>개인 문서함 관리</summary>
+<br/>
+<p align="center">
+사원이 본인 문서함을 추가·삭제·이관하고 순서를 조정하는 화면
+<br/>
+  <img src="picture/my-folder.png" alt="전자결재 - 개인 문서함 관리" />
+</p>
+</details>
+
+<details>
+<summary>개인 문서함 - 자동분류 규칙</summary>
+<br/>
+<p align="center">
+제목·양식명·기안자 등 조건을 만족하는 완료 문서를 지정 문서함으로 자동 분류하는 규칙 설정 화면
+<br/>
+  <img src="picture/my-folder-rule.png" alt="전자결재 - 자동분류 규칙" />
+</p>
+</details>
 
 </details>
 
@@ -246,6 +324,16 @@
 
 <details>
 <summary><h3>근태</h3></summary>
+
+<details>
+<summary>근태 정책 설정</summary>
+<br/>
+<p align="center">
+관리자가 회사의 근태 관련 정책(근무시간·지각·조퇴·초과근무 등)을 설정하는 화면
+<br/>
+  <img src="picture/gifs/attendance-settings.gif" alt="근태 - 정책 설정" />
+</p>
+</details>
 
 <details>
 <summary>전사 근태현황 (일자별)</summary>
