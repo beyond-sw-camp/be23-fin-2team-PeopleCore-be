@@ -42,26 +42,32 @@ public class AttendanceAggregateService {
 
     /* 집계에서의 상단 4개 카드 계산 */
     public AttendanceWeeklyHeadlineResDto getWeeklyHeadline(UUID companyId, LocalDate weekStart, EmploymentFilter filter) {
-        /*초기화 */
         EmploymentFilter filter1 = (filter != null) ? filter : EmploymentFilter.ALL;
         LocalDate weekEnd = weekStart.plusDays(6);
+
+        /* 마감일 분리
+         *  - absenceEnd: 결근 누적 마감 = 오늘 (오늘 미출근자도 결근으로 잡힘)
+         *  - denomEnd:   비율 분모/정상·지각 마감 = 어제 (오늘은 진행 중이라 비율 왜곡 방지)
+         *  - 미래 일자는 양쪽 모두 제외 */
+        LocalDate today = LocalDate.now();
+        LocalDate absenceEnd = today.isAfter(weekEnd) ? weekEnd : today;
+        LocalDate denomEnd = today.minusDays(1).isAfter(weekEnd) ? weekEnd : today.minusDays(1);
+        /* 주가 시작 전(미래 주차) → 빈 결과 */
+        if (absenceEnd.isBefore(weekStart) && denomEnd.isBefore(weekStart)) {
+            return emptyHeadline(weekStart, weekEnd);
+        }
+
         int weeklyMaxMinutes = resolveWeekMaxMinutes(companyId);
 
-        /*3쿼리 일괄 조회 */
         List<WeekEmpRow> employees = aggregateQueryRepository.fetchEmployees(companyId, filter1);
-        /*사원 0명이면 빈 지표로 조기 반환 */
         if (employees.isEmpty()) return emptyHeadline(weekStart, weekEnd);
-        /* empIds 추출 */
         List<Long> empIds = employees.stream().map(WeekEmpRow::getEmpId).toList();
 
-
+        /* 주간 최대근무 초과 판정용 누적은 주 전체 기준 유지 */
         List<WeekCommuteRow> commutes = aggregateQueryRepository.fetchCommutesInWeek(companyId, empIds, weekStart, weekEnd);
         List<WeekVacationRow> vacations = aggregateQueryRepository.fetApprovedVacationInWeek(companyId, empIds, weekStart, weekEnd);
 
-        /*메모리 인덱싱 */
-        /* commuteMap[empId][workDate]하루 한건 보장 (unique 제약)*/
-        // 3. commutes 단일 순회 — (사원→(날짜→WorkStatus)) 맵 + 주간 누적분 맵 동시 구축
-        //    체크아웃 전(minutes=null) 은 주간 누적에서 0 처리. ABSENT 레코드도 포함
+        // (사원→(날짜→WorkStatus)) + 주간 누적분 맵 동시 구축. minutes=null(체크아웃 전) 은 0 처리
         Map<Long, Map<LocalDate, WorkStatus>> statusMap = new HashMap<>();
         Map<Long, Long> weekMinutesMap = new HashMap<>();
         for (WeekCommuteRow c : commutes) {
@@ -72,8 +78,7 @@ public class AttendanceAggregateService {
                 weekMinutesMap.merge(c.getEmpId(), c.getMinutes(), Long::sum);
             }
         }
-        /* vacationMap[empId] -> List (한주에 여러 구간 가능) */
-        // 4. vacations 단일 순회 — (사원, 날짜) → 최대 휴가 비율 (double)
+        // (사원, 날짜) → 최대 휴가 비율 (반차/반반차 = <1.0, 종일 = 1.0)
         Map<Long, Map<LocalDate, Double>> vacFracMap = new HashMap<>();
         for (WeekVacationRow v : vacations) {
             LocalDate s = v.getStartAt().toLocalDate();
@@ -90,69 +95,66 @@ public class AttendanceAggregateService {
                 inner.merge(d, rowFrac, Math::max);
             }
         }
-        // 5. 7일 날짜/요일비트 사전 계산 — 사원 루프 내 재계산 제거
-        LocalDate[] days = new LocalDate[7];
-        int[] dayBits = new int[7];
-        for (int i = 0; i < 7; i++) {
+
+        /* 루프 범위: weekStart ~ absenceEnd (둘 중 늦은 마감 기준). 분모는 내부에서 denomEnd 로 한 번 더 컷 */
+        int aggDays = (int) (absenceEnd.toEpochDay() - weekStart.toEpochDay()) + 1;
+        if (aggDays < 0) aggDays = 0;
+        LocalDate[] days = new LocalDate[aggDays];
+        int[] dayBits = new int[aggDays];
+        for (int i = 0; i < aggDays; i++) {
             days[i] = weekStart.plusDays(i);
             dayBits[i] = 1 << (days[i].getDayOfWeek().getValue() - 1); // MONDAY=1 → bit0
         }
 
-
-        /*집계 */
-        long denom = 0L;        // 분모: 근무예정 + 종일휴가 아님
-        long normalCnt = 0L;    // 체크인 있음 + LATE 아님
-        long lateCnt = 0L;      // 체크인 있음 + LATE
-        long absenceCnt = 0L;   // 근무예정 + 체크인 없음 + 승인휴가 전무 (누적)
-        long exceedCnt = 0L;    // 주간 최대근무시간 초과 사원 수 (사원당 1회 체크라 자연 distinct)
+        long denom = 0L;        // 분모: 근무예정 + 종일휴가 아님 + ≤ denomEnd
+        long normalCnt = 0L;    // 체크인 있음 + LATE 아님 + ≤ denomEnd
+        long lateCnt = 0L;      // 체크인 있음 + LATE + ≤ denomEnd
+        long absenceCnt = 0L;   // 근무예정 + 체크인 없음 + 승인휴가 전무 (≤ absenceEnd, 오늘 포함)
+        long exceedCnt = 0L;    // 주간 최대근무시간 초과 사원 수 (주 전체 누적 기준)
 
         for (WeekEmpRow emp : employees) {
             Long empId = emp.getEmpId();
 
-            // 6-a. 주간 초과 판정 — 사원당 1회 (날짜 루프 밖)
+            // 주간 초과 판정 — 사원당 1회 (날짜 루프 밖)
             if (weekMinutesMap.getOrDefault(empId, 0L) > weeklyMaxMinutes) exceedCnt++;
 
-            // 6-b. 근무그룹 미배정 → 분모/출결 대상 아님. 루프 스킵
             Integer gwd = emp.getGroupWorkDay();
-            if (gwd == null) continue;
+            if (gwd == null) continue; // 근무그룹 미배정 → 분모/출결 대상 아님
 
-            // 6-c. 사원별 맵 참조 1회
             Map<LocalDate, WorkStatus> empCin = statusMap.getOrDefault(empId, Map.of());
             Map<LocalDate, Double> empVac = vacFracMap.getOrDefault(empId, Map.of());
 
-            // 6-d. 7일 루프 — 근무예정일(bit AND) 만 내부 진입
-            for (int i = 0; i < 7; i++) {
-                if ((gwd & dayBits[i]) == 0) continue;
+            for (int i = 0; i < aggDays; i++) {
+                if ((gwd & dayBits[i]) == 0) continue; // 근무예정일 아님
                 LocalDate day = days[i];
 
                 double frac = empVac.getOrDefault(day, 0.0);
                 boolean fullDay = frac >= 1.0;
+                boolean inDenomRange = !day.isAfter(denomEnd); // 비율 계산 기준일(어제까지)
 
-                // 분모: 종일휴가 제외 (반차/반반차는 포함)
-                if (!fullDay) denom++;
+                // 분모: 종일휴가 제외 + 어제까지
+                if (inDenomRange && !fullDay) denom++;
 
                 WorkStatus status = empCin.get(day);
-                /* 체크인 부재: 레코드 없음(null) 또는 결근 레코드(ABSENT) */
                 boolean noCheckIn = (status == null) || (status == WorkStatus.ABSENT);
 
                 if (!noCheckIn) {
-                    // 체크인 있는 레코드 — 지각 vs 정상 (LATE_AND_EARLY 도 지각으로 카운트)
+                    if (!inDenomRange) continue; // 오늘 체크인은 비율 분자에 안 넣음
                     if (status == WorkStatus.LATE || status == WorkStatus.LATE_AND_EARLY) lateCnt++;
                     else normalCnt++;
                 } else if (frac == 0.0) {
-                    // 체크인 없음 + 승인휴가 전무 → 결근 누적 (반차라도 휴가 있으면 제외)
-                    absenceCnt++;
+                    absenceCnt++; // 결근은 오늘까지 누적 (반차라도 휴가 있으면 제외)
                 }
             }
         }
-        // 7. 비율 계산 (분모 0 방어)
+
         double attendanceRate = (denom == 0L) ? 0.0
                 : roundTo1(((double) (normalCnt + lateCnt) / denom) * 100.0);
         double lateRate = (denom == 0L) ? 0.0
                 : roundTo1(((double) lateCnt / denom) * 100.0);
 
-        log.debug("[getWeeklyHeadline] companyId={}, week={}~{}, emps={}, denom={}, normal={}, late={}, absence={}, exceed={}",
-                companyId, weekStart, weekEnd, employees.size(), denom, normalCnt, lateCnt, absenceCnt, exceedCnt);
+        log.debug("[getWeeklyHeadline] companyId={}, week={}~{}, denomEnd={}, absenceEnd={}, emps={}, denom={}, normal={}, late={}, absence={}, exceed={}",
+                companyId, weekStart, weekEnd, denomEnd, absenceEnd, employees.size(), denom, normalCnt, lateCnt, absenceCnt, exceedCnt);
 
         return AttendanceWeeklyHeadlineResDto.builder()
                 .weekStart(weekStart)
