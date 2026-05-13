@@ -500,9 +500,9 @@ SELECT
   g.goal_id,
   CASE WHEN g.goal_type = 'KPI' THEN
     CASE g.kpi_direction
-      WHEN 'UP'       THEN ROUND(g.target_value * (0.85 + ((g.emp_id + g.kpi_id) % 30) / 100.0), 2)
-      WHEN 'DOWN'     THEN ROUND(GREATEST(g.target_value * (1.15 - ((g.emp_id + g.kpi_id) % 30) / 100.0), 0.01), 2)
-      WHEN 'MAINTAIN' THEN ROUND(g.target_value * (0.97 + ((g.emp_id + g.kpi_id) % 7) / 100.0), 2)
+      WHEN 'UP'       THEN ROUND(g.target_value * (0.75 + ((g.emp_id * 7919 + g.kpi_id * 131) % 240) / 1000.0), 2)
+      WHEN 'DOWN'     THEN ROUND(GREATEST(g.target_value * (1.10 + ((g.emp_id * 7919 + g.kpi_id * 131) % 240) / 1000.0), 0.01), 2)
+      WHEN 'MAINTAIN' THEN ROUND(g.target_value * (0.95 + ((g.emp_id * 7919 + g.kpi_id * 131) % 100) / 1000.0), 2)
     END
   ELSE NULL END AS actual_value,
   CASE WHEN g.goal_type = 'OKR' THEN

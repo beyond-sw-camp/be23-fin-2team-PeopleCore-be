@@ -9,6 +9,8 @@ import com.peoplecore.evaluation.dto.FinalGradeListItemDto;
 import com.peoplecore.evaluation.dto.UnassignedEmployeeDto;
 import com.querydsl.core.types.OrderSpecifier;
 import com.querydsl.core.types.dsl.BooleanExpression;
+import com.querydsl.core.types.dsl.CaseBuilder;
+import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -145,10 +147,27 @@ public class EvalGradeRepositoryImpl implements EvalGradeRepositoryCustom {
                 return isDesc(direction, false) ? qGrade.deptNameSnapshot.desc() : qGrade.deptNameSnapshot.asc(); // 부서 (스냅샷)
             case TOTAL_SCORE:
                 return isDesc(direction, true) ? qGrade.biasAdjustedScore.desc() : qGrade.biasAdjustedScore.asc(); // 점수 (보정후 기준)
-            case AUTO_GRADE:
-                return isDesc(direction, false) ? qGrade.autoGrade.desc() : qGrade.autoGrade.asc();               // 예정등급
-            case FINAL_GRADE:
-                return isDesc(direction, false) ? qGrade.finalGrade.desc() : qGrade.finalGrade.asc();             // 확정/보정등급
+            case AUTO_GRADE: {
+                // 알파벳 정렬(A<D<S)이 아닌 실제 등급 순(S=1>A=2>B=3>C=4>D=5)으로 정렬
+                NumberExpression<Integer> autoRank = new CaseBuilder()
+                        .when(qGrade.autoGrade.eq("S")).then(1)
+                        .when(qGrade.autoGrade.eq("A")).then(2)
+                        .when(qGrade.autoGrade.eq("B")).then(3)
+                        .when(qGrade.autoGrade.eq("C")).then(4)
+                        .when(qGrade.autoGrade.eq("D")).then(5)
+                        .otherwise(6);
+                return isDesc(direction, true) ? autoRank.asc() : autoRank.desc();
+            }
+            case FINAL_GRADE: {
+                NumberExpression<Integer> finalRank = new CaseBuilder()
+                        .when(qGrade.finalGrade.eq("S")).then(1)
+                        .when(qGrade.finalGrade.eq("A")).then(2)
+                        .when(qGrade.finalGrade.eq("B")).then(3)
+                        .when(qGrade.finalGrade.eq("C")).then(4)
+                        .when(qGrade.finalGrade.eq("D")).then(5)
+                        .otherwise(6);
+                return isDesc(direction, true) ? finalRank.asc() : finalRank.desc();
+            }
             default:
                 return qGrade.biasAdjustedScore.desc();    // 기본값 (보정후 기준)
         }
