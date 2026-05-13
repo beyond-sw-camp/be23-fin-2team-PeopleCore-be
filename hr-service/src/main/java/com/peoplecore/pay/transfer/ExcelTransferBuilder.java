@@ -131,11 +131,9 @@ public class ExcelTransferBuilder {
                 }
             }
 
-            // 컬럼 너비 자동 조정 (최대 12000 ~ 약 50자)
+            // 서버 컨테이너에 fontconfig가 없어도 동작하도록 자동 너비 대신 고정 너비 사용
             for (int c = 0; c < colCount; c++) {
-                sheet.autoSizeColumn(c);
-                int w = sheet.getColumnWidth(c);
-                sheet.setColumnWidth(c, Math.min(w + 1024, 12000));
+                sheet.setColumnWidth(c, 22 * 256);
             }
 
             ByteArrayOutputStream out = new ByteArrayOutputStream();
