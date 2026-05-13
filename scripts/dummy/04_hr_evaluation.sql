@@ -79,17 +79,15 @@ DELETE FROM department WHERE company_id = @cid AND dept_code = 'AUDIT';
 
 SET FOREIGN_KEY_CHECKS = 1;
 
--- ▼ 감사실(AUDIT) — CLEANUP 이후 생성 (중복 방지) ▼
---   소규모 팀 시연용, 3명만 배치 → minTeamSize=5 미만이라 BE 가 z-score 보정 스킵
---   기존 부서에서 emp090/091/092 (마케팅팀 팀원) 을 이동시켜 만든다
-INSERT INTO department (company_id, dept_name, dept_code, parent_dept_id, sort_order, is_use, created_at)
-  VALUES (@cid, '감사실', 'AUDIT', NULL, 0, 'Y', NOW());
-SET @d_audit := (SELECT dept_id FROM department WHERE company_id=@cid AND dept_code='AUDIT');
-
+-- ▼ 과거 시드에서 AUDIT 로 옮겨졌던 emp090/091/092 를 원래 MKT 로 복원 ▼
+--   AUDIT 부서가 CLEANUP 에서 삭제되면 이 사원들의 dept_id 가 orphan 이 되므로 명시적 복원 필요
 UPDATE employee
-   SET dept_id = @d_audit
+   SET dept_id = @d_mkt
  WHERE company_id = @cid
    AND emp_num IN ('EMP-2025-090', 'EMP-2025-091', 'EMP-2025-092');
+
+-- ▼ AUDIT(감사실) 부서는 시연 더미에서 제외 — 보정 화면 undersizedTeam 알람 트리거 안 함 ▼
+SET @d_audit := NULL;
 
 -- ▼ admin(emp001) 부서를 HR 로 이동 — admin 이 HR 부서장으로 평가 활동 ▼
 --   원본 02_hr_employees.sql 은 admin 을 EXEC 에 박지만, 04 시드에서는 HR 로 옮김
@@ -221,15 +219,7 @@ INSERT INTO kpi_template (department_id, grade_id, category_option_id, unit_opti
   (@d_mkt, NULL, @cat_work, @unit_pct,  '캠페인 일정 준수율',      '캠페인 런칭 일정 준수',                 95.00,   'MAINTAIN', true),
   (@d_mkt, NULL, @cat_qual, @unit_cnt,  '고객 컴플레인 건수',      '월간 고객 컴플레인',                    3.00,    'DOWN',     true);
 
--- ── 감사실 (AUDIT) — 소규모 팀, emp090(G4) / emp091(G3) / emp092(G3) 매칭용 ──
-INSERT INTO kpi_template (department_id, grade_id, category_option_id, unit_option_id, name, description, baseline, direction, is_active) VALUES
-  (@d_audit, @g4,  @cat_qual, @unit_cnt,  '감사 보고서 발행 건수',   '분기 내부감사 보고서',           4.00,   'UP',       true),
-  (@d_audit, @g4,  @cat_qual, @unit_pct,  '감사 일정 준수율',        '감사 계획 일정 준수',            95.00,  'MAINTAIN', true),
-  (@d_audit, @g3,  @cat_qual, @unit_cnt,  '내부통제 점검 건수',      '월간 통제활동 점검',             8.00,   'UP',       true),
-  (@d_audit, @g3,  @cat_eff,  @unit_hour, '감사 응답 시간',          '감사 의뢰 응답까지',             24.00,  'DOWN',     true),
-  (@d_audit, @g3,  @cat_qual, @unit_cnt,  '리스크 식별 건수',        '신규 리스크 등록',               3.00,   'UP',       true),
-  (@d_audit, NULL, @cat_qual, @unit_pct,  '컴플라이언스 준수율',     '규정 준수율',                    100.00, 'MAINTAIN', true),
-  (@d_audit, NULL, @cat_qual, @unit_cnt,  '시정 권고 이행 건수',     '권고사항 이행',                  5.00,   'UP',       true);
+-- ── 감사실(AUDIT) KPI 템플릿 — 시연 더미에서 제외 (AUDIT 부서 미운영) ──
 
 -- =====================================================================
 -- STEP 3. emp_evaluator_global (부서별 최고 직급 사원이 부서원의 평가자)
@@ -510,9 +500,9 @@ SELECT
   g.goal_id,
   CASE WHEN g.goal_type = 'KPI' THEN
     CASE g.kpi_direction
-      WHEN 'UP'       THEN ROUND(g.target_value * (0.70 + ((g.emp_id + g.kpi_id) % 60) / 100.0), 2)
-      WHEN 'DOWN'     THEN ROUND(GREATEST(g.target_value * (1.30 - ((g.emp_id + g.kpi_id) % 60) / 100.0), 0.01), 2)
-      WHEN 'MAINTAIN' THEN ROUND(g.target_value * (0.95 + ((g.emp_id + g.kpi_id) % 10) / 100.0), 2)
+      WHEN 'UP'       THEN ROUND(g.target_value * (0.85 + ((g.emp_id + g.kpi_id) % 30) / 100.0), 2)
+      WHEN 'DOWN'     THEN ROUND(GREATEST(g.target_value * (1.15 - ((g.emp_id + g.kpi_id) % 30) / 100.0), 0.01), 2)
+      WHEN 'MAINTAIN' THEN ROUND(g.target_value * (0.97 + ((g.emp_id + g.kpi_id) % 7) / 100.0), 2)
     END
   ELSE NULL END AS actual_value,
   CASE WHEN g.goal_type = 'OKR' THEN
