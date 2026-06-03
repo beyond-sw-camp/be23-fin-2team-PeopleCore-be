@@ -311,21 +311,79 @@
 
 - 캘린더 일정 등록  
 <p align="center"> 
-  <img src="picture/캘린더일정등록.png" alt="캘린더 일정등록 화면" width="900" /> 
+  <img src="picture/calendar_event_create.png" alt="캘린더 일정등록 화면" width="900" /> 
 </p> 
 
-- 캘린더 관리(환경설정) 
-<p align="center"> 
-  <img src="picture/캘린더관리.png" alt="캘린더 관리 화면" width="900" /> 
-</p> 
+- 일정참석자 - 캘린더 일정 등록 알림
+  <p align="center"> 
+    <img src="picture/calendar_event_attendees_alarm.png" alt="일정참석자 일정등록 알림 화면" width="900" /> 
+  </p> 
+
+- 일정참석자 - 캘린더 일정 조회 
+  <p align="center"> 
+    <img src="picture/calendar_event_attendee_read.png" alt="일정참석자 일정조회 화면" width="900" /> 
+  </p> 
+
+- 관심캘린더
+  - 관심캘린더 등록
+    <p align="center"> 
+      <img src="picture/calendar_interest_create.png" alt="관심캘린더 등록 화면" width="900" /> 
+    </p> 
+  - 관심캘린더 등록 요청 알림
+    <p align="center"> 
+      <img src="picture/calendar_interest_req_alarm.png" alt="관심캘린더 등록요청 알림 화면" width="900" /> 
+    </p> 
+  - 관심캘린더 일정 조회
+    <p align="center"> 
+      <img src="picture/calendar_interest_read.png" alt="관심캘린더 일정조회 화면" width="900" /> 
+    </p> 
+  - 관심캘린더 관리(환경설정) 
+    <p align="center"> 
+      <img src="picture/calendar_interest_settings.png" alt="관심캘린더 관리 화면" width="900" /> 
+    </p> 
+  
+- 전사일정
+  - 전사일정 등록
+    <p align="center"> 
+      <img src="picture/calendar_company_event_create.png" alt="전사 일정등록 화면" width="900" /> 
+    </p> 
+  - 직원 전사일정 조회(캘린더에 자동 저장)
+    <p align="center"> 
+      <img src="picture/calendar_company_event_read.png" alt="전사 일정조회 화면" width="900" /> 
+    </p> 
 
 </details>
 
 <details>
 <summary><font size="5"><strong>내 설정</strong></font></summary>
 
-<!-- 내 설정 서비스 화면 자료를 여기에 추가하세요. -->
-
+- 내 정보관리
+  - 정보 조회 및 프로필 관리
+    <p align="center"> 
+      <img src="picture/my_settings_profile.png" alt="내정보 조회 화면-1" width="900" /> 
+    </p> 
+  - 외부이메일 변경
+    <p align="center"> 
+      <img src="picture/my_settings_mail.png" alt="내정보 조회 화면-2" width="900" /> 
+    </p>
+  
+- 보안설정
+  - 보안설정 목록
+    <p align="center"> 
+      <img src="picture/my_settings_protect.png" alt="보안설정 목록 화면" width="900" /> 
+    </p>
+  - 비밀번호 관리
+    <p align="center"> 
+      <img src="picture/my_settings_password.png" alt="비밀번호 관리 화면" width="900" /> 
+    </p>
+  - 로그인 이력 정보
+    <p align="center"> 
+      <img src="picture/my_settings_login.png" alt="로그인 이력 정보 화면" width="900" /> 
+    </p>
+  - 인사통합 pin 관리
+    <p align="center"> 
+      <img src="picture/my_settings_pin.png" alt="인사통합 pin 관리 화면" width="900" /> 
+    </p>
 </details>
 
 <details>
@@ -371,7 +429,7 @@
   <img src="picture/gifs/ai_calendar.gif" width="400" />
 </p>
 
-- 휴가신청 젅자결재 생성하기
+- 휴가신청 전자결재 생성하기
 <p align="center">
   <img src="picture/gifs/search.gif" width="400" />
 </p>
@@ -628,12 +686,23 @@
 
 
 - 급여정책 설정 (최고권한자 설정 화면) 
-  - 지급/공제 항목 관리 
+  - 급여지급 설정 
+  <img src="picture/1.급여정책설정-급여지급설정.png" alt="급여지급설정 화면" width="900" />
+
+  - 지급 항목 관리 
   <img src="picture/2.급여정책설정-지급항목관리.png" alt="지급항목관리 화면" width="900" /> 
-  <img src="picture/3.급여정책설정-공제항목관리.png" alt="공제항목관리 화면" width="900" /> 
- 
-  - 퇴직연금 설정 관리 
-  <img src="picture/7.급여정책설정-퇴직연금설정.png" alt="퇴직연금설정 화면" width="900" /> 
+
+  - 공제 항목 관리
+  <img src="picture/3.급여정책설정-공제항목관리.png" alt="공제항목관리 화면" width="900" />
+
+  - 법정수당산정
+  <img src="picture/4.급여정책설정-법정수당산정.png" alt="법정수당산정 화면" width="900" />
+  
+  - 사회보험요율표
+  <img src="picture/5.급여정책설정-사회보험요율표.png" alt="사회보험요율표 화면" width="900" />
+  
+  - 퇴직연금 설정
+  <img src="picture/7.급여정책설정-퇴직연금설정.png" alt="퇴직연금설정 화면" width="900" />
 
 - 급여관리 (HR담당자 업무 화면) 
   - 사원별 급여관리-연봉 확인 
@@ -649,8 +718,11 @@
   <img src="picture/10.급여관리-연차수당산정-입사기념일도래사원.png" alt="연차수당조회 화면" width="900" /> 
 
   - 퇴직자 연차 수당 조회 및 정산 
-  <img src="picture/11.급여관리-연차수당산정-퇴직자연차정산.png" alt="연차수당조회 조회 화면" width="900" /> 
- 
+  <img src="picture/10.급여관리-연차수당산정-퇴직자연차정산.png" alt="연차수당조회 조회 화면" width="900" /> 
+
+  - 정산보험료 조회 및 산정 및 조회/급여대장 적용
+    <img src="picture/11.급여관리-정산보험료.png" alt="정산보험료 화면" width="900" />
+
   - 퇴직금대장 
   <img src="picture/12.급여관리-퇴직금대장.png" alt="퇴직금대장 조회 화면" width="900" /> 
 
@@ -711,7 +783,7 @@
 각 카테고리를 펼치면 관련 설계·운영 문서로 이동합니다.
 
 <details>
-<summary><h3>통합검색</h3></summary>
+<summary><strong>통합검색</strong></summary>
 
 | 문서 | 핵심 내용 |
 |------|-----------|
@@ -775,6 +847,19 @@
 |---------------------------------------------------------------------|----------------------------------------------------------------------------------------|
 | [시즌 무결성 아키텍처](docs_md/evaluation-season-integrity.md)               | `Season.formSnapshot` 박제 · `EvalGrade.@Version` 낙관적 락 · 평가자 퇴직 `AFTER_COMMIT` 이벤트 보정 |
 | [자동 산식 - Z-score + 강제분포](docs_md/evaluation-grade-calculation.md)  | 점수 집계 → 가중치 → Z-score 팀장 편향 보정 → 강제분포 4단 알고리즘 · BigDecimal 결정성                       |
+
+</details>
+
+
+<details>
+<summary><font size="5"><strong>급여</strong></font></summary>
+
+| 문서                                                                        | 핵심 내용                                                                                                                                                                                              |
+|---------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [급여 도메인 상태 머신 + 이벤트 자동화](docs_md/pay-state-event-architecture.md)         | `PayrollEmpStatus` / `SeverancePays` / `PensionDeposit` 다수 상태 머신 · 엔티티 메서드 가드 + 멱등 분기 · `PayrollPaidEvent` / `EmployeeRetiredEvent` + `@TransactionalEventListener(AFTER_COMMIT)` + `@Order` 직렬화 |
+| [결재 양식 동적 빌드 + 스냅샷](docs_md/pay-approval-html-snapshot.md)                | 활성 PayItem 기준 결의서 HTML 동적 빌드 → 결재 문서에 스냅샷 영구 보존으로 시점 정합성 + 최신 데이터 반영 동시 만족 · 결재팀 (양식 골격 버전관리) / hr-service (동적 본문) 책임 분담                                                                |
+| [Redis 캐시 전략 - Cache-Aside + 패턴 무효화](docs_md/pay-redis-cache-strategy.md)  | `EmpSalaryCacheService` (관리자) + `MySalaryCacheService` (사원 본인) Cache-Aside · 캐시 키 설계 (회사+사원+연도) · 패턴 기반 일괄 무효화 (`keys(pattern) + delete`) · 별도 Redis 템플릿 (`hrCacheRedisTemplate`) 분리             |
+| [은행별 이체 Strategy + Factory](docs_md/pay-bank-transfer-strategy.md)        | `BankTransferFileGenerator` 인터페이스 + 은행별 구현체 6종 (KB/신한/하나/우리/농협/IBK) · `BankTransferFileFactory` 로 회사 주거래은행 → Generator 라우팅 · 공통 빌더 (`ExcelTransferBuilder`) + 은행별 컬럼 차별화                          |
 
 </details>
 
@@ -1182,7 +1267,234 @@ Search API (/search-service/search)
 </details>
 
 <details>
-<summary><h3>통합검색</h3></summary>
+<summary><font size="5"><strong>캘린더</strong></font></summary>
+
+<details>
+<summary>1. 반복 일정 occurrence 생성 - 무한 루프 / 메모리 폭증 방어</summary>
+
+**문제 사항**
+
+- 사용자가 선택한 "무기한 반복" 옵션은 `until`/`count` 모두 null 로 들어와 자연 종료 조건이 없음 → 조회 범위 제어 없이 펼치면 메모리 폭증
+- 클라이언트 버그·조작으로 비정상 값(음수 `intervalVal`, 잘못된 `frequency` 등)이 들어오면 cursor 가 전진 안 해 무한 루프 위험
+
+**원인 분석**
+
+- 정상 종료 조건(`until`/`count`)만으로는 "무기한 반복" 정상 옵션을 처리 못 함 → 조회 범위 기반 종료(`viewEnd`)가 추가로 필요
+- 클라이언트가 보낸 값은 백엔드가 통제할 수 없으므로 비정상 입력 안전망(`MAX_ITERATIONS`)도 별도로 필요
+
+**시도 방법**
+
+- 종료 조건을 한 가지로 단순화 : 비정상 입력에 무방비 → 무한 루프 위험
+- 단순 카운트 제한만 적용 : 일반 케이스는 종료되지만 조회 범위 외 occurrence 까지 생성됨
+
+**해결 방법**
+
+- 루프 매 반복마다 4가지 종료 조건을 동시 평가해 입력 종류와 무관하게 안전 종료 보장
+  - `until` 도달 / `maxCount` 도달 — 사용자가 종료 조건 지정한 정상 입력의 자연 종료
+  - `cursor > viewEnd` — "무기한 반복" 옵션도 화면 조회 범위까지만 펼침 (메모리 절약)
+  - `MAX_ITERATIONS = 1000` — 비정상 입력(음수 `intervalVal`, 잘못된 `frequency` 등) 대비 마지막 안전망
+- 안전망 도달 시 WARN 로그로 사후 추적 가능 → 어떤 일정이 한도에 도달했는지 식별
+
+</details>
+
+<details>
+<summary>2. 알림 스케줄러 - 부분 실패 격리</summary>
+
+**문제 사항**
+
+- 매분 due 알림을 일괄 조회 후 발송하는 구조에서, 한 알림의 예외가 메서드 트랜잭션 전체를 롤백시킬 위험
+- 한 건의 실패로 `markSent` 도 못 찍히고, 다음 분에 같은 알림이 재시도되며 부분 실패가 전체 재시도 폭주로 번질 수 있음
+
+**원인 분석**
+
+- 스케줄러 메서드를 단일 트랜잭션으로 두면 항목 간 독립성 미보장
+- 알림은 사원별로 독립적인 작업인데 묶음 트랜잭션은 도메인 특성과 어긋남
+
+**시도 방법**
+
+- 단일 트랜잭션 유지 : 한 건 실패가 전체 발송 차단
+- 모든 예외를 메서드 밖으로 던지기 : 다음 분 재시도에서도 같은 실패 반복
+
+**해결 방법**
+
+- 발송 루프 안에 항목별 try-catch 배치 → 예외 발생 항목만 ERROR 로깅 후 다음 항목 진행
+- `markSent` 는 try 블록 안에 두어 발송 성공 항목만 정상 마킹 (실패 항목은 markSent 가 안 찍혀 다음 분 실행에서 자동으로 재시도 대상에 포함)
+- 메서드 트랜잭션은 유지하되 부분 실패를 흡수하는 패턴으로 운영 안정성 확보
+
+</details>
+
+</details>
+
+<details>
+<summary><font size="5"><strong>급여</strong></font></summary>
+
+<details>
+<summary>1. 사원별 상태 머신 - 부분 결재 / 부분 지급 표현</summary>
+
+**문제 사항**
+
+- 급여대장은 월 단위로 생성되지만 실무에서는 한 대장 안의 사원들이 서로 다른 단계(산정중/확정/결재중/승인/지급)에 동시에 머무는 게 정상
+- run 단일 상태(`PayrollRuns.status`) 로만 가드하면 부분 결재·부분 지급 시나리오 안정적 표현 불가
+
+**원인 분석**
+
+- 표면적 비즈니스 단위(월 단위) 와 실제 도메인의 변화 단위(사원 단위 전이) 가 다름 — 한 대장 안 사원들이 동시에 다른 상태(지급완료/결재중/산정중 등) 에 머무는 게 정상
+- 한 단위 상태만으로 가드하면 두 번째 결재 상신·일부 사원 지급 같은 후속 처리가 막힘
+
+**시도 방법**
+
+- run 전체 상태 단독 관리 : 부분 승인/반려/지급에서 서비스 가드 충돌
+- 화면 단(클라이언트) 에서만 사원별 상태 계산 : API 직접 호출·배치 처리 경로에서 정합성 보장 불가
+
+**해결 방법**
+
+- `PayrollEmpStatus` 사원별 row 를 기준 데이터 SoT(Source of Truth) 로 두고 run 상태는 레거시 일괄지급 호환용 참고 데이터로만 사용
+- 상태 전이 로직(`confirm()` / `approve()` / `pay()` 등) 을 `PayrollEmpStatus` 엔티티 메서드 안에 캡슐화 → 서비스 / 배치 / 이벤트 리스너 어디서 호출하든 동일한 안전성 보장
+- 각 메서드에 두 가지 안전장치 동시 적용:
+  - **가드** — 잘못된 전이 시도 시 IllegalStateException 발생 (예: `CALCULATING → PAID` 한 단계 건너뛰기 차단)
+  - **멱등** — 같은 상태로 재요청 시 조용히 통과 (예: 이미 `APPROVED` 인 사원에게 또 `approve()` 호출 → 아무 일 안 일어남)
+
+</details>
+
+<details>
+<summary>2. 자동 산정 트랜잭션 분리 - AFTER_COMMIT + 실패 격리</summary>
+
+**문제 사항**
+
+- 급여 PAID 처리 시 DC 가입 사원의 퇴직연금 적립 row 가 자동 INSERT 되어야 함
+- 본 PAID 트랜잭션과 같은 트랜잭션에 묶이면, 적립 INSERT 한 줄 실패가 회사 전체 급여 지급을 롤백시킬 수 있음
+
+**원인 분석**
+
+- 본 도메인(급여 지급) 과 부가 도메인(자동 산정) 결합도 ↑ → 한쪽 실패가 다른 쪽으로 전파
+- 자동 산정은 신뢰성 요구가 본 도메인보다 약함에도 동일 트랜잭션이 되면 양쪽 모두 강한 신뢰성을 요구받게 됨
+
+**시도 방법**
+
+- 동일 트랜잭션 처리 : 결합도 ↑, 부가 실패가 본 트랜잭션 롤백
+- 비동기 메시지 큐(Kafka) 도입 : 인프라 부담 큼, 부가 도메인 1개만으로는 과한 선택
+
+**해결 방법**
+
+- 급여 PAID 처리 시 `PayrollPaidEvent` 이벤트 발행 → 별도 리스너가 `@TransactionalEventListener(AFTER_COMMIT)` 으로 수신
+- 본 PAID 트랜잭션이 **DB 커밋 완료된 후**에만 적립 로직 실행 → 적립 실패가 본 트랜잭션 롤백을 트리거하지 않음 (급여 지급과 적립 자동화의 결합도 분리)
+- 리스너 내부 try-catch 로 예외를 잡아 ERROR 로깅만 하고 밖으로 던지지 않음 → 적립 실패해도 PAID 는 이미 커밋된 상태라 운영자가 [월별 일괄 적립] 버튼으로 나중에 수동 보정 가능(실패 격리)
+- 자동 산정이 중복 호출되어도 같은 row 가 두 번 생성되지 않도록 `existsByPayrollRun...` 사전 체크로 중복 방지 (같은 요청이 두 번 와도 결과 동일 = 멱등성)
+
+</details>
+
+<details>
+<summary>3. 리스너 실행 순서 - @Order 로 도메인 의존성 직렬화</summary>
+
+**문제 사항**
+
+- 사원 퇴직 완료 시 (1) 연차수당 자동 산정 + (2) 퇴직금 자동 산정 두 가지가 일어나야 함
+- 퇴직금 평균임금 계산식이 직전 3개월 임금 + 연차수당 보전분을 포함 → (2) 가 (1) 보다 먼저 실행되면 연차수당 누락된 평균임금으로 계산되어 퇴직금이 적게 산정
+
+**원인 분석**
+
+- Spring 이벤트 시스템에서 같은 이벤트를 듣는 리스너들의 실행 순서는 기본적으로 무보장 — "이벤트 기반 분리" 가 항상 비동기/순서 무관을 의미하지 않음
+- 도메인 의존성(평균임금 ← 연차수당) 이 있는 두 자동화는 순서 보장이 필요한데, 단순 이벤트 발행만으로는 부족
+
+**시도 방법**
+
+- 두 자동화를 하나의 서비스 메서드에 묶기 : 결합도 ↑, 도메인 분리 의도 훼손
+- 비동기 메시지 큐로 순차 처리 : 인프라 부담, 단일 노드 환경에서는 과한 선택
+
+**해결 방법**
+
+- 두 리스너 모두 `EmployeeRetiredEvent` 를 `AFTER_COMMIT` 으로 받되 `@Order` 로 실행 순서 강제
+- `LeaveAllowanceEventListener(Order=1)` → `SeveranceEventListener(Order=2)` 직렬 실행
+- 자동 산정 순서를 운영자에게 의존하지 않고 시스템 자체에서 보장
+
+</details>
+
+<details>
+<summary>4. 이체파일 다운로드 - 누락자 격리 + 응답 헤더 분리</summary>
+
+**문제 사항**
+
+- 대량이체 엑셀 다운로드는 한 사원의 데이터 누락(계좌 미등록 등) 이 회사 전체 응답 실패로 번질 위험
+- B2B 운영에서 한 명 누락이 회사 전체 마비로 이어지면 안 됨
+
+**원인 분석**
+
+- 사원 전체를 한 번에 처리하는 일괄 다운로드 특성상, 한 건의 데이터 오류가 응답 본문 생성을 막음
+- 응답 본문(엑셀 파일) 에 누락자 정보를 같이 담을 수 없음 (본문은 깨끗한 엑셀이어야 함)
+
+**시도 방법**
+
+- 사원 등록 시점에 계좌 필수 검증 : 데이터 정책 변경 부담 + 기존 사원 마이그레이션 필요
+- 누락자 발견 시 다운로드 자체 중단 + 사전 검증 : 운영자가 한 명 보정할 때마다 다시 시도
+
+**해결 방법**
+
+- 백엔드가 계좌·은행코드 누락자를 다운로드 대상에서 선별 제외
+- 누락자 명단은 `X-Skipped-Employees` 응답 헤더(URL-encoded JSON) 로 회신
+- 결재 승인된 사원이 0명이면 다운로드 자체를 막아 빈 파일 다운로드 방지
+- "정상 데이터 본문 + 누락자 메타 헤더" 분리 패턴으로 운영 친화적 응답 구성
+
+</details>
+
+<details>
+<summary>5. 은행별 이체 엑셀 - 양식 파일 입수 불가 환경 대응</summary>
+
+**문제 사항**
+
+- 대량이체 운영자가 인터넷뱅킹 화면에 사원 정보를 입력할 때, 한 줄씩 수동 입력하는 비효율을 줄이려면 **셀 영역 복사 → 인터넷뱅킹에 붙여넣기** 시나리오를 지원하는 엑셀 보조 자료 필요
+- 그러나 실제 은행 양식 파일은 법인 미보유로 인터넷뱅킹 접근 자체가 불가 → 외부 양식 파일 의존 불가
+
+**원인 분석**
+
+- 외부 자원 접근이 막힌 환경에서는 100% 정확 자동화가 현실적으로 불가능
+- 양식 파일 의존 시 추후 양식 변경에도 외부 자원에 종속
+
+**시도 방법**
+
+- 실제 양식 파일 입수 시까지 기능 보류 : 운영 시점에 보조 자료 부재 → 한 줄씩 수동 입력 강제, 실수 위험 ↑
+- 단순 CSV 생성 : 시각적 가독성 ↓, 어느 은행 양식인지 한눈에 안 보임, 셀 복붙 시 정렬 깨짐
+
+**해결 방법**
+
+- Apache POI 로 워크북 자체 빌드 → 외부 양식 파일 의존 0
+- **은행별 컬럼명·순서 차별화 — 운영자가 셀 영역을 복사해서 인터넷뱅킹 입력 화면에 붙여넣을 때 자동 매핑되도록** 추정 양식에 맞춰 컬럼 구성. 양식 정확 매칭되는 은행은 복붙으로 일괄 입력 가능, 부분 매칭만 되는 은행도 컬럼 재정렬 최소화로 입력 시간 단축
+- 공통 골격(헤더 스타일 / 천단위 콤마 / 합계 행 / 시트 메타) 은 모든 은행 동일 → 운영자가 어느 은행이든 같은 사용 방식
+- 양식 정확 매칭 안 돼도 운영자가 보고 판단해 한 줄씩 수동 입력 가능한 실패 안전(fail-safe) 설계 — 즉 복붙 → 부분 복붙 → 수동 입력 3단계 fallback
+
+</details>
+
+<details>
+<summary>6. 법정공휴일 - 자체 부트스트랩 가능한 멱등 시드</summary>
+
+**문제 사항**
+
+- 법정공휴일은 휴일근무수당 산정 / 연차 영업일 계산 / 주 소정근무시간 등 여러 도메인이 의존하는 운영 데이터
+- 매년 1회 정부 발표 갱신 빈도라 외부 API 도입은 비용 대비 이득이 작고, Flyway/Liquibase 도입은 변경 표면적이 크며 배포 임박 시점과 미스매치
+
+**원인 분석**
+
+- 외부 데이터 의존 도메인은 자체 부트스트랩 경로 부재 시 운영 시점에 사일런트 누락 위험
+- 매 부팅·매 배포마다 안전하게 재실행 가능한 적재 전략 필요
+
+**시도 방법**
+
+- Flyway/Liquibase 도입 : 변경 표면적 큼, 배포 임박 시점에 도입 위험
+- 외부 공식 API (공공데이터포털 특일정보) 호출 : 매년 1회 정부 발표 갱신 빈도 대비 키 발급/응답 매핑/유지 부담 큼
+- 매년 수동 INSERT 스크립트 실행 : 운영자 누락 시 사일런트 버그
+
+**해결 방법**
+
+- Spring `spring.sql.init` 으로 SQL 시드 파일 자동 적재 → 더미 리셋 워크플로와 SQL 파일 재사용 가능
+- 멱등성 : `UNIQUE` 제약 + `ON DUPLICATE KEY UPDATE` → 매 부팅·매 배포 안전 재실행
+- 환경 분리 : local OFF / prod ON (local 은 더미 리셋과 충돌 위험)
+- `continue-on-error: true` 로 시드 실패가 부팅 자체를 막지 않도록
+
+</details>
+
+</details>
+
+<details>
+<summary><strong>통합검색</strong></summary>
 <details>
 <summary>1. DB와 ES의 데이터 정합성 - Debezium</summary>
 
@@ -1289,7 +1601,7 @@ Search API (/search-service/search)
 </details>
 
 <details>
-<summary><h3>AI</h3></summary>
+<summary><strong>AI</strong></summary>
 <details>
 <summary>1. 민감 정보 보호 - 외부 LLM 데이터 유출 위험</summary>
 
@@ -1648,7 +1960,7 @@ Search API (/search-service/search)
 <summary><b>홍진희</b></summary>
 <br>
 
-> 급여와 캘린더 모듈을 담당했습니다. 급여 도메인은 세율과 관련 법규를 정확히 준수해야 하는 영역인 만큼, 기능 구현 이전에 법적 기준을 제대로 이해하는 데 많은 시간을 쏟았습니다. 그 과정에서 고민의 깊이가 곧 코드의 품질로 이어진다는 것을 느꼈고, 외부 기술을 덧붙이기보다 상태 패턴 같은 설계 원칙으로 코드 자체의 완성도를 높이는 방향을 선택했습니다. 도메인을 깊이 이해할수록 설계가 좋아진다는 것을 배우며 개발자로서 한 단계 성장할 수 있었던 프로젝트였습니다.
+> 급여와 캘린더 모듈을 담당하며 B2B 환경을 처음 경험해보았고, 실무에서 백엔드 코드가 어떻게 활용되는지를 직접 구현해보며 배울 수 있었습니다. 특히 인사팀이 실제 업무에서 사용하는 기능을 만들어보면서, 단순한 CRUD가 아니라 회사 정책과 법규·예외 케이스가 촘촘하게 얽혀 있는 도메인을 다루는 과정 자체가 재미있었습니다. 그러면서 꼼꼼한 ERD와 모델 설계가 개발 그 자체에 반드시 필요한 토대라는 것을 깨달았습니다. 또한, 외부 기술을 덧붙이기보다 상태 머신·이벤트 분리 같은 설계 원칙으로 코드 자체의 완성도를 높이는 방향을 택하면서, 도메인을 깊이 이해할수록 설계가 좋아진다는 것도 함께 배웠습니다. 늘 함께 고민하고 부딪혀준 팀원분들 덕분에 무사히 마무리할 수 있어 감사한 프로젝트였습니다.
 
 </details>
 

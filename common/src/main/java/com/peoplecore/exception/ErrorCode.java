@@ -120,8 +120,8 @@ public enum ErrorCode {
 
     // ── 정산보험료 ──
     INSURANCE_SETTLEMENT_NOT_FOUND(404, "정산보험료 데이터가 존재하지 않습니다."),
-    INSURANCE_PAY_ITEM_NOT_FOUND(404, "보험 공제항목(국민연금/건강보험/장기요양/고용보험)이 등록되지 않았습니다."),
-    INSURANCE_SETTLEMENT_ALREADY_APPLIED(400, "이미 급여대장에 반영된 정산 건입니다."),
+    INSURANCE_PAY_ITEM_NOT_FOUND(404, "보험 공제항목(건강보험/장기요양/고용보험 - 정산분/환급분 6종)이 등록되지 않았습니다."),
+    INSURANCE_SETTLEMENT_ALREADY_APPLIED(409, "이미 급여대장에 반영된 정산기간은 재산정할 수 없습니다. 재산정이 필요한 경우 해당 급여대장의 정산 항목을 먼저 제거해 주세요."),
 
     //    전자결재 연동
     OVERTIME_NOT_FOUND(404, "해당 초과근무 신청을 찾을 수 없습니다."),

@@ -104,9 +104,16 @@ public class EventsCustomRepositoryImpl implements EventsCustomRepository{
         return event.deletedAt.isNull();
     }
 
-//    일정 조회 범위와 겹치는지 확인 (일정시작 < 조회 끝) AND (일정 끝 > 조회시작)
+//    단일일정 : 일정 조회 범위와 겹치는지 확인 (일정시작 < 조회 끝) AND (일정 끝 > 조회시작)
+//    반복일정 : '반복일정master의 시작시각 < 조회범위끝 시각' 이면 조회결과에 포함
     private BooleanExpression periodOverlap(LocalDateTime start, LocalDateTime end){
-        return event.startAt.lt(end).and(event.endAt.gt(start));
+//        단일일정 겹침 검사
+        BooleanExpression singleOverlap = event.startAt.lt(end).and(event.endAt.gt(start));    // less than: startAt < end,  greater than: endAt > start
+
+//        반복일정 포함 조건
+        BooleanExpression recurringStarted = event.repeatedRules.isNotNull().and(event.startAt.lt(end));    // IS NOT NULL — 반복 규칙이 존재함,  마스터의 시작 시각 < end — 조회 끝 이전
+
+        return singleOverlap.or(recurringStarted);
     }
 
 }

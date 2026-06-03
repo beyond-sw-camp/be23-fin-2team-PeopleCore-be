@@ -44,6 +44,7 @@ public class InsuranceSettlementResDto {
     private String diffCategory;
 
     private Boolean isApplied;
+    private String payYearMonth;    //적용기준월
 
 
     public static InsuranceSettlementResDto fromEntity(InsuranceSettlement s){
@@ -82,6 +83,7 @@ public class InsuranceSettlementResDto {
                 .diffEmployment(s.getDiffEmployment())
                 .totalDiff(s.getTotalDiff())
                 .isApplied(s.getIsApplied())
+                .payYearMonth(s.getPayYearMonth())
                 .build();
     }
 

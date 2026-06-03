@@ -29,7 +29,7 @@ public class EventsNotifications {
     private LocalDateTime sentAt;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn( nullable = false)
+    @JoinColumn(name = "events_id", nullable = false)
     private Events events;
 
     public void markSent(LocalDateTime now){

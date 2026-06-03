@@ -156,3 +156,9 @@ package.json
 **/ssh-key
 **/ssh-key.pem
 **/ssh-key.pub
+
+
+# common 모듈은 wrapper 없이 운영 (IntelliJ가 link 시 자동 생성하는 wrapper 무시)
+/common/gradle/
+/common/gradlew
+/common/gradlew.bat

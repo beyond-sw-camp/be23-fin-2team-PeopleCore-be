@@ -47,7 +47,7 @@ public class EventInstances {
     private UUID companyId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(nullable = false)
+    @JoinColumn(name = "events_id", nullable = false)
     private Events events;
 
 }

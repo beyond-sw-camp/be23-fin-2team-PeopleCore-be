@@ -57,12 +57,10 @@ public class CalendarEventController {
 
 //    일정 상세 조회
     @GetMapping("/{eventsId}")
-    public ResponseEntity<CalendarEventRangeResDto> getEvent(
+    public ResponseEntity<EventResDto> getEvent(
             @RequestHeader("X-User-Company") UUID companyId,
-            @RequestHeader("X-User-Id") Long empId,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
-            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end){
-        return ResponseEntity.ok(calendarEventService.getEventsForView(companyId, empId, start, end));
+            @PathVariable Long eventsId){
+        return ResponseEntity.ok(calendarEventService.getEvent(companyId, eventsId));
     }
 
 //    캘린더 뷰 일정 조회(기간별 조회)

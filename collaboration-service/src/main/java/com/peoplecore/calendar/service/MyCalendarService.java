@@ -4,7 +4,7 @@ import com.peoplecore.calendar.dtos.MyCalendarCreateReqDto;
 import com.peoplecore.calendar.dtos.MyCalendarResDto;
 import com.peoplecore.calendar.dtos.MyCalendarUpdateReqDto;
 import com.peoplecore.calendar.entity.MyCalendars;
-import com.peoplecore.calendar.repository.MyCalendarsRepository;
+import com.peoplecore.calendar.repository.*;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -26,12 +26,21 @@ public class MyCalendarService {
 
 
     private final MyCalendarsRepository myCalendarsRepository;
+    private final EventsRepository eventsRepository;
+    private final EventInstancesRepository eventInstancesRepository;
+    private final EventAttendeesRepository eventAttendeesRepository;
+    private final EventsNotificationsRepository eventsNotificationsRepository;
+    private final RepeatedRulesRepository repeatedRulesRepository;
 
     @Autowired
-    public MyCalendarService(MyCalendarsRepository myCalendarsRepository) {
+    public MyCalendarService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, EventInstancesRepository eventInstancesRepository, EventAttendeesRepository eventAttendeesRepository, EventsNotificationsRepository eventsNotificationsRepository, RepeatedRulesRepository repeatedRulesRepository) {
         this.myCalendarsRepository = myCalendarsRepository;
+        this.eventsRepository = eventsRepository;
+        this.eventInstancesRepository = eventInstancesRepository;
+        this.eventAttendeesRepository = eventAttendeesRepository;
+        this.eventsNotificationsRepository = eventsNotificationsRepository;
+        this.repeatedRulesRepository = repeatedRulesRepository;
     }
-
 
     //    내 캘린더 목록조회
     @Transactional
@@ -168,7 +177,7 @@ public class MyCalendarService {
         return MyCalendarResDto.fromEntity(myCalendar);
     }
 
-    //    내캘린더 삭제
+    //    내캘린더 삭제 (일정,개별일정,참석자,알림 일괄 삭제 포함)
     @Transactional
     public void deleteMyCalendar(UUID companyId, Long empId, Long calendarId) {
 
@@ -176,6 +185,25 @@ public class MyCalendarService {
 
         if (myCalendar.getIsDefault()) {
             throw new CustomException(ErrorCode.DEFAULT_CALENDAR_CANNOT_DELETE);
+        }
+
+//        캘린더에 속한 모든 일정 ID
+        List<Long> eventIds = eventsRepository.findEventIdsByCalendarId(calendarId);
+
+        if (!eventIds.isEmpty()){
+//            events 삭제 전에 참조하던 반복규칙ID를 미리 수집 (삭제하면 역추적 불가)
+            List<Long> ruleIds = eventsRepository.findRepeatedRuleIdsByEventIds(eventIds);
+
+//            자식 -> 부모 순으로 삭제 (FK 제약 위배 방지)
+            eventAttendeesRepository.deleteByCalendarEventsIds(eventIds);
+            eventInstancesRepository.deleteByEventIds(eventIds);
+            eventsNotificationsRepository.deleteByEventIds(eventIds);
+            eventsRepository.deleteByEventIds(eventIds);
+
+//            events 삭제후 더이상 참조되지않는 반복규칙 정리
+            if (!ruleIds.isEmpty()){
+                repeatedRulesRepository.deleteOrphansByIds(ruleIds);
+            }
         }
 
         myCalendarsRepository.delete(myCalendar);
