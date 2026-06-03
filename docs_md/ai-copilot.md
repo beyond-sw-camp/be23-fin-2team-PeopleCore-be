@@ -16,7 +16,7 @@
 | 라우팅 기준 | 발화 키워드 · 주민번호 정규식 · 페이지 컨텍스트(URL) |
 | 도구(Tool) | `search_documents` · `today_digest` · `prefill_approval_form` · `create_calendar_event` |
 | 검색 백엔드 | [Elasticsearch Hybrid Search (BM25 + kNN, RRF)](elasticsearch.md) |
-| 프롬프트 캐싱 | Anthropic ephemeral 캐시 적용 — warm 호출 input 토큰 **약 79% 절감** |
+| 프롬프트 캐싱 | Anthropic ephemeral 캐시 적용 — warm 호출 시 호출당 비용 **약 83% 절감** |
 | 컴플라이언스 | 민감 데이터 외부 LLM 차단, 도메인 권한 필터를 검색 단계에서 강제 |
 
 ---
@@ -134,7 +134,7 @@ Anthropic Messages API의 `cache_control: ephemeral` 을 활용해 **변하지 �
 | `pageContext` 블록 | ❌ 미캐시 | 요청별 가변 — breakpoint 뒤에 두어 캐시 무효화 영향 없음 |
 | 도구 정의 (마지막 도구에 부착) | ✅ 캐시 | render 순서가 `tools → system → messages` 이므로 마지막 도구 breakpoint 가 도구 4개 모두를 캐시에 포함 |
 
-**측정 효과**: warm 호출 시 `cache_read_input_tokens` 비중이 커져 **input 토큰 약 79% 절감** (PoC 측정, 2026-05-06 적용).
+**측정 효과**: warm 호출 시 `cache_read_input_tokens` 비중이 커져 **호출당 비용 약 83% 절감** (5,697토큰 고정 컨텍스트 기준, Haiku 4.5 단가, PoC 측정 2026-05-06 적용).
 
 상세 비교(런타임 시퀀스·단가·결과 요약): [README의 "프롬프트 캐싱 토큰 성능 비교"](../README.md#프롬프트-캐싱-토큰-성능-비교)
 
