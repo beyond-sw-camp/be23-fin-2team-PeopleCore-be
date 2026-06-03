@@ -140,6 +140,7 @@ services:
       echo 'Search infra initialized.';
       exit 0;
       "
+
 volumes:
   es-data:
   minio-data:
