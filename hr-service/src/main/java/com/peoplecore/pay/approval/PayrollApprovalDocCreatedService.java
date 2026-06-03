@@ -45,15 +45,24 @@ public class PayrollApprovalDocCreatedService {
         log.info("[PayrollDocCreated] payrollRunId={}, status={}, docId={}",
                 run.getPayrollRunId(), run.getPayrollStatus(), event.getApprovalDocId());
 
-        // CONFIRMED 사원별 docId 바인딩 (이미 다른 결재문서에 바인딩된 사원은 건너띔 - 덮어쓰기 방지)
-        List<PayrollEmpStatus> confirmedEmps = payrollEmpStatusRepository
-                .findByPayrollRuns_PayrollRunIdAndStatus(
-                        run.getPayrollRunId(), PayrollEmpStatusType.CONFIRMED);
-        for (PayrollEmpStatus pes : confirmedEmps) {
+//        결재 대상 사원 후보
+        List<Long> selectedEmpIds = event.getSelectedEmpIds();
+        List<PayrollEmpStatus> targets;
+
+        if (selectedEmpIds != null && !selectedEmpIds.isEmpty()) {
+            targets = payrollEmpStatusRepository.findByPayrollRuns_PayrollRunIdAndStatusAndEmployee_EmpIdIn(
+                    run.getPayrollRunId(), PayrollEmpStatusType.CONFIRMED, selectedEmpIds);
+        } else {
+            targets = payrollEmpStatusRepository.findByPayrollRuns_PayrollRunIdAndStatus(run.getPayrollRunId(),PayrollEmpStatusType.CONFIRMED);
+        }
+
+        for (PayrollEmpStatus pes : targets) {
             if (pes.getApprovalDocId() == null) {
                 pes.bindApprovalDoc(event.getApprovalDocId());
             }
         }
+
+        log.info("[PayrollDocCreated] runId={}, docId={}, 바인딩 대상={}명, selected={}명", run.getPayrollRunId(), event.getApprovalDocId(), targets.size(), selectedEmpIds != null ? selectedEmpIds.size() : -1);
 
         // 스냅샷 저장
         if (event.getHtmlContent() != null && !event.getHtmlContent().isBlank()) {

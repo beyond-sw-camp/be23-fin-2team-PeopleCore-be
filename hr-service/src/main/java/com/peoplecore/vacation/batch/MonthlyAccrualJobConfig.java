@@ -67,7 +67,8 @@ public class MonthlyAccrualJobConfig {
     public Step monthlyAccrualStep(JobRepository jobRepository,
                                    PlatformTransactionManager transactionManager,
                                    JpaCursorItemReader<Employee> monthlyAccrualReader,
-                                   ItemWriter<Employee> monthlyAccrualWriter) {
+                                   ItemWriter<Employee> monthlyAccrualWriter,
+                                   VacationSkipListener vacationSkipListener) {
         return new StepBuilder("monthlyAccrualStep", jobRepository)
                 .<Employee, Employee>chunk(CHUNK_SIZE, transactionManager)
                 .reader(monthlyAccrualReader)
@@ -77,6 +78,7 @@ public class MonthlyAccrualJobConfig {
                 .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
+                .listener(vacationSkipListener)   // skip 상세를 ExecutionContext 에 누적 → Discord WARN 페이로드 포함
                 .build();
     }
 

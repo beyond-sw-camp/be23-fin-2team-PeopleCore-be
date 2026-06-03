@@ -67,10 +67,16 @@ public class DiscordNotifier {
         sendAsync(payload, "FAIL:" + jobName);
     }
 
+    /* Skip Details embed field 에 표기할 최대 건수 - 초과분은 "...외 N건" 으로 축약 */
+    /* Discord field value 1024자 제한 + 가독성 고려해 보수적으로 설정 */
+    private static final int MAX_SKIP_DETAILS_LINES = 10;
+
     /* 배치 부분 실패 경고 - Step 은 COMPLETED 지만 skipCount > 0 일 때 호출. 노란색 embed */
+    /* skipDetails - VacationSkipListener 가 누적한 "phase itemDesc | ExceptionClass: msg" 줄들 */
     /* 웹훅 미설정 시 조용히 skip */
     public void notifyBatchWarning(String jobName, String companyLabel, String params,
-                                   long readCount, long writeCount, long skipCount) {
+                                   long readCount, long writeCount, long skipCount,
+                                   List<String> skipDetails) {
         if (webhookUrl == null || webhookUrl.isBlank()) {
             log.debug("[DiscordNotifier] webhook URL 미설정 - skip. job={}", jobName);
             return;
@@ -86,13 +92,31 @@ public class DiscordNotifier {
                                 Map.of("name", "Read", "value", String.valueOf(readCount), "inline", true),
                                 Map.of("name", "Write", "value", String.valueOf(writeCount), "inline", true),
                                 Map.of("name", "Skip", "value", String.valueOf(skipCount), "inline", true),
-                                Map.of("name", "Parameters", "value", "```" + truncate(params, 900) + "```")
+                                Map.of("name", "Parameters", "value", "```" + truncate(params, 900) + "```"),
+                                Map.of("name", "Skip Details", "value", "```" + truncate(formatSkipDetails(skipDetails), 900) + "```")
                         ),
                         "timestamp", OffsetDateTime.now(ZoneOffset.UTC).toString()
                 ))
         );
 
         sendAsync(payload, "WARN:" + jobName);
+    }
+
+    /* skipDetails 줄 목록 → Discord embed 표기 문자열 */
+    /* 최대 MAX_SKIP_DETAILS_LINES 줄 노출, 초과분은 "...외 N건" */
+    private static String formatSkipDetails(List<String> skipDetails) {
+        if (skipDetails == null || skipDetails.isEmpty()) {
+            return "(상세 없음 - SkipListener 미부착 또는 보관 한도 초과)";
+        }
+        int show = Math.min(skipDetails.size(), MAX_SKIP_DETAILS_LINES);
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < show; i++) {
+            sb.append(skipDetails.get(i)).append('\n');
+        }
+        if (skipDetails.size() > show) {
+            sb.append("...외 ").append(skipDetails.size() - show).append("건");
+        }
+        return sb.toString();
     }
 
     /* 비동기 전송 - .subscribe() 로 main 스레드 블록 방지 */

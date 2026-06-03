@@ -128,6 +128,10 @@ public class InsuranceSettlement extends BaseTimeEntity {
         this.appliedAt = LocalDateTime.now();
     }
 
+    public void markApplied(String payYearMonth) {
+        this.isApplied = true;
+        this.payYearMonth = payYearMonth;
+    }
 //    재산정시 값 갱신
     public void recalculate(Long baseSalary, Long pensionEmp, Long pensionEmpr, Long healthEmp, Long healthEmpr, Long ltcEmp, Long ltcEmpr, Long employmentEmp, Long employmentEmpr, Long industrialEmpr, Long dedPension, Long dedHealth, Long dedLtc, Long dedEmployment){
         this.baseSalary = baseSalary;

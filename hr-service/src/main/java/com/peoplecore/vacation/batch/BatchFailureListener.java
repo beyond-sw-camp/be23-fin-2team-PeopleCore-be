@@ -10,6 +10,7 @@ import org.springframework.batch.core.StepExecution;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,10 +39,19 @@ public class BatchFailureListener implements JobExecutionListener {
         String companyLabel = resolveCompanyLabel(params); // Discord embed 용 회사 라벨
 
         if (status == BatchStatus.COMPLETED) {
-            StepExecution step = jobExecution.getStepExecutions().stream().findFirst().orElse(null);
-            long readCount = step != null ? step.getReadCount() : 0;
-            long writeCount = step != null ? step.getWriteCount() : 0;
-            long skipCount = step != null ? step.getSkipCount() : 0;
+            // 모든 step 카운트 합산 - multi-step 잡(예: AutoCloseJob) 두번째 step 도 집계 대상
+            long readCount = 0, writeCount = 0, skipCount = 0;
+            List<String> skipDetails = new ArrayList<>();
+            for (StepExecution step : jobExecution.getStepExecutions()) {
+                readCount += step.getReadCount();
+                writeCount += step.getWriteCount();
+                skipCount += step.getSkipCount();
+                // VacationSkipListener 가 step 의 ExecutionContext 에 누적한 skip 상세 회수
+                Object stepSkips = step.getExecutionContext().get(VacationSkipListener.SKIP_DETAILS_KEY);
+                if (stepSkips instanceof List<?> list) {
+                    for (Object s : list) if (s instanceof String str) skipDetails.add(str);
+                }
+            }
 
             log.info("[BatchOK] job={}, company={}, params={}, read={}, write={}, skip={}",
                     jobName, companyLabel, params, readCount, writeCount, skipCount);
@@ -51,7 +61,7 @@ public class BatchFailureListener implements JobExecutionListener {
                 try {
                     discordNotifier.notifyBatchWarning(
                             jobName, companyLabel, params.toString(),
-                            readCount, writeCount, skipCount);
+                            readCount, writeCount, skipCount, skipDetails);
                 } catch (Exception e) {
                     log.warn("[BatchFailureListener] Discord 경고 알림 트리거 중 예외 - job={}, err={}",
                             jobName, e.getMessage());

@@ -64,7 +64,8 @@ public class MenstrualMonthlyGrantJobConfig {
     public Step menstrualMonthlyGrantStep(JobRepository jobRepository,
                                           PlatformTransactionManager transactionManager,
                                           JpaCursorItemReader<Employee> menstrualMonthlyGrantReader,
-                                          ItemWriter<Employee> menstrualMonthlyGrantWriter) {
+                                          ItemWriter<Employee> menstrualMonthlyGrantWriter,
+                                          VacationSkipListener vacationSkipListener) {
         return new StepBuilder("menstrualMonthlyGrantStep", jobRepository)
                 .<Employee, Employee>chunk(CHUNK_SIZE, transactionManager)
                 .reader(menstrualMonthlyGrantReader)
@@ -74,6 +75,7 @@ public class MenstrualMonthlyGrantJobConfig {
                 .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
+                .listener(vacationSkipListener)   // skip 상세를 ExecutionContext 에 누적 → Discord WARN 페이로드 포함
                 .build();
     }
 

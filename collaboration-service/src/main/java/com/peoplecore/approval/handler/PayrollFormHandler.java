@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -39,6 +40,7 @@ public class PayrollFormHandler implements ApprovalFormHandler {
     public void onDocCreated(ApprovalDocument document, List<ApprovalLine> lines, String htmlContent) {
         try {
             Long payrollRunId = extractPayrollRunId(document);
+            List<Long> selectedEmpIds = extractSelectedEmpIds(document);
             PayrollApprovalDocCreatedEvent event = PayrollApprovalDocCreatedEvent.builder()
                     .companyId(document.getCompanyId())
                     .approvalDocId(document.getDocId())
@@ -46,6 +48,7 @@ public class PayrollFormHandler implements ApprovalFormHandler {
                     .drafterId(document.getEmpId())
                     .finalApproverEmpId(ApprovalFormHandler.findFinalApproverEmpId(lines))
                     .htmlContent(htmlContent)
+                    .selectedEmpIds(selectedEmpIds)
                     .build();
             kafkaTemplate.send(TOPIC_DOC_CREATED, objectMapper.writeValueAsString(event));
             log.info("[Kafka] Payroll docCreated 발행 - docId={}, payrollRunId={}",
@@ -81,6 +84,22 @@ public class PayrollFormHandler implements ApprovalFormHandler {
             JsonNode n = tree.get("payrollRunId");
             return (n != null && n.isNumber()) ? n.asLong() : null;
         } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private List<Long> extractSelectedEmpIds(ApprovalDocument document){
+        try{
+            JsonNode tree = objectMapper.readTree(document.getDocData());
+            JsonNode arr = tree.get("selectedEmpIds");
+            if (arr == null || !arr.isArray())
+                return null;
+            List<Long> result = new ArrayList<>();
+            for(JsonNode n : arr){
+                if (n.isNumber()) result.add(n.asLong());
+            }
+            return result.isEmpty() ? null : result;
+        }   catch (Exception e){
             return null;
         }
     }

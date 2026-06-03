@@ -67,7 +67,8 @@ public class PromotionNoticeJobConfig {
     public Step promotionNoticeStep(JobRepository jobRepository,
                                     PlatformTransactionManager transactionManager,
                                     JpaCursorItemReader<VacationBalance> promotionNoticeReader,
-                                    ItemWriter<VacationBalance> promotionNoticeWriter) {
+                                    ItemWriter<VacationBalance> promotionNoticeWriter,
+                                    VacationSkipListener vacationSkipListener) {
         return new StepBuilder("promotionNoticeStep", jobRepository)
                 .<VacationBalance, VacationBalance>chunk(CHUNK_SIZE, transactionManager)
                 .reader(promotionNoticeReader)
@@ -77,6 +78,7 @@ public class PromotionNoticeJobConfig {
                 .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
+                .listener(vacationSkipListener)   // skip 상세를 ExecutionContext 에 누적 → Discord WARN 페이로드 포함
                 .build();
     }
 

@@ -38,6 +38,6 @@ public class EventAttendees {
     private UUID companyId;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn( nullable = false)
+    @JoinColumn(name = "event_instances_id", nullable = false)
     private EventInstances eventInstances;
 }

@@ -9,6 +9,7 @@ import com.peoplecore.employee.domain.Employee;
 import com.peoplecore.exception.CustomException;
 import com.peoplecore.exception.ErrorCode;
 import com.peoplecore.vacation.batch.BatchFailureListener;
+import com.peoplecore.vacation.batch.VacationSkipListener;
 import com.peoplecore.vacation.repository.VacationRequestQueryRepository;
 import com.peoplecore.vacation.service.BusinessDayCalculator;
 import lombok.extern.slf4j.Slf4j;
@@ -73,7 +74,8 @@ public class AutoCloseJobConfig {
     public Step autoCloseStep(JobRepository jobRepository,
                               PlatformTransactionManager transactionManager,
                               ListItemReader<CommuteRecord> autoCloseReader,
-                              ItemWriter<CommuteRecord> autoCloseWriter) {
+                              ItemWriter<CommuteRecord> autoCloseWriter,
+                              VacationSkipListener vacationSkipListener) {
         return new StepBuilder("autoCloseStep", jobRepository)
                 .<CommuteRecord, CommuteRecord>chunk(CHUNK_SIZE, transactionManager)
                 .reader(autoCloseReader)
@@ -83,6 +85,7 @@ public class AutoCloseJobConfig {
                 .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
+                .listener(vacationSkipListener)   // skip 상세를 ExecutionContext 에 누적 → Discord WARN 페이로드 포함
                 .build();
     }
 
@@ -138,7 +141,8 @@ public class AutoCloseJobConfig {
     public Step absentStep(JobRepository jobRepository,
                            PlatformTransactionManager transactionManager,
                            ListItemReader<Employee> absentReader,
-                           ItemWriter<Employee> absentWriter) {
+                           ItemWriter<Employee> absentWriter,
+                           VacationSkipListener vacationSkipListener) {
         return new StepBuilder("absentStep", jobRepository)
                 .<Employee, Employee>chunk(CHUNK_SIZE, transactionManager)
                 .reader(absentReader)
@@ -148,6 +152,7 @@ public class AutoCloseJobConfig {
                 .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
+                .listener(vacationSkipListener)   // skip 상세를 ExecutionContext 에 누적 → Discord WARN 페이로드 포함
                 .build();
     }
 

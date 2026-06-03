@@ -66,7 +66,8 @@ public class AnnualTransitionJobConfig {
     public Step annualTransitionStep(JobRepository jobRepository,
                                      PlatformTransactionManager transactionManager,
                                      JpaCursorItemReader<Employee> annualTransitionReader,
-                                     ItemWriter<Employee> annualTransitionWriter) {
+                                     ItemWriter<Employee> annualTransitionWriter,
+                                     VacationSkipListener vacationSkipListener) {
         return new StepBuilder("annualTransitionStep", jobRepository)
                 .<Employee, Employee>chunk(CHUNK_SIZE, transactionManager)
                 .reader(annualTransitionReader)
@@ -76,6 +77,7 @@ public class AnnualTransitionJobConfig {
                 .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
+                .listener(vacationSkipListener)   // skip 상세를 ExecutionContext 에 누적 → Discord WARN 페이로드 포함
                 .build();
     }
 

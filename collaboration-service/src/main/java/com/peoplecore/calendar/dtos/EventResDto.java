@@ -37,13 +37,18 @@ public class EventResDto {
 
     private RepeatedRulesResDto repeatedRule;
     private List<NotificationResDto> notifications;
+    private LocalDateTime occurrenceStart; //반복일정의 시작일시(각 일정회차마다 다름)
 
     public static EventResDto fromEntity(Events events){
-        return fromEntity(events, null, Map.of());
+        return fromEntity(events, null, Map.of(), events.getStartAt(), events.getEndAt(), events.getStartAt());
     }
 
-    public static EventResDto fromEntity(Events events, List<EventAttendees> attendeeList){
-        return fromEntity(events, attendeeList, Map.of());
+public static EventResDto fromEntity(Events events, List<EventAttendees> attendeeList){
+        return fromEntity(events, attendeeList, Map.of(), events.getStartAt(), events.getEndAt(), events.getStartAt());
+    }
+
+    public static EventResDto fromEntity(Events events, List<EventAttendees> attendeeList, Map<Long, EmployeeSimpleResDto> empMap){
+        return fromEntity(events, attendeeList, empMap, events.getStartAt(), events.getEndAt(), events.getStartAt());
     }
 
     /**
@@ -53,15 +58,19 @@ public class EventResDto {
      */
     public static EventResDto fromEntity(Events events,
                                          List<EventAttendees> attendeeList,
-                                         Map<Long, EmployeeSimpleResDto> empMap) {
+                                         Map<Long, EmployeeSimpleResDto> empMap,
+                                         LocalDateTime startAt,
+                                         LocalDateTime endAt,
+                                         LocalDateTime occurrenceStart) {
         EmployeeSimpleResDto creator = empMap == null ? null : empMap.get(events.getEmpId());
         return EventResDto.builder()
                 .eventsId(events.getEventsId())
                 .title(events.getTitle())
                 .description(events.getDescription())
                 .location(events.getLocation())
-                .startAt(events.getStartAt())
-                .endAt(events.getEndAt())
+                .startAt(startAt)
+                .endAt(endAt)
+                .occurrenceStart(occurrenceStart)
                 .isAllDay(events.getIsAllDay())
                 .isPublic(events.getIsPublic())
                 .myCalendarsId(events.getMyCalendars() != null ? events.getMyCalendars().getMyCalendarsId() : null)

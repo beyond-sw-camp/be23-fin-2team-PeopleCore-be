@@ -1,7 +1,6 @@
 package com.peoplecore.calendar.service;
 
 import com.peoplecore.alarm.publisher.AlarmEventPublisher;
-import com.peoplecore.alarm.service.AlarmService;
 import com.peoplecore.calendar.dtos.*;
 import com.peoplecore.calendar.entity.*;
 import com.peoplecore.calendar.enums.EventInstancesType;
@@ -23,8 +22,6 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.peoplecore.calendar.entity.QEvents.events;
-
 @Slf4j
 @Service
 @Transactional(readOnly = true)
@@ -34,16 +31,16 @@ public class CalendarEventService {
     private final EventsRepository eventsRepository;
     private final RepeatedRulesRepository repeatedRulesRepository;
     private final EventsNotificationsRepository eventsNotificationsRepository;
-     private final InterestCalendarsRepository interestCalendarsRepository;
-     private final AlarmEventPublisher alarmEventPublisher;
-     private final HolidayRepository holidayRepository;
-     private final EventInstancesRepository eventInstancesRepository;
-     private final EventAttendeesRepository eventAttendeesRepository;
-     private final HrCacheService hrCacheService;
-
+    private final InterestCalendarsRepository interestCalendarsRepository;
+    private final AlarmEventPublisher alarmEventPublisher;
+    private final HolidayRepository holidayRepository;
+    private final EventInstancesRepository eventInstancesRepository;
+    private final EventAttendeesRepository eventAttendeesRepository;
+    private final HrCacheService hrCacheService;
+    private final RecurrenceExpander recurrenceExpander;
 
     @Autowired
-    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, InterestCalendarsRepository interestCalendarsRepository, AlarmEventPublisher alarmEventPublisher, HolidayRepository holidayRepository, EventInstancesRepository eventInstancesRepository, EventAttendeesRepository eventAttendeesRepository, HrCacheService hrCacheService) {
+    public CalendarEventService(MyCalendarsRepository myCalendarsRepository, EventsRepository eventsRepository, RepeatedRulesRepository repeatedRulesRepository, EventsNotificationsRepository eventsNotificationsRepository, InterestCalendarsRepository interestCalendarsRepository, AlarmEventPublisher alarmEventPublisher, HolidayRepository holidayRepository, EventInstancesRepository eventInstancesRepository, EventAttendeesRepository eventAttendeesRepository, HrCacheService hrCacheService, RecurrenceExpander recurrenceExpander) {
         this.myCalendarsRepository = myCalendarsRepository;
         this.eventsRepository = eventsRepository;
         this.repeatedRulesRepository = repeatedRulesRepository;
@@ -54,14 +51,15 @@ public class CalendarEventService {
         this.eventInstancesRepository = eventInstancesRepository;
         this.eventAttendeesRepository = eventAttendeesRepository;
         this.hrCacheService = hrCacheService;
+        this.recurrenceExpander = recurrenceExpander;
     }
 
-//    일정 등록
+    //    일정 등록
     @Transactional
-    public EventResDto createEvent(UUID companyId, Long empId, EventCreateReqDto reqDto){
-        MyCalendars calendar = myCalendarsRepository.findById(reqDto.getMyCalendarsId()).orElseThrow(()-> new CustomException(ErrorCode.CALENDAR_NOT_FOUND));
+    public EventResDto createEvent(UUID companyId, Long empId, EventCreateReqDto reqDto) {
+        MyCalendars calendar = myCalendarsRepository.findById(reqDto.getMyCalendarsId()).orElseThrow(() -> new CustomException(ErrorCode.CALENDAR_NOT_FOUND));
 
-        validateCalendarOwner(calendar,empId);
+        validateCalendarOwner(calendar, empId);
 
 //        반복규칙 저장 (없으면 null)
         RepeatedRules repeatedRules = saveRepeatedRule(companyId, reqDto.getRepeatedRule());
@@ -110,13 +108,13 @@ public class CalendarEventService {
     }
 
 
-//    일정 수정
+    //    일정 수정
     @Transactional
-    public EventResDto updateEvent(UUID companyId, Long empId, Long eventsId, EventUpdateReqDto reqDto){
+    public EventResDto updateEvent(UUID companyId, Long empId, Long eventsId, EventUpdateReqDto reqDto) {
         Events event = findEventOrThrow(eventsId, companyId);
         validateEventOwner(event, empId);
 
-        MyCalendars calendars = myCalendarsRepository.findById(reqDto.getMyCalendarsId()).orElseThrow(()-> new CustomException(ErrorCode.CALENDAR_NOT_FOUND));
+        MyCalendars calendars = myCalendarsRepository.findById(reqDto.getMyCalendarsId()).orElseThrow(() -> new CustomException(ErrorCode.CALENDAR_NOT_FOUND));
 
         // 반복 규칙 갱신: 신규 저장 → Events FK 교체 → 옛 규칙 삭제 (FK 위반 방지)
         RepeatedRules oldRule = event.getRepeatedRules();
@@ -149,16 +147,16 @@ public class CalendarEventService {
     }
 
 
-//     일정 삭제
+    //     일정 삭제
     @Transactional
-    public void deleteEvent(UUID companyId, Long empId, Long eventsId){
+    public void deleteEvent(UUID companyId, Long empId, Long eventsId) {
         Events event = findEventOrThrow(eventsId, companyId);
         validateEventOwner(event, empId);
         event.softDelete();
     }
 
-//  일정 상세 조회
-    public EventResDto getEvent(UUID companyId, Long eventsId){
+    //  일정 상세 조회
+    public EventResDto getEvent(UUID companyId, Long eventsId) {
         Events event = findEventOrThrow(eventsId, companyId);
         List<EventAttendees> attendees = eventAttendeesRepository.findByEventInstances_Events_EventsId(eventsId);
         return EventResDto.fromEntity(event, attendees, loadEmployeeMap(event, attendees));
@@ -227,6 +225,7 @@ public class CalendarEventService {
         for (EventAttendees a : allAttendees) {
             if (a.getInvitedEmpId() != null) allEmpIds.add(a.getInvitedEmpId());
         }
+//        HR service에서 한번만 호출
         Map<Long, EmployeeSimpleResDto> empMap = Map.of();
         if (!allEmpIds.isEmpty()) {
             try {
@@ -239,12 +238,16 @@ public class CalendarEventService {
 
         List<EventResDto> result = new ArrayList<>();
         for (Events e : merged.values()) {
-            result.add(EventResDto.fromEntity(e, attendeesByEventId.get(e.getEventsId()), empMap));
+            List<RecurrenceExpander.Occurrence> occurrences = recurrenceExpander.expand(e, start, end);
+            List<EventAttendees> attendees = attendeesByEventId.get(e.getEventsId());
+            for (RecurrenceExpander.Occurrence occ : occurrences) {
+                result.add(EventResDto.fromEntity(e,attendees, empMap,occ.startAt, occ.endAt, occ.startAt));
+            }
         }
 
-        // 6) 공휴일 머지 (NATIONAL + 회사의 COMPANY)
+        // 8. 공휴일 머지 (NATIONAL + 회사의 COMPANY)
         LocalDate startDate = start.toLocalDate();
-        LocalDate endDate   = end.toLocalDate();
+        LocalDate endDate = end.toLocalDate();
         List<Holidays> rawHolidays =
                 holidayRepository.findByCompanyIdAndPeriod(companyId, startDate, endDate);
 
@@ -253,7 +256,7 @@ public class CalendarEventService {
             if (Boolean.TRUE.equals(h.getIsRepeating())) {
                 // 반복 휴일은 [startDate~endDate] 범위 내의 모든 발생일을 펼침
                 int month = h.getDate().getMonthValue();
-                int day   = h.getDate().getDayOfMonth();
+                int day = h.getDate().getDayOfMonth();
                 for (int year = startDate.getYear(); year <= endDate.getYear(); year++) {
                     LocalDate occ;
                     try {
@@ -283,8 +286,10 @@ public class CalendarEventService {
     }
 
 
-    /** 작성자 + 참석자 empId 들을 일괄 조회해 Map<empId, dto> 반환. 단일 일정 조회/생성/수정용.
-     *  hr-service 가 일시적으로 응답하지 않아도 일정 저장 트랜잭션을 롤백시키지 않도록 예외는 흡수하고 빈 맵 반환. */
+    /**
+     * 작성자 + 참석자 empId 들을 일괄 조회해 Map<empId, dto> 반환. 단일 일정 조회/생성/수정용.
+     * hr-service 가 일시적으로 응답하지 않아도 일정 저장 트랜잭션을 롤백시키지 않도록 예외는 흡수하고 빈 맵 반환.
+     */
     private Map<Long, EmployeeSimpleResDto> loadEmployeeMap(Events event, List<EventAttendees> attendees) {
         Set<Long> empIds = new HashSet<>();
         if (event.getEmpId() != null) empIds.add(event.getEmpId());
@@ -303,7 +308,7 @@ public class CalendarEventService {
         }
     }
 
-    private void saveAttendees(UUID companyId, EventInstances instance, List<Long> attendeeEmpIds){
+    private void saveAttendees(UUID companyId, EventInstances instance, List<Long> attendeeEmpIds) {
         if (attendeeEmpIds == null || attendeeEmpIds.isEmpty()) return;
         LocalDateTime now = LocalDateTime.now();
         List<EventAttendees> rows = attendeeEmpIds.stream()
@@ -328,33 +333,33 @@ public class CalendarEventService {
                 .toList();
     }
 
-    private Events findEventOrThrow(Long eventsId, UUID companyId){
-        Events events = eventsRepository.findById(eventsId).orElseThrow(()-> new CustomException(ErrorCode.EVENT_NOT_FOUND));
+    private Events findEventOrThrow(Long eventsId, UUID companyId) {
+        Events events = eventsRepository.findById(eventsId).orElseThrow(() -> new CustomException(ErrorCode.EVENT_NOT_FOUND));
 
-        if (!events.getCompanyId().equals(companyId)){
+        if (!events.getCompanyId().equals(companyId)) {
             throw new CustomException(ErrorCode.EVENT_ACCESS_DENIED);
         }
-        if(events.isDelete()){
+        if (events.isDelete()) {
             throw new CustomException(ErrorCode.EVENT_DELETED);
         }
         return events;
     }
 
-    private void validateEventOwner(Events events, Long empId){
-        if(!events.getEmpId().equals(empId)) {
+    private void validateEventOwner(Events events, Long empId) {
+        if (!events.getEmpId().equals(empId)) {
             throw new CustomException(ErrorCode.EVENT_OWNER_MISMATCH);
         }
     }
 
-    private void validateCalendarOwner(MyCalendars myCalendars, Long empId){
-        if( !myCalendars.getEmpId().equals(empId)){
+    private void validateCalendarOwner(MyCalendars myCalendars, Long empId) {
+        if (!myCalendars.getEmpId().equals(empId)) {
             throw new CustomException(ErrorCode.EVENT_REGISTER_DENIED);
         }
     }
 
-//반복규칙 저장
-    private RepeatedRules saveRepeatedRule(UUID companyId, RepeatedRulesReqDto reqDto){
-        if(reqDto == null || reqDto.getFrequency() == null){
+    //반복규칙 저장
+    private RepeatedRules saveRepeatedRule(UUID companyId, RepeatedRulesReqDto reqDto) {
+        if (reqDto == null || reqDto.getFrequency() == null) {
             return null;
         }
         return repeatedRulesRepository.save(
@@ -370,9 +375,9 @@ public class CalendarEventService {
         );
     }
 
-//    알림설정 저장
-    private void saveNotifications(Events event, List<NotificationReqDto> reqDtos){
-        if(reqDtos == null || reqDtos.isEmpty()) return;
+    //    알림설정 저장
+    private void saveNotifications(Events event, List<NotificationReqDto> reqDtos) {
+        if (reqDtos == null || reqDtos.isEmpty()) return;
 
         List<EventsNotifications> notificationsList = reqDtos.stream()
                 .map(r -> EventsNotifications.builder()
@@ -385,9 +390,9 @@ public class CalendarEventService {
 
     }
 
-//    일정참석자에게 알림발송 / kafka 비동기
-    private void sendAttendeeAlarm(UUID companyId, Events event, List<Long> attendeeEmpIds){
-        if(attendeeEmpIds == null  || attendeeEmpIds.isEmpty()) return;
+    //    일정참석자에게 알림발송 / kafka 비동기
+    private void sendAttendeeAlarm(UUID companyId, Events event, List<Long> attendeeEmpIds) {
+        if (attendeeEmpIds == null || attendeeEmpIds.isEmpty()) return;
 
         alarmEventPublisher.publisher(AlarmEvent.builder()
                 .companyId(companyId)

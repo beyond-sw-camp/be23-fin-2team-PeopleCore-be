@@ -32,6 +32,9 @@ public interface InsuranceSettlementRepository extends JpaRepository<InsuranceSe
 //    해당 급여대장에 대한 정산 존재 여부
     boolean existsByPayrollRuns(PayrollRuns payrollRuns);
 
+//    급여대장에 반영 존재 여부
+    boolean existsByCompany_CompanyIdAndSettlementFromMonthAndSettlementToMonthAndIsAppliedTrue(
+            UUID companyId, String fromMonth, String toMonth);
 
 //    해당 월 정산 삭제 (재산정 시)
     void deleteByPayrollRuns(PayrollRuns payrollRuns);

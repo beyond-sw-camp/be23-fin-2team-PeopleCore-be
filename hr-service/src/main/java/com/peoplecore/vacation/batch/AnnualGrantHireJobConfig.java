@@ -71,7 +71,8 @@ public class AnnualGrantHireJobConfig {
     public Step annualGrantHireStep(JobRepository jobRepository,
                                     PlatformTransactionManager transactionManager,
                                     ListItemReader<Employee> annualGrantHireReader,
-                                    ItemWriter<Employee> annualGrantHireWriter) {
+                                    ItemWriter<Employee> annualGrantHireWriter,
+                                    VacationSkipListener vacationSkipListener) {
         return new StepBuilder("annualGrantHireStep", jobRepository)
                 .<Employee, Employee>chunk(CHUNK_SIZE, transactionManager)
                 .reader(annualGrantHireReader)
@@ -81,6 +82,7 @@ public class AnnualGrantHireJobConfig {
                 .retryLimit(3)
                 .skip(Exception.class)
                 .skipLimit(SKIP_LIMIT)
+                .listener(vacationSkipListener)   // skip 상세를 ExecutionContext 에 누적 → Discord WARN 페이로드 포함
                 .build();
     }
 

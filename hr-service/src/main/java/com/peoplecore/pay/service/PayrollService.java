@@ -202,7 +202,7 @@ public class PayrollService {
             pendingOtValue = amt > 0 ? amt : null;
         }
 
-        // prorate — Map 에서 꺼내쓰기 (DB 안 침)
+        // prorate — Map 에서 꺼내쓰기 (DB 안 침) / 일할계산
         ProrateInfo prorate = resolveProrateFromCache(emp, payMonth, resignByEmp.get(empId));
 
         return PayrollEmpResDto.builder()

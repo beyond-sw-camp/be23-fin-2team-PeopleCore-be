@@ -58,7 +58,8 @@ public class BalanceExpiryJobConfig {
     public Step balanceExpiryStep(JobRepository jobRepository,
                                   PlatformTransactionManager transactionManager,
                                   JpaCursorItemReader<VacationBalance> balanceExpiryReader,
-                                  ItemWriter<VacationBalance> balanceExpiryWriter) {
+                                  ItemWriter<VacationBalance> balanceExpiryWriter,
+                                  VacationSkipListener vacationSkipListener) {
         return new StepBuilder("balanceExpiryStep", jobRepository)
                 .<VacationBalance, VacationBalance>chunk(CHUNK_SIZE, transactionManager)
                 .reader(balanceExpiryReader)
@@ -68,6 +69,7 @@ public class BalanceExpiryJobConfig {
                 .retryLimit(3)
                 .skip(Exception.class)   // writer 에서 튀는 예외는 item 단위 skip
                 .skipLimit(SKIP_LIMIT)   // 초과 시 SkipLimitExceededException → Step FAILED
+                .listener(vacationSkipListener)   // skip 상세를 ExecutionContext 에 누적 → Discord WARN 페이로드 포함
                 .build();
     }
 

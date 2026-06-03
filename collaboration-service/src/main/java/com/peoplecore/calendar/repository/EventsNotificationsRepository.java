@@ -2,6 +2,7 @@ package com.peoplecore.calendar.repository;
 
 import com.peoplecore.calendar.entity.EventsNotifications;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -24,4 +25,10 @@ public interface EventsNotificationsRepository extends JpaRepository<EventsNotif
           AND FUNCTION('TIMESTAMPADD', MINUTE, -n.minutesBefore, n.events.startAt) <= :now
     """)
     List<EventsNotifications> findDueAlarms(@Param("now") LocalDateTime now);
+
+
+    @Modifying(clearAutomatically = true)
+    @Query("DELETE FROM EventsNotifications n WHERE n.events.eventsId IN :eventIds")
+    void deleteByEventIds(@Param("eventIds") List<Long> eventIds);
+
 }
