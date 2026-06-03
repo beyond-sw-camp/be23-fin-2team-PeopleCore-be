@@ -25,7 +25,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/employee")
-public class EmployeeController { //test
+public class EmployeeController { //test test
 //    사원 목록조회(등록)
 
     private final EmployeeService employeeService;
