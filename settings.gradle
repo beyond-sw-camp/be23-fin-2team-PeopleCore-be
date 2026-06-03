@@ -1,4 +1,4 @@
-rootProject.name = 'be23-fin-PeopleCore'
+rootProject.name = 'be23-fin-PeopleCore Lee'
 
 include(
         'api-gateway',
