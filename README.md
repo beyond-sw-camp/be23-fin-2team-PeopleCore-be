@@ -736,7 +736,7 @@
 
 | 문서 | 핵심 내용 |
 |------|-----------|
-| [AI Copilot](docs_md/ai-copilot.md) | 민감도 분류 → Anthropic / 사내 sLLM(EXAONE) 이중 라우팅 · Tool-Use 루프 · Prompt Caching(input -79%) · 응답 인용·액션 스키마 |
+| [AI Copilot](docs_md/ai-copilot.md) | 민감도 분류 → Anthropic / 사내 sLLM(EXAONE) 이중 라우팅 · Tool-Use 루프 · Prompt Caching(비용 83% 절감) · 응답 인용·액션 스키마 |
 
 </details>
 
@@ -1369,7 +1369,7 @@ Search API (/search-service/search)
 
 </details>
 <details>
-<summary>3. LLM 비용 최적화 - Prompt Caching으로 토큰 80% 절감</summary>
+<summary>3. LLM 비용 최적화 - Prompt Caching으로 비용 83% 절감</summary>
 
 **문제 사항**
 
@@ -1399,7 +1399,7 @@ Search API (/search-service/search)
 
 **결과**
 
-- 캐시 적중 시 토큰 사용량 최대 80% 절감 → LLM 호출 비용 대폭 감소
+- 캐시 적중(Warm) 시 호출당 비용 약 83% 절감 (5,697토큰 고정 컨텍스트 기준, Haiku 4.5 단가) → LLM 호출 비용 대폭 감소
 - 응답 속도 개선 (토큰 전송량 감소)
 - 대화형 기능에서도 긴 context 유지 가능 → 품질 유지 + 비용 최적화 동시 달성
 - 트래픽 증가에도 비용 증가율 완화 → 운영 안정성 확보
