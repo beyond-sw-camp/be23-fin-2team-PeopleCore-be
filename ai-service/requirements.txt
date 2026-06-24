@@ -1,0 +1,28 @@
+# 설치할 파일들 이름들 정리해놓은 것
+
+# LLM (Claude)
+langchain-anthropic
+anthropic
+
+# LangChain core / orchestration
+langchain
+langchain-core
+langchain-community
+langgraph
+
+# Vector DB / Embeddings
+langchain-chroma
+chromadb
+langchain-huggingface
+sentence-transformers
+
+# Document loaders
+pypdf
+python-docx
+
+# UI
+streamlit
+
+# Utils
+python-dotenv
+pydantic
