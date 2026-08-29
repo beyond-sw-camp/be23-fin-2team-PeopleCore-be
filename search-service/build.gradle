@@ -27,7 +27,6 @@ ext {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-actuator'
 	implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.cloud:spring-cloud-bus'
@@ -39,6 +38,11 @@ dependencies {
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testImplementation 'org.springframework.kafka:spring-kafka-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	// 액튜터
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	 //프로메테우스 언어로 변역 (데이터를 환)
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
 }
 
 dependencyManagement {
