@@ -24,6 +24,11 @@ dependencies {
 	implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-server'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+	//액튜터 프로메테우스 의존성
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	 //프로메테우스 언어로 변역 (데이터를 환)
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
 }
 
 dependencyManagement {
