@@ -1,4 +1,7 @@
-FROM docker.elastic.co/elasticsearch/elasticsearch:8.13.0
+# 버전은 Spring Boot가 관리하는 elasticsearch-java 클라이언트와 맞춤.
+# 8.13.0이던 시절, 클라이언트(8.18.8)가 필수로 요구하는 unassigned_primary_shards를
+# 서버가 응답에 담지 않아 /actuator/health의 ES 체크가 항상 DOWN(503)이었다.
+FROM docker.elastic.co/elasticsearch/elasticsearch:8.18.8
 
 
 # Nori(한국어 형태소 분석기) 플러그인 설치
